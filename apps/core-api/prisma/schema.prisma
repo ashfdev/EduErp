@@ -1,0 +1,1230 @@
+// Phase 0 foundation schema — Tenant, Academic structure, People.
+// Later phases (Fee, Exam, Attendance, Admission, etc.) add their own models here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Foundation
+// ─────────────────────────────────────────────
+
+enum InstitutionType {
+  SCHOOL
+  COLLEGE
+  MADRASAH
+  UNIVERSITY
+}
+
+enum GradingScale {
+  BD_BOARD // SSC/HSC 5.0 GPA scale (A+ ... F) — also used for CGPA_5
+  CGPA_4
+  CUSTOM   // currently falls back to BD_BOARD bands — see lib/grading.ts
+}
+
+model Tenant {
+  id               String          @id @default(cuid())
+  nameEn           String
+  nameBn           String?
+  shortCode        String          @default("INST") // e.g. "ASH" — used as Student/Staff UID prefix
+  type             InstitutionType @default(SCHOOL)
+  eiin             String?         @unique
+  board            String?
+  country          String          @default("BD")
+  currency         String          @default("BDT")
+  usesHijriCalendar Boolean        @default(false)
+  gradingScale     GradingScale    @default(BD_BOARD)
+  logoUrl          String?
+  faviconUrl       String?
+  tagline          String?
+  // Contact & social settings (PRD §4.14) — public-site footer/contact page.
+  address          String?
+  contactPhones    Json?           // string[]
+  contactEmails    Json?           // string[]
+  mapEmbedCode     String?
+  facebookUrl      String?
+  youtubeUrl       String?
+  twitterUrl       String?
+  linkedinUrl      String?
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  academicYears AcademicYear[]
+  shifts        Shift[]
+  classes       Class[]
+  departments   Department[]
+  users         User[]
+  outboxEvents  OutboxEvent[]
+  holidays      Holiday[]
+  rolePermissions RolePermission[]
+
+  @@map("tenants")
+}
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  tenantId  String
+  label     String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant      Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classes     Class[]
+  assignments SubjectTeacherAssignment[]
+  academicHistories StudentAcademicHistory[]
+
+  @@unique([tenantId, label])
+  @@index([tenantId])
+  @@map("academic_years")
+}
+
+model Shift {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  startTime String // "08:00"
+  endTime   String // "12:30"
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sections Section[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("shifts")
+}
+
+model Class {
+  id             String   @id @default(cuid())
+  tenantId       String
+  academicYearId String
+  name           String
+  level          Int
+  order          Int      @default(0)
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  sections     Section[]
+  subjects     Subject[]
+
+  @@unique([academicYearId, name])
+  @@index([tenantId])
+  @@map("classes")
+}
+
+model Section {
+  id            String  @id @default(cuid())
+  classId       String
+  name          String
+  shiftId       String?
+  classTeacherId String?
+
+  class        Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  shift        Shift?   @relation(fields: [shiftId], references: [id])
+  classTeacher Staff?   @relation(fields: [classTeacherId], references: [id])
+  students     Student[]
+  assignments  SubjectTeacherAssignment[]
+  academicHistories StudentAcademicHistory[]
+
+  @@unique([classId, name])
+  @@map("sections")
+}
+
+model Department {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  headId   String?
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff  Staff[]
+
+  @@unique([tenantId, name])
+  @@map("departments")
+}
+
+model Subject {
+  id           String  @id @default(cuid())
+  classId      String
+  nameEn       String
+  nameBn       String?
+  code         String
+  isCompulsory Boolean @default(true)
+  isOptional   Boolean @default(false)
+
+  class       Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  assignments SubjectTeacherAssignment[]
+
+  @@unique([classId, code])
+  @@map("subjects")
+}
+
+// Drives timetable, mark-entry permission, and parent-teacher visibility (PRD §11.2).
+// Academic-year scoped — reconfigured every year rather than carried forward implicitly.
+model SubjectTeacherAssignment {
+  id             String @id @default(cuid())
+  subjectId      String
+  staffId        String
+  classId        String
+  sectionId      String
+  academicYearId String
+
+  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  staff        Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  section      Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, sectionId, academicYearId])
+  @@index([staffId])
+  @@map("subject_teacher_assignments")
+}
+
+// Holiday calendar — excluded from attendance calculation (PRD §12.2).
+model Holiday {
+  id       String   @id @default(cuid())
+  tenantId String
+  date     DateTime
+  name     String
+  isNationalHoliday Boolean @default(false)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@map("holidays")
+}
+
+// ─────────────────────────────────────────────
+// People & Auth
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  INSTITUTION_ADMIN
+  PRINCIPAL
+  VICE_PRINCIPAL
+  EXAM_CONTROLLER
+  HEAD_OF_DEPARTMENT
+  CLASS_TEACHER
+  SUBJECT_TEACHER
+  ACCOUNTANT
+  LIBRARIAN
+  TRANSPORT_MANAGER
+  HOSTEL_MANAGER
+  IT_ADMIN
+  STUDENT
+  GUARDIAN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  PENDING
+}
+
+model User {
+  id              String     @id @default(cuid())
+  tenantId        String?    // null for SUPER_ADMIN (platform-wide)
+  name            String
+  role            UserRole
+  email           String?
+  phone           String?
+  passwordHash    String
+  status          UserStatus @default(ACTIVE)
+  langPreference  String     @default("bn")
+  totpSecret      String?    // set once 2FA is enabled; null = 2FA off
+  totpEnabled     Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  student  Student?
+  staff    Staff?
+  sessions Session[]
+  auditLogs AuditLog[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@map("users")
+}
+
+// Forgot-password flow (gap-fix, Phase 1). Token is stored hashed like a password;
+// the raw token only ever exists in the outbound email/SMS, never at rest.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Session/device management — list active sessions, force logout (gap-fix, Phase 1)
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+enum StudentStatus {
+  ACTIVE
+  PROMOTED
+  TRANSFERRED
+  GRADUATED
+  DROPPED_OUT
+}
+
+model Student {
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  tenantId       String
+  studentUid     String        // e.g. ASH-2024-00142
+  rollNo         String?
+  registrationNo String?
+  boardRoll      String?
+  classId        String?
+  sectionId      String?
+  guardianId     String?
+  biometricId    String?
+  photoUrl       String?
+  dateOfBirth    DateTime?
+  gender         String?
+  bloodGroup     String?
+  status         StudentStatus @default(ACTIVE)
+
+  // Health record fields — gap-fix, Phase 1
+  vaccinationJson     Json?
+  chronicConditions   String?
+  emergencyContact    String?
+
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section           Section?                 @relation(fields: [sectionId], references: [id])
+  guardian          Guardian?                @relation(fields: [guardianId], references: [id])
+  academicHistories StudentAcademicHistory[]
+  disciplineRecords DisciplineRecord[]
+  invoices          Invoice[]
+  scholarships      Scholarship[]
+
+  @@unique([tenantId, studentUid])
+  @@index([tenantId])
+  @@index([classId])
+  @@map("students")
+}
+
+model Guardian {
+  id       String  @id @default(cuid())
+  name     String
+  relation String
+  phone    String?
+  nid      String?
+  email    String?
+  address  String?
+
+  students Student[]
+
+  @@map("guardians")
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  PART_TIME
+}
+
+model Staff {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  tenantId       String
+  staffUid       String
+  designation    String
+  departmentId   String?
+  biometricId    String?
+  photoUrl       String?
+  signatureUrl   String?
+  employmentType EmploymentType @default(PERMANENT)
+  joiningDate    DateTime?
+  // Public faculty directory (PRD §4.11) — source of truth stays HR, no duplicate entry.
+  showOnWebsite  Boolean        @default(false)
+  qualification  String?
+
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department      Department?                @relation(fields: [departmentId], references: [id])
+  sections        Section[]
+  assignments     SubjectTeacherAssignment[]
+  salaryStructure SalaryStructure?
+  payrollRecords  PayrollRecord[]
+
+  @@unique([tenantId, staffUid])
+  @@index([tenantId])
+  @@map("staff")
+}
+
+// Every year the student has been enrolled: class, section, roll, and outcome (PRD §5.2).
+model StudentAcademicHistory {
+  id             String   @id @default(cuid())
+  studentId      String
+  academicYearId String
+  classId        String
+  sectionId      String
+  rollNo         String?
+  status         String   // promoted | failed | transferred | active
+  promotedBy     String?
+  createdAt      DateTime @default(now())
+
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  section      Section      @relation(fields: [sectionId], references: [id])
+
+  @@unique([studentId, academicYearId])
+  @@index([studentId])
+  @@map("student_academic_histories")
+}
+
+enum DisciplineCategory {
+  INCIDENT
+  COUNSELING
+  COMMENDATION
+}
+
+// Visible to Admin and Class Teacher only — never surfaced in student/guardian portal (PRD §5.8).
+model DisciplineRecord {
+  id          String             @id @default(cuid())
+  tenantId    String
+  studentId   String
+  recordedBy  String
+  category    DisciplineCategory
+  description String
+  actionTaken String?
+  occurredAt  DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, studentId])
+  @@map("discipline_records")
+}
+
+// ─────────────────────────────────────────────
+// Attendance (PRD §6)
+// ─────────────────────────────────────────────
+
+enum PersonType {
+  STUDENT
+  STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+  HALF_DAY
+}
+
+enum AttendanceSource {
+  MANUAL
+  BIOMETRIC
+}
+
+// Both students and staff attendance flow through this one table (PRD §6.3: "same
+// dual-source model applied to all staff roles"). Biometric takes precedence over
+// manual; a manual override is retained alongside the original record, not overwritten.
+model AttendanceRecord {
+  id             String            @id @default(cuid())
+  tenantId       String
+  personId       String
+  personType     PersonType
+  date           DateTime          @db.Date
+  shiftId        String?
+  periodNo       Int               @default(0) // 0 = whole-day attendance; 1+ = subject-wise period for college/university (PRD §6.2)
+  status         AttendanceStatus
+  source         AttendanceSource
+  deviceId       String?
+  markedBy       String? // staff userId, for manual entries
+  overrideReason String?
+  createdAt      DateTime          @default(now())
+
+  @@unique([tenantId, personId, date, periodNo])
+  @@index([tenantId, date])
+  @@index([personId])
+  @@map("attendance_records")
+}
+
+// ─────────────────────────────────────────────
+// File storage (PRD §2.1 File Storage service)
+// ─────────────────────────────────────────────
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+}
+
+model UploadedFile {
+  id           String     @id @default(cuid())
+  tenantId     String
+  blobKey      String     @unique
+  url          String
+  mimeType     String
+  sizeBytes    Int
+  uploadedBy   String
+  entityType   String? // e.g. "Student.photo", "Staff.document"
+  entityId     String?
+  scanStatus   ScanStatus @default(PENDING)
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@map("uploaded_files")
+}
+
+// ─────────────────────────────────────────────
+// Access control (gap-fix, Phase 1: "not just role gate" per PRD §3)
+// ─────────────────────────────────────────────
+
+// DB-backed grant table so Institution Admin can adjust who can do what per module
+// without a code change, on top of the hardcoded role list every route still checks
+// as a baseline (defense-in-depth — a bad DB row can only narrow access, never widen
+// it past what the route's requirePermission call itself allows).
+model RolePermission {
+  id       String   @id @default(cuid())
+  tenantId String
+  role     UserRole
+  module   String   // e.g. "students", "attendance", "settings"
+  action   String   // "read" | "write" | "delete" | "manage"
+  allowed  Boolean  @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, module, action])
+  @@index([tenantId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────
+// Fee & Finance (PRD §10, Phase 2)
+// ─────────────────────────────────────────────
+
+enum FeeCategory {
+  ADMISSION
+  TUITION
+  SESSION
+  EXAM
+  TRANSPORT
+  HOSTEL
+  LAB
+  LIBRARY
+  SPORTS
+  DEVELOPMENT
+  OTHER
+}
+
+enum FeeFrequency {
+  ONE_TIME
+  MONTHLY
+  TERM
+  YEARLY
+}
+
+// Fee varies by class/section/shift/student-category (PRD §10.1). classId/sectionId
+// null = applies tenant-wide; set = scoped to that class/section.
+model FeeStructure {
+  id             String       @id @default(cuid())
+  tenantId       String
+  academicYearId String
+  classId        String?
+  sectionId      String?
+  category       FeeCategory
+  amount         Decimal      @db.Decimal(12, 2)
+  frequency      FeeFrequency
+  dueDay         Int?         // day-of-month for recurring fees
+  lateFeePerDay  Decimal?     @db.Decimal(12, 2)
+  createdAt      DateTime     @default(now())
+
+  invoices Invoice[]
+
+  @@index([tenantId, academicYearId])
+  @@map("fee_structures")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  tenantId       String
+  studentId      String
+  feeStructureId String?
+  academicYearId String
+  category       FeeCategory
+  amountDue      Decimal       @db.Decimal(12, 2)
+  amountPaid     Decimal       @default(0) @db.Decimal(12, 2)
+  waivedAmount   Decimal       @default(0) @db.Decimal(12, 2)
+  lateFeeAccrued Decimal       @default(0) @db.Decimal(12, 2) // gap-fix: computed by lib/lateFee.ts, not auto-applied
+  dueDate        DateTime
+  status         InvoiceStatus @default(PENDING)
+  // Installment plans (gap-fix): set when this invoice is one slice of a split
+  // original invoice — see POST /invoices/:id/split-into-installments.
+  parentInvoiceId    String?
+  installmentNumber  Int?
+  createdAt      DateTime      @default(now())
+
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeStructure FeeStructure? @relation(fields: [feeStructureId], references: [id])
+  payments     Payment[]
+  refunds      RefundRequest[]
+
+  @@index([tenantId, studentId])
+  @@index([tenantId, status])
+  @@map("invoices")
+}
+
+enum PaymentGatewayName {
+  CASH
+  BKASH
+  NAGAD
+  ROCKET
+  SSLCOMMERZ
+  AAMARPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Payment {
+  id            String             @id @default(cuid())
+  tenantId      String
+  invoiceId     String
+  gateway       PaymentGatewayName
+  transactionId String?            @unique
+  amount        Decimal            @db.Decimal(12, 2)
+  status        PaymentStatus      @default(PENDING)
+  paidAt        DateTime?
+  receiptUrl    String?
+  collectedBy   String?            // staff userId, for manual/cash collection
+  createdAt     DateTime           @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Fee refund workflow (gap-fix, §1.E) — approval required, reverses against the invoice.
+model RefundRequest {
+  id         String       @id @default(cuid())
+  tenantId   String
+  invoiceId  String
+  amount     Decimal      @db.Decimal(12, 2)
+  reason     String
+  status     RefundStatus @default(PENDING)
+  requestedBy String
+  approvedBy String?
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("refund_requests")
+}
+
+enum ScholarshipType {
+  PERCENTAGE
+  FIXED
+}
+
+// Structured scholarship/waiver (gap-fix, §1.E) — applied at invoice-generation time,
+// not just an ad hoc "amount waived" field.
+model Scholarship {
+  id             String          @id @default(cuid())
+  tenantId       String
+  studentId      String
+  academicYearId String
+  name           String
+  type           ScholarshipType
+  value          Decimal         @db.Decimal(12, 2) // percentage (0-100) or fixed BDT amount
+  category       FeeCategory?    // null = applies to all fee categories
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, studentId])
+  @@map("scholarships")
+}
+
+// ─────────────────────────────────────────────
+// Payroll (PRD §10.4)
+// ─────────────────────────────────────────────
+
+model SalaryStructure {
+  id          String   @id @default(cuid())
+  tenantId    String
+  staffId     String   @unique
+  basic       Decimal  @db.Decimal(12, 2)
+  houseRent   Decimal  @default(0) @db.Decimal(12, 2)
+  medical     Decimal  @default(0) @db.Decimal(12, 2)
+  transport   Decimal  @default(0) @db.Decimal(12, 2)
+  providentFund Decimal @default(0) @db.Decimal(12, 2)
+  otherAllowances Json?
+  deductions  Json?
+  createdAt   DateTime @default(now())
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("salary_structures")
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSED
+  PAID
+}
+
+model PayrollRecord {
+  id          String        @id @default(cuid())
+  tenantId    String
+  staffId     String
+  month       Int
+  year        Int
+  grossAmount Decimal       @db.Decimal(12, 2)
+  deductions  Decimal       @default(0) @db.Decimal(12, 2)
+  netAmount   Decimal       @db.Decimal(12, 2)
+  status      PayrollStatus @default(DRAFT)
+  payslipUrl  String?
+  processedAt DateTime?
+  createdAt   DateTime      @default(now())
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, month, year])
+  @@index([tenantId, year, month])
+  @@map("payroll_records")
+}
+
+// ─────────────────────────────────────────────
+// Examination & Result (PRD §7, Phase 3)
+// ─────────────────────────────────────────────
+
+enum ExamType {
+  CLASS_TEST
+  HALF_YEARLY
+  ANNUAL
+  TERM_FINAL
+  SEMESTER_FINAL
+  BOARD_REGISTRATION
+  TRIAL
+}
+
+model Exam {
+  id              String   @id @default(cuid())
+  tenantId        String
+  academicYearId  String
+  name            String
+  type            ExamType
+  startDate       DateTime
+  endDate         DateTime
+  markEntryOpen   DateTime
+  markEntryClose  DateTime
+  has4thSubjectRule Boolean @default(false) // PRD §7.2 — applied only when true; see lib/grading.ts
+
+  classes         ExamClass[]
+  subjectConfigs  ExamSubjectConfig[]
+  markEntries     MarkEntry[]
+  seatPlans       ExamSeatPlan[]
+  resultPublications ResultPublication[]
+  results         ExamResult[]
+
+  @@index([tenantId, academicYearId])
+  @@map("exams")
+}
+
+// Which classes this exam covers (PRD §7.1 "class/sections covered").
+model ExamClass {
+  id      String @id @default(cuid())
+  examId  String
+  classId String
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId])
+  @@map("exam_classes")
+}
+
+// Per-class-per-subject full/pass marks (PRD §7.1) — isFourthSubject flags the
+// additional/4th subject whose GPA contribution is capped when has4thSubjectRule is on.
+model ExamSubjectConfig {
+  id              String  @id @default(cuid())
+  examId          String
+  classId         String
+  subjectId       String
+  fullMarks       Int
+  passMarks       Int
+  isFourthSubject Boolean @default(false)
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId, subjectId])
+  @@map("exam_subject_configs")
+}
+
+enum MarkEntryStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+// One row per student-subject-attempt. attemptNumber > 1 represents a retake/
+// improvement exam (gap-fix, §1.D) — same exam+student+subject, new attempt.
+model MarkEntry {
+  id             String          @id @default(cuid())
+  tenantId       String
+  examId         String
+  studentId      String
+  subjectId      String
+  attemptNumber  Int             @default(1)
+  marksObtained  Decimal?        @db.Decimal(6, 2)
+  isAbsent       Boolean         @default(false)
+  grade          String?
+  gpaPoint       Decimal?        @db.Decimal(3, 2)
+  status         MarkEntryStatus @default(DRAFT)
+  enteredBy      String
+  approvedBy     String?
+  approvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  remarkRequests RemarkRequest[]
+
+  @@unique([examId, studentId, subjectId, attemptNumber])
+  @@index([tenantId, examId])
+  @@map("mark_entries")
+}
+
+enum RemarkStatus {
+  PENDING
+  ADJUSTED
+  REJECTED
+}
+
+// Marks re-check/remark request workflow (gap-fix, §1.D).
+model RemarkRequest {
+  id             String       @id @default(cuid())
+  tenantId       String
+  markEntryId    String
+  requestedBy    String
+  reason         String
+  status         RemarkStatus @default(PENDING)
+  originalMarks  Decimal?     @db.Decimal(6, 2)
+  adjustedMarks  Decimal?     @db.Decimal(6, 2)
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  markEntry MarkEntry @relation(fields: [markEntryId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("remark_requests")
+}
+
+model ExamSeatPlan {
+  id            String  @id @default(cuid())
+  examId        String
+  studentId     String
+  hall          String
+  seatNo        String
+  invigilatorId String?
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@map("exam_seat_plans")
+}
+
+model ResultPublication {
+  id          String    @id @default(cuid())
+  examId      String
+  classId     String
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  publishedBy String?
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId])
+  @@map("result_publications")
+}
+
+// Computed aggregate per student per exam — refreshed on publish (overall GPA,
+// letter grade, class/section/campus position). Kept separate from MarkEntry
+// (which is per-subject) so publishing doesn't require recomputing from scratch
+// on every read.
+model ExamResult {
+  id            String   @id @default(cuid())
+  tenantId      String
+  examId        String
+  studentId     String
+  classId       String
+  sectionId     String
+  totalMarks    Decimal  @db.Decimal(8, 2)
+  gpa           Decimal  @db.Decimal(3, 2)
+  letterGrade   String
+  hasFailed     Boolean  @default(false)
+  positionInClass   Int?
+  positionInSection Int?
+  computedAt    DateTime @default(now())
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+  @@index([tenantId, examId, classId])
+  @@map("exam_results")
+}
+
+// ─────────────────────────────────────────────
+// Online MCQ / Quiz module (v1 addition, plan §1.D)
+// ─────────────────────────────────────────────
+
+model Question {
+  id            String   @id @default(cuid())
+  tenantId      String
+  subjectId     String
+  questionText  String
+  options       Json     // [{ key: "A", text: "..." }, ...]
+  correctOption String
+  marks         Int      @default(1)
+  createdBy     String
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, subjectId])
+  @@map("questions")
+}
+
+model Quiz {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subjectId       String
+  examId          String?
+  title           String
+  durationMinutes Int
+  questionIds     Json     // string[] — question bank ids included in this quiz
+  isPublished     Boolean  @default(false)
+  createdBy       String
+  createdAt       DateTime @default(now())
+
+  attempts QuizAttempt[]
+
+  @@index([tenantId, subjectId])
+  @@map("quizzes")
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+model QuizAttempt {
+  id            String            @id @default(cuid())
+  tenantId      String
+  quizId        String
+  studentId     String
+  questionOrder Json              // string[] — randomized order shown to this student
+  answers       Json?             // { [questionId]: selectedOptionKey }
+  score         Int?
+  status        QuizAttemptStatus @default(IN_PROGRESS)
+  startedAt     DateTime          @default(now())
+  submittedAt   DateTime?
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, studentId])
+  @@map("quiz_attempts")
+}
+
+// ─────────────────────────────────────────────
+// Certificate Verification Portal (v1 addition, plan §1.D)
+// ─────────────────────────────────────────────
+
+// Every generated marksheet/admit-card/TC gets one of these. QR on the printed
+// document encodes a URL containing verificationCode; the public verification
+// page resolves it here without exposing raw marks/NID (plan §2.2 flow).
+model DocumentRegistry {
+  id               String   @id @default(cuid())
+  tenantId         String
+  docType          String   // "marksheet" | "admit_card" | "transfer_certificate" | ...
+  entityId         String   // e.g. MarkEntry/ExamResult/Student id the document was generated for
+  verificationCode String   @unique
+  contentHash      String
+  // Snapshot of only the non-sensitive facts shown on public verification (name,
+  // class, doc type, issue date) — deliberately never raw marks/NID, and decouples
+  // the public verify endpoint from re-deriving/re-checking entity internals.
+  publicPayload    Json
+  issuedAt         DateTime @default(now())
+
+  @@index([tenantId, entityId])
+  @@map("document_registry")
+}
+
+// ─────────────────────────────────────────────
+// Website Maintenance (PRD §4, Phase 4)
+// ─────────────────────────────────────────────
+
+model SliderImage {
+  id           String    @id @default(cuid())
+  tenantId     String
+  imageUrl     String
+  title        String?
+  subtitle     String?
+  btnText      String?
+  btnLink      String?
+  order        Int       @default(0)
+  isActive     Boolean   @default(true)
+  publishFrom  DateTime?
+  publishUntil DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId])
+  @@map("slider_images")
+}
+
+// Static content pages (About Us, Mission & Vision, ...) — PRD §4.2.
+model Page {
+  id              String   @id @default(cuid())
+  tenantId        String
+  slug            String
+  title           String
+  titleBn         String?
+  bodyHtml        String
+  metaTitle       String?
+  metaDescription String?
+  ogImageUrl      String?
+  isPublished     Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, slug])
+  @@map("pages")
+}
+
+// Principal/Chairman/Governor messages — PRD §4.3.
+model AuthorityMessage {
+  id          String  @id @default(cuid())
+  tenantId    String
+  name        String
+  designation String
+  photoUrl    String?
+  messageBody String
+  order       Int     @default(0)
+  isActive    Boolean @default(true)
+
+  @@index([tenantId])
+  @@map("authority_messages")
+}
+
+// Governing Body / Academic Council / Finance Committee — PRD §4.4.
+model CommitteeMember {
+  id          String @id @default(cuid())
+  tenantId    String
+  groupName   String // "GOVERNING_BODY" | "ACADEMIC_COUNCIL" | "FINANCE_COMMITTEE" | custom
+  name        String
+  designation String
+  photoUrl    String?
+  bio         String?
+  order       Int    @default(0)
+
+  @@index([tenantId, groupName])
+  @@map("committee_members")
+}
+
+model GalleryAlbum {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  eventDate   DateTime?
+  description String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  images GalleryImage[]
+
+  @@index([tenantId])
+  @@map("gallery_albums")
+}
+
+model GalleryImage {
+  id           String @id @default(cuid())
+  albumId      String
+  imageUrl     String
+  caption      String?
+
+  album GalleryAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@map("gallery_images")
+}
+
+enum NoticeAudience {
+  PUBLIC
+  STUDENTS
+  STAFF
+  GUARDIANS
+}
+
+// Notice board + Daily Notification (PRD §4.6) — audience targeting decides
+// whether it surfaces on the public site vs. only inside the ERP/portal.
+model Notice {
+  id                 String         @id @default(cuid())
+  tenantId           String
+  title              String
+  body               String
+  audience           NoticeAudience
+  attachmentUrl      String?
+  isPinned           Boolean        @default(false)
+  isDailyNotification Boolean       @default(false) // short-form announcement vs. formal notice
+  publishAt          DateTime       @default(now())
+  expireAt           DateTime?
+  isPublishedWebsite Boolean        @default(false)
+  sendSms            Boolean        @default(false)
+  createdBy          String
+  createdAt          DateTime       @default(now())
+
+  @@index([tenantId, audience])
+  @@index([tenantId, isPublishedWebsite])
+  @@map("notices")
+}
+
+enum DownloadCategory {
+  SYLLABUS
+  FORMS
+  RESULTS
+  CIRCULARS
+  OTHERS
+}
+
+model DownloadFile {
+  id           String           @id @default(cuid())
+  tenantId     String
+  title        String
+  category     DownloadCategory
+  fileUrl      String
+  academicYear String?
+  isPublic     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+
+  @@index([tenantId, category])
+  @@map("download_files")
+}
+
+enum EventType {
+  HOLIDAY
+  EXAM
+  CULTURAL
+  SPORTS
+  PARENT_MEETING
+}
+
+model SchoolEvent {
+  id        String    @id @default(cuid())
+  tenantId  String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  type      EventType
+
+  @@index([tenantId])
+  @@map("school_events")
+}
+
+// Public contact-form submissions land here for staff to respond (PRD §4.14).
+model ContactMessage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  email     String?
+  phone     String?
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, isRead])
+  @@map("contact_messages")
+}
+
+// ─────────────────────────────────────────────
+// Cross-cutting (platform engineering gap-fixes)
+// ─────────────────────────────────────────────
+
+// Reliable cross-module side effects (payment success -> invoice update -> SMS -> receipt)
+model OutboxEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  eventType String
+  payload   Json
+  status    String   @default("pending") // pending | processing | done | failed
+  retries   Int      @default(0)
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@map("outbox_events")
+}
+
+// Every authenticated write is logged — includes Super Admin impersonation (gap-fix)
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  tenantId   String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}

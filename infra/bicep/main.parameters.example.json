@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "dev" },
+    "location": { "value": "southeastasia" },
+    "postgresAdminPassword": { "value": "REPLACE_ME_USE_KEYVAULT_OR_SECRET_INJECTION" }
+  }
+}

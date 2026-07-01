@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm ping *)",
+      "Bash(npm audit *)",
+      "Bash(docker --version)",
+      "Bash(pg_isready)",
+      "Bash(docker run *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npx next *)",
+      "Bash(npx turbo *)",
+      "Bash(rm -rf apps/admin-web/.next apps/portal-pwa/.next apps/public-site/.next apps/*/tsconfig.tsbuildinfo .turbo apps/*/.turbo packages/*/.turbo 2>/dev/null *)",
+      "Bash(DATABASE_URL=\"postgresql://postgres:Maleficent%40@localhost:5433/EduErp?schema=public\" npx prisma migrate dev --name phase3_exams_documents)",
+      "Bash(npm ls *)"
+    ],
+    "additionalDirectories": [
+      "E:\\EduErp\\apps\\*"
+    ]
+  }
+}
