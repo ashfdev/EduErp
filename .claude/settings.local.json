@@ -14,7 +14,18 @@
       "Bash(npx turbo *)",
       "Bash(rm -rf apps/admin-web/.next apps/portal-pwa/.next apps/public-site/.next apps/*/tsconfig.tsbuildinfo .turbo apps/*/.turbo packages/*/.turbo 2>/dev/null *)",
       "Bash(DATABASE_URL=\"postgresql://postgres:Maleficent%40@localhost:5433/EduErp?schema=public\" npx prisma migrate dev --name phase3_exams_documents)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(corepack enable *)",
+      "Bash(corepack prepare *)",
+      "Bash(pnpm --version)",
+      "Bash(grep -v '^./node_modules$')",
+      "Bash(git mv *)",
+      "PowerShell(Get-Process node,node.exe -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
+      "Bash(mv apps/core-api /tmp/test-move-check)",
+      "Bash(mv /tmp/test-move-check apps/core-api)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"
