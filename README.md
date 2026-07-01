@@ -1,52 +1,70 @@
 # Education ERP (Bangladesh)
 
-Multi-tenant School/College/Madrasah ERP — Core API + Admin Web + Student/Guardian PWA + Public
-Website. See `Education_ERP_PRD_v2.docx` for the full product spec and the plan doc referenced
-below for the gap-filled architecture and phased roadmap.
+Single-institution School/College/University/Madrasah ERP — Admin Panel + Student/Guardian
+Portal (PWA) + Public Institution Website + Core API. See `CLAUDE.md` for the full architecture
+and rules, and `prompts.md` / `PHASE_PROMPTS_PART2.md` for the phase-by-phase build guide.
+
+No multi-tenancy — everything institution-specific is configured through the Settings system
+(`InstitutionProfile`, `InstitutionConfig`, `StudentIdConfig`, `GradingScale`, etc.), not
+hardcoded or tenant-scoped.
 
 ## Structure
 
 ```
 apps/
-  core-api/      Node/Express + Prisma — all business logic, tenant-isolated
-  admin-web/     Next.js — institution admin/staff dashboards
-  portal-pwa/    Next.js PWA — student & guardian portal
-  public-site/   Next.js ISR — public institution website
+  admin/       Next.js 14 — institution admin/staff dashboards
+  portal/      Next.js 14 PWA — student & guardian portal
+  website/     Next.js 14 ISR — public institution website
 packages/
-  shared-types/  Roles, DTOs shared across apps
-  ui/            Shared React components
+  db/          Prisma schema + generated client (single source of truth)
+  types/       Shared TypeScript types (re-exports Prisma types + API wrappers)
+  validators/  Shared Zod schemas used by API + frontend
+  ui/          Shared React component library (shadcn/ui based)
+  config/      Shared tsconfig, eslint, tailwind base configs
+server/
+  api/         Node.js + Express — all business logic
+services/
+  device/      IoT/biometric device integration (Phase 17)
+  notification/  SMS/Email/Push dispatch worker, BullMQ (Phase 18)
 infra/
-  bicep/         Azure IaC baseline (App Service, PostgreSQL, Blob, Key Vault)
+  bicep/       Azure IaC baseline (App Service, PostgreSQL, Blob, Key Vault)
+_legacy/       Old npm/camelCase/tenant-scoped build, kept for reference while porting
+               proven business logic forward — not part of the pnpm workspace.
 .github/workflows/ci.yml   Lint/typecheck/test/build on every PR
 ```
 
 ## Prerequisites
 
 - Node.js 20+
-- PostgreSQL 16 (local, or `docker run -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16`)
-- Redis (for BullMQ queues, added from Phase 1 onward)
+- pnpm (`corepack enable && corepack prepare pnpm@latest --activate`, or `npm i -g pnpm`)
+- PostgreSQL 16 (local, or Docker)
+- Redis (for BullMQ queues, from Phase 18 onward)
 
 ## Getting started
 
 ```bash
-npm install
-cp apps/core-api/.env.example apps/core-api/.env   # then fill in DATABASE_URL, JWT secrets
-npm run prisma:generate
-npx --workspace=apps/core-api prisma migrate dev --name init
-npm run dev     # runs all apps in parallel via Turborepo
+pnpm install
+cp packages/db/.env.example packages/db/.env       # DATABASE_URL
+cp server/api/.env.example server/api/.env         # DATABASE_URL, JWT secrets, etc.
+pnpm db:generate
+pnpm db:migrate
+pnpm db:seed
+pnpm dev     # runs all apps in parallel via Turborepo
 ```
 
-- core-api: http://localhost:4000/health
-- admin-web: http://localhost:3000
-- portal-pwa: http://localhost:3001
-- public-site: http://localhost:3002
+- api: http://localhost:4000/health
+- admin: http://localhost:3000
+- portal: http://localhost:3001
+- website: http://localhost:3002
+
+Default seeded login: phone `01700000000`, password `Admin@1234`.
 
 ## Testing
 
 ```bash
-npm run test        # vitest across all workspaces
-npm run lint
-npm run typecheck
+pnpm test        # vitest across all workspaces
+pnpm lint
+pnpm typecheck
 ```
 
 ## Deploying infra (Azure)
@@ -64,6 +82,9 @@ az deployment group create \
 
 ## Roadmap
 
-Phase 0 (this scaffold) → SIS/Auth → Fee & Finance → Exams/Results/Documents → Website →
-Admission → Biometric Attendance → HR/Payroll → Library/Transport/Hostel/Inventory →
-Analytics/Mobile. Full detail in the architecture & delivery plan.
+Phase 0 (monorepo + schema + seed) → 1 (Settings) → 2 (Auth) → 3 (Students) → 4 (Subjects) →
+5 (Attendance) → 6 (Examination/Grading) → 7 (Results/Report Cards) → 8 (Fee & Finance) →
+9 (Admission) → 10 (Documents) → 11 (Website) → 12 (HR/Payroll) →
+13 (Library/Transport/Hostel) → 14 (Analytics) → 15 (Portal PWA) → 16 (Public Website ISR) →
+17 (IoT/Biometric Device Service) → 18 (Notification Service). Full detail in `ROADMAP.md` and
+`CLAUDE.md`'s Phase Tracker.

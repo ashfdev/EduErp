@@ -1,0 +1,19 @@
+{
+  "name": "@education-erp/device-service",
+  "private": true,
+  "version": "0.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@education-erp/db": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.2"
+  }
+}

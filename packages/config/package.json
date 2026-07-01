@@ -1,0 +1,16 @@
+{
+  "name": "@education-erp/config",
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.nextjs.json": "./tsconfig.nextjs.json",
+    "./tsconfig.node.json": "./tsconfig.node.json",
+    "./eslint-base": "./eslint-base.js",
+    "./tailwind.base": "./tailwind.base.ts"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

@@ -25,7 +25,21 @@
       "PowerShell(Get-Process node,node.exe -ErrorAction SilentlyContinue)",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
       "Bash(mv apps/core-api /tmp/test-move-check)",
-      "Bash(mv /tmp/test-move-check apps/core-api)"
+      "Bash(mv /tmp/test-move-check apps/core-api)",
+      "Bash(pnpm db:generate)",
+      "Bash(pnpm db:migrate --name initial_schema)",
+      "Bash(pnpm exec *)",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"Yes, reset it \\(Recommended\\)\" pnpm exec prisma migrate reset --force --skip-seed)",
+      "Bash(pnpm db:seed)",
+      "Bash(docker exec *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm install *)",
+      "Bash(curl -s http://localhost:4000/health)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(pnpm --filter=@education-erp/admin build)",
+      "Bash(pnpm --filter=@education-erp/portal build)",
+      "Bash(pnpm --filter=@education-erp/website build)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"

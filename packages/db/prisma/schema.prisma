@@ -1,0 +1,1209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// INSTITUTION & SETTINGS MODELS
+// ─────────────────────────────────────────────
+
+model InstitutionProfile {
+  id                    String            @id @default(cuid())
+  name_en               String
+  name_bn               String?
+  tagline_en            String?
+  tagline_bn            String?
+  type                  InstitutionType
+  eiin                  String?           @unique
+  board                 String?
+  founded_year          Int?
+  logo_url              String?
+  favicon_url           String?
+  primary_color         String            @default("#1a3c4a")
+  secondary_color       String            @default("#2e7d9a")
+  address               String?
+  district              String?
+  division              String?
+  post_code             String?
+  phone_primary         String?
+  phone_secondary       String?
+  email_primary         String?
+  email_secondary       String?
+  website_url           String?
+  facebook_url          String?
+  youtube_url           String?
+  map_embed_code        String?
+  principal_name        String?
+  principal_designation String?
+  established_text      String?
+  mission_text          String?
+  vision_text           String?
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+}
+
+model InstitutionConfig {
+  id                             String               @id @default(cuid())
+  academic_calendar_type        AcademicCalendarType @default(YEARLY)
+  has_shifts                    Boolean              @default(true)
+  has_sections                  Boolean              @default(true)
+  has_departments               Boolean              @default(false)
+  has_semesters                 Boolean              @default(false)
+  show_hijri_calendar           Boolean              @default(false)
+  term_class                    String               @default("Class")
+  term_section                  String               @default("Section")
+  term_teacher                  String               @default("Teacher")
+  term_principal                String               @default("Principal")
+  term_exam_controller          String               @default("Exam Controller")
+  term_student_id               String               @default("Student ID")
+  term_roll                     String               @default("Roll No")
+  term_registration             String               @default("Registration No")
+  extra_course_enrollment       Boolean              @default(false)
+  show_practical_marks          Boolean              @default(false)
+  show_subject_teacher_on_result Boolean             @default(true)
+  allow_partial_fee_payment     Boolean              @default(true)
+  show_position_in_result       Boolean              @default(true)
+  show_class_position           Boolean              @default(true)
+  show_section_position         Boolean              @default(true)
+  fourth_subject_rule           Boolean              @default(false)
+  created_at                    DateTime             @default(now())
+  updated_at                    DateTime             @updatedAt
+}
+
+model StudentIdConfig {
+  id                String          @id @default(cuid())
+  prefix            String          @default("STU")
+  include_year      Boolean         @default(true)
+  year_format       String          @default("2")
+  include_month     Boolean         @default(false)
+  separator         String          @default("-")
+  sequence_digits   Int             @default(4)
+  sequence_scope    IdSequenceScope @default(GLOBAL)
+  current_sequence  Int             @default(0)
+  preview_example   String?
+  created_at        DateTime        @default(now())
+  updated_at        DateTime        @updatedAt
+}
+
+model GradingScale {
+  id         String         @id @default(cuid())
+  name       String
+  is_default Boolean        @default(false)
+  scale_type GradeScaleType @default(GPA_5)
+  ranges     GradeRange[]
+  exams      Exam[]
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+}
+
+model GradeRange {
+  id               String       @id @default(cuid())
+  grading_scale_id String
+  min_marks        Float
+  max_marks        Float
+  grade_letter     String
+  grade_point      Float
+  remarks          String?
+  display_order    Int
+  grading_scale    GradingScale @relation(fields: [grading_scale_id], references: [id])
+  created_at       DateTime     @default(now())
+
+  @@index([grading_scale_id])
+}
+
+model ExamTypeConfig {
+  id                       String   @id @default(cuid())
+  name                     String
+  code                     String   @unique
+  weight_in_annual         Float    @default(0)
+  allows_absent_marking    Boolean  @default(true)
+  has_practical            Boolean  @default(false)
+  has_viva                 Boolean  @default(false)
+  practical_marks_separate Boolean  @default(false)
+  is_board_exam            Boolean  @default(false)
+  is_active                Boolean  @default(true)
+  display_order            Int
+  exams                    Exam[]
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+}
+
+model FeeRules {
+  id                       String      @id @default(cuid())
+  late_fee_enabled         Boolean     @default(true)
+  late_fee_type            LateFeeType @default(FIXED)
+  late_fee_amount          Float       @default(50)
+  late_fee_daily_cap       Float       @default(500)
+  grace_period_days        Int         @default(5)
+  fine_applies_to_exam_fee Boolean     @default(false)
+  block_result_on_due      Boolean     @default(false)
+  block_admit_on_due       Boolean     @default(false)
+  partial_payment_allowed  Boolean     @default(true)
+  advance_payment_allowed  Boolean     @default(true)
+  created_at               DateTime    @default(now())
+  updated_at               DateTime    @updatedAt
+}
+
+model AttendanceRules {
+  id                          String   @id @default(cuid())
+  min_attendance_percentage   Float    @default(75)
+  late_arrival_window_minutes Int      @default(15)
+  working_days_per_week       Int      @default(6)
+  count_late_as_absent_after  Int      @default(3)
+  sms_on_absent               Boolean  @default(true)
+  sms_on_late                 Boolean  @default(false)
+  created_at                  DateTime @default(now())
+  updated_at                  DateTime @updatedAt
+}
+
+model AuthorityConfig {
+  id             String        @id @default(cuid())
+  doc_type       DocumentType
+  slot           Int
+  label          String
+  authority_role AuthorityRole
+  is_required    Boolean       @default(true)
+  created_at     DateTime      @default(now())
+
+  @@unique([doc_type, slot])
+}
+
+model AuthoritySignature {
+  id            String        @id @default(cuid())
+  role          AuthorityRole
+  display_name  String
+  designation   String
+  signature_url String?
+  seal_url      String?
+  is_active     Boolean       @default(true)
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+}
+
+model DocumentTemplate {
+  id           String       @id @default(cuid())
+  doc_type     DocumentType
+  name         String
+  html_content String       @db.Text
+  css_content  String?      @db.Text
+  is_default   Boolean      @default(false)
+  is_active    Boolean      @default(false)
+  version      Int          @default(1)
+  preview_url  String?
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+}
+
+model NotificationConfig {
+  id          String              @id @default(cuid())
+  trigger     NotificationTrigger
+  channel     NotificationChannel
+  is_enabled  Boolean             @default(true)
+  template_bn String              @db.Text
+  template_en String              @db.Text
+  created_at  DateTime            @default(now())
+  updated_at  DateTime            @updatedAt
+
+  @@unique([trigger, channel])
+}
+
+// ─────────────────────────────────────────────
+// ACADEMIC STRUCTURE MODELS
+// ─────────────────────────────────────────────
+
+model AcademicYear {
+  id                        String                   @id @default(cuid())
+  label                     String                   @unique
+  start_date                DateTime
+  end_date                  DateTime
+  is_active                 Boolean                  @default(false)
+  created_at                DateTime                 @default(now())
+  updated_at                DateTime                 @updatedAt
+  classes                   Class[]
+  exams                     Exam[]
+  student_academic_histories StudentAcademicHistory[]
+  admission_cycles          AdmissionCycle[]
+  fee_structures            FeeStructure[]
+}
+
+model Shift {
+  id         String             @id @default(cuid())
+  name       String
+  start_time String
+  end_time   String
+  is_active  Boolean            @default(true)
+  created_at DateTime           @default(now())
+  sections   Section[]
+  attendance AttendanceRecord[]
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  name_en     String
+  name_bn     String?
+  code        String    @unique
+  head_id     String?   @unique
+  head        Staff?    @relation("DeptHead", fields: [head_id], references: [id])
+  staff       Staff[]   @relation("StaffDept")
+  is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  classes     Class[]
+}
+
+model Class {
+  id               String       @id @default(cuid())
+  academic_year_id String
+  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
+  department_id    String?
+  department       Department?  @relation(fields: [department_id], references: [id])
+  name_en          String
+  name_bn          String?
+  numeric_level    Int
+  is_active        Boolean      @default(true)
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+  sections         Section[]
+  subjects         Subject[]
+  students         Student[]    @relation("CurrentClass")
+  admission_cycles AdmissionCycle[]
+
+  @@index([academic_year_id])
+}
+
+model Section {
+  id               String             @id @default(cuid())
+  class_id         String
+  class            Class              @relation(fields: [class_id], references: [id])
+  shift_id         String?
+  shift            Shift?             @relation(fields: [shift_id], references: [id])
+  class_teacher_id String?
+  class_teacher    Staff?             @relation("ClassTeacher", fields: [class_teacher_id], references: [id])
+  name             String
+  capacity         Int                @default(50)
+  is_active        Boolean            @default(true)
+  created_at       DateTime           @default(now())
+  students         Student[]          @relation("CurrentSection")
+  attendance       AttendanceRecord[]
+
+  @@index([class_id])
+}
+
+model Subject {
+  id               String                     @id @default(cuid())
+  class_id         String
+  class            Class                      @relation(fields: [class_id], references: [id])
+  name_en          String
+  name_bn          String?
+  code             String
+  subject_type     SubjectType                @default(THEORY)
+  is_compulsory    Boolean                    @default(true)
+  is_optional      Boolean                    @default(false)
+  full_marks       Float                      @default(100)
+  pass_marks       Float                      @default(33)
+  display_order    Int                        @default(0)
+  is_active        Boolean                    @default(true)
+  created_at       DateTime                   @default(now())
+  updated_at       DateTime                   @updatedAt
+  assignments      SubjectTeacherAssignment[]
+  student_subjects StudentSubject[]
+  mark_entries     MarkEntry[]
+  exam_subject_configs ExamSubjectConfig[]
+
+  @@unique([class_id, code])
+  @@index([class_id])
+}
+
+model SubjectTeacherAssignment {
+  id               String   @id @default(cuid())
+  subject_id       String
+  subject          Subject  @relation(fields: [subject_id], references: [id])
+  staff_id         String
+  staff            Staff    @relation(fields: [staff_id], references: [id])
+  section_id       String?
+  academic_year_id String
+  created_at       DateTime @default(now())
+
+  @@unique([subject_id, section_id, academic_year_id])
+  @@index([staff_id])
+}
+
+// ─────────────────────────────────────────────
+// PEOPLE MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id             String         @id @default(cuid())
+  name_en        String
+  name_bn        String?
+  role           UserRole
+  email          String?        @unique
+  phone          String         @unique
+  password_hash  String
+  lang_pref      Lang           @default(BN)
+  is_active      Boolean        @default(true)
+  last_login_at  DateTime?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+  student        Student?
+  staff          Staff?
+  refresh_tokens RefreshToken[]
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  token      String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+}
+
+model Guardian {
+  id         String           @id @default(cuid())
+  name_en    String
+  name_bn    String?
+  relation   GuardianRelation
+  phone      String
+  nid        String?
+  email      String?
+  occupation String?
+  address    String?
+  created_at DateTime         @default(now())
+  updated_at DateTime         @updatedAt
+  students   Student[]
+}
+
+model Student {
+  id                    String      @id @default(cuid())
+  user_id               String?     @unique
+  user                  User?       @relation(fields: [user_id], references: [id])
+  student_uid           String      @unique
+  name_en               String
+  name_bn               String?
+  date_of_birth         DateTime?
+  gender                Gender
+  religion              String?
+  blood_group           String?
+  nationality           String      @default("Bangladeshi")
+  nid_or_birth_reg      String?
+  phone                 String?
+  guardian_id           String?
+  guardian              Guardian?   @relation(fields: [guardian_id], references: [id])
+  father_name           String?
+  father_phone          String?
+  father_nid            String?
+  father_occupation     String?
+  mother_name           String?
+  mother_phone          String?
+  mother_nid            String?
+  mother_occupation     String?
+  address_permanent     String?
+  address_current       String?
+  district              String?
+  current_class_id      String?
+  current_class         Class?      @relation("CurrentClass", fields: [current_class_id], references: [id])
+  current_section_id    String?
+  current_section       Section?    @relation("CurrentSection", fields: [current_section_id], references: [id])
+  current_roll_no       String?
+  registration_no       String?
+  board_roll            String?
+  biometric_id          String?
+  admission_date        DateTime?
+  previous_institution  String?
+  previous_class        String?
+  previous_result       String?
+  photo_url             String?
+  signature_url         String?
+  status                StudentStatus @default(ACTIVE)
+  has_disability        Boolean     @default(false)
+  disability_note       String?
+  deleted_at            DateTime?
+  created_at            DateTime    @default(now())
+  updated_at            DateTime    @updatedAt
+  created_by_id         String?
+  academic_history      StudentAcademicHistory[]
+  student_subjects      StudentSubject[]
+  attendance            AttendanceRecord[]
+  mark_entries          MarkEntry[]
+  invoices              Invoice[]
+  exam_seat_plans       ExamSeatPlan[]
+
+  @@index([current_class_id])
+  @@index([current_section_id])
+  @@index([status])
+}
+
+model StudentAcademicHistory {
+  id               String        @id @default(cuid())
+  student_id       String
+  student          Student       @relation(fields: [student_id], references: [id])
+  academic_year_id String
+  academic_year    AcademicYear  @relation(fields: [academic_year_id], references: [id])
+  class_id         String
+  section_id       String?
+  roll_no          String?
+  final_gpa        Float?
+  final_grade      String?
+  status           HistoryStatus
+  promoted_by_id   String?
+  promoted_at      DateTime?
+  notes            String?
+  created_at       DateTime      @default(now())
+
+  @@index([student_id])
+}
+
+model StudentSubject {
+  id                String   @id @default(cuid())
+  student_id        String
+  student           Student  @relation(fields: [student_id], references: [id])
+  subject_id        String
+  subject           Subject  @relation(fields: [subject_id], references: [id])
+  is_inherited      Boolean  @default(true)
+  academic_year_id  String
+  added_at          DateTime @default(now())
+
+  @@unique([student_id, subject_id, academic_year_id])
+  @@index([student_id])
+}
+
+model Staff {
+  id                  String                     @id @default(cuid())
+  user_id             String                     @unique
+  user                User                       @relation(fields: [user_id], references: [id])
+  staff_uid           String                     @unique
+  name_en             String
+  name_bn             String?
+  designation         String
+  department_id       String?
+  department          Department?                @relation("StaffDept", fields: [department_id], references: [id])
+  date_of_birth       DateTime?
+  gender              Gender?
+  religion            String?
+  blood_group         String?
+  nid                 String?
+  tin                 String?
+  phone               String?
+  email               String?
+  address             String?
+  photo_url           String?
+  signature_url       String?
+  biometric_id        String?
+  employment_type     EmploymentType             @default(PERMANENT)
+  joining_date        DateTime?
+  salary_structure_id String?
+  is_active           Boolean                    @default(true)
+  deleted_at          DateTime?
+  created_at          DateTime                   @default(now())
+  updated_at          DateTime                   @updatedAt
+  created_by_id       String?
+  subject_assignments SubjectTeacherAssignment[]
+  department_head_of  Department?                @relation("DeptHead")
+  class_teacher_of    Section[]                  @relation("ClassTeacher")
+  leave_requests      LeaveRequest[]
+  payroll_records     PayrollRecord[]
+
+  @@index([department_id])
+}
+
+// ─────────────────────────────────────────────
+// ATTENDANCE MODELS
+// ─────────────────────────────────────────────
+
+model AttendanceRecord {
+  id              String           @id @default(cuid())
+  person_id       String
+  person_type     PersonType
+  date            DateTime         @db.Date
+  shift_id        String?
+  shift           Shift?           @relation(fields: [shift_id], references: [id])
+  section_id      String?
+  section         Section?         @relation(fields: [section_id], references: [id])
+  student_id      String?
+  student         Student?         @relation(fields: [student_id], references: [id])
+  period_no       Int?
+  status          AttendanceStatus
+  source          AttendanceSource @default(MANUAL)
+  device_id       String?
+  device          Device?          @relation(fields: [device_id], references: [id])
+  marked_by_id    String?
+  override_reason String?
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  @@unique([person_id, person_type, date, shift_id, period_no])
+  @@index([person_id, date])
+  @@index([section_id, date])
+}
+
+model Device {
+  id                 String             @id @default(cuid())
+  name               String
+  type               DeviceType
+  brand              String?
+  location           String?
+  ip_address         String?
+  port               Int?               @default(4370)
+  last_sync_at       DateTime?
+  status             DeviceStatus       @default(OFFLINE)
+  is_active          Boolean            @default(true)
+  created_at         DateTime           @default(now())
+  attendance_records AttendanceRecord[]
+  punch_logs         DevicePunchLog[]
+}
+
+model DevicePunchLog {
+  id                String   @id @default(cuid())
+  device_id         String
+  device            Device   @relation(fields: [device_id], references: [id])
+  device_user_id    String
+  punch_at          DateTime
+  synced_at         DateTime @default(now())
+  mapped_person_id  String?
+  is_processed      Boolean  @default(false)
+
+  @@index([device_id, punch_at])
+}
+
+// ─────────────────────────────────────────────
+// EXAM & RESULT MODELS
+// ─────────────────────────────────────────────
+
+model Exam {
+  id                   String              @id @default(cuid())
+  academic_year_id     String
+  academic_year        AcademicYear        @relation(fields: [academic_year_id], references: [id])
+  exam_type_config_id  String
+  exam_type_config     ExamTypeConfig      @relation(fields: [exam_type_config_id], references: [id])
+  name                 String
+  start_date           DateTime?
+  end_date             DateTime?
+  mark_entry_opens_at  DateTime?
+  mark_entry_closes_at DateTime?
+  grading_scale_id     String?
+  grading_scale        GradingScale?       @relation(fields: [grading_scale_id], references: [id])
+  status               ExamStatus          @default(DRAFT)
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
+  subject_configs      ExamSubjectConfig[]
+  mark_entries         MarkEntry[]
+  seat_plans           ExamSeatPlan[]
+  result_publications  ResultPublication[]
+
+  @@index([academic_year_id])
+}
+
+model ExamSubjectConfig {
+  id                   String  @id @default(cuid())
+  exam_id              String
+  exam                 Exam    @relation(fields: [exam_id], references: [id])
+  subject_id           String
+  subject              Subject @relation(fields: [subject_id], references: [id])
+  full_marks_theory    Float   @default(100)
+  full_marks_practical Float   @default(0)
+  pass_marks_theory    Float   @default(33)
+  pass_marks_practical Float   @default(0)
+  pass_marks_combined  Float   @default(33)
+
+  @@unique([exam_id, subject_id])
+}
+
+model MarkEntry {
+  id              String     @id @default(cuid())
+  exam_id         String
+  exam            Exam       @relation(fields: [exam_id], references: [id])
+  student_id      String
+  student         Student    @relation(fields: [student_id], references: [id])
+  subject_id      String
+  subject         Subject    @relation(fields: [subject_id], references: [id])
+  marks_theory    Float?
+  marks_practical Float?
+  marks_total     Float?
+  is_absent       Boolean    @default(false)
+  grade_letter    String?
+  grade_point     Float?
+  status          MarkStatus @default(DRAFT)
+  entered_by_id   String?
+  approved_by_id  String?
+  approved_at     DateTime?
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+
+  @@unique([exam_id, student_id, subject_id])
+  @@index([exam_id, student_id])
+}
+
+model ExamSeatPlan {
+  id             String  @id @default(cuid())
+  exam_id        String
+  exam           Exam    @relation(fields: [exam_id], references: [id])
+  student_id     String
+  student        Student @relation(fields: [student_id], references: [id])
+  hall_name      String?
+  seat_number    String?
+  invigilator_id String?
+
+  @@unique([exam_id, student_id])
+}
+
+model ResultPublication {
+  id              String    @id @default(cuid())
+  exam_id         String
+  exam            Exam      @relation(fields: [exam_id], references: [id])
+  class_id        String
+  is_published    Boolean   @default(false)
+  published_at    DateTime?
+  published_by_id String?
+  is_public       Boolean   @default(false)
+
+  @@unique([exam_id, class_id])
+}
+
+// ─────────────────────────────────────────────
+// FEE MODELS
+// ─────────────────────────────────────────────
+
+model FeeStructure {
+  id               String       @id @default(cuid())
+  academic_year_id String
+  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
+  class_id         String?
+  section_id       String?
+  category         FeeCategory
+  name             String
+  amount           Float
+  frequency        FeeFrequency
+  due_day          Int?
+  is_active        Boolean      @default(true)
+  created_at       DateTime     @default(now())
+  invoices         Invoice[]
+}
+
+model Invoice {
+  id               String        @id @default(cuid())
+  student_id       String
+  student          Student       @relation(fields: [student_id], references: [id])
+  fee_structure_id String?
+  fee_structure    FeeStructure? @relation(fields: [fee_structure_id], references: [id])
+  academic_year_id String
+  category         FeeCategory
+  description      String
+  amount_due       Float
+  amount_paid      Float         @default(0)
+  fine_amount      Float         @default(0)
+  due_date         DateTime
+  status           InvoiceStatus @default(PENDING)
+  month            Int?
+  year             Int?
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  payments         Payment[]
+
+  @@index([student_id])
+  @@index([status])
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  invoice_id      String
+  invoice         Invoice        @relation(fields: [invoice_id], references: [id])
+  gateway         PaymentGateway
+  transaction_id  String?        @unique
+  amount          Float
+  status          PaymentStatus
+  paid_at         DateTime?
+  receipt_url     String?
+  notes           String?
+  collected_by_id String?
+  created_at      DateTime       @default(now())
+
+  @@index([invoice_id])
+}
+
+// ─────────────────────────────────────────────
+// HR MODELS
+// ─────────────────────────────────────────────
+
+model LeaveType {
+  id             String         @id @default(cuid())
+  name           String
+  days_allowed   Int
+  is_paid        Boolean        @default(true)
+  created_at     DateTime       @default(now())
+  leave_requests LeaveRequest[]
+}
+
+model LeaveRequest {
+  id             String      @id @default(cuid())
+  staff_id       String
+  staff          Staff       @relation(fields: [staff_id], references: [id])
+  leave_type_id  String
+  leave_type     LeaveType   @relation(fields: [leave_type_id], references: [id])
+  from_date      DateTime
+  to_date        DateTime
+  reason         String
+  status         LeaveStatus @default(PENDING)
+  approved_by_id String?
+  approved_at    DateTime?
+  created_at     DateTime    @default(now())
+
+  @@index([staff_id])
+}
+
+model SalaryStructure {
+  id             String   @id @default(cuid())
+  name           String
+  basic          Float
+  house_rent     Float    @default(0)
+  medical        Float    @default(0)
+  transport      Float    @default(0)
+  pf_percentage  Float    @default(0)
+  tds_percentage Float    @default(0)
+  created_at     DateTime @default(now())
+}
+
+model PayrollRecord {
+  id               String        @id @default(cuid())
+  staff_id         String
+  staff            Staff         @relation(fields: [staff_id], references: [id])
+  month            Int
+  year             Int
+  working_days     Int
+  present_days     Int
+  gross_salary     Float
+  deductions       Float
+  net_salary       Float
+  advance_deducted Float         @default(0)
+  status           PayrollStatus @default(DRAFT)
+  payslip_url      String?
+  processed_by_id  String?
+  created_at       DateTime      @default(now())
+
+  @@unique([staff_id, month, year])
+}
+
+// ─────────────────────────────────────────────
+// WEBSITE CONTENT MODELS
+// ─────────────────────────────────────────────
+
+model Notice {
+  id                String         @id @default(cuid())
+  title             String
+  body              String         @db.Text
+  attachment_url    String?
+  audience          NoticeAudience @default(PUBLIC)
+  is_pinned         Boolean        @default(false)
+  is_published      Boolean        @default(false)
+  is_public_website Boolean        @default(true)
+  send_sms          Boolean        @default(false)
+  sms_sent_at       DateTime?
+  publish_at        DateTime?
+  expire_at         DateTime?
+  created_by_id     String?
+  created_at        DateTime       @default(now())
+  updated_at        DateTime       @updatedAt
+}
+
+model SliderImage {
+  id            String    @id @default(cuid())
+  image_url     String
+  title         String?
+  subtitle      String?
+  btn_text      String?
+  btn_link      String?
+  display_order Int       @default(0)
+  is_active     Boolean   @default(true)
+  publish_from  DateTime?
+  publish_until DateTime?
+  created_at    DateTime  @default(now())
+}
+
+model GalleryAlbum {
+  id          String         @id @default(cuid())
+  name        String
+  date        DateTime?
+  description String?
+  cover_url   String?
+  is_public   Boolean        @default(true)
+  created_at  DateTime       @default(now())
+  images      GalleryImage[]
+}
+
+model GalleryImage {
+  id            String       @id @default(cuid())
+  album_id      String
+  album         GalleryAlbum @relation(fields: [album_id], references: [id])
+  image_url     String
+  thumbnail_url String?
+  caption       String?
+  display_order Int          @default(0)
+  created_at    DateTime     @default(now())
+
+  @@index([album_id])
+}
+
+model Download {
+  id               String           @id @default(cuid())
+  title            String
+  file_url         String
+  file_name        String
+  category         DownloadCategory
+  academic_year_id String?
+  is_public        Boolean          @default(true)
+  download_count   Int              @default(0)
+  created_at       DateTime         @default(now())
+}
+
+model StaticPage {
+  id           String   @id @default(cuid())
+  page_key     String   @unique
+  title_en     String?
+  title_bn     String?
+  content_en   String?  @db.Text
+  content_bn   String?  @db.Text
+  meta_title   String?
+  meta_desc    String?
+  is_published Boolean  @default(true)
+  updated_at   DateTime @updatedAt
+}
+
+model GoverningBodyMember {
+  id            String   @id @default(cuid())
+  name          String
+  designation   String
+  group         String   @default("Governing Body")
+  photo_url     String?
+  bio           String?
+  display_order Int      @default(0)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// ADMISSION MODELS
+// ─────────────────────────────────────────────
+
+model AdmissionCycle {
+  id               String                 @id @default(cuid())
+  class_id         String
+  class            Class                  @relation(fields: [class_id], references: [id])
+  academic_year_id String
+  academic_year    AcademicYear           @relation(fields: [academic_year_id], references: [id])
+  name             String
+  open_date        DateTime
+  close_date       DateTime
+  seat_count       Int
+  app_fee          Float                  @default(0)
+  is_open          Boolean                @default(false)
+  is_published     Boolean                @default(false)
+  form_config      Json?
+  created_at       DateTime               @default(now())
+  applications     AdmissionApplication[]
+}
+
+model AdmissionApplication {
+  id                   String          @id @default(cuid())
+  cycle_id             String
+  cycle                AdmissionCycle  @relation(fields: [cycle_id], references: [id])
+  admission_roll       String?         @unique
+  applicant_name       String
+  guardian_info        Json
+  personal_info        Json
+  previous_result      Json?
+  selected_subjects    Json?
+  documents            Json?
+  status               AdmissionStatus @default(PENDING)
+  merit_rank           Int?
+  payment_id           String?
+  enrolled_student_id  String?
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+
+  @@index([cycle_id])
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum InstitutionType {
+  SCHOOL
+  COLLEGE
+  UNIVERSITY
+  MADRASAH
+}
+
+enum AcademicCalendarType {
+  YEARLY
+  SEMESTER
+  TRIMESTER
+}
+
+enum IdSequenceScope {
+  GLOBAL
+  YEARLY
+  CLASS
+}
+
+enum GradeScaleType {
+  GPA_5
+  GPA_4
+  PERCENTAGE
+  CUSTOM
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  PRINCIPAL
+  VICE_PRINCIPAL
+  EXAM_CONTROLLER
+  HEAD_OF_DEPT
+  CLASS_TEACHER
+  SUBJECT_TEACHER
+  ACCOUNTANT
+  LIBRARIAN
+  TRANSPORT_MANAGER
+  HOSTEL_MANAGER
+  PROCTOR
+  REGISTRAR
+  IT_ADMIN
+  STUDENT
+  GUARDIAN
+}
+
+enum Lang {
+  EN
+  BN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum GuardianRelation {
+  FATHER
+  MOTHER
+  UNCLE
+  AUNT
+  BROTHER
+  SISTER
+  OTHER
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  TRANSFERRED
+  GRADUATED
+  EXPELLED
+}
+
+enum HistoryStatus {
+  PROMOTED
+  FAILED
+  TRANSFERRED
+  GRADUATED
+}
+
+enum PersonType {
+  STUDENT
+  STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+  HALF_DAY
+}
+
+enum AttendanceSource {
+  BIOMETRIC
+  MANUAL
+}
+
+enum DeviceType {
+  FINGERPRINT
+  RFID
+  GPS
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum SubjectType {
+  THEORY
+  PRACTICAL
+  BOTH
+}
+
+enum ExamStatus {
+  DRAFT
+  ACTIVE
+  MARK_ENTRY
+  COMPLETED
+  PUBLISHED
+}
+
+enum MarkStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+enum FeeCategory {
+  ADMISSION
+  TUITION
+  EXAM
+  TRANSPORT
+  HOSTEL
+  LAB
+  LIBRARY
+  SPORTS
+  DEVELOPMENT
+  OTHER
+}
+
+enum FeeFrequency {
+  MONTHLY
+  YEARLY
+  ONE_TIME
+}
+
+enum LateFeeType {
+  FIXED
+  PERCENTAGE
+  DAILY
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum PaymentGateway {
+  BKASH
+  NAGAD
+  ROCKET
+  SSLCOMMERZ
+  AAMARPAY
+  CASH
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  INITIATED
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayrollStatus {
+  DRAFT
+  FINALIZED
+  PAID
+}
+
+enum AuthorityRole {
+  PRINCIPAL
+  VICE_PRINCIPAL
+  HEADMASTER
+  VICE_CHANCELLOR
+  PRO_VICE_CHANCELLOR
+  EXAM_CONTROLLER
+  REGISTRAR
+  PROCTOR
+  DEAN
+  HOD
+  LIBRARIAN
+  ACCOUNTANT
+  CLASS_TEACHER
+}
+
+enum DocumentType {
+  STUDENT_ID_CARD
+  STAFF_ID_CARD
+  ADMIT_CARD
+  REGISTRATION_CARD
+  MARKSHEET
+  REPORT_CARD
+  TABULATION_SHEET
+  TESTIMONIAL
+  TRANSFER_CERTIFICATE
+  ATTENDANCE_SHEET
+  ATTENDANCE_BLANK
+  FEE_RECEIPT
+  PAYSLIP
+  SYLLABUS
+  MERIT_LIST
+}
+
+enum NoticeAudience {
+  PUBLIC
+  STUDENTS
+  STAFF
+  GUARDIANS
+  ALL
+}
+
+enum NotificationTrigger {
+  ABSENCE
+  LATE
+  FEE_DUE
+  RESULT_PUBLISHED
+  NOTICE
+  ADMISSION_CONFIRM
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum DownloadCategory {
+  SYLLABUS
+  EXAM_SCHEDULE
+  FORMS
+  RESULTS
+  CIRCULARS
+  OTHERS
+}
+
+enum AdmissionStatus {
+  PENDING
+  SHORTLISTED
+  WAITLISTED
+  REJECTED
+  CONFIRMED
+  ENROLLED
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  PART_TIME
+}

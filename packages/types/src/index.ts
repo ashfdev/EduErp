@@ -1,0 +1,40 @@
+// Re-export every Prisma-generated model type + enum so app code never
+// imports `@prisma/client` directly.
+export * from "@education-erp/db";
+
+export interface ApiSuccess<T> {
+  success: true;
+  data: T;
+  message?: string;
+  meta?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface ApiError {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown[];
+  };
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface JwtAccessPayload {
+  sub: string;
+  role: string;
+  portal: "admin" | "portal";
+}

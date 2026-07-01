@@ -1,0 +1,40 @@
+{
+  "name": "@education-erp/api",
+  "private": true,
+  "version": "0.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@education-erp/db": "workspace:*",
+    "@education-erp/types": "workspace:*",
+    "@education-erp/validators": "workspace:*",
+    "express": "^5.0.1",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8",
+    "supertest": "^7.0.0",
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.10.2",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/supertest": "^6.0.2",
+    "pino-pretty": "^13.0.0"
+  }
+}
