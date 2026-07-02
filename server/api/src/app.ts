@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/error-handler";
 import { healthRouter } from "./routes/health";
 import { settingsRouter } from "./modules/settings";
 import { uploadsRouter } from "./modules/uploads.routes";
+import { authRouter } from "./modules/auth/auth.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp(): Express {
   app.use(pinoHttp({ logger }));
 
   app.use("/health", healthRouter);
+  app.use("/api/auth", authRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/uploads", uploadsRouter);
 

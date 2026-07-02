@@ -90,9 +90,32 @@ was silently losing `.value`/`.files` typing.
 
 ## Phase 2 — Auth + Login System
 
-- [ ] Not started. Full spec in `prompts.md`. Enhancement to port forward from the old build:
-      staff 2FA/TOTP login, and a DB-backed overridable permission matrix layered on top of the
-      static `authorize()` middleware.
+- [x] API — `server/api/src/modules/auth/auth.routes.ts`: login (phone/email + password,
+      bcrypt-verified, issues 15min access + 7d refresh JWT), refresh (Redis-backed, rotates the
+      refresh token on every use), logout (deletes from Redis), change-password (authenticated),
+      forgot-password (6-digit OTP, bcrypt-hashed in Redis, 10min TTL, dispatched via the Phase 1
+      SMS stub), verify-otp (issues a 5min reset_token), reset-password, and `/me`. A new
+      dedicated `eduerp-redis-dev` Docker container (port 6380) backs token/OTP storage — the
+      only other Redis on this machine is an unrelated project's container on 6379.
+- [x] Admin UI — `/login` (institution-branded split layout, show/hide password, inline error
+      states for invalid-credentials vs. disabled-account vs. network error, full 4-state
+      forgot-password flow with resend cooldown), `/403`, a `ProtectedRoute` wrapper gating the
+      whole `(dashboard)` layout (redirects unauthenticated → `/login`, role-mismatched → `/403`),
+      role-based post-login redirect, and a proper 401-triggers-refresh-then-retry axios
+      interceptor (was previously just an immediate logout).
+- [x] Verified: live curl-driven full flow against the dev Postgres + new Redis — login,
+      wrong-password rejection, `/me`, refresh-token rotation (confirmed via direct Redis
+      inspection that the old key is deleted and reuse correctly 401s), forgot-password →
+      OTP-from-log → verify-otp → OTP-reuse-rejected → reset-password → login-with-new-password,
+      full monorepo typecheck (11/11), `next build` generates all 20 admin routes, and a live dev
+      server confirmed the login page renders real content while an unauthenticated `/dashboard`
+      hit correctly shows the `ProtectedRoute` loading state (pre-redirect).
+
+Deferred (not in the given Phase 2 spec, noted for later rather than silently dropped): staff
+2FA/TOTP login and a DB-backed overridable permission matrix layered on top of the static
+`authorize()` middleware — both existed in the old build and are worth porting forward
+eventually, but weren't required to match the authoritative spec and would have meaningfully
+expanded this phase's scope.
 
 ## Phase 3 — Student Module
 

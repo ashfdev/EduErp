@@ -24,7 +24,8 @@
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "@azure/storage-blob": "^12.26.0",
-    "multer": "^2.0.1"
+    "multer": "^2.0.1",
+    "ioredis": "^5.4.2"
   },
   "devDependencies": {
     "typescript": "^5.7.2",
