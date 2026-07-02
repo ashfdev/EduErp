@@ -499,6 +499,7 @@ model Staff {
   employment_type     EmploymentType             @default(PERMANENT)
   joining_date        DateTime?
   salary_structure_id String?
+  salary_structure    SalaryStructure?           @relation(fields: [salary_structure_id], references: [id])
   show_on_website     Boolean                    @default(false)
   is_active           Boolean                    @default(true)
   deleted_at          DateTime?
@@ -512,6 +513,7 @@ model Staff {
   payroll_records     PayrollRecord[]
 
   @@index([department_id])
+  @@index([salary_structure_id])
 }
 
 // ─────────────────────────────────────────────
@@ -753,6 +755,7 @@ model LeaveRequest {
   status         LeaveStatus @default(PENDING)
   approved_by_id String?
   approved_at    DateTime?
+  rejection_reason String?
   created_at     DateTime    @default(now())
 
   @@index([staff_id])
@@ -768,6 +771,7 @@ model SalaryStructure {
   pf_percentage  Float    @default(0)
   tds_percentage Float    @default(0)
   created_at     DateTime @default(now())
+  staff          Staff[]
 }
 
 model PayrollRecord {
@@ -788,6 +792,18 @@ model PayrollRecord {
   created_at       DateTime      @default(now())
 
   @@unique([staff_id, month, year])
+}
+
+model JobPosting {
+  id           String   @id @default(cuid())
+  title        String
+  department   String?
+  description  String   @db.Text
+  requirements String?  @db.Text
+  deadline     DateTime?
+  is_published Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────

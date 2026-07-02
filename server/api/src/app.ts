@@ -21,6 +21,7 @@ import { admissionRouter } from "./modules/admission/admission.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
 import { websiteRouter } from "./modules/website";
 import { contentRouter } from "./modules/content/content.routes";
+import { hrRouter } from "./modules/hr";
 
 export function createApp(): Express {
   const app = express();
@@ -48,6 +49,7 @@ export function createApp(): Express {
   app.use("/api/documents", documentsRouter);
   app.use("/api/website", websiteRouter);
   app.use("/api/content", contentRouter);
+  app.use("/api/hr", hrRouter);
 
   app.use(errorHandler);
 

@@ -493,8 +493,77 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 12 — HR + Payroll
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. Port forward: staff-advance/loan
-      tracking gap.
+- [x] Schema additions (2 migrations): `Staff.salary_structure_id` gained a real Prisma relation
+      (was a bare unrelated FK column since Phase 0) plus a back-relation array on
+      `SalaryStructure`, a `JobPosting` model for the spec's "basic recruitment" board (didn't
+      exist — genuinely needed for `/api/hr/jobs`), and `LeaveRequest.rejection_reason` (the spec's
+      `PUT /leaves/:id/reject` takes a `{ reason }` body but the Phase 0 schema had nowhere to
+      store it).
+- [x] `server/api/src/modules/hr/` (mounted at `/api/hr`, distinct from the pre-existing minimal
+      `/api/staff/teachers` dropdown endpoint from Phase 4, which is untouched and still used by
+      Settings → Subjects):
+  - Staff: full CRUD with a real `STAFF-{YEAR}-{seq}` UID generator (`utils/staff-id.generator.ts`,
+      mirrors the student UID generator's pattern), optional login-account creation (temp password
+      via the existing SMS stub) or an auto-created deactivated shell `User` when no login is
+      wanted (required since `Staff.user_id` is a non-null unique FK), photo/signature upload, and
+      a `show_on_website` toggle that triggers the Phase 11 `/faculty` revalidation.
+  - Leave: leave-type CRUD, apply (validates remaining balance for the leave's calendar year),
+      balance-per-type endpoint, approve (transactionally creates/updates a `LEAVE`
+      `AttendanceRecord` for every non-Friday day in the range — reusing the same find-then-write
+      pattern from Phase 5 since the compound unique key has nullable members) and reject (now
+      persists the reason via the new column).
+  - Salary structures: CRUD + a `PUT /staff/:id/salary-structure` assignment endpoint.
+  - Payroll: `calculate` (derives working days from the existing `AttendanceRules.
+      working_days_per_week` — 6 excludes only Friday, less excludes Friday+Saturday, since no
+      Holiday-calendar model exists in the schema, a previously documented gap; per-day salary =
+      basic/working_days; deductions = PF% + TDS% + absent-day proration; upserts one
+      `PayrollRecord` per staff with a salary structure), list/filter, draft-only manual
+      adjustment (recomputes net), `finalize` (renders a **real** payslip PDF per staff via the
+      Phase 10 `renderDocument("PAYSLIP", ...)` and uploads it through the existing storage
+      service — a single staff's render failure doesn't block finalizing the rest of the batch),
+      `mark-paid` (FINALIZED→PAID only), and an on-demand payslip endpoint.
+  - Jobs: CRUD + publish toggle for a lightweight recruitment board; public listing added to
+      `/api/content/jobs` (Phase 11's public content router) rather than under `/api/hr` so an
+      unpublished posting is never accidentally exposed.
+- [x] Admin UI — `/hr` (stat cards: total/active staff, pending leave, this-month payroll total),
+      `/hr/staff` (searchable table) + `/hr/staff/new` (single-form add — see deferred note) +
+      `/hr/staff/[id]` (Profile/Subjects/Leave/Payroll tabs, leave-balance cards, an "Apply Leave"
+      dialog for admin-on-behalf-of, per-record payslip download), `/hr/leave` (Pending/Approved/
+      Rejected/All tabs with inline approve/reject), `/hr/payroll` (month/year selector,
+      Calculate/Finalize/Mark-Paid actions, per-row payslip download). Added an "HR" nav link.
+  - **Bug caught and fixed during this phase**: the first draft of the payslip-download links used
+      plain `<a href="/api/documents/...">`, which is broken two ways at once — it resolves
+      against the *admin app's own origin* (not the API server) and carries no `Authorization`
+      header, so it would have 404'd/401'd for every user. Fixed by switching to the same
+      `api.get(..., { responseType: "blob" })` + `URL.createObjectURL` pattern already established
+      in Phase 8's Fee Reports and Phase 10's Print Center, in both `/hr/payroll` and
+      `/hr/staff/[id]`.
+- [x] Verified live against the dev Postgres: created a staff member through `/api/hr/staff` with
+      `create_login:true` and confirmed both the SMS-stub log line and the (gracefully-failing,
+      since no website server was running) revalidation trigger fired; assigned a salary structure;
+      seeded 13 real `PRESENT` attendance days for July 2026 and ran `/payroll/calculate`, then
+      hand-verified the exact arithmetic the API returned (working_days=26, gross=৳43,500,
+      deductions=৳18,045 [PF+TDS+13 absent days × per-day rate], net=৳25,455 — matched to the
+      taka); adjusted the DRAFT record's deductions and confirmed net recalculated; finalized the
+      month and confirmed a **real, fetchable PDF payslip** was generated and stored (not a stub);
+      confirmed a finalized record correctly rejects further adjustment; marked it PAID; applied
+      for 3 days of leave, confirmed the balance endpoint only counts APPROVED leave, approved it,
+      and confirmed exactly 3 `LEAVE` `AttendanceRecord` rows were created for the correct dates
+      and the balance dropped accordingly; confirmed a second application exceeding the remaining
+      balance is correctly rejected; rejected a separate pending application with a reason and
+      confirmed it persists; created and published a job posting and confirmed it's invisible on
+      the public endpoint until published. All fixtures cleaned up afterward. Full monorepo
+      typecheck (11/11), `vitest run` (still 30/30), and the admin production build all succeed.
+- [ ] Deferred: staff advance/loan tracking (the `advance_deducted` field exists on
+      `PayrollRecord` and is applied in the net-salary formula, but there's no dedicated
+      loan-ledger model or UI to originate/track an advance over time — matches a gap already
+      flagged before this migration began); the "Add Staff" admin UI is a single form rather than
+      the spec's 4-step wizard (Personal → Professional → Account Access → Done) — all the same
+      fields are collected, just on one screen; no staff Attendance calendar tab or Documents
+      (NID/TIN/certificate vault) tab on the staff detail page — the attendance data model and
+      upload plumbing both already exist and are exercised by other features, this is UI-surface
+      scope only; "Download All Payslips" as a single ZIP/merged PDF is not implemented (each
+      payslip downloads individually, which is functionally complete but not bulk-optimized).
 
 ## Phase 13 — Library + Transport + Hostel
 

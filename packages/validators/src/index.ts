@@ -7,3 +7,4 @@ export * from "./examination";
 export * from "./fees";
 export * from "./admission";
 export * from "./website";
+export * from "./hr";

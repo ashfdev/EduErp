@@ -56,6 +56,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/website" className="rounded-md px-3 py-2 hover:bg-accent">
               Website
             </Link>
+            <Link href="/hr" className="rounded-md px-3 py-2 hover:bg-accent">
+              HR
+            </Link>
             <Link href="/settings/institution" className="rounded-md px-3 py-2 hover:bg-accent">
               Settings
             </Link>

@@ -200,6 +200,14 @@ contentRouter.get(
   }),
 );
 
+contentRouter.get(
+  "/jobs",
+  asyncHandler(async (_req, res) => {
+    const jobs = await prisma.jobPosting.findMany({ where: { is_published: true }, orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: jobs });
+  }),
+);
+
 contentRouter.post(
   "/contact",
   asyncHandler(async (req, res) => {
