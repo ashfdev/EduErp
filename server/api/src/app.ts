@@ -8,6 +8,8 @@ import { healthRouter } from "./routes/health";
 import { settingsRouter } from "./modules/settings";
 import { uploadsRouter } from "./modules/uploads.routes";
 import { authRouter } from "./modules/auth/auth.routes";
+import { studentsRouter } from "./modules/students/students.routes";
+import { subjectsRouter } from "./modules/subjects/subjects.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -22,6 +24,8 @@ export function createApp(): Express {
   app.use("/api/auth", authRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/uploads", uploadsRouter);
+  app.use("/api/students", studentsRouter);
+  app.use("/api/subjects", subjectsRouter);
 
   app.use(errorHandler);
 

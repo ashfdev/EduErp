@@ -82,7 +82,14 @@
       "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -X POST http://localhost:4000/api/auth/login -H 'Content-Type: application/json' -d '{\"identifier\":\"01700000000\",\"password\":\"NewPass@123\",\"portal\":\"admin\"}')",
       "Bash(node -e ' *)",
       "Bash(curl -s http://localhost:3010/dashboard)",
-      "Bash(rm -f /tmp/api-dev.log /tmp/admin-dev.log /tmp/api.log)"
+      "Bash(rm -f /tmp/api-dev.log /tmp/admin-dev.log /tmp/api.log)",
+      "PowerShell(Stop-Process -Id 17328 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 4000 -ErrorAction SilentlyContinue)",
+      "Bash(curl -s http://localhost:3010/students -o students-page.html)",
+      "Bash(curl -s http://localhost:3010/students/new -o new-page.html)",
+      "Bash(curl -s http://localhost:3010/students)",
+      "PowerShell(Stop-Process -Id 15932,9128 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"done\")"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"

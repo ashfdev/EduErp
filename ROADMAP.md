@@ -119,7 +119,34 @@ expanded this phase's scope.
 
 ## Phase 3 — Student Module
 
-- [ ] Not started. Full spec in `prompts.md`.
+- [x] `server/api/src/utils/student-id.generator.ts` — GLOBAL scope atomically increments
+      `StudentIdConfig.current_sequence`; YEARLY/CLASS scopes are derived by counting existing
+      students in that scope (the schema has only one counter column, so per-year/per-class
+      "reset" is computed rather than stored — self-resetting, no extra state to maintain).
+- [x] `server/api/src/utils/subject-inheritance.ts` — shared by create/update/promote/
+      bulk-promote/bulk-import: assigns all compulsory subjects + any selected optional ones.
+- [x] API — full CRUD, list with search/filters/pagination, the 360° profile endpoint
+      (personal/academic/subjects/attendance/results/fees — library/transport/hostel return
+      empty/null until Phase 13 adds those models), promote + bulk-promote (skips students who
+      failed a subject or are below the configured attendance threshold), extra-subject
+      add/remove (blocks removing compulsory subjects), and CSV bulk-import (preview + confirm).
+      Pulled a minimal read-only `GET /api/subjects?class_id=` forward from Phase 4 since student
+      creation genuinely needs it — Phase 4 adds the full CRUD on top.
+- [x] Admin UI — `/students` (search/filter/paginated table), `/students/new` (5-step form:
+      Personal → Guardian → Academic Placement → Subjects → Review, with live compulsory/optional
+      subject preview per selected class), `/students/:id` (360° profile with 6 tabs: Personal,
+      Academic, Subjects, Attendance, Results, Fees).
+- [x] Verified: live end-to-end via curl against the dev Postgres — created a student, confirmed
+      auto-generated `student_uid` (GLOBAL scope), auto-created guardian (matched-or-created by
+      phone), correct compulsory-vs-optional subject split in the 360 profile, search/list
+      filtering, and that removing a compulsory subject is correctly rejected (400). Full
+      monorepo typecheck (11/11), `next build` generates all 22 admin routes. Test data cleaned
+      up after verification.
+
+## Phase 4 — Subjects & Teacher Assignment
+
+- [ ] Not started. Full spec in `prompts.md`. `GET /api/subjects` already exists (built during
+      Phase 3) — this phase adds POST/PUT/DELETE/reorder + teacher assignment endpoints and UI.
 
 ## Phase 4 — Subjects & Teacher Assignment
 
