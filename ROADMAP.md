@@ -416,10 +416,80 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 11 — Website Maintenance + Public Website (apps/website)
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md` (this phase merges what earlier planning
-      notes called separate "Website Maintenance" and "Public Website" phases — the authoritative
-      Part 2 doc combines them into one). Port forward: self-hosted CAPTCHA + rate-limiting, old
-      public-site's proven 9-page structure, revalidate-on-publish pattern.
+- [x] Schema additions (one migration, `phase11_website_events_contact_staff_website_flag`): the
+      Phase 0 schema had `Notice`/`SliderImage`/`GalleryAlbum`/`GalleryImage`/`Download`/
+      `StaticPage`/`GoverningBodyMember` already, but no `Event` or `ContactSubmission` model —
+      both are genuinely required by this phase's spec (academic calendar + contact-form inbox)
+      so they were added rather than skipped. Also added `Staff.show_on_website` (the spec
+      explicitly calls for this column to drive the public faculty directory).
+- [x] `server/api/src/modules/website/` (admin, `WEBSITE_CONTENT_ROLES` = ADMIN/PRINCIPAL/
+      IT_ADMIN) — full CRUD for sliders (image upload, reorder, active toggle), notices (create/
+      update/soft-delete, publish/unpublish with ISR-revalidation trigger, send-sms fan-out to the
+      resolved audience via the existing `sendSms` stub), gallery (albums + up-to-20-at-once image
+      upload with automatic first-image-as-cover, image reorder), downloads (any file type),
+      static pages (10 spec'd `page_key`s, upsert-on-save), governing body (photo upload,
+      reorder), events, and contact-submission review (list/mark-read).
+- [x] `server/api/src/modules/content/content.routes.ts` — the public, unauthenticated
+      `/api/content/*` API apps/website reads from: sliders (date-window + active filtered),
+      notices (pinned-first), gallery albums/images, downloads, static pages, governing body,
+      events, faculty (grouped by department from `Staff.show_on_website`), admission/open (reuses
+      Phase 9's `AdmissionCycle`), merit-list (reuses Phase 9's ranked applications), institution
+      branding, live student/staff stats, and `POST /contact` (stores a `ContactSubmission` +
+      best-effort admin-email via a new `email.service.ts` stub mirroring the SMS stub pattern).
+      All routes share the existing `publicEndpointLimiter`.
+- [x] `server/api/src/services/revalidate.service.ts` — `triggerRevalidation(paths)`, called after
+      notice publish/unpublish and static-page save; POSTs to the website app's own
+      `WEBSITE_URL/api/revalidate` webhook (not a route on the main API — the real
+      `revalidatePath()` call can only run inside the Next.js process). Best-effort: catches and
+      logs a warning rather than failing the admin action if the website isn't reachable.
+- [x] Admin UI — `/website` (hub with section cards + a contact-submissions inbox table),
+      `/website/notices` (filter tabs, new-notice dialog, publish/unpublish/send-sms/delete),
+      `/website/sliders` (card grid, add dialog with image upload, up/down reorder, active
+      toggle), `/website/gallery` (album grid) + `/website/gallery/[id]` (multi-file upload with
+      a live-updating grid, per-image delete), `/website/downloads` (upload dialog, category
+      badges), `/website/governing-body` (reorderable card list), `/website/events` (table +
+      add dialog), `/website/pages` (list) + `/website/pages/[page_key]` (EN/BN tabbed editor).
+      Added a "Website" nav link.
+- [x] Public website (`apps/website`) — a shared `SiteChrome` (navbar + footer) now wraps every
+      page via the root layout, fetching institution branding client-side and exposing
+      `primary_color`/`secondary_color` as CSS variables (matches CLAUDE.md's per-institution
+      theming requirement). New pages: `/` (hero slider with auto-advance + dot nav, quick stats,
+      admission-open banner, notice board widget, principal message teaser, gallery preview,
+      upcoming events, contact section), `/notices` (tab-filtered), `/gallery` + `/gallery/[id]`
+      (click-to-zoom lightbox), `/downloads` (grouped by category), `/about` + `/about/[slug]`
+      (sidebar-navigated static pages), `/faculty` (grouped by department), `/governing-body`
+      (grouped by group), `/contact` (form + map embed), `/events` (grouped by month), and
+      `app/api/revalidate/route.ts` (the real Next.js ISR webhook, secret-verified). All content
+      pages follow the existing `/result`/`/admission` pages' established pattern — `"use client"`
+      + plain `fetch` against `/api/content/*` — for consistency with the rest of the app rather
+      than introducing a second data-fetching style.
+- [x] Verified live against the dev Postgres: published a notice and confirmed it appears on
+      `/api/content/notices` (and confirmed the revalidation trigger really does fire — it 400s/
+      warns cleanly since no website dev server was running during the API-only test, proving the
+      best-effort error handling); updated a static page and confirmed the public fetch reflects
+      it; created a governing-body member and an event and confirmed both are public-visible;
+      submitted a real contact form and confirmed it appears in the admin inbox and can be marked
+      read; uploaded a real PNG through the slider/gallery/downloads multipart endpoints and
+      confirmed each stored file is actually retrievable (`HTTP 200, content-type image/png`) —
+      not just a DB row with a dangling URL; confirmed gallery multi-image upload auto-assigns the
+      albums's first image as cover; created a `show_on_website=true` staff fixture and confirmed
+      it's grouped correctly by `/api/content/faculty`. All fixtures (including uploaded local
+      files) cleaned up afterward. Full monorepo typecheck (11/11 packages), `vitest run` (still
+      30/30), and both `admin`/`website` production builds succeed.
+- [ ] Deferred: rich-text editing uses plain `<textarea>` for notice bodies and page content
+      rather than a Tiptap/Quill WYSIWYG editor (the spec calls for Tiptap; this mirrors a
+      known-deferred item from the old pre-migration build for the same reason — time-boxed, and
+      admins can still write raw HTML which the public pages render via `dangerouslySetInnerHTML`
+      the same way a rich-text editor's output would be rendered); no EN/BN language-toggle switch
+      on the public navbar (bilingual content itself is fully modeled and editable — `content_bn`
+      fields exist and are editable in the admin page editor — just not switchable on the public
+      side yet); Swiper.js/react-photo-gallery/yet-another-react-lightbox were not installed —
+      the hero slider and gallery lightbox are hand-rolled with plain React state instead, which
+      cover the spec'd behavior (autoplay, dot nav, click-to-zoom) without the extra dependencies;
+      no Redis caching on the public content endpoints (spec suggests 5min/1hr TTLs) — acceptable
+      at this stage since there's no real traffic yet, easy to layer on later via the existing
+      `ioredis` client from Phase 2; the admission info page doesn't yet surface a downloads
+      section alongside the open-cycle CTA.
 
 ## Phase 12 — HR + Payroll
 

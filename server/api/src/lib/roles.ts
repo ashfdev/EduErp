@@ -19,3 +19,4 @@ export const RESULT_PUBLISH_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CON
 export const FEE_COLLECTION_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
 export const ADMISSION_MANAGE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const ADMISSION_ENROLL_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL"];
+export const WEBSITE_CONTENT_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "IT_ADMIN"];

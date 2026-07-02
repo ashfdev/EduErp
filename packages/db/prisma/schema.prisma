@@ -499,6 +499,7 @@ model Staff {
   employment_type     EmploymentType             @default(PERMANENT)
   joining_date        DateTime?
   salary_structure_id String?
+  show_on_website     Boolean                    @default(false)
   is_active           Boolean                    @default(true)
   deleted_at          DateTime?
   created_at          DateTime                   @default(now())
@@ -884,6 +885,29 @@ model GoverningBodyMember {
   display_order Int      @default(0)
   is_active     Boolean  @default(true)
   created_at    DateTime @default(now())
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  name        String
+  date_from   DateTime
+  date_to     DateTime?
+  type        String    @default("GENERAL")
+  description String?
+  is_public   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+}
+
+model ContactSubmission {
+  id         String   @id @default(cuid())
+  name       String
+  email      String?
+  phone      String?
+  subject    String?
+  message    String   @db.Text
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
 }
 
 // ─────────────────────────────────────────────
