@@ -94,7 +94,10 @@
       "PowerShell(\"killed\")",
       "PowerShell(Stop-Process -Id 11608 -Force -ErrorAction SilentlyContinue)",
       "Bash(rm -f login-resp.json year-resp.json class-resp.json section-resp.json subject-resp.json teacher-resp.json teachers-list.json assign-resp.json test-ids.txt api.log)",
-      "PowerShell(Stop-Process -Id 21728 -Force -ErrorAction SilentlyContinue)"
+      "PowerShell(Stop-Process -Id 21728 -Force -ErrorAction SilentlyContinue)",
+      "Bash(pnpm why *)",
+      "Bash(pnpm config *)",
+      "PowerShell(Stop-Process -Id 12712 -Force -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"

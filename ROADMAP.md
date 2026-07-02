@@ -164,13 +164,36 @@ record's `staff_uid` but never its `id` — since `SubjectTeacherAssignment.staf
 to a subject would hit a foreign-key violation with no way to recover the right id short of a
 follow-up list call. Added `id` to both the create-response and list-response `staff` selects.
 
-## Phase 4 — Subjects & Teacher Assignment
-
-- [ ] Not started. Full spec in `prompts.md`.
-
 ## Phase 5 — Attendance Module (Full)
 
-- [ ] Not started. Full spec in `prompts.md`.
+- [x] API — `POST /api/attendance/mark` (biometric-conflict detection requiring an explicit
+      override reason, find-then-write instead of `upsert()` since Prisma's compound-unique
+      `where` shorthand rejects the null `shift_id`/`period_no` this schema actually has, SMS to
+      guardians of absentees per `AttendanceRules.sms_on_absent`), `GET /api/attendance` (section
+      roster for a date, flags biometric source), `GET /api/attendance/student/:id` (calendar view
+      or yearly+monthly summary), `GET /api/attendance/defaulters`, `GET /api/attendance/daily-summary`,
+      and reports (`daily-register`, `monthly-sheet`, `blank-sheet` as structured JSON;
+      `bulk-export` as a real multi-sheet `.xlsx` via `exceljs`).
+- [x] Admin UI — `/attendance/mark` (date/class/section picker, live summary pills, click-to-set
+      P/A/L/LV/HD grid, biometric badge, mark-all-present, conflict toast), `/attendance/reports`
+      (4 tabs: Daily Register, Monthly Sheet, Defaulters, Bulk Export).
+- [x] Verified: live curl-driven flow against the dev Postgres — mark, re-fetch confirming persisted
+      status, daily-summary, per-student summary, defaulters (correctly flagged a 0%-attendance
+      student), daily-register/monthly-sheet JSON shape, and the bulk-export endpoint downloaded
+      and was confirmed as a real `Microsoft Excel 2007+` file via `file`. Full monorepo
+      typecheck, admin build generates all 25 routes.
+
+Deferred (schema/infra gaps in the given spec, not oversights here): holiday-calendar validation
+on mark (no `Holiday` model exists anywhere in the Phase 0 schema) and real-time Socket.io
+emission on mark (no socket server has been built yet). Both noted for a later pass rather than
+silently dropped.
+
+Real bug found and fixed: an earlier attempt used `attendanceRecord.upsert()` keyed on the
+`@@unique([person_id, person_type, date, shift_id, period_no])` compound index, but Prisma's
+generated `where` type for that shorthand requires non-null `shift_id`/`period_no` even though
+both columns are nullable — so any attendance marked without a shift or period (the common case)
+wouldn't even compile. Replaced with an explicit find-then-create/update using regular `where`
+filtering, which does support `null` correctly.
 
 ## Phase 6 — Examination + Mark Entry + Grading
 
@@ -187,50 +210,59 @@ follow-up list call. Added `id` to both the create-response and list-response `s
 
 ## Phase 9 — Online Admission
 
-- [ ] Not started. Scope designed (my own design, per user's request) — see
-      `PHASE_PROMPTS_PART2.md` once written, and the migration plan file for the summary.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`.
 
-## Phase 10 — Document Generation (all doc types)
+## Phase 10 — Document Generation (all 15 doc types)
 
-- [ ] Not started. Adds `DocumentRegistry` model. Port forward: Bangla PDF font-embedding
-      solution, certificate verification (QR + registry).
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. Adds a `DocumentRegistry`-equivalent for
+      certificate verification. Port forward: Bangla PDF font-embedding solution.
 
-## Phase 11 — Website Maintenance
+## Phase 11 — Website Maintenance + Public Website (apps/website)
 
-- [ ] Not started. Port forward: self-hosted CAPTCHA + rate-limiting, old public-site's proven
-      9-page structure.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md` (this phase merges what earlier planning
+      notes called separate "Website Maintenance" and "Public Website" phases — the authoritative
+      Part 2 doc combines them into one). Port forward: self-hosted CAPTCHA + rate-limiting, old
+      public-site's proven 9-page structure, revalidate-on-publish pattern.
 
 ## Phase 12 — HR + Payroll
 
-- [ ] Not started. Port forward: staff-advance/loan tracking gap.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. Port forward: staff-advance/loan
+      tracking gap.
 
 ## Phase 13 — Library + Transport + Hostel
 
-- [ ] Not started. Adds `Book`/`BookCopy`/`BookIssue`, `TransportRoute`/`Vehicle`/
-      `StudentTransportAssignment`, `HostelBuilding`/`HostelRoom`/`HostelAllocation` (schema gap
-      in the original spec).
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`, which includes the actual schema
+      additions this time (`Book`/`BookIssue`, `TransportRoute`/`Vehicle`/`StudentTransport`,
+      `HostelBlock`/`HostelRoom`/`HostelAllocation`/`HostelVisitor`) — supersedes the earlier
+      placeholder guess at these model names.
 
-## Phase 14 — Analytics Dashboard
+## Phase 14 — Analytics + Reporting Dashboard
 
-- [ ] Not started.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`.
 
 ## Phase 15 — Student/Guardian Portal (PWA)
 
-- [ ] Not started. `apps/portal`.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `apps/portal`.
 
-## Phase 16 — Public Website (ISR)
+## Phase 16 — IoT/Biometric Device Service
 
-- [ ] Not started. Port forward: revalidate-on-publish pattern.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `services/device`. Blocked on
+      confirming the pilot institution's device brand — build against the generic ZKTeco ADMS
+      protocol, keep the connector adapter-swappable.
 
-## Phase 17 — IoT/Biometric Device Service
+## Phase 17 — Notification Service
 
-- [ ] Not started. `services/device`. Blocked on confirming the pilot institution's device
-      brand — build against generic ADMS protocol, keep adapter-swappable.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `services/notification`. Real
+      BullMQ+Redis worker, replacing the old polling-loop outbox pattern. Port forward: SSL
+      Wireless BD SMS adapter.
 
-## Phase 18 — Notification Service
+## Phase 18 — Security, Performance, Docker, Testing, README
 
-- [ ] Not started. `services/notification`. Real BullMQ+Redis worker, replacing the old
-      polling-loop outbox pattern. Port forward: SSL Wireless BD SMS adapter.
+- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md` — this is a "final integration" phase
+      (rate limiting, Prisma-error-code mapping, Redis caching, Docker/compose, comprehensive
+      seed data, unit/integration/e2e tests, root README) that earlier planning notes hadn't
+      accounted for; supersedes the earlier placeholder guess that Phase 18 would be the
+      Notification Service (that's actually Phase 17).
 
 ## Phase 19 — Mobile apps (Flutter) — FUTURE, out of scope
 

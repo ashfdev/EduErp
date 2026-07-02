@@ -26,7 +26,8 @@
     "@azure/storage-blob": "^12.26.0",
     "multer": "^2.0.1",
     "ioredis": "^5.4.2",
-    "csv-parse": "^5.6.0"
+    "csv-parse": "^5.6.0",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(rm -f login-resp.json year-resp.json class-resp.json section-resp.json s1-resp.json s2-resp.json test-ids.txt api.log export-test.xlsx)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}
