@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AuthorityRole, DocumentType, UserRole } from "@education-erp/types";
 
 export const institutionTypeSchema = z.enum(["SCHOOL", "COLLEGE", "UNIVERSITY", "MADRASAH"]);
 
@@ -122,22 +123,22 @@ export const attendanceRulesSchema = z.object({
 export type AttendanceRulesInput = z.infer<typeof attendanceRulesSchema>;
 
 export const authoritySignatureSchema = z.object({
-  role: z.string().min(1),
+  role: z.nativeEnum(AuthorityRole),
   display_name: z.string().min(1),
   designation: z.string().min(1),
   is_active: z.boolean().optional(),
 });
 
 export const authorityConfigSlotSchema = z.object({
-  doc_type: z.string().min(1),
+  doc_type: z.nativeEnum(DocumentType),
   slot: z.number().int().min(1).max(3),
   label: z.string().min(1),
-  authority_role: z.string().min(1),
+  authority_role: z.nativeEnum(AuthorityRole),
   is_required: z.boolean(),
 });
 
 export const documentTemplateSchema = z.object({
-  doc_type: z.string().min(1),
+  doc_type: z.nativeEnum(DocumentType),
   name: z.string().min(1),
   html_content: z.string().min(1),
   css_content: z.string().optional().nullable(),
@@ -186,7 +187,7 @@ export const createUserSchema = z.object({
   name_bn: z.string().optional().nullable(),
   phone: z.string().regex(/^01\d{9}$/),
   email: z.string().email().optional().nullable(),
-  role: z.string().min(1),
+  role: z.nativeEnum(UserRole),
   designation: z.string().optional().nullable(),
   department_id: z.string().optional().nullable(),
 });

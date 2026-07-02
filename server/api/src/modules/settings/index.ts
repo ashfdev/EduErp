@@ -1,0 +1,32 @@
+import { Router } from "express";
+import { institutionRouter, institutionConfigRouter } from "./institution.routes";
+import { studentIdRouter } from "./student-id.routes";
+import { gradingRouter } from "./grading.routes";
+import { examTypesRouter } from "./exam-types.routes";
+import { feeRulesRouter } from "./fee-rules.routes";
+import { attendanceRulesRouter } from "./attendance-rules.routes";
+import { signaturesRouter, authorityConfigRouter } from "./signatures.routes";
+import { templatesRouter } from "./templates.routes";
+import { notificationsRouter } from "./notifications.routes";
+import { academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter } from "./academic.routes";
+import { usersRouter } from "./users.routes";
+
+export const settingsRouter = Router();
+
+settingsRouter.use("/institution", institutionRouter);
+settingsRouter.use("/config", institutionConfigRouter);
+settingsRouter.use("/student-id-config", studentIdRouter);
+settingsRouter.use("/grading-scales", gradingRouter);
+settingsRouter.use("/exam-types", examTypesRouter);
+settingsRouter.use("/fee-rules", feeRulesRouter);
+settingsRouter.use("/attendance-rules", attendanceRulesRouter);
+settingsRouter.use("/signatures", signaturesRouter);
+settingsRouter.use("/authority-config", authorityConfigRouter);
+settingsRouter.use("/templates", templatesRouter);
+settingsRouter.use("/notifications", notificationsRouter);
+settingsRouter.use("/academic-years", academicYearsRouter);
+settingsRouter.use("/shifts", shiftsRouter);
+settingsRouter.use("/departments", departmentsRouter);
+settingsRouter.use("/classes", classesRouter);
+settingsRouter.use("/sections", sectionsRouter);
+settingsRouter.use("/users", usersRouter);

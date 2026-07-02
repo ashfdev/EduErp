@@ -39,7 +39,16 @@
       "Bash(wait)",
       "Bash(pnpm --filter=@education-erp/admin build)",
       "Bash(pnpm --filter=@education-erp/portal build)",
-      "Bash(pnpm --filter=@education-erp/website build)"
+      "Bash(pnpm --filter=@education-erp/website build)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(curl -s http://localhost:4000/api/settings/institution)",
+      "Bash(curl -s http://localhost:4000/api/settings/student-id-config)",
+      "Bash(nohup pnpm exec tsx src/index.ts)",
+      "Read(//tmp/**)",
+      "Bash(pkill -f \"tsx src/index.ts\")",
+      "Bash(node check.mjs)",
+      "PowerShell($path = \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; if \\(Test-Path $path\\) { Start-Process $path; \"Started\" } else { \"Not found at $path\" })",
+      "Bash(docker start *)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"
