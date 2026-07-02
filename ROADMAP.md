@@ -630,7 +630,65 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 14 — Analytics + Reporting Dashboard
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`.
+- [x] No schema changes — this phase is entirely read-side aggregation over models that already
+      exist across all 13 prior phases.
+- [x] `server/api/src/modules/reports/analytics.routes.ts` (mounted at `/api/analytics`) — the 7
+      spec'd endpoints: `overview` (students/staff/finance/academic/library summary cards, all
+      real Prisma counts/sums — no stubs), `attendance-trend` (weekly/monthly buckets, optional
+      class filter), `result-performance` (per-exam-per-class average GPA via the existing
+      `computeClassResults` export from Phase 7, plus per-subject average marks for the latest
+      published exam), `fee-collection` (daily/by-category/by-gateway breakdowns over a date
+      range), `defaulters-risk` (composite risk score = attendance-shortfall-below-threshold +
+      min(50, days-overdue/2), sourced from the same `AttendanceRules.min_attendance_percentage`
+      Phase 5 already uses), `class-comparison` (attendance% / avg GPA / fee-collection% side by
+      side per class), `teacher-workload` (classes/subjects/student-count/pending-mark-entry-exams
+      per teacher, derived from `SubjectTeacherAssignment`). Plus 4 supporting endpoints for
+      Report-Center items the 7 core endpoints don't cover: `enrollment-trend`,
+      `library-utilization`, `staff-attendance`, `leave-summary`; and a
+      `POST /defaulters-risk/:student_id/remind` action endpoint backing the dashboard's
+      "SMS Guardian" button (reuses the existing `sendSms` stub — the button now does something
+      real instead of the placeholder wired during initial UI drafting, see below).
+- [x] Admin UI — `/dashboard` completely rebuilt from the Phase 0 placeholder into the spec'd
+      5-row layout using Recharts (already a dependency, unused until now): Row 1 quick-stat cards,
+      Row 2 attendance-trend `LineChart` + latest-notices widget, Row 3 fee-collection `BarChart` +
+      subject-performance `RadarChart`, Row 4 at-risk-students table (color-coded by risk score,
+      per-row SMS button), Row 5 upcoming events / quick actions / system status. Role-specific
+      sections (Teacher / Accountant / Exam Controller) render conditionally below the main
+      dashboard based on the logged-in user's role from the existing auth store, rather than as
+      separate routes — same data, scoped presentation. `/reports` — a Report Center hub with the
+      4 spec'd categories (Academic/Finance/HR/Management) as tabs; items that already have a
+      dedicated page from an earlier phase (attendance reports, fee reports, payroll, print
+      center) link out to it directly; the genuinely new analytics-only reports (enrollment trend,
+      dropout risk, library utilization, staff attendance, leave summary) open an inline
+      preview table with a client-side CSV download. Added a "Reports" nav link.
+  - **Bug caught and fixed while wiring the UI**: the at-risk table's "SMS Guardian" button was
+      first drafted calling `POST /api/website/notices` with an empty body (leftover copy-paste),
+      which would have both failed validation and made no sense semantically. Caught before
+      shipping and replaced with the real `POST /api/analytics/defaulters-risk/:id/remind`
+      endpoint built specifically for this action.
+- [x] Verified live against the dev Postgres: seeded 2 students in one class, marked one
+      `PRESENT`/one `ABSENT` today, and confirmed `/overview` returned the exact counts
+      (`today_present: 1, today_absent: 1, today_percentage: 50`) and `/attendance-trend`'s
+      current week bucket matched; confirmed `/class-comparison` reported the right student count
+      and attendance% for the class; confirmed `/defaulters-risk` correctly flagged only the
+      absent student (0% attendance, below the 75% threshold) with a hand-verified risk score
+      (`75 = max(0, 75-0) attendance-risk + 0 due-risk`) and left the present student off the
+      list entirely; fired the SMS-reminder endpoint and confirmed the stub log line appears;
+      exercised all remaining endpoints (`enrollment-trend`, `library-utilization`,
+      `staff-attendance`, `leave-summary`, `result-performance`, `teacher-workload`,
+      `fee-collection`) against both empty and populated state and confirmed none error. All
+      fixtures cleaned up afterward. Full monorepo typecheck (11/11), `vitest run` (still 30/30),
+      and the admin production build all succeed.
+- [ ] Deferred: the 5 analytics-only Report Center items export via client-side CSV rather than
+      server-rendered Excel (unlike Phase 8's fee-ledger export, which genuinely uses `exceljs`
+      server-side) — a deliberate scope trim given how much of this phase's spec is report
+      *plumbing* already satisfied by earlier phases' PDF/Excel endpoints; separate role-scoped
+      dashboard *routes* (e.g. a dedicated `/dashboard/teacher`) were not built — role-specific
+      content renders conditionally on the single `/dashboard` route instead, which satisfies the
+      spec's actual requirement ("role-specific views") without duplicating the data-fetching
+      layer three times; "last backup time" and "device sync status" in the System Status card
+      are omitted (no backup job or device-sync service exists yet — the latter lands in
+      Phase 16).
 
 ## Phase 15 — Student/Guardian Portal (PWA)
 

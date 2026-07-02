@@ -25,6 +25,7 @@ import { hrRouter } from "./modules/hr";
 import { libraryRouter } from "./modules/library/library.routes";
 import { transportRouter } from "./modules/transport/transport.routes";
 import { hostelRouter } from "./modules/hostel/hostel.routes";
+import { analyticsRouter } from "./modules/reports/analytics.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -56,6 +57,7 @@ export function createApp(): Express {
   app.use("/api/library", libraryRouter);
   app.use("/api/transport", transportRouter);
   app.use("/api/hostel", hostelRouter);
+  app.use("/api/analytics", analyticsRouter);
 
   app.use(errorHandler);
 
