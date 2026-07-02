@@ -692,7 +692,103 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 15 — Student/Guardian Portal (PWA)
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `apps/portal`.
+- [x] Schema additions (manual-migration workaround, see below): `Guardian.user_id` (nullable,
+      unique — Guardians had no login path at all before this phase, despite `GUARDIAN` already
+      existing in the `UserRole` enum since Phase 0), `Homework`, `RoutineSlot`, `PushSubscription`
+      — none of these existed and the spec's `/homework`, `/routine`, and push-notification
+      registration pages need real backing tables, not stubs.
+- [x] **Migration tooling note**: `prisma migrate dev` refused to run in this non-interactive shell
+      for this migration (it wanted interactive confirmation for the nullable-unique-column
+      warning on `Guardian.user_id`, which is actually always safe — Postgres allows multiple NULLs
+      under a unique constraint). Worked around it with `prisma migrate diff --from-url ... --to-
+      schema-datamodel ... --script` to generate the SQL, hand-created the migration folder, then
+      `prisma migrate deploy` (the non-interactive-safe command) to apply it. First attempt
+      corrupted the SQL file by redirecting `2>&1` and capturing pnpm's `[WARN]` banner into the
+      file; fixed by redirecting stdout and stderr separately. Documented here since this will
+      likely recur in Phases 16-18 if they need schema changes.
+- [x] **Guardian login retrofit**: `students.routes.ts`'s student-creation transaction now also
+      provisions a `User` (role=`GUARDIAN`) the first time a new guardian phone is seen (reusing
+      the existing `User` if a sibling's guardian already has one), and links it via
+      `Guardian.user_id`. Extended `POST /api/auth/login` to additionally resolve a `student_uid`
+      identifier to its linked `User` when `portal === "portal"` (Student ID login, per spec).
+  - **Real gap found and fixed while wiring this up**: the pre-existing (Phase 3) admission SMS
+      literally said "temp password sent separately" for the student's own login — but nothing
+      ever sent it; the password was silently unrecoverable. Fixed by sending the student their
+      own credentials via a second SMS to their own phone when a login account is created, so the
+      portal is actually usable by a real student rather than only by staff who can see the DB.
+- [x] `server/api/src/modules/portal/portal.routes.ts` (mounted at `/api/portal`, `authorize`d to
+      `STUDENT`/`GUARDIAN` only) — every route resolves accessible student ids from the caller's
+      own `User` row first (`Student.user_id` for a student, `Guardian.user_id` → linked
+      `Student[]` for a guardian) and 403s via a shared `assertAccess()` helper before touching any
+      other student's data: `/me`, `/student/:id/dashboard` (combined summary — today's
+      attendance, this-month %, upcoming exams, latest published result via the existing grading
+      engine, fee dues, recent notices, homework pending count), `/attendance`, `/results` +
+      `/results/:exam_id/marksheet` (real PDF via Phase 10's `renderDocument`), `/fees` +
+      `POST /fees/pay` (reuses the Phase 8 payment-adapter pattern), `/homework`, `/routine`,
+      `/notices`, `/subjects`, `/profile`, and `POST /push-subscribe` (stores the subscription;
+      actual push *sending* is Phase 17's job).
+  - **Security hardening found and fixed while building this**: two existing admin routers
+      (`documentsRouter`, `studentsRouter`) only required `authenticate` with no role check, which
+      was harmless while STUDENT/GUARDIAN logins were theoretical — Phase 15 makes them real. A
+      STUDENT/GUARDIAN token could otherwise call `GET /api/students/:id` or
+      `GET /api/documents/student/:id/*` directly (bypassing the portal's ownership checks
+      entirely) to read or generate a PDF of **any** student's full profile, grades, fees, and
+      guardian contact info. Added a new `STAFF_ONLY_ROLES` constant (every role except
+      STUDENT/GUARDIAN) and applied it router-wide to both. The portal's marksheet-download and
+      profile views now go through new ownership-checked portal-only endpoints instead of the
+      admin ones. **This audit was not exhaustive** — see deferred items below.
+- [x] `apps/portal` — built out from the Phase 0 placeholder: `lib/api.ts` + `stores/auth-store.ts`
+      (mirrors the admin app's axios-interceptor/refresh/Zustand pattern, separate localStorage
+      key, plus a `students`/`activeStudentId` slice for the guardian multi-child case),
+      `components/protected-route.tsx`, `components/bottom-nav.tsx` (5 items per spec),
+      `components/portal-shell.tsx` (wraps every page, shows a horizontal child-switcher strip
+      only when a guardian has >1 linked student). Pages: `/login` (Student ID or phone + password),
+      `/` (mobile card-stack dashboard matching the spec's header/today/quick-stats/upcoming-exams/
+      notices/result/homework sections), `/results` + `/results/[exam_id]` (subject table +
+      "Print Result Card" opening the real PDF), `/attendance` (Monthly calendar grid
+      color-coded by status + summary row, Yearly per-month % cards), `/fees` (outstanding-dues
+      alert, per-invoice Pay Now → gateway bottom sheet, collapsible payment history), `/notices`
+      + `/notices/[id]`, `/routine` (day tabs, current-day/current-period highlight), `/homework`
+      (Pending/Submitted/All tabs, client-side-only "Mark as Done" per spec's "visual only, no
+      submission for v1"), `/profile` (now backed by the new ownership-checked endpoint, not the
+      admin one — see above).
+- [x] PWA: `public/manifest.json`, a hand-rolled `public/sw.js` (cache-then-network for
+      `/api/portal/*` and `/api/content/*` GETs so the dashboard/notices/attendance can show stale
+      data offline per the spec's offline-behavior section, navigation fallback to
+      `offline.html`), registered from `providers.tsx`. An `online`/`offline` listener shows the
+      spec'd "You're offline — showing cached data" banner. `next-pwa` was deliberately not
+      installed — see deferred items.
+- [x] Verified live against the dev Postgres with real fixtures (two sibling students sharing one
+      guardian phone, all cleaned up after): confirmed the guardian-login SMS carried a real,
+      usable temp password and the student's own SMS did too (the bug fix above, verified via the
+      actual log line, not just code review); logged in as the student via **Student ID** (not
+      phone) and confirmed it resolved correctly; logged in as the guardian and confirmed
+      `/api/portal/me` returned **both** linked children; confirmed the second student's
+      guardian-creation call correctly reused the existing Guardian/User rather than creating a
+      duplicate (matched by phone); confirmed a student token gets a clean `403 FORBIDDEN` from
+      `/api/portal/student/:id/dashboard` for a sibling's id and `200` for their own; confirmed
+      the same student token now correctly gets `403` (not the pre-existing free pass) from the
+      admin `GET /api/students/:id` and `GET /api/documents/student/:id/id-card` after the
+      `STAFF_ONLY_ROLES` fix; exercised homework/routine/subjects/profile endpoints against real
+      fixture data and confirmed the dashboard's homework-pending count reflected the fixture;
+      confirmed `POST /fees/pay` 404s cleanly for a nonexistent invoice. Full monorepo typecheck
+      (11/11), `vitest run` (still 30/30), and both `admin`/`portal` production builds succeed
+      (portal's Next.js `themeColor`-in-`metadata` warning was also fixed by moving it to a
+      `viewport` export).
+- [ ] Deferred: the router-role audit above covered only the two highest-risk routers
+      (`documentsRouter`, `studentsRouter`); other admin routers (`attendanceRouter`,
+      `resultsRouter`'s non-portal endpoints, `feesRouter`, exam/marks routers) still only check
+      `authenticate` with no role gate and should get the same `STAFF_ONLY_ROLES` treatment in a
+      follow-up pass — flagging this explicitly rather than silently claiming full coverage; push
+      notifications are subscribe-only — no VAPID keys or actual push-sending exists yet (lands in
+      Phase 17, per the spec's own layering); `next-pwa` was not installed in favor of a small
+      hand-rolled service worker — simpler and avoids a dependency with known App-Router
+      compatibility friction, but lacks `next-pwa`'s more sophisticated cache-strategy tooling;
+      `manifest.json` references `icon-192.png`/`icon-512.png` that don't exist as real image
+      assets yet (no institution branding to generate them from — same class of gap as other
+      pending image assets throughout this project); language toggle (Bangla/English) on
+      `/profile` is not implemented (bilingual data itself — `name_bn` etc. — is already modeled
+      and returned by the API).
 
 ## Phase 16 — IoT/Biometric Device Service
 

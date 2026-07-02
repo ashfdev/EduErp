@@ -26,3 +26,15 @@ export const PAYROLL_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
 export const LIBRARY_MANAGE_ROLES: UserRole[] = ["ADMIN", "LIBRARIAN"];
 export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["ADMIN", "TRANSPORT_MANAGER"];
 export const HOSTEL_MANAGE_ROLES: UserRole[] = ["ADMIN", "HOSTEL_MANAGER"];
+export const PORTAL_ROLES: UserRole[] = ["STUDENT", "GUARDIAN"];
+
+// Every staff-facing role — i.e. every role except the two portal-only ones.
+// Used to lock admin-panel routers (documents, full student profile) out of
+// STUDENT/GUARDIAN tokens now that Phase 15 makes those a real, actively-used
+// login path — those roles must go through the ownership-checked
+// /api/portal/* routes instead of the admin endpoints directly.
+export const STAFF_ONLY_ROLES: UserRole[] = [
+  "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
+  "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
+  "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
+];

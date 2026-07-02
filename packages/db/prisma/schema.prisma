@@ -271,6 +271,8 @@ model Class {
   subjects         Subject[]
   students         Student[]    @relation("CurrentClass")
   admission_cycles AdmissionCycle[]
+  homework         Homework[]
+  routine_slots    RoutineSlot[]
 
   @@index([academic_year_id])
 }
@@ -289,6 +291,8 @@ model Section {
   created_at       DateTime           @default(now())
   students         Student[]          @relation("CurrentSection")
   attendance       AttendanceRecord[]
+  homework         Homework[]
+  routine_slots    RoutineSlot[]
 
   @@index([class_id])
 }
@@ -313,6 +317,8 @@ model Subject {
   student_subjects StudentSubject[]
   mark_entries     MarkEntry[]
   exam_subject_configs ExamSubjectConfig[]
+  homework         Homework[]
+  routine_slots    RoutineSlot[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -351,6 +357,8 @@ model User {
   updated_at     DateTime       @updatedAt
   student        Student?
   staff          Staff?
+  guardian       Guardian?
+  push_subscriptions PushSubscription[]
   refresh_tokens RefreshToken[]
 }
 
@@ -367,6 +375,8 @@ model RefreshToken {
 
 model Guardian {
   id         String           @id @default(cuid())
+  user_id    String?          @unique
+  user       User?            @relation(fields: [user_id], references: [id])
   name_en    String
   name_bn    String?
   relation   GuardianRelation
@@ -1123,6 +1133,59 @@ model HostelVisitor {
   created_at   DateTime  @default(now())
 
   @@index([student_id])
+}
+
+// ─────────────────────────────────────────────
+// PORTAL MODELS
+// ─────────────────────────────────────────────
+
+model Homework {
+  id             String   @id @default(cuid())
+  class_id       String
+  class          Class    @relation(fields: [class_id], references: [id])
+  section_id     String?
+  section        Section? @relation(fields: [section_id], references: [id])
+  subject_id     String
+  subject        Subject  @relation(fields: [subject_id], references: [id])
+  teacher_id     String?
+  title          String
+  description    String   @db.Text
+  due_date       DateTime
+  attachment_url String?
+  created_at     DateTime @default(now())
+
+  @@index([class_id])
+  @@index([section_id])
+}
+
+model RoutineSlot {
+  id          String   @id @default(cuid())
+  class_id    String
+  class       Class    @relation(fields: [class_id], references: [id])
+  section_id  String?
+  section     Section? @relation(fields: [section_id], references: [id])
+  day_of_week Int
+  period_no   Int
+  subject_id  String?
+  subject     Subject? @relation(fields: [subject_id], references: [id])
+  teacher_id  String?
+  start_time  String
+  end_time    String
+
+  @@index([class_id])
+  @@index([section_id])
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  endpoint   String   @unique
+  keys_p256dh String
+  keys_auth  String
+  created_at DateTime @default(now())
+
+  @@index([user_id])
 }
 
 // ─────────────────────────────────────────────

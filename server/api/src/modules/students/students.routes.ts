@@ -8,7 +8,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { upload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
-import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES } from "../../lib/roles";
+import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
@@ -17,7 +17,10 @@ import { badRequest, notFound } from "../../lib/errors";
 import { randomBytes } from "node:crypto";
 
 export const studentsRouter = Router();
-studentsRouter.use(authenticate);
+// Full 360-degree profiles (incl. fees/results/attendance) for any given id
+// with no per-record ownership check — staff-only. STUDENT/GUARDIAN reach
+// their own data via the ownership-checked /api/portal/* routes instead.
+studentsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
 const STUDENT_LIST_SELECT = {
   id: true,
@@ -199,6 +202,8 @@ studentsRouter.post(
       // no strict uniqueness requirement across guardians — phone can repeat for siblings
     }
 
+    let guardianTempPassword: string | undefined;
+
     const student = await prisma.$transaction(async (tx) => {
       let guardianId = body.guardian_id ?? null;
       if (!guardianId && body.father_phone) {
@@ -206,8 +211,23 @@ studentsRouter.post(
         if (existingGuardian) {
           guardianId = existingGuardian.id;
         } else {
+          // Guardians get a portal login too (role=GUARDIAN), same optional-account
+          // pattern already used for students below — the phone may already belong
+          // to a User from an older sibling's guardian record, in which case we
+          // just link the new Guardian row to that existing account.
+          const existingGuardianUser = await tx.user.findUnique({ where: { phone: body.father_phone } });
+          let guardianUserId: string | undefined = existingGuardianUser?.id;
+          if (!existingGuardianUser) {
+            guardianTempPassword = `Grd${randomBytes(4).toString("hex")}!1`;
+            const guardianPasswordHash = await bcrypt.hash(guardianTempPassword, 10);
+            const guardianUser = await tx.user.create({
+              data: { name_en: body.father_name ?? "Guardian", role: "GUARDIAN", phone: body.father_phone, password_hash: guardianPasswordHash },
+            });
+            guardianUserId = guardianUser.id;
+          }
+
           const guardian = await tx.guardian.create({
-            data: { name_en: body.father_name ?? "Guardian", relation: "FATHER", phone: body.father_phone },
+            data: { user_id: guardianUserId, name_en: body.father_name ?? "Guardian", relation: "FATHER", phone: body.father_phone },
           });
           guardianId = guardian.id;
         }
@@ -264,10 +284,15 @@ studentsRouter.post(
       await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids);
 
       if (body.send_portal_login_sms !== false && body.father_phone) {
+        const guardianLoginNote = guardianTempPassword ? ` Guardian portal login: ${body.father_phone} / temp password: ${guardianTempPassword}.` : "";
+        const studentLoginNote = user ? ` Student portal login: ${student_uid} / temp password sent to the student's own phone.` : "";
         await sendSms(
           body.father_phone,
-          `${body.name_en} has been admitted. Student ID: ${student_uid}. Portal login: ${body.phone ?? "N/A"} / temp password sent separately.`,
+          `${body.name_en} has been admitted. Student ID: ${student_uid}.${studentLoginNote}${guardianLoginNote}`,
         );
+        if (user && body.phone) {
+          await sendSms(body.phone, `Your student portal account is ready. Student ID: ${student_uid}. Temp password: ${tempPassword}.`);
+        }
       }
 
       return created;

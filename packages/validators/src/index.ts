@@ -11,3 +11,4 @@ export * from "./hr";
 export * from "./library";
 export * from "./transport";
 export * from "./hostel";
+export * from "./portal";

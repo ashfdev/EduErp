@@ -102,6 +102,12 @@ importers:
       '@education-erp/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@education-erp/validators':
+        specifier: workspace:*
+        version: link:../../packages/validators
+      '@tanstack/react-query':
+        specifier: ^5.62.11
+        version: 5.101.2(react@18.3.1)
       axios:
         specifier: ^1.7.9
         version: 1.18.1
@@ -114,6 +120,12 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      sonner:
+        specifier: ^1.7.1
+        version: 1.7.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      zustand:
+        specifier: ^5.0.2
+        version: 5.0.14(@types/react@18.3.31)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
     devDependencies:
       '@education-erp/config':
         specifier: workspace:*

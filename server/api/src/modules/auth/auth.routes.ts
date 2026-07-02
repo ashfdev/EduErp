@@ -32,9 +32,17 @@ authRouter.post(
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
-    const user = await prisma.user.findFirst({
+    // Portal logins additionally accept a Student ID (student_uid) as the
+    // identifier — resolve it to the linked User via Student.user_id first.
+    let user = await prisma.user.findFirst({
       where: { OR: [{ phone: body.identifier }, { email: body.identifier }] },
     });
+    if (!user && body.portal === "portal") {
+      const student = await prisma.student.findUnique({ where: { student_uid: body.identifier } });
+      if (student?.user_id) {
+        user = await prisma.user.findUnique({ where: { id: student.user_id } });
+      }
+    }
     if (!user) throw unauthorized("Invalid credentials");
     if (!user.is_active) throw unauthorized("Account disabled — contact admin");
 

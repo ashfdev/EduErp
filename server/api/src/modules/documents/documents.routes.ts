@@ -3,13 +3,19 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
+import { STAFF_ONLY_ROLES } from "../../lib/roles";
 import { badRequest, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
 
 export const documentsRouter = Router();
-documentsRouter.use(authenticate);
+// Generates PDFs containing full personal/academic/financial data for any
+// given id with no per-record ownership check — restricted to staff roles.
+// STUDENT/GUARDIAN reach their own marksheet via the ownership-checked
+// /api/portal/student/:id/results/:exam_id/marksheet route instead.
+documentsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
 function sendPdf(res: import("express").Response, buffer: Buffer, filename: string, download: boolean) {
   res.setHeader("Content-Type", "application/pdf");
@@ -148,7 +154,7 @@ documentsRouter.get(
 
 // ───────────────────────── Result Documents ─────────────────────────
 
-async function buildMarksheetData(examId: string, studentId: string) {
+export async function buildMarksheetData(examId: string, studentId: string) {
   const [exam, student, entries] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
