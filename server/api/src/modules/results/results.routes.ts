@@ -10,7 +10,7 @@ import { badRequest, notFound } from "../../lib/errors";
 
 export const resultsRouter = Router();
 
-async function computeClassResults(examId: string, classId: string) {
+export async function computeClassResults(examId: string, classId: string) {
   const [exam, subjects, students] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: true } } } }),
     prisma.subject.findMany({ where: { class_id: classId } }),

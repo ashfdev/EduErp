@@ -1,0 +1,35 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 10mm; font-size: 12px; }
+  .header { text-align: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #999; padding: 5px; font-size: 11px; }
+  th { background: {{institution.primary_color}}; color: #fff; }
+  .net { text-align: center; font-size: 18px; font-weight: 700; margin-top: 12px; }
+  .days { display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; }
+  .footer { display: flex; justify-content: space-between; margin-top: 30px; }
+  .sig-line { border-top: 1px solid #333; width: 100px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+  <div class="header"><h1>{{institution.name_en}}</h1><p>Payslip — {{month}}/{{year}}</p></div>
+  <div class="meta"><span>{{staff.name_en}} ({{staff.staff_uid}})</span><span>{{staff.designation}}</span></div>
+  <table>
+    <tr><th colspan="2">Earnings</th><th colspan="2">Deductions</th></tr>
+    <tr><td>Gross Salary</td><td>৳{{gross_salary}}</td><td>Total Deductions</td><td>৳{{deductions}}</td></tr>
+    <tr><td>Advance Recovery</td><td>৳{{advance_deducted}}</td><td></td><td></td></tr>
+  </table>
+  <p class="net">Net Salary: ৳{{net_salary}}</p>
+  <div class="days"><span>Working Days: {{working_days}}</span><span>Present Days: {{present_days}}</span></div>
+  <div class="footer">
+    <div><div class="sig-line"></div><p>Accountant Signature</p></div>
+    <div><div class="sig-line"></div><p>Received the above amount (Staff Signature)</p></div>
+  </div>
+</body>
+</html>

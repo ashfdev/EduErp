@@ -1,0 +1,40 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 18mm; font-size: 13px; line-height: 1.8; }
+  .letterhead { text-align: center; border-bottom: 3px double {{institution.primary_color}}; padding-bottom: 10px; margin-bottom: 24px; }
+  .letterhead img { height: 20mm; }
+  .letterhead h1 { margin: 4px 0; color: {{institution.primary_color}}; }
+  .letterhead p { margin: 2px 0; font-size: 11px; }
+  .title { text-align: center; font-size: 16px; font-weight: 700; text-decoration: underline; margin-bottom: 20px; }
+  .body-text { text-align: justify; }
+  .footer { display: flex; justify-content: space-between; margin-top: 50px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    {{institutionLogo}}
+    <h1>{{institution.name_en}}</h1>
+    <p>{{institution.address}} | Phone: {{institution.phone}} | EIIN: {{institution.eiin}}</p>
+  </div>
+  <p class="title">TESTIMONIAL</p>
+  <p class="body-text">
+    This is to certify that <strong>{{student.name_en}}</strong>, son/daughter of <strong>{{student.father_name}}</strong>,
+    Roll No: <strong>{{student.current_roll_no}}</strong>, Registration No: <strong>{{student.registration_no}}</strong>,
+    was a student of this institution from <strong>{{banglaDate student.admission_date}}</strong> to <strong>{{banglaDate leaving_date}}</strong>.
+    He/She has appeared in the <strong>{{exam_name}}</strong> Examination in <strong>{{year}}</strong> from this institution.
+    He/She bears good character and conduct. We wish him/her success in future.
+  </p>
+  <div class="footer">
+    <div>Date: {{banglaDate issue_date}}<br />Institution Seal</div>
+    {{signatureBlock 1}}
+  </div>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 8mm; font-size: 9px; }
+  .header { text-align: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; margin-bottom: 8px; }
+  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #999; padding: 3px; text-align: center; height: 16px; }
+  th { background: {{institution.primary_color}}; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>{{institution.name_en}}</h1>
+    <p>Class: {{class_name}} | Section: {{section_name}} | Shift: {{shift_name}} | From: {{banglaDate from_date}} To: {{banglaDate to_date}}</p>
+  </div>
+  <table>
+    <thead>
+      <tr><th>SL</th><th>Roll</th><th>Name</th>{{#each date_columns}}<th>{{this}}</th>{{/each}}<th>Total P</th><th>Total A</th><th>%</th></tr>
+    </thead>
+    <tbody>
+      {{#each students}}
+      <tr><td>{{this.sl}}</td><td>{{this.roll_no}}</td><td style="text-align:left">{{this.name_en}}</td>{{#each ../date_columns}}<td></td>{{/each}}<td></td><td></td><td></td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+</body>
+</html>

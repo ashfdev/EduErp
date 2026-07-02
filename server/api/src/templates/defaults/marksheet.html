@@ -1,0 +1,67 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 12mm; font-size: 12px; }
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header img { height: 16mm; }
+  .header .center { text-align: center; }
+  .header .center h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .photo { width: 22mm; height: 28mm; object-fit: cover; border: 1px solid #999; float: right; }
+  table.info { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.info td { padding: 3px 6px; }
+  table.results { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  table.results th, table.results td { border: 1px solid #999; padding: 5px; font-size: 11px; text-align: center; }
+  table.results th { background: {{institution.primary_color}}; color: #fff; }
+  table.results tr:nth-child(even) { background: #f7f7f7; }
+  .total-row { font-weight: 700; }
+  .promo { text-align: center; margin-top: 16px; font-size: 14px; font-weight: 700; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+</style>
+</head>
+<body>
+  <div class="header">
+    {{institutionLogo}}
+    <div class="center"><h1>{{institution.name_en}}</h1><p>EIIN: {{institution.eiin}} | {{institution.address}}</p></div>
+    <div><strong>{{exam_name}}</strong><br />{{academic_year_label}}</div>
+  </div>
+
+  <img class="photo" src="{{student.photo_url}}" />
+  <table class="info">
+    <tr><td>Name (EN)</td><td>{{student.name_en}}</td><td>Roll No</td><td>{{student.current_roll_no}}</td></tr>
+    <tr><td>Name (BN)</td><td>{{student.name_bn}}</td><td>Registration No</td><td>{{student.registration_no}}</td></tr>
+    <tr><td>Father's Name</td><td>{{student.father_name}}</td><td>Board Roll</td><td>{{student.board_roll}}</td></tr>
+    <tr><td>Mother's Name</td><td>{{student.mother_name}}</td><td>Class / Section</td><td>{{student.current_class.name_en}} / {{student.current_section.name}}</td></tr>
+  </table>
+
+  <table class="results">
+    <thead><tr><th>Subject</th><th>Code</th><th>Full Marks</th><th>Theory</th><th>Practical</th><th>Total</th><th>Grade</th><th>GPA</th></tr></thead>
+    <tbody>
+      {{#each subjects}}
+      <tr>
+        <td>{{this.name_en}}</td><td>{{this.code}}</td><td>{{this.full_marks}}</td>
+        <td>{{formatMarks this.marks_theory}}</td><td>{{formatMarks this.marks_practical}}</td>
+        <td>{{formatMarks this.marks_total}}</td>
+        <td style="color: {{gradeColor this.grade_letter}}">{{this.grade_letter}}</td>
+        <td>{{this.grade_point}}</td>
+      </tr>
+      {{/each}}
+      <tr class="total-row"><td colspan="5">Total / Overall</td><td>{{total_marks}}</td><td>{{overall_grade}}</td><td>{{total_gpa}}</td></tr>
+    </tbody>
+  </table>
+
+  <p class="promo">{{#if has_failed}}Result: FAILED{{else}}Promoted to {{next_class_name}}{{/if}}</p>
+
+  <div class="signatures">
+    {{signatureBlock 1}}
+    {{signatureBlock 2}}
+    {{signatureBlock 3}}
+  </div>
+</body>
+</html>

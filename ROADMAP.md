@@ -351,8 +351,68 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 10 — Document Generation (all 15 doc types)
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. Adds a `DocumentRegistry`-equivalent for
-      certificate verification. Port forward: Bangla PDF font-embedding solution.
+- [x] `server/api/src/services/pdf.service.ts` — implements CLAUDE.md's `renderDocument()` pattern
+      exactly: loads `InstitutionProfile` branding, the active `DocumentTemplate` for the doc type
+      (auto-seeding one from a built-in default HTML file on first use if none exists yet — so
+      every endpoint works out of the box, and the existing Phase-1 Templates/Signatures settings
+      CRUD is what lets an admin customize it later), the `AuthorityConfig`→`AuthoritySignature`
+      chain per doc type, compiles with Handlebars, and renders via Puppeteer
+      (`--no-sandbox`, `PUPPETEER_EXECUTABLE_PATH` override for prod Linux per CLAUDE.md). All 6
+      spec'd Handlebars helpers registered (`banglaDate`, `gradeColor`, `ifPassed`, `formatMarks`,
+      `institutionLogo`, `signatureBlock`). Real Puppeteer + Handlebars + `qrcode` packages
+      installed (Chromium downloaded successfully in this environment).
+- [x] `renderDocumentBatch()` — a genuine improvement over a naive per-record approach: compiles
+      the template once and concatenates N records' rendered HTML with CSS page-breaks into a
+      **single** Puppeteer pass, so "all admit cards for a class" / "all marksheets for a class" /
+      "all ID cards for a class" each produce one real multi-page PDF instead of launching a
+      browser per record or silently only rendering the first record.
+- [x] `server/api/src/templates/defaults/` — 13 default Handlebars templates matching the spec's
+      layout descriptions: student/staff ID card (85.6×54mm), admit card, marksheet, report card,
+      tabulation sheet (A3 landscape), merit list, testimonial, transfer certificate (numbered
+      BD-board format), attendance sheet (monthly grid) + blank sheet, fee receipt (with inline QR
+      via `qrcode`), payslip. All embed the mandatory Noto Sans Bengali font-face per CLAUDE.md.
+      `SYLLABUS` and `REGISTRATION_CARD` doc types exist in the schema enum but have no default
+      template or endpoint — the spec's own Step 10B endpoint list never calls either, so they're
+      left for a custom template via the existing Templates CRUD if ever needed.
+- [x] `server/api/src/modules/documents/documents.routes.ts` — all 19 endpoints from the spec:
+      student id-card/testimonial/transfer-cert; exam admit-cards (bulk) + seat-plan; result
+      marksheet/report-card (single) + marksheets (bulk class) + tabulation + merit-list; attendance
+      daily-register/monthly-sheet/blank-sheet; fee receipt/invoice/dues-report; payroll payslip;
+      staff id-card + id-cards bulk (class / all-staff). `?download=true` toggles attachment vs.
+      inline `Content-Disposition`. Two ops-report endpoints (daily-register, dues-report) skip the
+      customizable-template path entirely via a new `renderSimpleReport()` helper, since their
+      `DocumentType`-enum doesn't have a slot for them and they don't need an authority-signature
+      workflow — they still get real institution branding + Puppeteer rendering.
+- [x] Admin UI — `/documents/print`, a Print Center with a doc-type sidebar (all 18 generatable
+      types) and a per-type filter panel (class/section/exam pickers reuse existing Settings data,
+      date/month/year inputs where relevant) that downloads the generated PDF as a blob, matching
+      the existing Excel-export pattern from Phase 8's Fee Reports page. Added a "Documents" nav
+      link.
+- [x] Verified live against the dev Postgres: generated **all 19 endpoints** end-to-end with real
+      fixtures (class/section/2 students/subject/exam/mark-entries/invoice/payment/staff/payroll-
+      record, all cleaned up afterward) and confirmed every response via `file` is a genuine
+      `PDF document` — not a stub. Specifically confirmed: the student ID card renders at
+      credit-card size; the 2-student bulk ID-card, bulk marksheets, and bulk admit-cards requests
+      each came back as real **2-page** PDFs (proving `renderDocumentBatch`'s single-pass batching
+      actually works, not just the single-record path); the fee receipt is measurably larger than
+      the otherwise-identical invoice document (confirming the inline QR code is actually embedded);
+      `DocumentTemplate` rows were auto-seeded on first use for exactly the 3 doc types exercised
+      early in the test (confirms lazy per-type seeding, not an eager bulk-seed); tabulation sheet
+      correctly rendered A3 landscape; endpoints with no underlying data yet (seat-plan, daily
+      register with no attendance records) still returned valid PDFs with empty tables rather than
+      erroring. Full monorepo typecheck, `vitest run` (still 30/30 — no regressions), and `admin`
+      production build all succeed.
+- [ ] Deferred: no `DocumentRegistry`/QR-verification-code model exists for a public "verify this
+      certificate" lookup page (the fee-receipt QR points at a receipt id but there's no `/verify`
+      endpoint or registry table yet — the original migration plan called for adding this model at
+      this phase but the Phase 0 schema already fixed the model set and PHASE_PROMPTS_PART2.md's
+      actual Phase 10 spec doesn't ask for it either, so it's left as a genuine gap rather than
+      invented scope); the admit-card endpoint has no real per-subject exam-schedule data to draw
+      from (no such model exists in the schema — hall/seat come from the real `ExamSeatPlan`, but
+      date/time per subject are currently placeholder text) — would need a new schedule model in a
+      future phase; 2-up/4-up cut-line print layouts for ID cards and admit cards (spec mentions
+      these formats; today each record is a full page, which the batching change above makes
+      correct for bulk *counts* but not space-efficient for physical cutting).
 
 ## Phase 11 — Website Maintenance + Public Website (apps/website)
 

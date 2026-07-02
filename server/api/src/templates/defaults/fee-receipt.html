@@ -1,0 +1,49 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 10mm; font-size: 12px; }
+  .header { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header img { height: 12mm; }
+  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .header .title { margin-left: auto; font-size: 14px; font-weight: 700; }
+  .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 11px; }
+  table.details { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.details td { padding: 2px 4px; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.items th, table.items td { border: 1px solid #999; padding: 5px; font-size: 11px; }
+  table.items th { background: {{institution.primary_color}}; color: #fff; }
+  .total-row { font-weight: 700; }
+  .payment { margin-top: 10px; font-size: 11px; }
+  .footer { display: flex; justify-content: space-between; margin-top: 30px; align-items: flex-end; }
+  .sig-line { border-top: 1px solid #333; width: 60px; margin-bottom: 2px; }
+  .note { text-align: center; font-size: 9px; color: #777; margin-top: 14px; }
+  .qr { height: 24mm; width: 24mm; }
+</style>
+</head>
+<body>
+  <div class="header">{{institutionLogo}}<h1>{{institution.name_en}}</h1><span class="title">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
+  <div class="meta"><span>Receipt No: {{receipt_no}}</span><span>Date: {{banglaDate date}}</span></div>
+  <table class="details">
+    <tr><td>Student Name</td><td>{{student.name_en}}</td><td>Student ID</td><td>{{student.student_uid}}</td></tr>
+    <tr><td>Class</td><td>{{student.current_class.name_en}}</td><td>Section</td><td>{{student.current_section.name}}</td></tr>
+  </table>
+  <table class="items">
+    <thead><tr><th>Category</th><th>Description</th><th>Amount</th><th>Fine</th></tr></thead>
+    <tbody>
+      {{#each items}}
+      <tr><td>{{this.category}}</td><td>{{this.description}}</td><td>৳{{this.amount}}</td><td>৳{{this.fine}}</td></tr>
+      {{/each}}
+      <tr class="total-row"><td colspan="2">Total</td><td colspan="2">৳{{total}}</td></tr>
+    </tbody>
+  </table>
+  <p class="payment">Payment Method: {{payment_method}} {{#if transaction_id}}| Transaction ID: {{transaction_id}}{{/if}}</p>
+  <div class="footer">
+    <div><div class="sig-line"></div><p>Cashier Signature</p></div>
+    {{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}
+  </div>
+  <p class="note">This is a system-generated receipt.</p>
+</body>
+</html>
