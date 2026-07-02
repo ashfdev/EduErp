@@ -40,7 +40,7 @@ usersRouter.get(
         role: true,
         is_active: true,
         last_login_at: true,
-        staff: { select: { staff_uid: true, designation: true, department_id: true } },
+        staff: { select: { id: true, staff_uid: true, designation: true, department_id: true } },
       },
       orderBy: { created_at: "desc" },
     });
@@ -77,7 +77,7 @@ usersRouter.post(
           },
         },
       },
-      select: { id: true, name_en: true, phone: true, role: true, staff: { select: { staff_uid: true } } },
+      select: { id: true, name_en: true, phone: true, role: true, staff: { select: { id: true, staff_uid: true } } },
     });
 
     await sendSms(body.phone, `Your account has been created. Temporary password: ${tempPassword}`);

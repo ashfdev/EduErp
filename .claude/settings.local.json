@@ -89,7 +89,12 @@
       "Bash(curl -s http://localhost:3010/students/new -o new-page.html)",
       "Bash(curl -s http://localhost:3010/students)",
       "PowerShell(Stop-Process -Id 15932,9128 -Force -ErrorAction SilentlyContinue)",
-      "PowerShell(\"done\")"
+      "PowerShell(\"done\")",
+      "PowerShell(Stop-Process -Id 20372 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(\"killed\")",
+      "PowerShell(Stop-Process -Id 11608 -Force -ErrorAction SilentlyContinue)",
+      "Bash(rm -f login-resp.json year-resp.json class-resp.json section-resp.json subject-resp.json teacher-resp.json teachers-list.json assign-resp.json test-ids.txt api.log)",
+      "PowerShell(Stop-Process -Id 21728 -Force -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"

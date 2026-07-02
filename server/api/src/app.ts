@@ -10,6 +10,7 @@ import { uploadsRouter } from "./modules/uploads.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { studentsRouter } from "./modules/students/students.routes";
 import { subjectsRouter } from "./modules/subjects/subjects.routes";
+import { staffRouter } from "./modules/staff/staff.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -26,6 +27,7 @@ export function createApp(): Express {
   app.use("/api/uploads", uploadsRouter);
   app.use("/api/students", studentsRouter);
   app.use("/api/subjects", subjectsRouter);
+  app.use("/api/staff", staffRouter);
 
   app.use(errorHandler);
 

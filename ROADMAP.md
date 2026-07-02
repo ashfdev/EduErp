@@ -145,8 +145,24 @@ expanded this phase's scope.
 
 ## Phase 4 — Subjects & Teacher Assignment
 
-- [ ] Not started. Full spec in `prompts.md`. `GET /api/subjects` already exists (built during
-      Phase 3) — this phase adds POST/PUT/DELETE/reorder + teacher assignment endpoints and UI.
+- [x] API — `POST/PUT/DELETE /api/subjects` (duplicate-code-per-class rejected with 409, delete
+      blocked if `MarkEntry` records exist), `PUT /api/subjects/reorder`,
+      `GET /api/subjects/:id/assignments`, `POST/PUT/DELETE /api/subjects/assign`, and
+      `GET /api/staff/teachers` (filters `Staff` by `User.role` in the teaching-role set — a
+      minimal read-only endpoint, full HR/staff CRUD is Phase 12).
+- [x] Admin UI — `/settings/subjects`: left panel class list, right panel subjects for the
+      selected class (up/down reorder, inline compulsory/optional/marks badges, add-subject
+      dialog), expandable per-subject teacher-assignment panel (per-section or all-sections,
+      assign/remove).
+- [x] Verified: live curl-driven flow against the dev Postgres — subject creation, duplicate-code
+      409, teacher assignment, fetching assignments, unassign, reorder. Full monorepo typecheck,
+      admin build generates all 23 routes.
+
+Real bug found and fixed: `POST /api/settings/users` (Phase 1) returned the created staff
+record's `staff_uid` but never its `id` — since `SubjectTeacherAssignment.staff_id` references
+`Staff.id` (not `User.id`), any caller using that response to immediately assign the new teacher
+to a subject would hit a foreign-key violation with no way to recover the right id short of a
+follow-up list call. Added `id` to both the create-response and list-response `staff` selects.
 
 ## Phase 4 — Subjects & Teacher Assignment
 

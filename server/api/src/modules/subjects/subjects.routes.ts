@@ -3,10 +3,12 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
+import { reqParam } from "../../lib/req-param";
+import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
+import { subjectSchema, subjectAssignmentSchema } from "@education-erp/validators";
+import { conflict, notFound } from "../../lib/errors";
 
-// Minimal read-only endpoint pulled forward from Phase 4 because the Phase 3
-// student-creation form needs to show compulsory/optional subjects per
-// class. Phase 4 adds the full CRUD + teacher assignment on top of this.
 export const subjectsRouter = Router();
 subjectsRouter.use(authenticate);
 
@@ -19,5 +21,99 @@ subjectsRouter.get(
       orderBy: { display_order: "asc" },
     });
     res.json({ success: true, data: subjects });
+  }),
+);
+
+subjectsRouter.post(
+  "/",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = subjectSchema.parse(req.body);
+    const existing = await prisma.subject.findUnique({ where: { class_id_code: { class_id: body.class_id, code: body.code } } });
+    if (existing) throw conflict("A subject with this code already exists in this class");
+
+    const subject = await prisma.subject.create({ data: body });
+    res.status(201).json({ success: true, data: subject });
+  }),
+);
+
+subjectsRouter.put(
+  "/reorder",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = z.array(z.object({ id: z.string(), display_order: z.number().int() })).parse(req.body);
+    await prisma.$transaction(
+      body.map((item) => prisma.subject.update({ where: { id: item.id }, data: { display_order: item.display_order } })),
+    );
+    res.json({ success: true, message: "Order updated" });
+  }),
+);
+
+subjectsRouter.put(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = subjectSchema.partial().parse(req.body);
+    const subject = await prisma.subject.update({ where: { id }, data: body });
+    res.json({ success: true, data: subject });
+  }),
+);
+
+subjectsRouter.delete(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const hasMarks = await prisma.markEntry.findFirst({ where: { subject_id: id } });
+    if (hasMarks) throw conflict("This subject has exam records and cannot be deleted");
+    await prisma.subject.update({ where: { id }, data: { is_active: false } });
+    res.status(204).send();
+  }),
+);
+
+subjectsRouter.get(
+  "/:id/assignments",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+    const assignments = await prisma.subjectTeacherAssignment.findMany({
+      where: { subject_id: id, ...(query.academic_year_id && { academic_year_id: query.academic_year_id }) },
+      include: { staff: { select: { id: true, name_en: true, designation: true } }, subject: true },
+    });
+    res.json({ success: true, data: assignments });
+  }),
+);
+
+subjectsRouter.post(
+  "/assign",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = subjectAssignmentSchema.parse(req.body);
+    const assignment = await prisma.subjectTeacherAssignment.create({ data: body });
+    res.status(201).json({ success: true, data: assignment });
+  }),
+);
+
+subjectsRouter.put(
+  "/assign/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ staff_id: z.string().min(1) }).parse(req.body);
+    const assignment = await prisma.subjectTeacherAssignment.update({ where: { id }, data: body });
+    res.json({ success: true, data: assignment });
+  }),
+);
+
+subjectsRouter.delete(
+  "/assign/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.subjectTeacherAssignment.findUnique({ where: { id } });
+    if (!existing) throw notFound("Assignment not found");
+    await prisma.subjectTeacherAssignment.delete({ where: { id } });
+    res.status(204).send();
   }),
 );

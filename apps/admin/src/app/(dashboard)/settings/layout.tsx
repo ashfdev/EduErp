@@ -7,6 +7,7 @@ const GROUPS = [
       { href: "/settings/institution", label: "Profile & Branding" },
       { href: "/settings/academic", label: "Academic Structure" },
       { href: "/settings/departments", label: "Departments" },
+      { href: "/settings/subjects", label: "Subjects" },
     ],
   },
   {
