@@ -278,7 +278,76 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 9 — Online Admission
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`.
+- [x] `packages/validators/src/admission.ts` — cycle create/update/toggle, dynamic
+      `form_config` schema (fields[] + subject_config + document_uploads), public application
+      submission, status update, bulk-action, enroll, payment-initiate, status-lookup schemas.
+- [x] `server/api/src/modules/admission/admission.routes.ts` — built on the `AdmissionCycle`/
+      `AdmissionApplication` models already defined in the Phase 0 schema (no migration needed):
+  - Cycle management: create/list/detail (each with live-computed stats: applied/shortlisted/
+    waitlisted/confirmed/enrolled/rejected + seats-remaining), update (blocks changing
+    class/academic_year once applications exist), open/publish toggle.
+  - Form config: get/put per-cycle `form_config`, get compulsory/optional subject split for the
+    cycle's class.
+  - Public: published-cycles list/detail, `POST /apply` (validates cycle is open, within the
+    open/close date window, and that all `form_config`-required fields + required document keys
+    are present; generates a sequential `{prefix}-{year}-{seq}` admission roll from the cycle
+    name; queues a confirmation SMS), payment initiate/callback (reuses the Phase 8
+    `getPaymentAdapter` — correctly 400s as "not configured" today, same as Fees), and a
+    phone-verified application-status lookup (matches `application_id` + guardian phone against
+    the JSON `guardian_info` field — no dedicated phone column needed).
+  - Admin processing: paginated/filterable application list + detail, single/bulk status
+    update (SHORTLISTED/WAITLISTED/REJECTED, blocked once ENROLLED), merit-list generation
+    (ranks non-rejected/non-enrolled applications by a `gpa*1000 + total_marks/1000` score
+    computed from the `previous_result` JSON, auto-shortlists the top `seat_count` and
+    waitlists the rest), merit-list publish (SMS-notifies every ranked applicant of their
+    rank/status), confirm (SHORTLISTED→CONFIRMED), and enroll (CONFIRMED→ENROLLED —
+    creates/matches a `Guardian` by phone, generates a real `student_uid` via the existing
+    `generateStudentUID()`, creates the `User`+`Student`, runs the existing
+    `inheritSubjectsForClass()` against the applicant's `selected_subjects`, creates an
+    ADMISSION-category `Invoice` when `app_fee > 0`, sets `enrolled_student_id`, and sends a
+    welcome SMS — all inside one transaction).
+  - Document endpoints (`admit-card`, `merit-list/pdf`) return structured JSON with an explicit
+    "PDF rendering lands in Phase 10" note, matching the pattern already used for Phase 5/7
+    report endpoints — no PDF engine exists yet.
+- [x] Admin UI — `/admission` (dashboard cards per cycle with live stats + open/draft badges),
+      `/admission/cycles/new` (single-form cycle creation — class, year, dates, seats, fee),
+      `/admission/cycles/[id]` (open/publish switches, stats bar, Applications tab with status
+      filter + checkbox multi-select + bulk shortlist/waitlist/reject, Merit List tab with
+      generate + publish-and-notify actions), `/admission/applications/[id]` (guardian/previous-
+      record/personal-info/documents panels + status-appropriate action buttons: Shortlist/
+      Waitlist/Reject → Confirm → Enroll, redirects to the new student's profile on enroll
+      success). Added an "Admission" link to the sidebar nav.
+- [x] Public UI (`apps/website`) — `/admission` (published-cycle list with Apply/Check-Status
+      links), `/admission/[cycle_id]` (6-step wizard: Personal Info incl. cycle-specific dynamic
+      fields from `form_config`, Guardian Info, Previous Academic Record, Subject Selection
+      (compulsory shown read-only, optional checkboxes), Documents (URL inputs keyed by
+      `form_config.document_uploads` — see deferred item below), Review & Submit — shows the
+      generated admission roll on success), `/admission/status` (application_id + guardian-phone
+      lookup, plain fetch, no auth, matches the existing `/result` page's style).
+- [x] Verified end-to-end via live curl against the dev Postgres (fixtures created and cleaned
+      up afterward): created a class/section/compulsory+optional subject, created a 2-seat
+      cycle with a required custom field + required document, confirmed `POST /apply` correctly
+      400s when the required field is missing, submitted 3 applications with descending GPA
+      (5.0/4.5/3.5) getting sequential rolls `CLA-2026-0001..0003`, confirmed the phone-verified
+      status lookup returns `found:false` for a wrong phone, generated the merit list and
+      confirmed the top-2-by-GPA were SHORTLISTED and the third WAITLISTED, confirmed+enrolled
+      the rank-1 applicant and verified the resulting `Student` had the compulsory subject
+      correctly inherited, an ADMISSION invoice for ৳500 created, the application flipped to
+      ENROLLED with `enrolled_student_id` set, and a second enroll attempt correctly rejected;
+      confirmed an unconfigured-BKASH payment-initiate 400s cleanly, merit-list-publish sent 3
+      SMS stub log lines, bulk-reject correctly excluded the already-ENROLLED application from
+      re-transition, and the admit-card endpoint 400s for a REJECTED application but returns the
+      structured payload for a SHORTLISTED one. Full monorepo typecheck and both `admin`/
+      `website` production builds succeed.
+- [ ] Deferred: real document file upload for the public application form (currently accepts a
+      document URL directly rather than uploading through a public multipart endpoint — no
+      public-facing upload route exists yet, only the authenticated one used elsewhere); the
+      admin cycle-creation form builder is a fixed form rather than the drag-and-drop dynamic
+      field editor described in the spec (the `form_config` JSON contract is fully implemented
+      and editable via the API, just not yet through a dedicated builder UI); a payment-driven
+      auto-confirm path (today `confirm` is a manual admin action — the payment callback handler
+      already flips CONFIRMED on a successful gateway callback, so this mostly needs real gateway
+      credentials to exercise, per the standing "external accounts... later" decision).
 
 ## Phase 10 — Document Generation (all 15 doc types)
 

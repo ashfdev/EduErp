@@ -17,6 +17,7 @@ import { marksRouter } from "./modules/examination/marks.routes";
 import { resultsRouter } from "./modules/results/results.routes";
 import { feesRouter } from "./modules/fees/fees.routes";
 import { paymentsRouter } from "./modules/fees/payments.routes";
+import { admissionRouter } from "./modules/admission/admission.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -40,6 +41,7 @@ export function createApp(): Express {
   app.use("/api/results", resultsRouter);
   app.use("/api/fees", feesRouter);
   app.use("/api/payments", paymentsRouter);
+  app.use("/api/admission", admissionRouter);
 
   app.use(errorHandler);
 
