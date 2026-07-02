@@ -35,6 +35,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/attendance/mark" className="rounded-md px-3 py-2 hover:bg-accent">
               Attendance
             </Link>
+            <Link href="/examination" className="rounded-md px-3 py-2 hover:bg-accent">
+              Examination
+            </Link>
+            <Link href="/marks" className="rounded-md px-3 py-2 hover:bg-accent">
+              Marks
+            </Link>
             <Link href="/settings/institution" className="rounded-md px-3 py-2 hover:bg-accent">
               Settings
             </Link>

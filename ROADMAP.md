@@ -197,7 +197,31 @@ filtering, which does support `null` correctly.
 
 ## Phase 6 — Examination + Mark Entry + Grading
 
-- [ ] Not started. Full spec in `prompts.md`. Port forward: grading engine incl. 4th-subject rule.
+- [x] `server/api/src/utils/grading.engine.ts` — pure functions ported forward from the old
+      build: `calculateGrade` (handles absent + out-of-range clamping), `calculateStudentResult`
+      (4th-subject rule: drops the lowest-GPA optional subject from the average, marksheet still
+      shows its marks), `calculatePositions` (GPA desc, total-marks tiebreak, shared position on
+      ties with the next rank skipped). 21 unit tests covering every BD-board grade boundary, the
+      4th-subject rule on/off, a failed-subject-forces-overall-F case, and 3 tie-handling
+      scenarios — all passing.
+- [x] API — exam CRUD (auto-creates `ExamSubjectConfig` from each selected class's subjects on
+      create; edit/delete restricted to `DRAFT`), enforced `DRAFT→ACTIVE→MARK_ENTRY→COMPLETED→PUBLISHED`
+      status transitions, subject-config batch update, round-robin seat-plan generation across
+      halls. Mark entry: the grid endpoint scopes to a `SUBJECT_TEACHER`'s own assigned subjects
+      automatically, submit enforces the entry window + full-marks ceiling + (for subject
+      teachers) assignment ownership, approve requires every subject×student combination
+      submitted first, publish requires every mark approved first.
+- [x] Admin UI — `/examination` (card grid), `/examination/new` (multi-field form + class
+      checkboxes), `/examination/:id` (editable subject-config table + status-transition button),
+      `/examination/:id/seat-plan` (hall builder + generate + table), `/marks` (exam/class/section
+      picker scoped to exams currently in `MARK_ENTRY`), `/marks/:exam_id/:class_id/:section_id`
+      (editable grid with per-cell absent checkbox), `/marks/:exam_id/approve` (per-class
+      approve+publish with a public-on-website toggle).
+- [x] Verified: live curl-driven flow against the dev Postgres — exam creation, mark-entry-window
+      guard (rejected while `DRAFT`), invalid-transition rejection (`DRAFT`→`MARK_ENTRY` skipping
+      `ACTIVE`), mark submission, over-full-marks rejection, approve (correctly required full
+      submission first), publish, and seat-plan generation. Full monorepo typecheck, `vitest run`
+      (22/22 including the 21 new grading tests), admin build generates all 31 routes.
 
 ## Phase 7 — Results & Report Cards
 
