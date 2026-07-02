@@ -23,3 +23,6 @@ export const WEBSITE_CONTENT_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "IT_ADMI
 export const HR_MANAGE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL"];
 export const LEAVE_APPROVE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL"];
 export const PAYROLL_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
+export const LIBRARY_MANAGE_ROLES: UserRole[] = ["ADMIN", "LIBRARIAN"];
+export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["ADMIN", "TRANSPORT_MANAGER"];
+export const HOSTEL_MANAGE_ROLES: UserRole[] = ["ADMIN", "HOSTEL_MANAGER"];

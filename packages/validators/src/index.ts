@@ -8,3 +8,6 @@ export * from "./fees";
 export * from "./admission";
 export * from "./website";
 export * from "./hr";
+export * from "./library";
+export * from "./transport";
+export * from "./hostel";

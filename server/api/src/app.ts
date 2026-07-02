@@ -22,6 +22,9 @@ import { documentsRouter } from "./modules/documents/documents.routes";
 import { websiteRouter } from "./modules/website";
 import { contentRouter } from "./modules/content/content.routes";
 import { hrRouter } from "./modules/hr";
+import { libraryRouter } from "./modules/library/library.routes";
+import { transportRouter } from "./modules/transport/transport.routes";
+import { hostelRouter } from "./modules/hostel/hostel.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -50,6 +53,9 @@ export function createApp(): Express {
   app.use("/api/website", websiteRouter);
   app.use("/api/content", contentRouter);
   app.use("/api/hr", hrRouter);
+  app.use("/api/library", libraryRouter);
+  app.use("/api/transport", transportRouter);
+  app.use("/api/hostel", hostelRouter);
 
   app.use(errorHandler);
 

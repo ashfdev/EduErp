@@ -434,6 +434,8 @@ model Student {
   mark_entries          MarkEntry[]
   invoices              Invoice[]
   exam_seat_plans       ExamSeatPlan[]
+  transport             StudentTransport?
+  hostel_allocations    HostelAllocation[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -970,8 +972,169 @@ model AdmissionApplication {
 }
 
 // ─────────────────────────────────────────────
+// LIBRARY MODELS
+// ─────────────────────────────────────────────
+
+model Book {
+  id           String      @id @default(cuid())
+  isbn         String?     @unique
+  title        String
+  author       String
+  publisher    String?
+  edition      String?
+  category     String
+  subject_id   String?
+  total_copies Int         @default(1)
+  available    Int         @default(1)
+  location     String?
+  barcode      String?     @unique
+  cover_url    String?
+  is_active    Boolean     @default(true)
+  created_at   DateTime    @default(now())
+  issues       BookIssue[]
+}
+
+model BookIssue {
+  id             String      @id @default(cuid())
+  book_id        String
+  book           Book        @relation(fields: [book_id], references: [id])
+  person_id      String
+  person_type    PersonType
+  issued_at      DateTime    @default(now())
+  due_date       DateTime
+  returned_at    DateTime?
+  fine_per_day   Float       @default(2)
+  fine_amount    Float       @default(0)
+  fine_paid      Boolean     @default(false)
+  issued_by_id   String?
+  returned_to_id String?
+  status         IssueStatus @default(ISSUED)
+
+  @@index([book_id])
+  @@index([person_id])
+}
+
+// ─────────────────────────────────────────────
+// TRANSPORT MODELS
+// ─────────────────────────────────────────────
+
+model TransportRoute {
+  id         String             @id @default(cuid())
+  name       String
+  fare       Float              @default(0)
+  is_active  Boolean            @default(true)
+  created_at DateTime           @default(now())
+  stops      RouteStop[]
+  vehicles   Vehicle[]
+  students   StudentTransport[]
+}
+
+model RouteStop {
+  id         String         @id @default(cuid())
+  route_id   String
+  route      TransportRoute @relation(fields: [route_id], references: [id])
+  name       String
+  stop_order Int
+  time       String?
+
+  @@index([route_id])
+}
+
+model Vehicle {
+  id            String          @id @default(cuid())
+  route_id      String?
+  route         TransportRoute? @relation(fields: [route_id], references: [id])
+  vehicle_no    String
+  type          String
+  capacity      Int
+  driver_name   String?
+  driver_phone  String?
+  insurance_exp DateTime?
+  is_active     Boolean         @default(true)
+  created_at    DateTime        @default(now())
+
+  @@index([route_id])
+}
+
+model StudentTransport {
+  id          String         @id @default(cuid())
+  student_id  String         @unique
+  student     Student        @relation(fields: [student_id], references: [id])
+  route_id    String
+  route       TransportRoute @relation(fields: [route_id], references: [id])
+  pickup_stop String?
+  created_at  DateTime       @default(now())
+
+  @@index([route_id])
+}
+
+// ─────────────────────────────────────────────
+// HOSTEL MODELS
+// ─────────────────────────────────────────────
+
+model HostelBlock {
+  id         String       @id @default(cuid())
+  name       String
+  type       String?
+  rooms      HostelRoom[]
+  created_at DateTime     @default(now())
+}
+
+model HostelRoom {
+  id          String             @id @default(cuid())
+  block_id    String
+  block       HostelBlock        @relation(fields: [block_id], references: [id])
+  room_no     String
+  floor       Int                @default(0)
+  capacity    Int                @default(4)
+  type        String?
+  is_active   Boolean            @default(true)
+  allocations HostelAllocation[]
+
+  @@index([block_id])
+}
+
+model HostelAllocation {
+  id         String     @id @default(cuid())
+  room_id    String
+  room       HostelRoom @relation(fields: [room_id], references: [id])
+  student_id String
+  student    Student    @relation(fields: [student_id], references: [id])
+  bed_no     String?
+  from_date  DateTime
+  to_date    DateTime?
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+
+  @@index([room_id])
+  @@index([student_id])
+}
+
+model HostelVisitor {
+  id           String    @id @default(cuid())
+  student_id   String
+  visitor_name String
+  relation     String
+  phone        String
+  purpose      String?
+  in_time      DateTime  @default(now())
+  out_time     DateTime?
+  approved_by  String?
+  created_at   DateTime  @default(now())
+
+  @@index([student_id])
+}
+
+// ─────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────
+
+enum IssueStatus {
+  ISSUED
+  RETURNED
+  OVERDUE
+  LOST
+}
 
 enum InstitutionType {
   SCHOOL

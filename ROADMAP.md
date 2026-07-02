@@ -567,10 +567,66 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 13 — Library + Transport + Hostel
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`, which includes the actual schema
-      additions this time (`Book`/`BookIssue`, `TransportRoute`/`Vehicle`/`StudentTransport`,
-      `HostelBlock`/`HostelRoom`/`HostelAllocation`/`HostelVisitor`) — supersedes the earlier
-      placeholder guess at these model names.
+- [x] Schema additions (one migration, `phase13_library_transport_hostel`): all 9 models from the
+      spec added exactly as designed — `Book`/`BookIssue` (+`IssueStatus` enum), `TransportRoute`/
+      `RouteStop`/`Vehicle`/`StudentTransport`, `HostelBlock`/`HostelRoom`/`HostelAllocation`/
+      `HostelVisitor`. Added the two back-relations the spec's model sketch omitted but Prisma
+      requires (`Student.transport`, `Student.hostel_allocations`) — `BookIssue.person_id` and
+      `HostelVisitor.student_id` stay as informal (non-FK) references, matching the same
+      person_id/person_type discriminator pattern `AttendanceRecord` already established in
+      Phase 0, so no back-relation was needed there.
+- [x] `server/api/src/modules/library/` — book catalog CRUD + add-copies, issue/return workflow
+      (issue decrements `available` and validates it's >0 first; return computes
+      `days_late × fine_per_day` and increments `available` back, in one transaction each way),
+      person issue history, overdue report (with borrower name/phone resolved across both
+      `Student`/`Staff` tables since `BookIssue.person_type` discriminates), fine-collection
+      summary.
+- [x] `server/api/src/modules/transport/` — route CRUD, stop management (replace-all per route,
+      ordered), vehicle CRUD, and `POST /assign` which upserts a `StudentTransport` row and — if
+      the route has a nonzero fare and an academic year is currently active — creates a real
+      TRANSPORT-category `Invoice` (reuses the existing `FeeCategory` enum value from Phase 8,
+      no schema change needed there), plus a per-route passenger manifest endpoint.
+- [x] `server/api/src/modules/hostel/` — block/room CRUD, `GET /rooms?available=true` (computes
+      `beds_free` from each room's active-allocation count vs. capacity), allocate (rejects both
+      an over-capacity room and a student who already has an active allocation elsewhere),
+      checkout, visitor log with in/out timestamps, and an occupancy report (per-room + aggregate
+      fill rate).
+- [x] Admin UI — `/library` (dashboard), `/library/books` (catalog + add-copies), `/library/issue`
+      (student-search → book-search → issue), `/library/return` (issued-list with overdue
+      highlighting → one-click return showing the computed fine), `/library/reports` (overdue /
+      fine-report tabs); `/transport` (route cards with vehicle/student counts) + `/transport/
+      routes/new` (route + ordered-stops builder in one form) + `/transport/routes/[id]`
+      (stops, assigned vehicles, printable passenger manifest) + `/transport/assign`; `/hostel`
+      (single page, three tabs — Blocks & Rooms with a click-to-allocate room grid, Visitor Log,
+      Occupancy Report — combined rather than split into many sub-pages, a deliberate scope
+      simplification given the spec's own "visual block/floor/room grid" description maps
+      naturally onto one page rather than several). Added Library/Transport/Hostel nav links.
+- [x] Verified live against the dev Postgres with real fixtures (2 students, all cleaned up
+      after): issued a book with a due date 5 days in the past at a custom ৳5/day fine rate,
+      confirmed `available` decremented and the overdue report correctly showed
+      `days_late: 5, projected_fine: 25`, then returned it and confirmed the actual fine
+      (`fine_amount: 25`) matched the projection exactly and `available` incremented back to the
+      original count; created a route with 2 ordered stops and a vehicle, assigned a student with
+      no active academic year and confirmed **no** invoice was created (correct — there's nothing
+      to bill against), then activated a year and re-assigned a second student and confirmed a
+      real ৳1,500 TRANSPORT invoice appeared in `/api/fees/invoices`; created a capacity-1 hostel
+      room, allocated one student successfully, confirmed a second allocation attempt to the same
+      room is rejected ("at full capacity") and a duplicate allocation attempt for the
+      already-housed student to a *different* room is also rejected ("already has an active
+      allocation"), confirmed the occupancy report's aggregate math (5 total capacity, 1 occupied,
+      20% fill rate) matched by hand; logged a hostel visitor in, confirmed it appears in the
+      active-visitors filter, checked out, and confirmed a second checkout attempt is correctly
+      rejected. Full monorepo typecheck (11/11), `vitest run` (still 30/30, no regressions), and
+      the admin production build all succeed.
+- [ ] Deferred: `BookIssue`/`HostelVisitor` fine/visit SMS reminders beyond the issue-time
+      confirmation SMS already sent (e.g. an automated "your book is overdue" nagging job) — no
+      scheduler exists yet, this is a natural fit for Phase 17's Notification Service; bed-level
+      (not just room-level) occupancy tracking — `HostelAllocation.bed_no` is captured but nothing
+      currently validates two students can't be assigned the same bed number within a room; no
+      barcode-scanner integration for library issue/return (the `barcode` field exists on `Book`
+      and issue/return both work from a text search, but there's no actual scanner-input capture
+      UI); transport route stops don't support drag-to-reorder in the UI (the ordered-list is
+      edited via a flat form with Remove buttons, `stop_order` is still fully respected end-to-end).
 
 ## Phase 14 — Analytics + Reporting Dashboard
 
