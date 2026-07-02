@@ -14,6 +14,7 @@ import { staffRouter } from "./modules/staff/staff.routes";
 import { attendanceRouter } from "./modules/attendance/attendance.routes";
 import { examsRouter } from "./modules/examination/exams.routes";
 import { marksRouter } from "./modules/examination/marks.routes";
+import { resultsRouter } from "./modules/results/results.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -34,6 +35,7 @@ export function createApp(): Express {
   app.use("/api/attendance", attendanceRouter);
   app.use("/api/exams", examsRouter);
   app.use("/api/marks", marksRouter);
+  app.use("/api/results", resultsRouter);
 
   app.use(errorHandler);
 

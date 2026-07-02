@@ -225,7 +225,30 @@ filtering, which does support `null` correctly.
 
 ## Phase 7 — Results & Report Cards
 
-- [ ] Not started. Full spec in `prompts.md`.
+- [x] API — `GET /api/results/student/:id` (all published results across exams),
+      `GET /api/results/exam/:exam_id` (merit-list-sorted class results, computed via the Phase 6
+      grading engine), `GET /api/results/public/lookup` (**no auth**, by `student_uid` or
+      `roll_no`+`registration_no`, only surfaces `is_published && is_public` results —
+      rate-limited), `GET /api/results/tabulation/:exam_id/:class_id`, and reports
+      (`merit-list`/`subject-analysis`/`campus-wide` as structured JSON — PDF rendering is
+      Phase 10).
+- [x] Admin UI — `/results` (completed/published exam list), `/results/:exam_id` (class picker +
+      Merit List / Subject Analysis tabs).
+- [x] Public — `apps/website` `/result` (student-ID or roll+registration search, no site chrome
+      yet since the shared navbar/footer/branding is Phase 11's job — this is a standalone,
+      functional page using plain `fetch` since the website app has no axios client yet).
+- [x] Verified: live curl-driven flow against the dev Postgres — full mark→approve→publish→lookup
+      pipeline with a real `BD_BOARD` grading-scale preset (85 marks correctly graded A+),
+      merit-list/subject-analysis reports, public lookup by both `student_uid` and
+      `roll_no`+`registration_no`, and confirmed the rate limiter actually returns 429 after the
+      configured request budget. Full monorepo typecheck, both `admin` and `website` builds
+      succeed.
+
+Proactive fix (not a bug found in testing, but a real risk): `GET /api/results/public/lookup` is
+unauthenticated by design (public result lookup) and reachable by anyone, which makes it a
+plausible enumeration/scraping target. Added a shared `publicEndpointLimiter` (20 req/min) rather
+than leaving it fully exposed until Phase 18's dedicated security-hardening pass — per-route rate
+tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 8 — Fee & Finance Module
 
