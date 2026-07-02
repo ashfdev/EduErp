@@ -56,7 +56,37 @@ Prisma engine or `tsc`):
 
 ## Phase 1 — Settings System (FULL) — API + Admin UI
 
-- [ ] Not started. Full endpoint + page spec in `prompts.md`.
+- [x] API — all `server/api/src/modules/settings/*` endpoints: institution profile/branding/
+      type-change (cascading terminology per InstitutionType), config, student-id-config
+      (+preview+reset), grading-scales (+ranges+presets+gap/overlap validation), exam-types
+      (+reorder), fee-rules, attendance-rules, signatures+authority-config, templates
+      (+HTML/CSS upload+preview render), notifications (+test send), academic-years/shifts/
+      departments/classes/sections, users (+auto staff_uid+temp password SMS). JWT
+      authenticate/authorize middleware, Azure Blob + local-disk storage service (ported
+      forward), path-traversal-safe upload serving.
+- [x] Admin UI — all 12 `/settings/*` pages under a secondary sidebar (4 groups): Institution
+      Profile (4 tabs incl. type-change confirmation), Academic Structure, Departments,
+      Student ID Format (live preview), Grading System (scale editor + presets), Exam Types,
+      Fee Rules, Attendance Rules, Authority Signatures, Signature Mapping, Document Templates
+      (upload+preview), Notifications (per-trigger×channel templates), User Accounts. Added
+      the remaining shadcn-style primitives (select, switch, checkbox, tabs, dialog,
+      confirm-dialog, textarea) to `packages/ui` as consumed.
+- [x] Verified: live curl smoke tests against every endpoint category (institution CRUD,
+      grading preset apply, academic-year create, user creation with SMS stub) against the dev
+      Postgres; full monorepo typecheck (11/11); `next build` succeeds generating all 18 admin
+      routes; live-fetched rendered HTML for the institution page and spot-checked 4 more pages
+      (all 200 OK with real content, not error boundaries).
+
+Real bugs fixed: Express 5's `ParamsDictionary` types route params as `string | string[]`
+(broader than Express 4) — combined with `noUncheckedIndexedAccess` this mistyped every
+`req.params.x`; added a validating `reqParam()` helper instead of scattering casts. Several
+settings validators used loose `z.string()` where a Prisma enum was required (authority role,
+document type, user role, grading scale type) — switched to `z.nativeEnum()`. A path-traversal
+hole in the local-storage fallback (`blobKey` query param fed straight into `path.join`) was
+closed with a resolved-path containment check before any file read. `packages/config`'s
+Next.js tsconfig never included the `DOM` lib, so `HTMLInputElement`/`HTMLSelectElement` etc.
+weren't fully typed — every native `<input onChange>` handler across the new settings pages
+was silently losing `.value`/`.files` typing.
 
 ## Phase 2 — Auth + Login System
 

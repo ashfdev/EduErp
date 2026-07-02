@@ -97,6 +97,7 @@ export const examTypeConfigSchema = z.object({
   is_board_exam: z.boolean(),
   display_order: z.number().int(),
 });
+export type ExamTypeConfigInput = z.infer<typeof examTypeConfigSchema>;
 
 export const feeRulesSchema = z.object({
   late_fee_enabled: z.boolean(),

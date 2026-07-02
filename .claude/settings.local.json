@@ -48,7 +48,16 @@
       "Bash(pkill -f \"tsx src/index.ts\")",
       "Bash(node check.mjs)",
       "PowerShell($path = \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; if \\(Test-Path $path\\) { Start-Process $path; \"Started\" } else { \"Not found at $path\" })",
-      "Bash(docker start *)"
+      "Bash(docker start *)",
+      "Bash(pnpm --filter=@education-erp/ui typecheck)",
+      "Bash(pnpm --filter=@education-erp/admin typecheck)",
+      "Bash(curl -sD - -o /tmp/institution-page.html http://localhost:3000/settings/institution)",
+      "Bash(netstat -ano)",
+      "Bash(nohup pnpm exec next dev -p 3010)",
+      "Bash(curl -sD - -o /tmp/institution-page.html http://localhost:3010/settings/institution)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(pkill -f \"tsx watch\")",
+      "Bash(rm -f /tmp/institution-page.html /tmp/api-dev.log /tmp/admin-dev.log /tmp/api.log)"
     ],
     "additionalDirectories": [
       "E:\\EduErp\\apps\\*"
