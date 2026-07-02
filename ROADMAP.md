@@ -252,8 +252,29 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 8 — Fee & Finance Module
 
-- [ ] Not started. Full spec in `prompts.md`. Port forward: late-fee calculation, payment adapter
-      pattern (CASH working, BKASH/NAGAD/SSLCOMMERZ stubs).
+- [x] `server/api/src/utils/late-fee.ts` — ported forward from the old build: FIXED/PERCENTAGE/DAILY
+      fine types, grace period, daily cap clamp. 8 unit tests (disabled rules, within-grace,
+      each fine type, cap clamping) — all passing.
+- [x] `server/api/src/services/payment/` — adapter interface + registry (`getPaymentAdapter`),
+      CASH (synchronously completes, no external round-trip), and BKASH/NAGAD/SSLCOMMERZ stubs
+      that report `isConfigured()` from env vars and fail gracefully with a clear message when
+      credentials aren't set — same proven pattern as the old build, real API calls deferred per
+      the standing "external accounts... later" decision.
+- [x] API — fee structure CRUD (delete blocked once invoices exist), invoice generation
+      (single + bulk-monthly, duplicate-invoice prevention), manual collection via the CASH
+      adapter (applies the late-fee calculator, transitions PENDING→PARTIAL→PAID), invoice
+      waiver, online-payment initiate/callback (BKASH/NAGAD/SSLCOMMERZ — correctly 400s as
+      "not configured" today), and reports (daily-collection, monthly-summary, dues, defaulters,
+      Excel export).
+- [x] Admin UI — `/fees` (dashboard cards), `/fees/structures`, `/fees/invoices` (filter +
+      bulk-generate), `/fees/collect` (student search → outstanding invoices → collect),
+      `/fees/reports` (Dues / Defaulters / Export tabs).
+- [x] Verified: live curl-driven flow against the dev Postgres — invoice generation +
+      duplicate-prevention, partial→full payment collection with a real computed late fee ($50
+      fixed fine correctly applied since the test due-date was already past), daily-collection
+      report, graceful 400 on an unconfigured BKASH initiate, and the Excel export confirmed as a
+      real file via `file`. Full monorepo typecheck, `vitest run` (30/30 incl. 8 new late-fee
+      tests), admin build succeeds.
 
 ## Phase 9 — Online Admission
 

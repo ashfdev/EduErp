@@ -15,6 +15,8 @@ import { attendanceRouter } from "./modules/attendance/attendance.routes";
 import { examsRouter } from "./modules/examination/exams.routes";
 import { marksRouter } from "./modules/examination/marks.routes";
 import { resultsRouter } from "./modules/results/results.routes";
+import { feesRouter } from "./modules/fees/fees.routes";
+import { paymentsRouter } from "./modules/fees/payments.routes";
 
 export function createApp(): Express {
   const app = express();
@@ -36,6 +38,8 @@ export function createApp(): Express {
   app.use("/api/exams", examsRouter);
   app.use("/api/marks", marksRouter);
   app.use("/api/results", resultsRouter);
+  app.use("/api/fees", feesRouter);
+  app.use("/api/payments", paymentsRouter);
 
   app.use(errorHandler);
 
