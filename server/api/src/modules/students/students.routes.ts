@@ -272,6 +272,7 @@ studentsRouter.post(
           current_roll_no: body.current_roll_no,
           registration_no: body.registration_no,
           board_roll: body.board_roll,
+          biometric_id: body.biometric_id,
           admission_date: body.admission_date ?? new Date(),
           previous_institution: body.previous_institution,
           previous_class: body.previous_class,

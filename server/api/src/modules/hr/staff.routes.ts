@@ -137,6 +137,7 @@ hrStaffRouter.post(
           address: body.address,
           employment_type: body.employment_type,
           joining_date: body.joining_date ?? new Date(),
+          biometric_id: body.biometric_id,
           show_on_website: body.show_on_website,
           created_by_id: req.user!.sub,
         },

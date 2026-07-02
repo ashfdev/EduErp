@@ -27,6 +27,8 @@ import { transportRouter } from "./modules/transport/transport.routes";
 import { hostelRouter } from "./modules/hostel/hostel.routes";
 import { analyticsRouter } from "./modules/reports/analytics.routes";
 import { portalRouter } from "./modules/portal/portal.routes";
+import { devicesRouter } from "./modules/devices/devices.routes";
+import { internalRouter } from "./routes/internal";
 
 export function createApp(): Express {
   const app = express();
@@ -60,6 +62,8 @@ export function createApp(): Express {
   app.use("/api/hostel", hostelRouter);
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/portal", portalRouter);
+  app.use("/api/devices", devicesRouter);
+  app.use("/internal", internalRouter);
 
   app.use(errorHandler);
 

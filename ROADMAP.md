@@ -792,9 +792,70 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 16 — IoT/Biometric Device Service
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `services/device`. Blocked on
-      confirming the pilot institution's device brand — build against the generic ZKTeco ADMS
-      protocol, keep the connector adapter-swappable.
+- [x] `services/device` — standalone Express service (port 4500) implementing the ZKTeco ADMS
+      push protocol: `GET /iclock/cdata` (connectivity check-in, auto-registers unknown serial
+      numbers as an inactive `Device` row rather than dropping data silently), `POST /iclock/cdata`
+      (parses tab-delimited ATTLOG punch lines), `GET /iclock/getrequest` (device polls for queued
+      commands), `POST /iclock/devicecmd` (device confirms execution). Since ADMS is device-initiated
+      and push-only, both "pull logs" and "push commands" are implemented via an in-memory
+      per-serial-number command queue (`lib/command-queue.ts`) drained on the device's next poll —
+      documented as not horizontally-scalable (would need Redis) and sufficient only for a single
+      long-running process; real queue infra deferred to pair with Phase 17.
+- [x] `connectors/` — adapter interface (`testConnection`, `pullPunchLogs`, `getUserList`,
+      `pushUserList`, `enrollUser`, `deleteUser`, `clearLogs`, `getDeviceInfo`, `syncTime`) with a
+      ZKTeco ADMS implementation and a generic-HTTP implementation for non-ADMS devices (fail-soft
+      on unreachable devices), keeping the device brand swappable per the original plan.
+- [x] `processor/punch.processor.ts` — dedup (device_id + device_user_id + punch_at, no DB unique
+      constraint, consistent with the find-then-write pattern used since Phase 5), maps punches to
+      `Student`/`Staff` via `biometric_id`, determines shift via the student's section shift (or all
+      active shifts as fallback), determines PRESENT/LATE against `AttendanceRules.late_arrival_window_minutes`,
+      writes/updates `AttendanceRecord` (BIOMETRIC beats MANUAL; a second same-day BIOMETRIC punch
+      is left as first-punch-wins), and best-effort notifies the core API for future Socket.io
+      wiring (currently just logs — no Socket.io server exists yet, a gap carried from Phase 5).
+      Staff have no shift-matching since no Staff→Shift model exists in the schema.
+- [x] `processor/reconciliation.ts` — since ADMS can't be polled for missed logs, "reconciliation"
+      re-runs `processPunch()` on any `DevicePunchLog` still `is_processed: false` (e.g. punches
+      that arrived before the person's `biometric_id` was registered) — proven live to self-heal
+      once the mapping exists. `markDefaultAbsentees()` creates `ABSENT` records for active students
+      with no attendance record for the day (Friday-excluded). Both run via `setInterval`-based
+      recurring jobs (`jobs/sync.job.ts`, "BullMQ-lite") — real infra deferred to Phase 17.
+- [x] Core API: `modules/devices/devices.routes.ts` (CRUD, `test-connection`, `sync-now`,
+      `sync-users`, `enroll-user`, `punch-logs`, `unmapped`), `routes/internal.ts`
+      (`POST /internal/attendance/biometric-event`, logs only), both directions of the
+      device-service ↔ core-API bridge secret-gated via `x-device-service-secret` (mirrors the
+      `WEBSITE_REVALIDATE_SECRET` pattern), role gate `DEVICE_MANAGE_ROLES = [ADMIN, IT_ADMIN]`.
+- [x] Schema: `Device.serial_number` (nullable unique), `DevicePunchLog.mapped_person_type`.
+- [x] Admin UI: `/settings/devices` — device list with live status-dot badges, expandable
+      punch-log/unmapped tables, Test Connection/Sync Now/Sync Users actions, device registration
+      dialog.
+- **Bugs found and fixed via live testing (not caught by typecheck/build):**
+  1. `packages/validators/src/students.ts` and `hr.ts` were missing `biometric_id` entirely from
+     their create/update schemas — Zod silently stripped it from every request, making the entire
+     biometric-enrollment feature non-functional from the admin side despite all backend plumbing
+     being correct. Fixed by adding the field to both validators and both routes' explicit
+     `tx.*.create()` data blocks.
+  2. `GET /api/devices/:id/unmapped` filtered on `is_processed: true`, which an unmapped punch never
+     reaches by design (it must stay `false` so reconciliation keeps retrying it) — the endpoint
+     could never return a result. Fixed by dropping that filter, keeping only `mapped_person_id: null`.
+- **Live-verification evidence** (two Node services run simultaneously, core API :4000 +
+  device-service :4500, communicating over the shared-secret HTTP bridge): unknown-device
+  auto-registration as inactive; connectivity check-in flips device to ONLINE; real ATTLOG push
+  parsed and processed; punch correctly mapped to student via `biometric_id`; PRESENT determined
+  for an 08:05 punch against an 08:00 shift + 15-min window, LATE determined for an 08:20 punch
+  against the same shift; re-pushing an identical punch line produced zero new rows (dedup); the
+  fixed `/unmapped` endpoint correctly showed an unmapped punch, which then disappeared after
+  registering the person's `biometric_id` and calling `sync-now` (reconciliation self-heal,
+  `{"retried":1,"resolved":1}`); command queue correctly returned queued commands in FIFO order
+  on the device's next poll; `sync-users`/`enroll-user`/`test-connection` admin actions all
+  verified. All test fixtures (devices, students, guardians, class/section/shift/year) cleaned up
+  after verification; `GET /api/devices` confirmed empty afterward.
+- **Explicitly deferred**: no real TCP/SDK integration for directly polling a device (ADMS is
+  push-only by design, so this doesn't apply to ADMS devices; the generic-HTTP connector exists
+  for that case but is untested against a real device); in-memory command queue is
+  single-process-only; no Staff→Shift assignment model, so staff attendance skips late-window
+  matching entirely; no Socket.io server yet, so the biometric-event endpoint only logs; the
+  Phase 15 router-role-gate audit (`attendanceRouter`, `resultsRouter`'s non-portal endpoints,
+  `feesRouter`, exam/marks routers still lack `STAFF_ONLY_ROLES`) remains outstanding.
 
 ## Phase 17 — Notification Service
 

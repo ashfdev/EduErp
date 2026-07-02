@@ -30,6 +30,7 @@ export const createStudentSchema = z.object({
   current_roll_no: z.string().optional().nullable(),
   registration_no: z.string().optional().nullable(),
   board_roll: z.string().optional().nullable(),
+  biometric_id: z.string().optional().nullable(),
   academic_year_id: z.string().min(1, "Academic year is required"),
   admission_date: z.coerce.date().optional().nullable(),
   previous_institution: z.string().optional().nullable(),

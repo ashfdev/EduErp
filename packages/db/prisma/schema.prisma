@@ -563,6 +563,7 @@ model Device {
   name               String
   type               DeviceType
   brand              String?
+  serial_number      String?            @unique
   location           String?
   ip_address         String?
   port               Int?               @default(4370)
@@ -575,14 +576,15 @@ model Device {
 }
 
 model DevicePunchLog {
-  id                String   @id @default(cuid())
-  device_id         String
-  device            Device   @relation(fields: [device_id], references: [id])
-  device_user_id    String
-  punch_at          DateTime
-  synced_at         DateTime @default(now())
-  mapped_person_id  String?
-  is_processed      Boolean  @default(false)
+  id                  String      @id @default(cuid())
+  device_id           String
+  device              Device      @relation(fields: [device_id], references: [id])
+  device_user_id      String
+  punch_at            DateTime
+  synced_at           DateTime    @default(now())
+  mapped_person_id    String?
+  mapped_person_type  PersonType?
+  is_processed        Boolean     @default(false)
 
   @@index([device_id, punch_at])
 }

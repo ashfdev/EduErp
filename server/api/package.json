@@ -15,6 +15,7 @@
     "@education-erp/db": "workspace:*",
     "@education-erp/types": "workspace:*",
     "@education-erp/validators": "workspace:*",
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",

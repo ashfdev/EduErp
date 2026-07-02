@@ -33,6 +33,7 @@ const GROUPS = [
     items: [
       { href: "/settings/users", label: "User Accounts" },
       { href: "/settings/notifications", label: "Notifications" },
+      { href: "/settings/devices", label: "Biometric Devices" },
     ],
   },
 ];
