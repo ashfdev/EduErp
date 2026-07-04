@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
@@ -68,7 +68,8 @@ governingBodyRouter.delete(
 governingBodyRouter.post(
   "/:id/photo",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("photo"),
+  imageUpload.single("photo"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const existing = await prisma.governingBodyMember.findUnique({ where: { id } });

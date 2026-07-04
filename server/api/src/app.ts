@@ -2,7 +2,10 @@ import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import { env } from "./lib/env";
 import { logger } from "./lib/logger";
+import { requestId } from "./middleware/request-id";
+import { defaultApiLimiter } from "./middleware/rate-limit";
 import { errorHandler } from "./middleware/error-handler";
 import { healthRouter } from "./routes/health";
 import { settingsRouter } from "./modules/settings";
@@ -28,18 +31,37 @@ import { hostelRouter } from "./modules/hostel/hostel.routes";
 import { analyticsRouter } from "./modules/reports/analytics.routes";
 import { portalRouter } from "./modules/portal/portal.routes";
 import { devicesRouter } from "./modules/devices/devices.routes";
+import { accountsModuleRouter } from "./modules/accounts";
+import { inventoryModuleRouter } from "./modules/inventory";
 import { internalRouter } from "./routes/internal";
+
+const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL].filter((url): url is string => !!url);
 
 export function createApp(): Express {
   const app = express();
 
+  app.use(requestId);
   app.use(helmet());
-  app.use(cors());
+  app.use(
+    cors({
+      // Falls back to allow-all only when no app URLs are configured at all
+      // (e.g. a bare `pnpm dev` with no .env) so local dev never silently 403s.
+      origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true,
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true }));
-  app.use(pinoHttp({ logger }));
+  app.use(pinoHttp({ logger, genReqId: (req) => req.requestId }));
 
   app.use("/health", healthRouter);
+  app.use("/api/health", healthRouter);
+
+  // Global default limiter for everything else — routes with their own
+  // stricter/looser limiter (login, forgot-password, /api/content) still get
+  // layered under this one, which is fine since theirs will bind first.
+  app.use("/api", defaultApiLimiter);
+
   app.use("/api/auth", authRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/uploads", uploadsRouter);
@@ -63,6 +85,8 @@ export function createApp(): Express {
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/devices", devicesRouter);
+  app.use("/api/accounts", accountsModuleRouter);
+  app.use("/api/inventory", inventoryModuleRouter);
   app.use("/internal", internalRouter);
 
   app.use(errorHandler);

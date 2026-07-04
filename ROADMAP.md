@@ -276,6 +276,124 @@ tuning (login attempts, forgot-password, etc.) still lands there.
       real file via `file`. Full monorepo typecheck, `vitest run` (30/30 incl. 8 new late-fee
       tests), admin build succeeds.
 
+## Phase 8B — Accounts (Double-Entry Bookkeeping)
+
+Added retroactively — `PHASE_8B_ACCOUNTS.md` was a spec file the user had prepared but forgot to
+hand over during the original phase-by-phase build; built here alongside Phase 8C once discovered.
+
+- [x] Schema — ~15 new models: `AccountGroup`/`Account` (chart of accounts, `is_system` protection,
+      opening balance + type), `Voucher`/`JournalEntry` (RECEIPT/PAYMENT/JOURNAL/CONTRA/DEBIT_NOTE/
+      CREDIT_NOTE, DRAFT→APPROVED→POSTED workflow; `created_by_id` deliberately nullable for
+      payment-gateway webhook callbacks with no authenticated user), `FinancialYear`, `Budget`/
+      `BudgetLine`, `BankAccount`, `BankReconciliation`/`ReconciliationItem`, `ChequeEntry`,
+      `TaxEntry`, and `FeeAccountMapping` (new — not in the original spec text, added so
+      fee-category→income-account mapping is Settings-driven per CLAUDE.md's "everything
+      configurable" rule rather than hardcoded).
+- [x] Seed — 5 account groups, 55 chart-of-accounts entries (matches spec, plus one extra `5020
+      Loss on Disposal of Asset` needed for the disposal auto-journal), 10 fee-category mappings,
+      one active `FinancialYear` (2026-2027).
+- [x] `server/api/src/modules/accounts/voucher-helpers.ts` — `validateBalance()` (rejects
+      unbalanced entries with the exact debit/credit/difference message), `createVoucher()`
+      (financial-year date-range + not-closed checks, auto-generates voucher numbers per type),
+      `generateVoucherNo()`.
+- [x] `server/api/src/modules/accounts/auto-journal.service.ts` — the ONLY place allowed to create
+      system-triggered vouchers: `createFeeReceiptJournal`, `createPayrollJournal`,
+      `createInventoryPurchaseJournal`, `createDepreciationJournal`, `createAssetDisposalJournal`,
+      `createMaintenanceJournal`. All auto-post immediately (no approval step — pre-balanced by
+      construction) and swallow their own errors so a journal failure never blocks the calling
+      module's primary transaction.
+- [x] API — chart of accounts + account CRUD (system-reserved codes protected), financial years
+      CRUD + activate + close, fee-mapping GET/PUT, vouchers CRUD + approve/post/cancel state
+      machine, ledger (opening/closing + running balance), reports (day-book, cash-book, bank-book,
+      trial-balance, income-expenditure, balance-sheet, account-summary, budget-vs-actual), budgets,
+      banks + reconciliation, cheques, tax entries.
+- [x] Admin UI — `/accounts` dashboard, `/accounts/chart`, `/accounts/vouchers` (list + new-voucher
+      form with a live balance indicator that disables Save until balanced + color-coded
+      RV/PV/JV/CV types), `/accounts/vouchers/[id]` (detail + approve/post/cancel), `/accounts/ledger`,
+      `/accounts/reports` (trial-balance / income-expenditure / balance-sheet tabs).
+- [x] Live-verified against the dev Postgres: balanced/unbalanced voucher validation, full
+      approve→post workflow, ledger running balances, fee-payment auto-journal (Dr Cash/Bank → Cr
+      mapped income account), trial balance (`total_debit === total_credit`).
+- [x] **Real bug found and fixed**: the balance sheet only summed formally-closed `EQUITY`
+      accounts, so it didn't balance mid-year (before a financial-year-end close). Real accounting
+      always folds the current period's unclosed net income into Equity as an implicit "Current
+      Year Earnings" line — added a `currentPeriodNetIncome()` computation to the balance-sheet
+      report that does this on the fly. Re-verified: `total_assets === total_liabilities_and_equity`.
+- [x] **Real bug found and fixed (second pass, during the full Accounts+Inventory integration
+      test)**: the balance sheet's asset-section total added the Accumulated Depreciation
+      contra-asset account's balance instead of subtracting it, overstating total assets by 2× its
+      balance. `sectionRows()` in `reports.routes.ts` now detects contra accounts (nature doesn't
+      match the account group's expected nature) and subtracts them from the section total while
+      still displaying them as a positive "Less: ..." deduction line — the admin UI was updated to
+      render this the same way.
+- [ ] Deferred: no dedicated admin UI for day-book/cash-book/bank-book/budget-vs-actual/bank
+      reconciliation/cheque management — API + data exist, list/detail pages don't yet. No PDF
+      export for any of the 9 accounts reports (JSON only).
+
+## Phase 8C — Inventory & Assets (Fixed Assets + Consumable Stock)
+
+Added retroactively alongside Phase 8B, from `PHASE_8C_INVENTORY.md`.
+
+- [x] Schema — ~14 new models: `AssetCategory` (depreciation rate/method + linked
+      asset/depreciation/disposal accounts), `Asset` (QR code, department/staff assignment,
+      condition, disposal fields), `DepreciationEntry`, `AssetMaintenance`, `AssetTransfer`,
+      `ItemCategory`, `Item` (expense-account link, min/reorder stock), `StockTransaction`,
+      `Supplier`, `PurchaseRequisition`/`RequisitionItem`, `PurchaseOrder`/`PurchaseItem`,
+      `GoodsReceivedNote`/`GRNItem`.
+- [x] Seed — 4 default asset categories (Furniture 10%/10yr, Electronics 20%/5yr, Vehicles
+      15%/7yr, Buildings 5%/20yr) linked to the correct chart-of-accounts codes, 3 item categories.
+- [x] `server/api/src/utils/asset-id.generator.ts` — `generateAssetUid()` plus
+      `createWithUniqueAssetUid()`, which wraps the actual `prisma.asset.create()` call and retries
+      the whole generate+create cycle on a P2002 unique-constraint collision (up to 5 attempts) —
+      the precheck-then-create pattern alone has a TOCTOU race under concurrent requests.
+- [x] API — asset categories CRUD, asset CRUD (QR code auto-generated via `qrcode` + uploaded to
+      storage on creation) + photo upload + transfer + maintenance (auto-journal) + dispose
+      (auto-journal with gain/loss balancing), depreciation `/calculate` (monthly) +
+      `/calculate-annual` + `/schedule`, item categories + items CRUD (added a `GET /items/:id`
+      detail route this session — the list-only pattern was inconsistent with every other module),
+      stock issue (never negative) + adjust + transaction history + low-stock report, suppliers
+      CRUD, requisitions (PENDING→APPROVED/REJECTED) + purchase orders (DRAFT→APPROVED→
+      PARTIALLY_RECEIVED/RECEIVED) + GRN (the only trigger for stock/asset creation + auto-journal;
+      supports partial receipt across multiple GRNs per PO), asset-register/depreciation-schedule/
+      stock-report/stock-movement/purchase-history/maintenance-due reports, inventory dashboard.
+- [x] Admin UI — `/inventory` dashboard, `/inventory/assets` (list + new + detail with
+      depreciation/maintenance/transfer tabs + maintenance/dispose dialogs), `/inventory/stock`
+      (issue-stock dialog), `/inventory/suppliers`, `/inventory/purchases` (3-tab: requisitions /
+      orders / received, including the GRN-receive dialog), `/inventory/reports`.
+- [x] Live-verified against the dev Postgres, covering every scenario in `PHASE_8C_INVENTORY.md`'s
+      own test list: asset creation + QR code (fetched and visually confirmed as a real scannable
+      QR image, not just a valid PNG), depreciation math (SLM, book value stops at 0), disposal
+      journal (balances: proceeds + accumulated depreciation + loss = original cost), asset status
+      → `DISPOSED` after disposal, normal stock issue, over-issue correctly rejected with a 400,
+      low-stock report correctly flags items below `minimum_stock`, stock transaction history in
+      chronological order with correct running balances, and a full partial-receipt purchase flow
+      (PO for 100 units → GRN #1 receives 40 → status `PARTIALLY_RECEIVED` → GRN #2 receives the
+      remaining 60 → status `RECEIVED`, stock incremented correctly across both GRNs).
+- [x] **Real bug found and fixed**: 5 concurrent `POST /api/inventory/assets` requests — one failed
+      with a raw `asset_uid already exists` conflict instead of succeeding with a unique UID
+      (the precheck-then-create race described above). Fixed via `createWithUniqueAssetUid()`;
+      re-verified with 5 concurrent creations, zero failures, all unique sequential UIDs.
+- [x] **Real bug found and fixed**: after a GRN with a properly account-linked consumable item,
+      the API response showed `"voucher_id": null` even though the auto-journal genuinely fired
+      (confirmed directly in the DB) — the response serialized the `grn` object captured before a
+      later `update()` set its `voucher_id`. Fixed by setting `grn.voucher_id` on the in-memory
+      object right after the DB update so the response reflects what was actually persisted.
+- [x] **Accounts + Inventory integration test** (`PHASE_8C_INVENTORY.md`'s full "one financial
+      cycle" scenario) run end-to-end against the dev Postgres: income cycle (tuition fee payment
+      → auto-journal) → purchase cycle (PO→GRN for stationery → auto-journal → manual payment
+      voucher clearing the payable, net change zero) → payroll cycle (gross/TDS/net auto-journal,
+      three-way balanced) → depreciation cycle (book value decreased, expense entry posted) →
+      trial balance (balanced) → income & expenditure (correct income/expense/surplus figures) →
+      balance sheet (balanced, after the contra-asset fix above). One substitution from the literal
+      spec: the income-cycle step used the CASH gateway instead of bKash, since bKash/Nagad/
+      SSLCommerz remain unconfigured stubs (external merchant credentials pending, a
+      previously-documented deferral) — this exercises the identical `createFeeReceiptJournal`
+      code path and account-selection branch, differing only in which account (1001 vs 1002) is
+      debited, which is a single reviewed conditional.
+- [ ] Deferred: no dedicated admin UI page for creating/editing Items directly (create via
+      `POST /api/inventory/items` or through the PO item picker only). No PDF export for any of the
+      5 inventory reports (JSON only).
+
 ## Phase 9 — Online Admission
 
 - [x] `packages/validators/src/admission.ts` — cycle create/update/toggle, dynamic
@@ -944,11 +1062,46 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 18 — Security, Performance, Docker, Testing, README
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md` — this is a "final integration" phase
-      (rate limiting, Prisma-error-code mapping, Redis caching, Docker/compose, comprehensive
-      seed data, unit/integration/e2e tests, root README) that earlier planning notes hadn't
-      accounted for; supersedes the earlier placeholder guess that Phase 18 would be the
-      Notification Service (that's actually Phase 17).
+- [x] `server/api/src/lib/env.ts` — Zod-validated environment config, fails fast on boot with a
+      clear message instead of surfacing a confusing error deep in a request handler.
+- [x] `middleware/rate-limit.ts` — Redis-backed (`rate-limit-redis`) limiters: login (+ a
+      login-ban-guard for repeated failures), forgot-password, public content endpoints, and a
+      default API-wide limiter.
+- [x] `middleware/upload.ts` — `imageUpload`/`documentUpload`/`csvUpload`/`templateUpload`, each
+      verifying the real file content via magic bytes (`file-type@16` — pinned below v17 since this
+      server has no `"type": "module"` and v17+ dropped CommonJS support), not just the
+      client-supplied MIME type/extension.
+- [x] `lib/sanitize.ts` — DOMPurify sanitization on `Notice.body` and `StaticPage` rich-text content
+      before it's stored, closing a stored-XSS gap in the two rich-text-editor surfaces.
+- [x] `lib/cache.ts` — `cached()`/`invalidateCacheNamespace()` Redis read-through cache helpers.
+- [x] `middleware/request-id.ts`, `middleware/error-handler.ts` (maps Prisma P2002/P2025/P2003 to
+      the project's standard `{success:false,error:{code,message}}` shape instead of leaking raw
+      Prisma error text), `routes/health.ts` (real DB + Redis connectivity checks, plus a
+      `/detailed` admin-only variant).
+- [x] Docker — one Dockerfile per deployable unit (server/api with Chromium for Puppeteer, the 3
+      Next.js apps with `output: "standalone"`, the 2 background services), `docker-compose.yml` +
+      `docker-compose.prod.yml` + `Makefile` + `.dockerignore`. Every Dockerfile needed a fix to
+      also copy `packages/config` — found via a real `docker build` failure, not a review.
+- [x] `README.md` — fully rewritten for the new architecture, preserving pre-existing
+      `infra/bicep`/CI references. `.github/workflows/ci.yml` rewritten from a stale
+      npm/old-architecture version to pnpm + Postgres + Redis service containers.
+- [x] Seed data — classes/sections/subjects, 5 demo students, 6 staff users with distinct roles
+      (for RBAC testing).
+- [x] `vitest.config.ts` + `vitest.setup.ts` — vitest doesn't load `.env` by default, which made
+      `env.ts` call `process.exit(1)` mid test-run; fixed with a setup file that imports
+      `dotenv/config` first. New test files: `student-id-format.test.ts` (6 tests),
+      `packages/validators/src/validators.test.ts` (16 tests). 36 vitest tests passing across the
+      monorepo.
+- [x] Full monorepo typecheck and `pnpm build` clean across all 11 packages after recovering from
+      an unrelated pnpm-store corruption incident (see Phase 8B/8C section above for the
+      environment-crash timeline).
+- [ ] Deferred (flagged, not yet built): no ESLint config anywhere in the monorepo, so lint isn't
+      in CI either; no Socket.io server actually stood up despite being in the original tech stack
+      (flagged since Phase 5); no BullMQ-backed PDF queue for bulk document generation; no
+      compression middleware; a handful of routers (`attendanceRouter`, some of `resultsRouter`,
+      `feesRouter`, exam/marks routers) still rely on per-route `authorize()` calls rather than a
+      blanket `STAFF_ONLY_ROLES` gate at the router level (flagged since Phase 15, not a known
+      vulnerability — every sensitive route is individually gated — just an inconsistency in style).
 
 ## Phase 19 — Mobile apps (Flutter) — FUTURE, out of scope
 

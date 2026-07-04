@@ -8,6 +8,7 @@ import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES } from "../../lib/roles";
 import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema } from "@education-erp/validators";
 import { calculateStudentResult } from "../../utils/grading.engine";
+import { cached } from "../../lib/cache";
 import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument } from "../../services/pdf.service";
 import { buildMarksheetData } from "../documents/documents.routes";
@@ -78,6 +79,16 @@ portalRouter.get(
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
 
+    // Cached per-student (assertAccess above already gated this specific
+    // request; the cached payload itself carries no cross-student data, so
+    // any other authorized viewer of the same student correctly gets the
+    // same cached snapshot).
+    const data = await cached(`portal-dashboard:${id}`, 5 * 60, () => buildStudentDashboard(id));
+    res.json({ success: true, data });
+  }),
+);
+
+async function buildStudentDashboard(id: string) {
     const student = await prisma.student.findUnique({
       where: { id },
       include: { current_class: true, current_section: true },
@@ -119,26 +130,22 @@ portalRouter.get(
       }
     }
 
-    res.json({
-      success: true,
-      data: {
-        student: {
-          name: student.name_en, uid: student.student_uid, class: student.current_class?.name_en, section: student.current_section?.name,
-          roll: student.current_roll_no, photo: student.photo_url,
-        },
-        attendance: {
-          today_status: todayRecord?.status ?? "NOT_MARKED",
-          this_month_percentage: monthRecords.length ? Math.round((monthPresent / monthRecords.length) * 1000) / 10 : null,
-        },
-        upcoming_exams: upcomingExams.map((e) => ({ id: e.id, name: e.name, start_date: e.start_date })),
-        recent_results: recentResults,
-        fee_dues: { total_outstanding: Math.round(outstandingTotal * 100) / 100, next_due_date: nextInvoice?.due_date ?? null, next_due_amount: nextInvoice ? nextInvoice.amount_due + nextInvoice.fine_amount - nextInvoice.amount_paid : null },
-        recent_notices: notices,
-        homework: { pending: homeworkAll.filter((h) => h.due_date >= now).length, submitted: 0, recent: homeworkAll.slice(0, 3) },
+    return {
+      student: {
+        name: student.name_en, uid: student.student_uid, class: student.current_class?.name_en, section: student.current_section?.name,
+        roll: student.current_roll_no, photo: student.photo_url,
       },
-    });
-  }),
-);
+      attendance: {
+        today_status: todayRecord?.status ?? "NOT_MARKED",
+        this_month_percentage: monthRecords.length ? Math.round((monthPresent / monthRecords.length) * 1000) / 10 : null,
+      },
+      upcoming_exams: upcomingExams.map((e) => ({ id: e.id, name: e.name, start_date: e.start_date })),
+      recent_results: recentResults,
+      fee_dues: { total_outstanding: Math.round(outstandingTotal * 100) / 100, next_due_date: nextInvoice?.due_date ?? null, next_due_amount: nextInvoice ? nextInvoice.amount_due + nextInvoice.fine_amount - nextInvoice.amount_paid : null },
+      recent_notices: notices,
+      homework: { pending: homeworkAll.filter((h) => h.due_date >= now).length, submitted: 0, recent: homeworkAll.slice(0, 3) },
+    };
+}
 
 portalRouter.get(
   "/student/:id/attendance",

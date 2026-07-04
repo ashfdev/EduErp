@@ -6,6 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { initiatePaymentSchema } from "@education-erp/validators";
 import { getPaymentAdapter } from "../../services/payment";
 import { sendSms } from "../../services/sms.service";
+import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const paymentsRouter = Router();
@@ -47,10 +48,12 @@ async function handleCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ", payload
   if (verified.success) {
     const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: payment.invoice_id } });
     const newAmountPaid = invoice.amount_paid + payment.amount;
-    await prisma.invoice.update({
+    const updatedInvoice = await prisma.invoice.update({
       where: { id: invoice.id },
       data: { amount_paid: newAmountPaid, status: newAmountPaid >= invoice.amount_due + invoice.fine_amount ? "PAID" : "PARTIAL" },
     });
+
+    await createFeeReceiptJournal(payment, updatedInvoice);
 
     const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
     if (student?.father_phone) {

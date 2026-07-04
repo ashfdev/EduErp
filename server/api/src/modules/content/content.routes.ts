@@ -1,32 +1,45 @@
 import { Router } from "express";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
-import { publicEndpointLimiter } from "../../middleware/rate-limit";
+import { contentLimiter } from "../../middleware/rate-limit";
+import { cached } from "../../lib/cache";
 import { reqParam } from "../../lib/req-param";
 import { contactSubmitSchema } from "@education-erp/validators";
 import { notFound } from "../../lib/errors";
 import { sendEmail } from "../../services/email.service";
 
 export const contentRouter = Router();
-contentRouter.use(publicEndpointLimiter);
+contentRouter.use(contentLimiter);
+
+// Shared prefix for every cache key this router writes, so
+// revalidate.service.ts can wipe the whole namespace in one call whenever
+// any content-mutating admin action fires ISR revalidation.
+export const CONTENT_CACHE_PREFIX = "content-cache:";
+const CONTENT_CACHE_TTL_SECONDS = 300;
+
+function contentCacheKey(suffix: string): string {
+  return `${CONTENT_CACHE_PREFIX}${suffix}`;
+}
 
 contentRouter.get(
   "/sliders",
   asyncHandler(async (_req, res) => {
-    const now = new Date();
-    const sliders = await prisma.sliderImage.findMany({
-      where: {
-        is_active: true,
-        OR: [
-          { publish_from: null, publish_until: null },
-          { publish_from: { lte: now }, publish_until: null },
-          { publish_from: null, publish_until: { gte: now } },
-          { publish_from: { lte: now }, publish_until: { gte: now } },
-        ],
-      },
-      orderBy: { display_order: "asc" },
+    const data = await cached(contentCacheKey("sliders"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const now = new Date();
+      return prisma.sliderImage.findMany({
+        where: {
+          is_active: true,
+          OR: [
+            { publish_from: null, publish_until: null },
+            { publish_from: { lte: now }, publish_until: null },
+            { publish_from: null, publish_until: { gte: now } },
+            { publish_from: { lte: now }, publish_until: { gte: now } },
+          ],
+        },
+        orderBy: { display_order: "asc" },
+      });
     });
-    res.json({ success: true, data: sliders });
+    res.json({ success: true, data });
   }),
 );
 
@@ -34,13 +47,15 @@ contentRouter.get(
   "/notices",
   asyncHandler(async (req, res) => {
     const limit = Number(req.query.limit ?? 10);
-    const now = new Date();
-    const notices = await prisma.notice.findMany({
-      where: { is_published: true, is_public_website: true, OR: [{ expire_at: null }, { expire_at: { gte: now } }] },
-      orderBy: [{ is_pinned: "desc" }, { publish_at: "desc" }],
-      take: limit,
+    const data = await cached(contentCacheKey(`notices:${limit}`), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const now = new Date();
+      return prisma.notice.findMany({
+        where: { is_published: true, is_public_website: true, OR: [{ expire_at: null }, { expire_at: { gte: now } }] },
+        orderBy: [{ is_pinned: "desc" }, { publish_at: "desc" }],
+        take: limit,
+      });
     });
-    res.json({ success: true, data: notices });
+    res.json({ success: true, data });
   }),
 );
 
@@ -48,23 +63,31 @@ contentRouter.get(
   "/gallery/albums",
   asyncHandler(async (req, res) => {
     const limit = Number(req.query.limit ?? 12);
-    const albums = await prisma.galleryAlbum.findMany({
-      where: { is_public: true },
-      include: { images: { take: 1, orderBy: { display_order: "asc" } } },
-      orderBy: { created_at: "desc" },
-      take: limit,
+    const data = await cached(contentCacheKey(`gallery-albums:${limit}`), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const albums = await prisma.galleryAlbum.findMany({
+        where: { is_public: true },
+        include: { images: { take: 1, orderBy: { display_order: "asc" } } },
+        orderBy: { created_at: "desc" },
+        take: limit,
+      });
+      return albums.map((a) => ({ ...a, cover_url: a.cover_url ?? a.images[0]?.image_url ?? null }));
     });
-    res.json({ success: true, data: albums.map((a) => ({ ...a, cover_url: a.cover_url ?? a.images[0]?.image_url ?? null })) });
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/gallery/albums/:id/images",
   asyncHandler(async (req, res) => {
-    const album = await prisma.galleryAlbum.findFirst({ where: { id: reqParam(req, "id"), is_public: true } });
-    if (!album) throw notFound("Album not found");
-    const images = await prisma.galleryImage.findMany({ where: { album_id: album.id }, orderBy: { display_order: "asc" } });
-    res.json({ success: true, data: { album, images } });
+    const id = reqParam(req, "id");
+    const data = await cached(contentCacheKey(`gallery-images:${id}`), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const album = await prisma.galleryAlbum.findFirst({ where: { id, is_public: true } });
+      if (!album) return null;
+      const images = await prisma.galleryImage.findMany({ where: { album_id: album.id }, orderBy: { display_order: "asc" } });
+      return { album, images };
+    });
+    if (!data) throw notFound("Album not found");
+    res.json({ success: true, data });
   }),
 );
 
@@ -72,20 +95,25 @@ contentRouter.get(
   "/downloads",
   asyncHandler(async (req, res) => {
     const category = req.query.category as string | undefined;
-    const downloads = await prisma.download.findMany({
-      where: { is_public: true, ...(category && { category: category as never }) },
-      orderBy: { created_at: "desc" },
-    });
-    res.json({ success: true, data: downloads });
+    const data = await cached(contentCacheKey(`downloads:${category ?? "all"}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.download.findMany({
+        where: { is_public: true, ...(category && { category: category as never }) },
+        orderBy: { created_at: "desc" },
+      }),
+    );
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/pages/:page_key",
   asyncHandler(async (req, res) => {
-    const page = await prisma.staticPage.findFirst({ where: { page_key: reqParam(req, "page_key"), is_published: true } });
-    if (!page) throw notFound("Page not found");
-    res.json({ success: true, data: page });
+    const pageKey = reqParam(req, "page_key");
+    const data = await cached(contentCacheKey(`page:${pageKey}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.staticPage.findFirst({ where: { page_key: pageKey, is_published: true } }),
+    );
+    if (!data) throw notFound("Page not found");
+    res.json({ success: true, data });
   }),
 );
 
@@ -93,11 +121,13 @@ contentRouter.get(
   "/governing-body",
   asyncHandler(async (req, res) => {
     const group = req.query.group as string | undefined;
-    const members = await prisma.governingBodyMember.findMany({
-      where: { is_active: true, ...(group && { group }) },
-      orderBy: { display_order: "asc" },
-    });
-    res.json({ success: true, data: members });
+    const data = await cached(contentCacheKey(`governing-body:${group ?? "all"}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.governingBodyMember.findMany({
+        where: { is_active: true, ...(group && { group }) },
+        orderBy: { display_order: "asc" },
+      }),
+    );
+    res.json({ success: true, data });
   }),
 );
 
@@ -106,40 +136,47 @@ contentRouter.get(
   asyncHandler(async (req, res) => {
     const upcoming = req.query.upcoming === "true";
     const limit = Number(req.query.limit ?? 10);
-    const events = await prisma.event.findMany({
-      where: { is_public: true, ...(upcoming && { date_from: { gte: new Date() } }) },
-      orderBy: { date_from: "asc" },
-      take: limit,
-    });
-    res.json({ success: true, data: events });
+    const data = await cached(contentCacheKey(`events:${upcoming}:${limit}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.event.findMany({
+        where: { is_public: true, ...(upcoming && { date_from: { gte: new Date() } }) },
+        orderBy: { date_from: "asc" },
+        take: limit,
+      }),
+    );
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/faculty",
   asyncHandler(async (_req, res) => {
-    const staff = await prisma.staff.findMany({
-      where: { show_on_website: true, is_active: true, deleted_at: null },
-      include: { department: { select: { name_en: true } } },
-      orderBy: { name_en: "asc" },
+    const data = await cached(contentCacheKey("faculty"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const staff = await prisma.staff.findMany({
+        where: { show_on_website: true, is_active: true, deleted_at: null },
+        include: { department: { select: { name_en: true } } },
+        orderBy: { name_en: "asc" },
+      });
+      const grouped: Record<string, typeof staff> = {};
+      for (const s of staff) {
+        const key = s.department?.name_en ?? "General";
+        (grouped[key] ??= []).push(s);
+      }
+      return grouped;
     });
-    const grouped: Record<string, typeof staff> = {};
-    for (const s of staff) {
-      const key = s.department?.name_en ?? "General";
-      (grouped[key] ??= []).push(s);
-    }
-    res.json({ success: true, data: grouped });
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/admission/open",
   asyncHandler(async (_req, res) => {
-    const cycles = await prisma.admissionCycle.findMany({
-      where: { is_open: true, is_published: true },
-      include: { class: { select: { name_en: true, name_bn: true } } },
-    });
-    res.json({ success: true, data: cycles });
+    const data = await cached(contentCacheKey("admission-open"), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.admissionCycle.findMany({
+        where: { is_open: true, is_published: true },
+        include: { class: { select: { name_en: true, name_bn: true } } },
+      }),
+    );
+    res.json({ success: true, data });
   }),
 );
 
@@ -147,23 +184,24 @@ contentRouter.get(
   "/merit-list/:cycle_id",
   asyncHandler(async (req, res) => {
     const cycleId = reqParam(req, "cycle_id");
-    const applications = await prisma.admissionApplication.findMany({
-      where: { cycle_id: cycleId, merit_rank: { not: null }, status: { in: ["SHORTLISTED", "WAITLISTED", "CONFIRMED", "ENROLLED"] } },
-      orderBy: { merit_rank: "asc" },
-      select: { admission_roll: true, applicant_name: true, merit_rank: true, status: true },
-    });
-    res.json({ success: true, data: applications });
+    const data = await cached(contentCacheKey(`merit-list:${cycleId}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.admissionApplication.findMany({
+        where: { cycle_id: cycleId, merit_rank: { not: null }, status: { in: ["SHORTLISTED", "WAITLISTED", "CONFIRMED", "ENROLLED"] } },
+        orderBy: { merit_rank: "asc" },
+        select: { admission_roll: true, applicant_name: true, merit_rank: true, status: true },
+      }),
+    );
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/institution",
   asyncHandler(async (_req, res) => {
-    const profile = await prisma.institutionProfile.findUnique({ where: { id: "singleton" } });
-    if (!profile) throw notFound("Institution profile not configured");
-    res.json({
-      success: true,
-      data: {
+    const data = await cached(contentCacheKey("institution"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const profile = await prisma.institutionProfile.findUnique({ where: { id: "singleton" } });
+      if (!profile) return null;
+      return {
         name_en: profile.name_en,
         name_bn: profile.name_bn,
         tagline_en: profile.tagline_en,
@@ -184,27 +222,34 @@ contentRouter.get(
         vision_text: profile.vision_text,
         principal_name: profile.principal_name,
         principal_designation: profile.principal_designation,
-      },
+      };
     });
+    if (!data) throw notFound("Institution profile not configured");
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/stats",
   asyncHandler(async (_req, res) => {
-    const [students, staff] = await Promise.all([
-      prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
-      prisma.staff.count({ where: { is_active: true, deleted_at: null } }),
-    ]);
-    res.json({ success: true, data: { students, staff } });
+    const data = await cached(contentCacheKey("stats"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const [students, staff] = await Promise.all([
+        prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
+        prisma.staff.count({ where: { is_active: true, deleted_at: null } }),
+      ]);
+      return { students, staff };
+    });
+    res.json({ success: true, data });
   }),
 );
 
 contentRouter.get(
   "/jobs",
   asyncHandler(async (_req, res) => {
-    const jobs = await prisma.jobPosting.findMany({ where: { is_published: true }, orderBy: { created_at: "desc" } });
-    res.json({ success: true, data: jobs });
+    const data = await cached(contentCacheKey("jobs"), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.jobPosting.findMany({ where: { is_published: true }, orderBy: { created_at: "desc" } }),
+    );
+    res.json({ success: true, data });
   }),
 );
 

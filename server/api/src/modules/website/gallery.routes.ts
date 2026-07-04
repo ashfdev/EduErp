@@ -3,7 +3,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
@@ -67,7 +67,8 @@ galleryRouter.delete(
 galleryRouter.post(
   "/albums/:id/cover",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("cover"),
+  imageUpload.single("cover"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     if (!req.file) throw badRequest("A cover image file is required");
@@ -80,7 +81,8 @@ galleryRouter.post(
 galleryRouter.post(
   "/albums/:id/images",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.array("images", 20),
+  imageUpload.array("images", 20),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const albumId = reqParam(req, "id");
     const album = await prisma.galleryAlbum.findUnique({ where: { id: albumId } });

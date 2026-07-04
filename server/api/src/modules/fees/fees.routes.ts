@@ -10,6 +10,7 @@ import { FEE_COLLECTION_ROLES } from "../../lib/roles";
 import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema } from "@education-erp/validators";
 import { calculateLateFee } from "../../utils/late-fee";
 import { getPaymentAdapter } from "../../services/payment";
+import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
 export const feesRouter = Router();
@@ -241,6 +242,8 @@ feesRouter.post(
       where: { id: invoice.id },
       data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
     });
+
+    if (result.status === "COMPLETED") await createFeeReceiptJournal(payment, updated);
 
     res.json({ success: true, data: { payment, invoice: updated } });
   }),

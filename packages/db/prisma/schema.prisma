@@ -253,6 +253,7 @@ model Department {
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   classes     Class[]
+  assets      Asset[]
 }
 
 model Class {
@@ -523,6 +524,7 @@ model Staff {
   class_teacher_of    Section[]                  @relation("ClassTeacher")
   leave_requests      LeaveRequest[]
   payroll_records     PayrollRecord[]
+  assigned_assets     Asset[]
 
   @@index([department_id])
   @@index([salary_structure_id])
@@ -742,6 +744,492 @@ model Payment {
   created_at      DateTime       @default(now())
 
   @@index([invoice_id])
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNTS MODELS (Phase 8B — double-entry accounting)
+// Every money movement elsewhere in the system (fee payment, payroll,
+// inventory GRN, depreciation, asset disposal) creates a Voucher +
+// JournalEntry pair here via auto-journal.service.ts — never bypassed.
+// ─────────────────────────────────────────────
+
+model AccountGroup {
+  id            String      @id @default(cuid())
+  name          String // "Assets", "Liabilities", "Income", "Expenses"
+  type          AccountType
+  display_order Int
+  created_at    DateTime    @default(now())
+  accounts      Account[]
+}
+
+model Account {
+  id                   String        @id @default(cuid())
+  account_group_id     String
+  account_group        AccountGroup  @relation(fields: [account_group_id], references: [id])
+  code                 String        @unique // "1001", "2001", "4001"
+  name                 String // "Cash in Hand", "Tuition Fee Income"
+  name_bn              String?
+  account_nature       AccountNature // DEBIT_NORMAL or CREDIT_NORMAL
+  is_bank_account      Boolean       @default(false)
+  is_cash_account      Boolean       @default(false)
+  is_system            Boolean       @default(false) // auto-created, cannot delete/recode
+  opening_balance      Float         @default(0)
+  opening_balance_type BalanceType   @default(DEBIT)
+  is_active            Boolean       @default(true)
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+  debit_entries        JournalEntry[] @relation("DebitAccount")
+  credit_entries       JournalEntry[] @relation("CreditAccount")
+  bank_account         BankAccount?
+  budget_lines         BudgetLine[]
+  asset_categories_as_asset    AssetCategory[] @relation("AssetAccount")
+  asset_categories_as_dep      AssetCategory[] @relation("AccumulatedDepAccount")
+  asset_categories_as_expense  AssetCategory[] @relation("DepExpenseAccount")
+  items_expense_account        Item[]
+
+  @@index([account_group_id])
+}
+
+model BankAccount {
+  id              String    @id @default(cuid())
+  account_id      String    @unique
+  account         Account   @relation(fields: [account_id], references: [id])
+  bank_name       String
+  branch_name     String?
+  account_number  String
+  account_title   String
+  current_balance Float     @default(0)
+  created_at      DateTime  @default(now())
+  reconciliations BankReconciliation[]
+  cheques         ChequeEntry[]
+}
+
+model Voucher {
+  id                String        @id @default(cuid())
+  voucher_no        String        @unique // RV-2026-0001, PV-..., JV-..., CV-...
+  voucher_type      VoucherType
+  financial_year_id String
+  financial_year    FinancialYear @relation(fields: [financial_year_id], references: [id])
+  date              DateTime      @db.Date
+  narration         String        @db.Text
+  narration_bn      String?       @db.Text
+  reference_no      String?
+  reference_type    String? // "FEE_PAYMENT", "PAYROLL", "INVENTORY_PURCHASE", "DEPRECIATION", "ASSET_DISPOSAL"
+  reference_id      String?
+  total_amount      Float
+  status            VoucherStatus @default(DRAFT)
+  created_by_id     String? // nullable — auto-journals from unauthenticated payment-gateway webhooks have no human actor
+  approved_by_id    String?
+  approved_at       DateTime?
+  is_auto           Boolean       @default(false)
+  attachment_url    String?
+  deleted_at        DateTime?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
+  journal_entries   JournalEntry[]
+
+  @@index([date])
+  @@index([voucher_type])
+  @@index([financial_year_id])
+  @@index([reference_type, reference_id])
+}
+
+model JournalEntry {
+  id                String   @id @default(cuid())
+  voucher_id        String
+  voucher           Voucher  @relation(fields: [voucher_id], references: [id])
+  debit_account_id  String?
+  debit_account     Account? @relation("DebitAccount", fields: [debit_account_id], references: [id])
+  credit_account_id String?
+  credit_account    Account? @relation("CreditAccount", fields: [credit_account_id], references: [id])
+  amount            Float
+  narration         String?
+  created_at        DateTime @default(now())
+
+  @@index([voucher_id])
+  @@index([debit_account_id])
+  @@index([credit_account_id])
+}
+
+model FinancialYear {
+  id           String    @id @default(cuid())
+  label        String    @unique // "2026-2027"
+  start_date   DateTime  @db.Date
+  end_date     DateTime  @db.Date
+  is_active    Boolean   @default(false)
+  is_closed    Boolean   @default(false)
+  closed_at    DateTime?
+  closed_by_id String?
+  created_at   DateTime  @default(now())
+  vouchers     Voucher[]
+  budgets      Budget[]
+}
+
+model Budget {
+  id                String        @id @default(cuid())
+  financial_year_id String
+  financial_year    FinancialYear @relation(fields: [financial_year_id], references: [id])
+  name              String
+  status            BudgetStatus  @default(DRAFT)
+  approved_by_id    String?
+  approved_at       DateTime?
+  created_at        DateTime      @default(now())
+  lines             BudgetLine[]
+}
+
+model BudgetLine {
+  id        String  @id @default(cuid())
+  budget_id String
+  budget    Budget  @relation(fields: [budget_id], references: [id])
+  account_id String
+  account   Account @relation(fields: [account_id], references: [id])
+  amount    Float
+  notes     String?
+
+  @@unique([budget_id, account_id])
+}
+
+model BankReconciliation {
+  id                String              @id @default(cuid())
+  bank_account_id   String
+  bank_account      BankAccount         @relation(fields: [bank_account_id], references: [id])
+  month             Int
+  year              Int
+  statement_balance Float
+  book_balance      Float
+  difference        Float
+  status            ReconcileStatus     @default(PENDING)
+  reconciled_at     DateTime?
+  notes             String?
+  items             ReconciliationItem[]
+
+  @@unique([bank_account_id, month, year])
+}
+
+model ReconciliationItem {
+  id                String             @id @default(cuid())
+  reconciliation_id String
+  reconciliation    BankReconciliation @relation(fields: [reconciliation_id], references: [id])
+  voucher_id        String?
+  description       String
+  amount            Float
+  item_type         ReconcileItemType
+  is_reconciled     Boolean            @default(false)
+}
+
+model ChequeEntry {
+  id              String       @id @default(cuid())
+  bank_account_id String
+  bank_account    BankAccount  @relation(fields: [bank_account_id], references: [id])
+  voucher_id      String?
+  cheque_no       String
+  cheque_date     DateTime     @db.Date
+  payee           String
+  amount          Float
+  cheque_type     ChequeType
+  status          ChequeStatus @default(PENDING)
+  cleared_at      DateTime?
+  created_at      DateTime     @default(now())
+}
+
+model TaxEntry {
+  id          String    @id @default(cuid())
+  voucher_id  String
+  tax_type    TaxType
+  rate        Float
+  base_amount Float
+  tax_amount  Float
+  payee       String?
+  period      String?
+  is_paid     Boolean   @default(false)
+  paid_at     DateTime?
+  challan_no  String?
+  created_at  DateTime  @default(now())
+
+  @@index([voucher_id])
+}
+
+// Fee-category → income-account mapping, configurable in Settings rather
+// than hardcoded — mirrors the project's "everything configurable" rule.
+model FeeAccountMapping {
+  id         String      @id @default(cuid())
+  category   FeeCategory @unique
+  account_id String
+}
+
+// ─────────────────────────────────────────────
+// INVENTORY & ASSET MODELS (Phase 8C)
+// PART A — Fixed Assets (with straight-line depreciation)
+// PART B — Consumable Inventory (stock never goes negative)
+// Both share the Requisition → PO → GRN purchase workflow, which is the
+// only path that creates stock/assets (aside from manual adjustments) and
+// is the trigger for auto-journal entries into the Accounts module above.
+// ─────────────────────────────────────────────
+
+model AssetCategory {
+  id                         String              @id @default(cuid())
+  name                       String
+  name_bn                    String?
+  depreciation_method        DepreciationMethod  @default(STRAIGHT_LINE)
+  depreciation_rate          Float               @default(10)
+  useful_life_years          Int                 @default(10)
+  asset_account_id           String?
+  asset_account              Account?            @relation("AssetAccount", fields: [asset_account_id], references: [id])
+  accumulated_dep_account_id String?
+  accumulated_dep_account    Account?            @relation("AccumulatedDepAccount", fields: [accumulated_dep_account_id], references: [id])
+  dep_expense_account_id     String?
+  dep_expense_account        Account?            @relation("DepExpenseAccount", fields: [dep_expense_account_id], references: [id])
+  created_at                 DateTime            @default(now())
+  assets                     Asset[]
+}
+
+model Asset {
+  id                   String              @id @default(cuid())
+  asset_uid            String              @unique // AST-2026-0001
+  category_id          String
+  category             AssetCategory       @relation(fields: [category_id], references: [id])
+  name                 String
+  name_bn              String?
+  description          String?
+  barcode              String?             @unique
+  qr_code_url          String?
+  purchase_date        DateTime            @db.Date
+  purchase_price       Float
+  supplier_id          String?
+  supplier             Supplier?           @relation(fields: [supplier_id], references: [id])
+  invoice_no           String?
+  warranty_expiry      DateTime?           @db.Date
+  current_location     String?
+  department_id        String?
+  department           Department?         @relation(fields: [department_id], references: [id])
+  assigned_to_staff_id String?
+  assigned_to_staff    Staff?              @relation(fields: [assigned_to_staff_id], references: [id])
+  condition            AssetCondition      @default(GOOD)
+  status               AssetStatus         @default(ACTIVE)
+  accumulated_dep      Float               @default(0)
+  book_value           Float
+  photo_url            String?
+  notes                String?
+  purchase_grn_item_id String?
+  disposed_at          DateTime?
+  disposed_reason      String?
+  disposed_value       Float?
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
+  depreciation_entries DepreciationEntry[]
+  maintenance_logs     AssetMaintenance[]
+  transfer_logs        AssetTransfer[]
+
+  @@index([category_id])
+  @@index([status])
+}
+
+model DepreciationEntry {
+  id              String   @id @default(cuid())
+  asset_id        String
+  asset           Asset    @relation(fields: [asset_id], references: [id])
+  financial_year  String
+  period          String // "July 2026" or "Annual 2026-2027"
+  opening_value   Float
+  dep_rate        Float
+  dep_amount      Float
+  closing_value   Float
+  voucher_id      String?
+  created_at      DateTime @default(now())
+
+  @@unique([asset_id, period])
+}
+
+model AssetMaintenance {
+  id               String    @id @default(cuid())
+  asset_id         String
+  asset            Asset     @relation(fields: [asset_id], references: [id])
+  maintenance_date DateTime  @db.Date
+  type             String
+  description      String
+  cost             Float     @default(0)
+  done_by          String?
+  next_due         DateTime? @db.Date
+  voucher_id       String?
+  created_at       DateTime  @default(now())
+}
+
+model AssetTransfer {
+  id                 String   @id @default(cuid())
+  asset_id           String
+  asset              Asset    @relation(fields: [asset_id], references: [id])
+  from_location      String?
+  to_location        String?
+  from_department_id String?
+  to_department_id   String?
+  transferred_at     DateTime @default(now())
+  transferred_by_id  String?
+  reason             String?
+}
+
+model ItemCategory {
+  id         String   @id @default(cuid())
+  name       String
+  name_bn    String?
+  created_at DateTime @default(now())
+  items      Item[]
+}
+
+model Item {
+  id                 String             @id @default(cuid())
+  item_code          String             @unique // ITM-0001
+  category_id        String
+  category           ItemCategory       @relation(fields: [category_id], references: [id])
+  name               String
+  name_bn            String?
+  unit               String // "Pcs", "Ream", "Litre", "Kg", "Box"
+  current_stock      Float              @default(0)
+  minimum_stock      Float              @default(0)
+  reorder_qty        Float              @default(0)
+  expense_account_id String?
+  expense_account    Account?           @relation(fields: [expense_account_id], references: [id])
+  is_active          Boolean            @default(true)
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  stock_transactions StockTransaction[]
+  purchase_items     PurchaseItem[]
+  requisition_items  RequisitionItem[]
+
+  @@index([category_id])
+}
+
+model StockTransaction {
+  id               String       @id @default(cuid())
+  item_id          String
+  item             Item         @relation(fields: [item_id], references: [id])
+  transaction_type StockTxnType
+  quantity         Float
+  unit_price       Float?
+  total_value      Float?
+  balance_after    Float
+  reference_type   String? // "PURCHASE", "ISSUE", "RETURN", "ADJUSTMENT"
+  reference_id     String?
+  department_id    String?
+  issued_to_id     String?
+  notes            String?
+  created_by_id    String?
+  created_at       DateTime     @default(now())
+
+  @@index([item_id, created_at])
+}
+
+model Supplier {
+  id              String           @id @default(cuid())
+  name            String
+  name_bn         String?
+  contact_person  String?
+  phone           String?
+  email           String?
+  address         String?
+  nid             String?
+  tin             String?
+  account_id      String?
+  is_active       Boolean          @default(true)
+  created_at      DateTime         @default(now())
+  purchase_orders PurchaseOrder[]
+  assets          Asset[]
+}
+
+model PurchaseRequisition {
+  id                String            @id @default(cuid())
+  req_no            String            @unique // REQ-2026-0001
+  requested_by_id   String
+  department_id     String?
+  reason            String
+  req_date          DateTime          @db.Date @default(now())
+  required_by       DateTime?         @db.Date
+  status            ReqStatus         @default(PENDING)
+  approved_by_id    String?
+  approved_at       DateTime?
+  rejected_reason   String?
+  created_at        DateTime          @default(now())
+  items             RequisitionItem[]
+  purchase_order    PurchaseOrder?
+}
+
+model RequisitionItem {
+  id                   String              @id @default(cuid())
+  requisition_id       String
+  requisition          PurchaseRequisition @relation(fields: [requisition_id], references: [id])
+  item_id              String?
+  item                 Item?               @relation(fields: [item_id], references: [id])
+  description          String
+  quantity             Float
+  estimated_unit_price Float?
+  notes                String?
+}
+
+model PurchaseOrder {
+  id              String               @id @default(cuid())
+  po_no           String               @unique // PO-2026-0001
+  requisition_id  String?              @unique
+  requisition     PurchaseRequisition? @relation(fields: [requisition_id], references: [id])
+  supplier_id     String
+  supplier        Supplier             @relation(fields: [supplier_id], references: [id])
+  order_date      DateTime             @db.Date
+  delivery_date   DateTime?            @db.Date
+  delivery_address String?
+  terms           String?
+  total_amount    Float
+  status          POStatus             @default(DRAFT)
+  approved_by_id  String?
+  approved_at     DateTime?
+  created_at      DateTime             @default(now())
+  items           PurchaseItem[]
+  grns            GoodsReceivedNote[]
+}
+
+model PurchaseItem {
+  id                String        @id @default(cuid())
+  po_id             String
+  po                PurchaseOrder @relation(fields: [po_id], references: [id])
+  item_id           String?
+  item              Item?         @relation(fields: [item_id], references: [id])
+  description       String
+  purchase_type     PurchaseType
+  quantity          Float
+  unit              String?
+  unit_price        Float
+  total_price       Float
+  asset_category_id String?
+  received_qty      Float         @default(0)
+
+  @@index([po_id])
+}
+
+model GoodsReceivedNote {
+  id                  String        @id @default(cuid())
+  grn_no              String        @unique // GRN-2026-0001
+  po_id               String
+  po                  PurchaseOrder @relation(fields: [po_id], references: [id])
+  received_date       DateTime      @db.Date
+  received_by_id      String
+  supplier_invoice_no String?
+  remarks             String?
+  total_amount        Float
+  voucher_id          String?
+  created_at          DateTime      @default(now())
+  items               GRNItem[]
+}
+
+model GRNItem {
+  id          String            @id @default(cuid())
+  grn_id      String
+  grn         GoodsReceivedNote @relation(fields: [grn_id], references: [id])
+  po_item_id  String
+  description String
+  ordered_qty Float
+  received_qty Float
+  unit_price  Float
+  total_price Float
+  asset_id    String?
+
+  @@index([grn_id])
 }
 
 // ─────────────────────────────────────────────
@@ -1501,4 +1989,128 @@ enum EmploymentType {
   PERMANENT
   CONTRACT
   PART_TIME
+}
+
+// ─────────────────────────────────────────────
+// ACCOUNTS ENUMS (Phase 8B)
+// ─────────────────────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum AccountNature {
+  DEBIT_NORMAL
+  CREDIT_NORMAL
+}
+
+enum BalanceType {
+  DEBIT
+  CREDIT
+}
+
+enum VoucherType {
+  RECEIPT
+  PAYMENT
+  JOURNAL
+  CONTRA
+  DEBIT_NOTE
+  CREDIT_NOTE
+}
+
+enum VoucherStatus {
+  DRAFT
+  APPROVED
+  POSTED
+  CANCELLED
+}
+
+enum BudgetStatus {
+  DRAFT
+  APPROVED
+  LOCKED
+}
+
+enum ReconcileStatus {
+  PENDING
+  RECONCILED
+}
+
+enum ReconcileItemType {
+  IN_BOOK_NOT_BANK
+  IN_BANK_NOT_BOOK
+}
+
+enum ChequeType {
+  ISSUED
+  RECEIVED
+}
+
+enum ChequeStatus {
+  PENDING
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+enum TaxType {
+  TDS
+  VAT
+}
+
+// ─────────────────────────────────────────────
+// INVENTORY & ASSET ENUMS (Phase 8C)
+// ─────────────────────────────────────────────
+
+enum DepreciationMethod {
+  STRAIGHT_LINE
+  WRITTEN_DOWN_VALUE
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetStatus {
+  ACTIVE
+  UNDER_REPAIR
+  DISPOSED
+  LOST
+  TRANSFERRED
+}
+
+enum StockTxnType {
+  IN
+  OUT
+  ADJUSTMENT
+  RETURN
+}
+
+enum ReqStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PO_CREATED
+}
+
+enum POStatus {
+  DRAFT
+  APPROVED
+  SENT_TO_SUPPLIER
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum PurchaseType {
+  ASSET
+  CONSUMABLE
 }

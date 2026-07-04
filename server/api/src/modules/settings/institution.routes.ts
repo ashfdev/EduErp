@@ -3,8 +3,10 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
+import { cached } from "../../lib/cache";
+import { redis } from "../../lib/redis";
 import { SETTINGS_INSTITUTION_ROLES } from "../../lib/roles";
 import { institutionProfileSchema, institutionConfigSchema } from "@education-erp/validators";
 import { badRequest } from "../../lib/errors";
@@ -15,6 +17,8 @@ export const institutionConfigRouter = Router();
 
 const PROFILE_ID = "singleton";
 const CONFIG_ID = "singleton";
+const PROFILE_CACHE_KEY = "settings-cache:institution-profile";
+const PROFILE_CACHE_TTL_SECONDS = 60 * 60;
 
 const TYPE_CASCADE: Record<InstitutionType, Record<string, unknown>> = {
   SCHOOL: { term_class: "Class", term_teacher: "Teacher", term_principal: "Headmaster", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
@@ -28,7 +32,7 @@ const TYPE_CASCADE: Record<InstitutionType, Record<string, unknown>> = {
 institutionRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
-    const profile = await prisma.institutionProfile.findUnique({ where: { id: PROFILE_ID } });
+    const profile = await cached(PROFILE_CACHE_KEY, PROFILE_CACHE_TTL_SECONDS, () => prisma.institutionProfile.findUnique({ where: { id: PROFILE_ID } }));
     res.json({ success: true, data: profile });
   }),
 );
@@ -40,6 +44,7 @@ institutionRouter.put(
   asyncHandler(async (req, res) => {
     const body = institutionProfileSchema.parse(req.body);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: body });
+    await redis.del(PROFILE_CACHE_KEY);
     res.json({ success: true, data: profile });
   }),
 );
@@ -48,11 +53,13 @@ institutionRouter.post(
   "/logo",
   authenticate,
   authorize(SETTINGS_INSTITUTION_ROLES),
-  upload.single("file"),
+  imageUpload.single("file"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A file is required");
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { logo_url: url } });
+    await redis.del(PROFILE_CACHE_KEY);
     res.json({ success: true, data: profile });
   }),
 );
@@ -61,11 +68,13 @@ institutionRouter.post(
   "/favicon",
   authenticate,
   authorize(SETTINGS_INSTITUTION_ROLES),
-  upload.single("file"),
+  imageUpload.single("file"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A file is required");
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { favicon_url: url } });
+    await redis.del(PROFILE_CACHE_KEY);
     res.json({ success: true, data: profile });
   }),
 );
@@ -82,6 +91,7 @@ institutionRouter.put(
       prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { type } }),
       prisma.institutionConfig.update({ where: { id: CONFIG_ID }, data: TYPE_CASCADE[type] }),
     ]);
+    await redis.del(PROFILE_CACHE_KEY);
     res.json({ success: true, data: { profile, config } });
   }),
 );

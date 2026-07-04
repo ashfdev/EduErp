@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { templateUpload } from "../../middleware/upload";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { DocumentType } from "@education-erp/types";
@@ -62,7 +62,7 @@ templatesRouter.get(
 templatesRouter.post(
   "/",
   authorize(SETTINGS_ACADEMIC_ROLES),
-  upload.fields([{ name: "html", maxCount: 1 }, { name: "css", maxCount: 1 }]),
+  templateUpload.fields([{ name: "html", maxCount: 1 }, { name: "css", maxCount: 1 }]),
   asyncHandler(async (req, res) => {
     const body = z.object({ doc_type: z.nativeEnum(DocumentType), name: z.string().min(1) }).parse(req.body);
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;

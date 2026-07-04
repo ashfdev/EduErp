@@ -6,7 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { csvUpload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema } from "@education-erp/validators";
@@ -508,7 +508,7 @@ studentsRouter.delete(
 studentsRouter.post(
   "/bulk-import",
   authorize(STUDENT_CRUD_ROLES),
-  upload.single("file"),
+  csvUpload.single("file"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A CSV file is required");
     const records: Record<string, string>[] = parse(req.file.buffer.toString("utf-8"), {

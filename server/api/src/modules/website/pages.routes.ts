@@ -7,6 +7,7 @@ import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { staticPageSchema } from "@education-erp/validators";
 import { triggerRevalidation } from "../../services/revalidate.service";
+import { sanitizeHtml } from "../../lib/sanitize";
 import { notFound } from "../../lib/errors";
 
 export const pagesRouter = Router();
@@ -43,6 +44,8 @@ pagesRouter.put(
     if (!(PAGE_KEYS as readonly string[]).includes(pageKey)) throw notFound("Unknown page key");
 
     const body = staticPageSchema.parse(req.body);
+    if (body.content_en) body.content_en = sanitizeHtml(body.content_en);
+    if (body.content_bn) body.content_bn = sanitizeHtml(body.content_bn);
     const page = await prisma.staticPage.upsert({
       where: { page_key: pageKey },
       create: { page_key: pageKey, ...body },

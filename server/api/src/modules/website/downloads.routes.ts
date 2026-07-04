@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
@@ -33,7 +33,8 @@ downloadsRouter.get(
 downloadsRouter.post(
   "/",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("file"),
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
     const body = downloadMetaSchema.parse({ ...req.body, is_public: req.body.is_public === "true" || req.body.is_public === true || req.body.is_public === undefined });
     if (!req.file) throw badRequest("A file is required");

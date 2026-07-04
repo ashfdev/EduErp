@@ -501,6 +501,100 @@ interface FeeRules {
 
 ---
 
+## 🧮 Accounts Module Rules (Double-Entry — Phase 8B)
+
+```
+Every money movement in the system MUST create a journal entry:
+  ✅ Fee payment collected  → auto-journal via auto-journal.service.ts
+  ✅ Payroll paid           → auto-journal via auto-journal.service.ts
+  ✅ Asset purchased        → auto-journal via auto-journal.service.ts
+  ✅ Inventory GRN received → auto-journal via auto-journal.service.ts
+  ✅ Asset depreciation     → auto-journal via auto-journal.service.ts (createDepreciationJournal)
+  ✅ Asset disposed         → auto-journal via auto-journal.service.ts (createAssetDisposalJournal)
+  ❌ NEVER manually create vouchers from other modules
+  ❌ NEVER bypass auto-journal.service.ts — it is the ONLY place allowed to
+     construct a system-triggered Voucher
+
+Double-entry validation:
+  Every Voucher's JournalEntries MUST balance: total_debit == total_credit
+  Enforced at API level (400 error if unbalanced) — see validateBalance() in
+  voucher-helpers.ts
+  Frontend disables Save button if unbalanced (see vouchers/new/page.tsx)
+
+Voucher workflow (manual vouchers only — auto-journals skip straight to POSTED):
+  DRAFT → APPROVED → POSTED
+  Only DRAFT vouchers can be edited or deleted; only POSTED vouchers count
+  toward ledger/trial-balance/financial-statement queries.
+
+Balance sheet — contra accounts:
+  A contra-asset account (e.g. 1105 Accumulated Depreciation — CREDIT_NORMAL,
+  grouped under ASSET) must be SUBTRACTED from its section total, never
+  added, even though it displays a positive balance in its own natural
+  direction. Any account whose account_nature doesn't match its group's
+  expected nature (ASSET→DEBIT_NORMAL, LIABILITY/EQUITY→CREDIT_NORMAL) is a
+  contra account and follows this rule.
+
+Balance sheet — mid-year equation:
+  Assets = Liabilities + Equity must hold at ANY point in time, not just
+  after a formal year-end close. Fold the current period's unclosed net
+  income (Income − Expense to date) into Equity as an implicit
+  "Current Year Earnings" line on every balance-sheet request.
+
+Account codes (system-reserved, never delete or change code):
+  1001 = Cash in Hand
+  1002 = Cash at Bank
+  1105 = Accumulated Depreciation (contra-asset)
+  2001 = Accounts Payable
+  2002 = TDS Payable
+  2004 = Salary Payable
+  3004 = Surplus/Deficit
+  4001 = Tuition Fee Income
+  5001 = Salary Expense (Teaching)
+  5018 = Depreciation Expense
+  5020 = Loss on Disposal of Asset
+
+Fee-category → income-account mapping lives in FeeAccountMapping (Settings
+table, editable at Settings → Accounts → Fee Mapping) — never hardcode which
+account a fee category posts to.
+```
+
+---
+
+## 📦 Inventory Module Rules (Fixed Assets + Stock — Phase 8C)
+
+```
+Stock never goes negative:
+  Always validate: quantity_to_issue <= current_stock
+  Return 400 (VALIDATION_ERROR) if insufficient stock — see
+  /api/inventory/stock/issue
+
+Asset depreciation:
+  Method: Straight Line Method (SLM) by default
+  Formula: Annual Dep = Purchase Price × (Rate / 100); Monthly Dep = Annual / 12
+  Stop depreciating when book_value reaches 0 — never negative
+  One DepreciationEntry per asset per period (unique on asset_id+period);
+  one consolidated Voucher per depreciation run across all assets in that run
+
+Purchase workflow:
+  Requisition → Purchase Order → GRN (mandatory for audit trail)
+  GRN is the ONLY trigger for: stock increment, asset creation, and the
+  accounts auto-journal
+  Never add stock or create an asset without a GRN (except a manual stock
+  adjustment via /stock/adjust, which is audit-logged but doesn't touch accounts)
+  A PO can be received across multiple partial GRNs; status moves
+  DRAFT → APPROVED → PARTIALLY_RECEIVED → RECEIVED
+
+Asset UID / QR codes:
+  Every asset gets a unique asset_uid and a QR code on creation
+  QR code URL points to /inventory/assets/{asset_uid} (admin)
+  Asset creation MUST go through createWithUniqueAssetUid() (asset-id.generator.ts),
+  which retries the whole generate+create cycle on a unique-constraint
+  collision — never generate a candidate UID and create() separately, that
+  has a TOCTOU race under concurrent requests
+```
+
+---
+
 ## 📝 Exam & Mark Rules (Settings-Driven)
 
 ```typescript
@@ -696,26 +790,35 @@ GOOGLE_FONTS_KEY=""
 Update this section as phases complete:
 
 ```
-[ ] PHASE 0  — Repo init, Turborepo setup, DB schema, env
-[ ] PHASE 1  — Settings system (FULL — all config tables + UI)
-[ ] PHASE 2  — Auth + User management
-[ ] PHASE 3  — Student module (CRUD + 360° profile)
-[ ] PHASE 4  — Subject system + Teacher assignment
-[ ] PHASE 5  — Attendance (manual + biometric)
-[ ] PHASE 6  — Examination + Mark entry + Grading engine
-[ ] PHASE 7  — Results + Report cards + Public result page
-[ ] PHASE 8  — Fee & Finance module
-[ ] PHASE 9  — Online Admission
-[ ] PHASE 10 — Document generation (all doc types)
-[ ] PHASE 11 — Website Maintenance module
-[ ] PHASE 12 — HR + Payroll
-[ ] PHASE 13 — Library + Transport + Hostel
-[ ] PHASE 14 — Analytics dashboard
-[ ] PHASE 15 — Student/Guardian Portal (PWA)
-[ ] PHASE 16 — Public Website (ISR)
-[ ] PHASE 17 — IoT/Biometric device service
-[ ] PHASE 18 — Notification service
+[x] PHASE 0  — Repo init, Turborepo setup, DB schema, env
+[x] PHASE 1  — Settings system (FULL — all config tables + UI)
+[x] PHASE 2  — Auth + User management
+[x] PHASE 3  — Student module (CRUD + 360° profile)
+[x] PHASE 4  — Subject system + Teacher assignment
+[x] PHASE 5  — Attendance (manual + biometric)
+[x] PHASE 6  — Examination + Mark entry + Grading engine
+[x] PHASE 7  — Results + Report cards + Public result page
+[x] PHASE 8  — Fee & Finance module
+[x] PHASE 8B — Accounts (double-entry: journals, ledger, trial balance,
+               income+expenditure, balance sheet, bank reconciliation, TDS)
+[x] PHASE 8C — Inventory & Assets (fixed assets, depreciation, consumable
+               stock, purchase workflow: REQ→PO→GRN, supplier management)
+[x] PHASE 9  — Online Admission
+[x] PHASE 10 — Document generation (all doc types)
+[x] PHASE 11 — Website Maintenance module (public-facing ISR pages built
+               here too — Phase 16 below was folded into this phase)
+[x] PHASE 12 — HR + Payroll
+[x] PHASE 13 — Library + Transport + Hostel
+[x] PHASE 14 — Analytics dashboard
+[x] PHASE 15 — Student/Guardian Portal (PWA)
+[x] PHASE 16 — Public Website (ISR) — delivered as part of Phase 11, see above
+[x] PHASE 17 — IoT/Biometric device service
+[x] PHASE 18 — Notification service
 [ ] PHASE 19 — Mobile apps (Flutter) — FUTURE
+[x] PHASE 20 — Production hardening (env validation, rate limiting, upload
+               magic-byte checks, response sanitization, Docker for all 6
+               services, CI, README, vitest suite) — not in the original
+               19-phase plan, added because a production deploy needs it
 ```
 
 ---

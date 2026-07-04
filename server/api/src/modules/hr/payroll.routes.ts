@@ -10,6 +10,7 @@ import { calculatePayrollSchema, updatePayrollSchema, finalizePayrollSchema, mar
 import { workingDaysInMonth } from "../../utils/working-days";
 import { renderDocument } from "../../services/pdf.service";
 import { uploadBuffer } from "../../services/storage.service";
+import { createPayrollJournal } from "../accounts/auto-journal.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const payrollRouter = Router();
@@ -169,10 +170,20 @@ payrollRouter.post(
   authorize(PAYROLL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const body = markPaidSchema.parse(req.body);
-    const result = await prisma.payrollRecord.updateMany({
+    const records = await prisma.payrollRecord.findMany({
       where: { id: { in: body.payroll_ids }, status: "FINALIZED" },
+      include: { staff: true },
+    });
+
+    const result = await prisma.payrollRecord.updateMany({
+      where: { id: { in: records.map((r) => r.id) } },
       data: { status: "PAID" },
     });
+
+    for (const record of records) {
+      await createPayrollJournal(record, record.staff);
+    }
+
     res.json({ success: true, data: { updated: result.count } });
   }),
 );

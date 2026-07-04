@@ -4,8 +4,9 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
+import { sanitizeHtml } from "../../lib/sanitize";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { noticeSchema } from "@education-erp/validators";
@@ -62,7 +63,8 @@ noticesRouter.get(
 noticesRouter.post(
   "/",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("attachment"),
+  documentUpload.single("attachment"),
+  verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
     const body = noticeSchema.omit({ attachment_url: true }).parse({
       ...req.body,
@@ -70,6 +72,7 @@ noticesRouter.post(
       is_public_website: req.body.is_public_website === "true" || req.body.is_public_website === true,
       send_sms: req.body.send_sms === "true" || req.body.send_sms === true,
     });
+    body.body = sanitizeHtml(body.body);
 
     let attachment_url: string | undefined;
     if (req.file) attachment_url = (await uploadBuffer("notices", req.file.originalname, req.file.buffer, req.file.mimetype)).url;
@@ -82,7 +85,8 @@ noticesRouter.post(
 noticesRouter.put(
   "/:id",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("attachment"),
+  documentUpload.single("attachment"),
+  verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
     const existing = await prisma.notice.findUnique({ where: { id: reqParam(req, "id") } });
     if (!existing) throw notFound("Notice not found");
@@ -93,6 +97,7 @@ noticesRouter.put(
       ...(req.body.is_public_website !== undefined && { is_public_website: req.body.is_public_website === "true" || req.body.is_public_website === true }),
       ...(req.body.send_sms !== undefined && { send_sms: req.body.send_sms === "true" || req.body.send_sms === true }),
     });
+    if (body.body) body.body = sanitizeHtml(body.body);
 
     let attachment_url: string | undefined;
     if (req.file) attachment_url = (await uploadBuffer("notices", req.file.originalname, req.file.buffer, req.file.mimetype)).url;

@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
@@ -25,7 +25,8 @@ slidersRouter.get(
 slidersRouter.post(
   "/",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("image"),
+  imageUpload.single("image"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const body = sliderSchema.omit({ image_url: true }).parse(req.body);
     if (!req.file) throw badRequest("An image file is required");
@@ -60,7 +61,8 @@ slidersRouter.put(
 slidersRouter.put(
   "/:id",
   authorize(WEBSITE_CONTENT_ROLES),
-  upload.single("image"),
+  imageUpload.single("image"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const body = sliderSchema.omit({ image_url: true }).partial().parse(req.body);
     const existing = await prisma.sliderImage.findUnique({ where: { id: reqParam(req, "id") } });

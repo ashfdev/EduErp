@@ -39,3 +39,8 @@ export const STAFF_ONLY_ROLES: UserRole[] = [
   "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
 ];
 export const DEVICE_MANAGE_ROLES: UserRole[] = ["ADMIN", "IT_ADMIN"];
+export const ACCOUNTS_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
+export const VOUCHER_APPROVE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT", "PRINCIPAL"];
+export const VOUCHER_POST_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
+export const INVENTORY_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
+export const REQUISITION_APPROVE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "HEAD_OF_DEPT"];

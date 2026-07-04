@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { publicEndpointLimiter } from "../../middleware/rate-limit";
+import { cached } from "../../lib/cache";
 import { reqParam } from "../../lib/req-param";
 import { calculateStudentResult, calculatePositions } from "../../utils/grading.engine";
 import { badRequest, notFound } from "../../lib/errors";
@@ -115,35 +116,37 @@ resultsRouter.get(
       throw badRequest("Provide either student_uid, or both roll_no and registration_no");
     }
 
-    const student = await prisma.student.findFirst({
-      where: query.student_uid ? { student_uid: query.student_uid } : { current_roll_no: query.roll_no, registration_no: query.registration_no },
-    });
-    if (!student) return res.json({ success: true, data: { found: false } });
-
-    const publications = await prisma.resultPublication.findMany({
-      where: { is_published: true, is_public: true, class_id: student.current_class_id ?? undefined, ...(query.exam_id && { exam_id: query.exam_id }) },
-      include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
-    });
-
-    const results = [];
-    for (const pub of publications) {
-      const entries = await prisma.markEntry.findMany({ where: { exam_id: pub.exam_id, student_id: student.id }, include: { subject: true } });
-      if (!entries.length) continue;
-      const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
-      const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], false);
-      results.push({
-        exam_name: pub.exam.name,
-        subjects: entries.map((e) => ({ subject_name: e.subject.name_en, marks_total: e.marks_total, grade_letter: e.grade_letter, is_absent: e.is_absent })),
-        gpa: result.total_gpa,
-        grade: result.overall_grade_letter,
-        has_failed: result.has_failed,
+    const cacheKey = `result-lookup:${query.student_uid ?? `${query.roll_no}:${query.registration_no}`}:${query.exam_id ?? "all"}`;
+    const data = await cached(cacheKey, 30 * 60, async () => {
+      const student = await prisma.student.findFirst({
+        where: query.student_uid ? { student_uid: query.student_uid } : { current_roll_no: query.roll_no, registration_no: query.registration_no },
       });
-    }
+      if (!student) return { found: false };
 
-    res.json({
-      success: true,
-      data: { found: true, student_name: student.name_en, student_uid: student.student_uid, results },
+      const publications = await prisma.resultPublication.findMany({
+        where: { is_published: true, is_public: true, class_id: student.current_class_id ?? undefined, ...(query.exam_id && { exam_id: query.exam_id }) },
+        include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
+      });
+
+      const results = [];
+      for (const pub of publications) {
+        const entries = await prisma.markEntry.findMany({ where: { exam_id: pub.exam_id, student_id: student.id }, include: { subject: true } });
+        if (!entries.length) continue;
+        const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
+        const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], false);
+        results.push({
+          exam_name: pub.exam.name,
+          subjects: entries.map((e) => ({ subject_name: e.subject.name_en, marks_total: e.marks_total, grade_letter: e.grade_letter, is_absent: e.is_absent })),
+          gpa: result.total_gpa,
+          grade: result.overall_grade_letter,
+          has_failed: result.has_failed,
+        });
+      }
+
+      return { found: true, student_name: student.name_en, student_uid: student.student_uid, results };
     });
+
+    res.json({ success: true, data });
   }),
 );
 

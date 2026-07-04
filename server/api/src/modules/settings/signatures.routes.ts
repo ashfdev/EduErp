@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { authoritySignatureSchema, authorityConfigSlotSchema } from "@education-erp/validators";
@@ -28,7 +28,8 @@ signaturesRouter.get(
 signaturesRouter.post(
   "/",
   authorize(SETTINGS_ACADEMIC_ROLES),
-  upload.fields([{ name: "signature", maxCount: 1 }, { name: "seal", maxCount: 1 }]),
+  imageUpload.fields([{ name: "signature", maxCount: 1 }, { name: "seal", maxCount: 1 }]),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const body = authoritySignatureSchema.parse(req.body);
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -54,7 +55,8 @@ signaturesRouter.post(
 signaturesRouter.put(
   "/:id",
   authorize(SETTINGS_ACADEMIC_ROLES),
-  upload.fields([{ name: "signature", maxCount: 1 }, { name: "seal", maxCount: 1 }]),
+  imageUpload.fields([{ name: "signature", maxCount: 1 }, { name: "seal", maxCount: 1 }]),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const body = authoritySignatureSchema.partial().parse(req.body);
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;

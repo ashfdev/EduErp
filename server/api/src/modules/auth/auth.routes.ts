@@ -9,6 +9,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib/jwt";
 import { unauthorized, badRequest, notFound } from "../../lib/errors";
 import { sendSms } from "../../services/sms.service";
+import { loginLimiter, loginBanGuard, forgotPasswordLimiter } from "../../middleware/rate-limit";
 import {
   loginSchema,
   changePasswordSchema,
@@ -29,6 +30,8 @@ function publicUser(user: { id: string; name_en: string; name_bn: string | null;
 
 authRouter.post(
   "/login",
+  loginBanGuard,
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
@@ -115,6 +118,7 @@ authRouter.post(
 
 authRouter.post(
   "/forgot-password",
+  forgotPasswordLimiter,
   asyncHandler(async (req, res) => {
     const body = forgotPasswordSchema.parse(req.body);
     const user = await prisma.user.findUnique({ where: { phone: body.phone } });

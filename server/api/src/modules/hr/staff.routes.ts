@@ -6,7 +6,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { upload } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES } from "../../lib/roles";
@@ -185,7 +185,8 @@ hrStaffRouter.delete(
 hrStaffRouter.post(
   "/:id/photo",
   authorize(HR_MANAGE_ROLES),
-  upload.single("photo"),
+  imageUpload.single("photo"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     if (!req.file) throw badRequest("A photo file is required");
@@ -198,7 +199,8 @@ hrStaffRouter.post(
 hrStaffRouter.post(
   "/:id/signature",
   authorize(HR_MANAGE_ROLES),
-  upload.single("signature"),
+  imageUpload.single("signature"),
+  verifyImageMagicBytes,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     if (!req.file) throw badRequest("A signature file is required");

@@ -1,8 +1,9 @@
 import "dotenv/config";
+import { env } from "./lib/env";
 import { createApp } from "./app";
 import { logger } from "./lib/logger";
 
-const port = Number(process.env.PORT ?? 4000);
+const port = env.PORT;
 const app = createApp();
 
 app.listen(port, () => {
