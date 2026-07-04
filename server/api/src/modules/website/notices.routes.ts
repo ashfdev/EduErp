@@ -9,28 +9,38 @@ import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { noticeSchema } from "@education-erp/validators";
-import { sendSms } from "../../services/sms.service";
+import { sendNotification, type NotificationRecipient } from "../../services/notification.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { notFound } from "../../lib/errors";
 
 export const noticesRouter = Router();
 noticesRouter.use(authenticate);
 
-async function audiencePhones(audience: string): Promise<string[]> {
-  const phones: string[] = [];
+async function audienceRecipients(audience: string): Promise<NotificationRecipient[]> {
+  const recipients: NotificationRecipient[] = [];
   if (audience === "STUDENTS" || audience === "ALL") {
-    const students = await prisma.student.findMany({ where: { deleted_at: null, father_phone: { not: null } }, select: { father_phone: true } });
-    phones.push(...students.map((s) => s.father_phone!));
+    const students = await prisma.student.findMany({
+      where: { deleted_at: null, father_phone: { not: null } },
+      select: { id: true, name_en: true, father_phone: true, guardian: { select: { user_id: true, email: true } } },
+    });
+    recipients.push(...students.map((s) => ({ name: s.name_en, phone: s.father_phone, email: s.guardian?.email, user_id: s.guardian?.user_id, person_id: s.id })));
   }
   if (audience === "GUARDIANS" || audience === "ALL") {
-    const guardians = await prisma.guardian.findMany({ select: { phone: true } });
-    phones.push(...guardians.map((g) => g.phone));
+    const guardians = await prisma.guardian.findMany({ select: { id: true, name_en: true, phone: true, email: true, user_id: true } });
+    recipients.push(...guardians.map((g) => ({ name: g.name_en, phone: g.phone, email: g.email, user_id: g.user_id, person_id: g.id })));
   }
   if (audience === "STAFF" || audience === "ALL") {
-    const staff = await prisma.staff.findMany({ where: { is_active: true, deleted_at: null, phone: { not: null } }, select: { phone: true } });
-    phones.push(...staff.map((s) => s.phone!));
+    const staff = await prisma.staff.findMany({ where: { is_active: true, deleted_at: null, phone: { not: null } }, select: { id: true, name_en: true, phone: true, email: true, user_id: true } });
+    recipients.push(...staff.map((s) => ({ name: s.name_en, phone: s.phone, email: s.email, user_id: s.user_id, person_id: s.id })));
   }
-  return [...new Set(phones)];
+  // Dedup by phone — the same guardian/staff-parent shouldn't get the same notice twice.
+  const seen = new Set<string>();
+  return recipients.filter((r) => {
+    const key = r.phone ?? r.user_id ?? r.email ?? "";
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 noticesRouter.get(
@@ -134,12 +144,14 @@ noticesRouter.post(
     const notice = await prisma.notice.findUnique({ where: { id } });
     if (!notice) throw notFound("Notice not found");
 
-    const phones = await audiencePhones(body.override_audience ?? notice.audience);
-    for (const phone of phones) {
-      await sendSms(phone, `${notice.title}: ${notice.body.slice(0, 100)}`);
-    }
+    const recipients = await audienceRecipients(body.override_audience ?? notice.audience);
+    const result = await sendNotification({
+      trigger: "NOTICE",
+      recipients,
+      template_data: { title: notice.title, body: notice.body.slice(0, 100) },
+    });
     await prisma.notice.update({ where: { id }, data: { sms_sent_at: new Date() } });
 
-    res.json({ success: true, data: { queued: phones.length } });
+    res.json({ success: true, data: result });
   }),
 );

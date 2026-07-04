@@ -8,6 +8,10 @@ export const pushSubscribeSchema = z.object({
   }),
 });
 
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().min(1),
+});
+
 export const portalPaySchema = z.object({
   invoice_id: z.string().min(1),
   gateway: z.enum(["BKASH", "NAGAD", "SSLCOMMERZ"]),

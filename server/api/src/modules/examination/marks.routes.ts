@@ -8,6 +8,8 @@ import { reqParam } from "../../lib/req-param";
 import { MARK_ENTRY_ROLES, MARK_APPROVAL_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { submitMarksSchema } from "@education-erp/validators";
 import { calculateGrade } from "../../utils/grading.engine";
+import { computeClassResults } from "../results/results.routes";
+import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const marksRouter = Router();
@@ -186,6 +188,21 @@ marksRouter.post(
       create: { exam_id: examId, class_id: classId, is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
       update: { is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
     });
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    const perStudent = await computeClassResults(examId, classId);
+    const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
+    const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
+    const guardianById = new Map(guardians.map((g) => [g.id, g]));
+
+    for (const p of perStudent) {
+      const guardian = p.student.guardian_id ? guardianById.get(p.student.guardian_id) : undefined;
+      await sendNotification({
+        trigger: "RESULT_PUBLISHED",
+        recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
+        template_data: { student_name: p.student.name_en, exam_name: exam?.name ?? "", gpa: p.result.total_gpa.toFixed(2) },
+      });
+    }
 
     res.json({ success: true, data: publication });
   }),

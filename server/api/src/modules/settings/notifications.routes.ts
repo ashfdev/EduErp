@@ -39,3 +39,45 @@ notificationsRouter.post(
     res.json({ success: true, data: result });
   }),
 );
+
+notificationsRouter.get(
+  "/logs",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        status: z.enum(["QUEUED", "SENT", "FAILED", "SKIPPED"]).optional(),
+        channel: z.enum(["SMS", "EMAIL", "PUSH"]).optional(),
+        trigger: z.enum(["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM"]).optional(),
+        from_date: z.string().optional(),
+        to_date: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+      .parse(req.query);
+
+    const where = {
+      ...(query.status && { status: query.status }),
+      ...(query.channel && { channel: query.channel }),
+      ...(query.trigger && { trigger: query.trigger }),
+      ...((query.from_date || query.to_date) && {
+        created_at: {
+          ...(query.from_date && { gte: new Date(query.from_date) }),
+          ...(query.to_date && { lte: new Date(query.to_date) }),
+        },
+      }),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.notificationLog.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.notificationLog.count({ where }),
+    ]);
+
+    res.json({ success: true, data: items, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
+  }),
+);

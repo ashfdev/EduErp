@@ -8,7 +8,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { ATTENDANCE_MARK_ROLES } from "../../lib/roles";
 import { markAttendanceSchema } from "@education-erp/validators";
-import { sendSms } from "../../services/sms.service";
+import { sendNotification } from "../../services/notification.service";
 import { badRequest } from "../../lib/errors";
 
 export const attendanceRouter = Router();
@@ -94,14 +94,19 @@ attendanceRouter.post(
 
     const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     if (rules?.sms_on_absent && absentStudentIds.length > 0) {
-      const absentStudents = await prisma.student.findMany({
-        where: { id: { in: absentStudentIds } },
-        select: { name_en: true, father_phone: true },
-      });
+      const [absentStudents, institution] = await Promise.all([
+        prisma.student.findMany({
+          where: { id: { in: absentStudentIds } },
+          select: { id: true, name_en: true, father_phone: true, guardian: { select: { user_id: true, email: true } } },
+        }),
+        prisma.institutionProfile.findFirst(),
+      ]);
       for (const s of absentStudents) {
-        if (s.father_phone) {
-          await sendSms(s.father_phone, `Dear parent, ${s.name_en} was marked absent today (${date.toLocaleDateString()}).`);
-        }
+        await sendNotification({
+          trigger: "ABSENCE",
+          recipients: [{ name: s.name_en, phone: s.father_phone, email: s.guardian?.email, user_id: s.guardian?.user_id, person_id: s.id }],
+          template_data: { student_name: s.name_en, date: date.toLocaleDateString(), school_phone: institution?.phone_primary ?? "" },
+        });
       }
     }
 

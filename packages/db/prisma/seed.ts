@@ -16,6 +16,33 @@ const BD_BOARD_RANGES = [
 const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
+const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
+  ABSENCE: {
+    bn: "প্রিয় অভিভাবক, আজ {{date}} তারিখে {{student_name}} উপস্থিত নেই। যোগাযোগ করুন: {{school_phone}}",
+    en: "Dear guardian, {{student_name}} was absent today ({{date}}). Contact: {{school_phone}}",
+  },
+  LATE: {
+    bn: "প্রিয় অভিভাবক, {{student_name}} আজ {{time}} সময়ে বিদ্যালয়ে দেরিতে উপস্থিত হয়েছে।",
+    en: "Dear guardian, {{student_name}} arrived late today at {{time}}.",
+  },
+  FEE_DUE: {
+    bn: "{{student_name}} এর {{month}} মাসের বেতন বকেয়া আছে। মোট: ৳{{amount}}। দিন: {{school_name}}",
+    en: "{{student_name}}'s fee for {{month}} is due. Total: BDT {{amount}}. — {{school_name}}",
+  },
+  RESULT_PUBLISHED: {
+    bn: "{{student_name}} এর {{exam_name}} ফলাফল প্রকাশিত হয়েছে। GPA: {{gpa}}। পোর্টালে দেখুন।",
+    en: "{{student_name}}'s result for {{exam_name}} has been published. GPA: {{gpa}}. View on the portal.",
+  },
+  NOTICE: {
+    bn: "{{title}}: {{body}}",
+    en: "{{title}}: {{body}}",
+  },
+  ADMISSION_CONFIRM: {
+    bn: "অভিনন্দন! {{student_name}} ভর্তি নিশ্চিত হয়েছে। শিক্ষার্থী আইডি: {{student_uid}}",
+    en: "Congratulations! {{student_name}} has been admitted. Student ID: {{student_uid}}",
+  },
+};
+
 async function main() {
   await prisma.institutionProfile.upsert({
     where: { id: "singleton" },
@@ -90,6 +117,7 @@ async function main() {
 
   for (const trigger of NOTIFICATION_TRIGGERS) {
     for (const channel of NOTIFICATION_CHANNELS) {
+      const template = NOTIFICATION_TEMPLATES[trigger];
       await prisma.notificationConfig.upsert({
         where: { trigger_channel: { trigger, channel } },
         update: {},
@@ -97,8 +125,8 @@ async function main() {
           trigger,
           channel,
           is_enabled: channel === "SMS",
-          template_bn: `{{student_name}} সম্পর্কিত একটি নোটিফিকেশন (${trigger}).`,
-          template_en: `A notification regarding {{student_name}} (${trigger}).`,
+          template_bn: template.bn,
+          template_en: template.en,
         },
       });
     }

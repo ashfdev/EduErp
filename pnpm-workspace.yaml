@@ -6,3 +6,7 @@ packages:
 
 overrides:
   uuid: "^11.1.1"
+  # bullmq pins an exact ioredis version; without this override a second,
+  # slightly newer ioredis gets hoisted for server/api's own ^5.4.2 range,
+  # and TypeScript treats the two copies' Redis classes as incompatible.
+  ioredis: "5.10.1"

@@ -4,9 +4,11 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { computeClassResults } from "../results/results.routes";
-import { sendSms } from "../../services/sms.service";
+import { sendNotification } from "../../services/notification.service";
 import { reqParam } from "../../lib/req-param";
 import { notFound } from "../../lib/errors";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const analyticsRouter = Router();
 analyticsRouter.use(authenticate);
@@ -403,11 +405,30 @@ analyticsRouter.post(
   "/defaulters-risk/:student_id/remind",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
-    const student = await prisma.student.findFirst({ where: { id: studentId, deleted_at: null } });
+    const student = await prisma.student.findFirst({
+      where: { id: studentId, deleted_at: null },
+      select: { id: true, name_en: true, father_phone: true, guardian: { select: { user_id: true, email: true } } },
+    });
     if (!student) throw notFound("Student not found");
     if (!student.father_phone) throw notFound("This student has no guardian phone on file");
 
-    const sent = await sendSms(student.father_phone, `Reminder: ${student.name_en} has low attendance and/or overdue fees. Please contact the institution office.`);
-    res.json({ success: true, data: sent });
+    const [dueInvoices, institution] = await Promise.all([
+      prisma.invoice.findMany({ where: { student_id: studentId, status: { in: ["PENDING", "OVERDUE", "PARTIAL"] } } }),
+      prisma.institutionProfile.findFirst(),
+    ]);
+    const totalDue = dueInvoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+    const now = new Date();
+
+    const result = await sendNotification({
+      trigger: "FEE_DUE",
+      recipients: [{ name: student.name_en, phone: student.father_phone, email: student.guardian?.email, user_id: student.guardian?.user_id, person_id: student.id }],
+      template_data: {
+        student_name: student.name_en,
+        amount: totalDue.toFixed(2),
+        month: MONTH_NAMES[now.getMonth()] ?? "",
+        school_name: institution?.name_en ?? "the institution",
+      },
+    });
+    res.json({ success: true, data: result });
   }),
 );

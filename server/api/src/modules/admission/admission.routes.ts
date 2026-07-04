@@ -24,6 +24,7 @@ import {
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
+import { sendNotification } from "../../services/notification.service";
 import { getPaymentAdapter } from "../../services/payment";
 import { badRequest, notFound, conflict } from "../../lib/errors";
 
@@ -625,7 +626,12 @@ admissionRouter.post(
       return created;
     });
 
-    await sendSms(guardianInfo.phone, `Congratulations! ${application.applicant_name} has been enrolled. Student ID: ${student.student_uid}.`);
+    const guardian = await prisma.guardian.findFirst({ where: { phone: guardianInfo.phone }, select: { user_id: true, email: true } });
+    await sendNotification({
+      trigger: "ADMISSION_CONFIRM",
+      recipients: [{ name: application.applicant_name, phone: guardianInfo.phone, email: guardian?.email, user_id: guardian?.user_id, person_id: student.id }],
+      template_data: { student_name: application.applicant_name, student_uid: student.student_uid },
+    });
 
     res.status(201).json({ success: true, data: student });
   }),

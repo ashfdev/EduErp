@@ -859,9 +859,88 @@ tuning (login attempts, forgot-password, etc.) still lands there.
 
 ## Phase 17 — Notification Service
 
-- [ ] Not started. Full spec in `PHASE_PROMPTS_PART2.md`. `services/notification`. Real
-      BullMQ+Redis worker, replacing the old polling-loop outbox pattern. Port forward: SSL
-      Wireless BD SMS adapter.
+- [x] `services/notification` — real BullMQ+Redis worker (three queues: SMS/Email/Push — named
+      `notification-sms`/`-email`/`-push`; BullMQ rejects `:` in queue names, so the spec's
+      `notification:sms` naming was adjusted), replacing the old direct-call stub in
+      `sms.service.ts`/`email.service.ts`. `server/api` now only *enqueues* — `lib/queues.ts`
+      holds the BullMQ `Queue` producers, `services/notification.service.ts` is the new
+      config-driven, multi-channel, trigger-based sender (`sendNotification({trigger, recipients,
+      template_data})`), and the plain `sendSms`/`sendEmail` helpers (still used by the ~15
+      non-trigger call sites — OTP, password reset, staff/user creation, library issue, payment
+      receipts) were rewritten to enqueue instead of logging inline, so a slow/down provider never
+      blocks a request.
+- [x] Every attempt gets a `NotificationLog` row up front (`status=QUEUED`, `trigger` nullable to
+      cover plain non-templated sends too) that the worker updates to `SENT`/`FAILED`/`SKIPPED` —
+      this is the delivery audit trail, browsable at `/settings/notifications/logs` (filter by
+      status/channel/trigger, paginated). `FAILED` is only written once BullMQ's own retry
+      (`attempts: 3`, exponential backoff) is exhausted, not on every individual attempt.
+- [x] Providers: `sslwireless.provider.ts` (real BD SMS gateway adapter, BD phone
+      normalization to `88` country code — genuinely wired, just waiting on the explicitly-deferred
+      SMS_API_TOKEN/SID) with a `mock.provider.ts` fallback for dev; `nodemailer.provider.ts` (real
+      SMTP) with a logging mock fallback; `webpush.provider.ts` (real `web-push`/VAPID) — a real
+      dev VAPID keypair was generated and lives in `services/notification/.env` (gitignored). All
+      three providers auto-select real-vs-mock purely from whether their credentials are present
+      in env, so the whole pipeline is provably correct end-to-end without needing real accounts.
+      Credentials moved out of `server/api/.env(.example)` entirely and into
+      `services/notification/.env(.example)` — the API no longer talks to any provider directly.
+- [x] Push delivery fetches every `PushSubscription` for the recipient's `user_id` (reusing Phase
+      15's model as-is rather than adding a redundant `person_id`/`person_type` one from the spec),
+      sends to each, and auto-deletes a subscription on a 404/410 (expired/revoked) response; the
+      job only fails if *every* subscription for that user failed — a `SKIPPED` (not `FAILED`) log
+      is written when a recipient has no subscriptions at all, since that's terminal, not transient.
+- [x] Wired all 6 `NotificationTrigger` values to real business events (previously the whole
+      config/template system built in Phase 1 had zero real callers): `ABSENCE` — attendance
+      manual-mark's existing `sms_on_absent` check; `LATE` — the Phase 16 device-service
+      biometric-event bridge (`internal.ts`), gated on the previously-unused
+      `AttendanceRules.sms_on_late` flag; `FEE_DUE` — the analytics defaulters-risk "remind"
+      endpoint, enhanced to compute a real outstanding-invoice total instead of a generic message;
+      `RESULT_PUBLISHED` — the marks-publish route, using the existing `computeClassResults()`
+      helper for real GPA per student; `NOTICE` — the notice `send-sms` route, generalized from an
+      SMS-only helper into a `audienceRecipients()` builder that also surfaces email/user_id for
+      multi-channel fan-out; `ADMISSION_CONFIRM` — the admission enroll step.
+- [x] Improved `packages/db/prisma/seed.ts`'s `NotificationConfig` seed from a generic placeholder
+      (`"A notification regarding {{student_name}} (TRIGGER)."`) to real per-trigger BN/EN
+      templates matching the spec's own examples (ABSENCE/FEE_DUE/RESULT_PUBLISHED verbatim, the
+      other three authored in the same style) — the live dev DB's already-seeded rows were
+      force-updated to match via a one-off script, since `seed.ts`'s upsert intentionally never
+      overwrites existing rows (so admin template customizations survive a reseed).
+- **Live-verification evidence**: real end-to-end run across both Node services (core API :4000 +
+  notification-service :4600) over the real Redis (`eduerp-redis-dev`, port 6380) and Postgres —
+  plain SMS enqueue → mock provider → `NotificationLog` flips `QUEUED`→`SENT`; a real Notice
+  publish to a temporary test guardian fanned out across all three channels at once (SMS to 6
+  guardians via mock, Email via the logging mock, Push via **real** `web-push`) — `{"queued":8,
+  "skipped":10}` matched the expected math exactly (6 SMS + 1 email + 1 push eligible; the other
+  existing guardians lacked email/push so were correctly skipped, not failed). Push was proven with
+  a genuine VAPID-encrypted payload over real TLS: a throwaway self-signed-cert HTTPS receiver
+  confirmed an authentic encrypted Web Push body arrived (not a mock), a 201 response marked the
+  log `SENT`, and a second subscription pointed at an endpoint returning 410 was **automatically
+  deleted** from `PushSubscription` while the job still succeeded (since the other subscription
+  came through) — proving both the success path and the expired-subscription cleanup path for
+  real. An earlier attempt against a plain-HTTP (non-TLS) endpoint correctly exhausted all 3
+  retries and landed as `FAILED` with an error message, confirming the retry-then-fail path too.
+  All test fixtures (guardian, user, push subscriptions, notice, notification logs, temporarily-
+  enabled EMAIL/PUSH channels on the NOTICE trigger) were cleaned up/reverted after verification.
+- **Bug found and fixed mid-implementation**: BullMQ rejects `:` in queue names — the spec's literal
+  `"notification:sms"` naming throws `Error: Queue name cannot contain :` at startup. Fixed by
+  hyphenating (`notification-sms` etc.) on both the producer (`server/api/src/lib/queues.ts`) and
+  consumer (`services/notification/src/workers/*.ts`) sides before either service could even boot.
+- **Housekeeping**: a pnpm/ioredis version-skew bug surfaced during this phase — `bullmq` pins an
+  exact `ioredis@5.10.1`, but `server/api`'s own `^5.4.2` range independently resolved to a newer
+  `5.11.1`, and TypeScript treated the two installed copies' `Redis` classes as structurally
+  incompatible (`lib/queues.ts` wouldn't compile). Fixed by pinning `ioredis` to the exact same
+  `5.10.1` in both `server/api` and `services/notification`'s `package.json`, plus an `ioredis`
+  entry in `pnpm-workspace.yaml`'s `overrides` as a second line of defense. While in there, also
+  removed root `package.json`'s `pnpm.overrides` block — pnpm 9.15 has moved that config to
+  `pnpm-workspace.yaml` and was silently ignoring the old location on every single command.
+- **Explicitly deferred**: real SMS/SMTP credentials (client has deferred these since Phase 0);
+  the portal's client-side `pushManager.subscribe()` call was never built (Phase 15 only built the
+  subscribe-only *backend* endpoint) — `DELETE /api/portal/push-unsubscribe` was added this phase,
+  but there's still no browser-side code that actually requests permission and calls
+  `pushManager.subscribe()`, so push only works today via directly-inserted `PushSubscription`
+  rows; template resolution happens in `server/api` at enqueue time rather than in the worker
+  itself (a deliberate deviation from the spec's suggested `templates/template.resolver.ts`
+  location — simpler, and avoids the worker needing its own DB read of `NotificationConfig` for
+  every job); the same Phase 15 router-role-gate gap noted in Phase 16 remains outstanding.
 
 ## Phase 18 — Security, Performance, Docker, Testing, README
 

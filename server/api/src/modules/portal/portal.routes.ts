@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, portalPaySchema } from "@education-erp/validators";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema } from "@education-erp/validators";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument } from "../../services/pdf.service";
@@ -304,5 +304,14 @@ portalRouter.post(
       update: { keys_p256dh: body.keys.p256dh, keys_auth: body.keys.auth },
     });
     res.status(201).json({ success: true, data: { id: subscription.id } });
+  }),
+);
+
+portalRouter.delete(
+  "/push-unsubscribe",
+  asyncHandler(async (req, res) => {
+    const body = pushUnsubscribeSchema.parse(req.body);
+    await prisma.pushSubscription.deleteMany({ where: { endpoint: body.endpoint, user_id: req.user!.sub } });
+    res.status(204).send();
   }),
 );

@@ -1190,6 +1190,26 @@ model PushSubscription {
   @@index([user_id])
 }
 
+// trigger is nullable because NotificationLog also records plain,
+// non-templated sends (OTP, password reset, receipts) that aren't tied to
+// any of the six configurable NotificationTrigger values.
+model NotificationLog {
+  id            String               @id @default(cuid())
+  trigger       NotificationTrigger?
+  channel       NotificationChannel
+  recipient     String
+  person_id     String?
+  status        NotifLogStatus       @default(QUEUED)
+  message       String?              @db.Text
+  error_message String?
+  sent_at       DateTime?
+  created_at    DateTime             @default(now())
+
+  @@index([trigger])
+  @@index([channel, status])
+  @@index([created_at])
+}
+
 // ─────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────
@@ -1450,6 +1470,13 @@ enum NotificationChannel {
   SMS
   EMAIL
   PUSH
+}
+
+enum NotifLogStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum DownloadCategory {
