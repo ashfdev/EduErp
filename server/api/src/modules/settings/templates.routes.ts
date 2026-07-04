@@ -7,6 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { templateUpload } from "../../middleware/upload";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { DocumentType } from "@education-erp/types";
 
@@ -92,6 +93,7 @@ templatesRouter.put(
       prisma.documentTemplate.updateMany({ where: { doc_type: template.doc_type }, data: { is_active: false } }),
       prisma.documentTemplate.update({ where: { id: reqParam(req, "id") }, data: { is_active: true } }),
     ]);
+    await logAudit("TEMPLATE_ACTIVATE", { userId: req.user!.sub, targetType: "DocumentTemplate", targetId: template.id, metadata: { doc_type: template.doc_type }, req });
     res.json({ success: true, message: "Template activated" });
   }),
 );

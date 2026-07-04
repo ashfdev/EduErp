@@ -13,6 +13,7 @@ import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPro
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
 import { randomBytes } from "node:crypto";
 
@@ -359,6 +360,7 @@ studentsRouter.delete(
     if (student.user_id) {
       await prisma.user.update({ where: { id: student.user_id }, data: { is_active: false } });
     }
+    await logAudit("STUDENT_DELETE", { userId: req.user!.sub, targetType: "Student", targetId: id, req });
     res.status(204).send();
   }),
 );

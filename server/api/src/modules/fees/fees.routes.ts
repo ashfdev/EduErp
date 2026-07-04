@@ -11,6 +11,7 @@ import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, c
 import { calculateLateFee } from "../../utils/late-fee";
 import { getPaymentAdapter } from "../../services/payment";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
 export const feesRouter = Router();
@@ -202,6 +203,7 @@ feesRouter.put(
     const id = reqParam(req, "id");
     const body = waiveInvoiceSchema.parse(req.body);
     const invoice = await prisma.invoice.update({ where: { id }, data: { status: "WAIVED" } });
+    await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "Invoice", targetId: id, metadata: { reason: body.reason }, req });
     res.json({ success: true, data: invoice, message: `Waived: ${body.reason}` });
   }),
 );

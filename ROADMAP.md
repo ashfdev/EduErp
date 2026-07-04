@@ -1097,11 +1097,115 @@ Added retroactively alongside Phase 8B, from `PHASE_8C_INVENTORY.md`.
       environment-crash timeline).
 - [ ] Deferred (flagged, not yet built): no ESLint config anywhere in the monorepo, so lint isn't
       in CI either; no Socket.io server actually stood up despite being in the original tech stack
-      (flagged since Phase 5); no BullMQ-backed PDF queue for bulk document generation; no
-      compression middleware; a handful of routers (`attendanceRouter`, some of `resultsRouter`,
-      `feesRouter`, exam/marks routers) still rely on per-route `authorize()` calls rather than a
-      blanket `STAFF_ONLY_ROLES` gate at the router level (flagged since Phase 15, not a known
-      vulnerability — every sensitive route is individually gated — just an inconsistency in style).
+      (flagged since Phase 5); no BullMQ-backed PDF queue for bulk document generation; a handful
+      of routers (`attendanceRouter`, some of `resultsRouter`, `feesRouter`, exam/marks routers)
+      still rely on per-route `authorize()` calls rather than a blanket `STAFF_ONLY_ROLES` gate at
+      the router level (flagged since Phase 15, not a known vulnerability — every sensitive route
+      is individually gated — just an inconsistency in style). Compression middleware was missing
+      here too — fixed in the Test Playbook Audit pass below.
+
+## Test Playbook Audit — Security, Theme, SEO, Completeness (July 2026)
+
+Ran the scriptable/grep-based checks from `TEST_PLAYBOOK.md` and `TEST_PLAYBOOK_PART2.md` across
+the whole codebase (Master Security Audit, Master One-Command Full Audit, Skip/Completeness Audit,
+Phase-by-phase completeness checks). Genuinely manual-only items (Lighthouse scores, browser
+DevTools contrast checker, PWA install-prompt flow, device-toolbar responsive testing) are **not**
+verifiable in this environment and are called out explicitly below rather than assumed passing.
+
+- [x] **Security** — grep-audited: no `password_hash` in any API response, no wildcard CORS, no
+      hardcoded/short JWT secrets (env-validated at boot, min 32 chars), no unparameterized raw
+      SQL (`$queryRaw` used exactly once, a static `SELECT 1` health check), 234 Zod-validated
+      inputs, Helmet present, rate limiting confirmed on login (5/15min + 1hr ban), forgot-password
+      (3/hr keyed by phone), public endpoints (20/min), content (100/min), and a global default
+      (60/min keyed by user). Payment webhook adapters (bKash/Nagad/SSLCommerz) all throw on
+      `verifyCallback()` rather than trusting an unsigned payload — safe-by-being-stubbed, matching
+      the documented external-credentials deferral.
+- [x] **Real bug found and fixed — CORS fail-open in production**: `app.ts`'s CORS origin fell
+      back to `true` (reflect-any-origin, credentials enabled) whenever `ADMIN_URL`/`PORTAL_URL`/
+      `WEBSITE_URL` were all unset — and all three are `.optional()` in `env.ts`, so a misconfigured
+      production deploy could silently boot with CORS wide open. Fixed: boot now throws if
+      `NODE_ENV=production` and none of the three are set, matching the existing fail-fast pattern
+      for missing JWT secrets. The permissive fallback still applies in dev, unchanged.
+- [x] **Real bug found and fixed — unsanitized stored XSS in `map_embed_code`**: `Notice.body` and
+      `StaticPage.content` are sanitized via `sanitizeHtml()` (DOMPurify) before storage, but
+      `InstitutionProfile.map_embed_code` (a Google Maps iframe snippet) had no sanitization at all
+      despite being rendered via `dangerouslySetInnerHTML` on two public pages (homepage, contact).
+      Added `sanitizeEmbedCode()` (DOMPurify with an iframe allowlist) and applied it on write.
+- [x] **Real gap found and fixed — no audit trail existed anywhere**: the security audit explicitly
+      calls for an `AuditLog` table logging sensitive actions; none existed. Added the model
+      (migration `20260704140000_audit_log`), `lib/audit-log.ts` (`logAudit()`, fire-and-forget,
+      never throws into the caller), wired into login/logout/failed-login, mark-entry submit,
+      result approve/publish, fee waiver, student soft-delete, role change, and template
+      activation. Added `GET /api/settings/audit-log` (ADMIN/IT_ADMIN only) and an admin UI page
+      at `/settings/audit-log`. Live-verified: a real login and a real failed login both produced
+      the correct log rows.
+- [x] Compression middleware was missing (flagged in the Phase 18 section above) — added
+      (`compression()` in `app.ts`).
+- [x] **Real gap found and fixed — no manual staff attendance endpoint existed**: payroll's
+      absence-deduction calculation and the analytics dashboards both already query
+      `AttendanceRecord` rows with `person_type: "STAFF"`, but the only two writers of such rows
+      were the biometric device bridge and leave-approval (which only ever writes `LEAVE` status).
+      An institution with no biometric device for staff had no way to mark staff attendance at
+      all, silently breaking payroll's present-day calculation. Added
+      `POST /api/attendance/staff/mark`, mirroring the existing student `/mark` upsert pattern.
+      Live-verified: marked PRESENT, re-marked the same staff+date as LATE, confirmed the upsert
+      (not a duplicate) via the same unique-constraint pattern as the student endpoint.
+- [x] **Real bug found and fixed — `Exam` was hard-deleted**, violating CLAUDE.md's explicit
+      "never hard-delete student, staff, exam, or result data" rule (the only literal violation
+      found — the ~19 other `prisma.model.delete()` call sites are all Settings/config or website
+      content, not student/staff/exam/result data). Added `Exam.deleted_at` (migration
+      `20260704141500_exam_soft_delete`), the delete route now sets it instead of hard-deleting,
+      and the list query now filters `deleted_at: null`.
+- [x] **Real gap found and fixed — 8 raw `<img>` tags on the public website**, explicitly flagged
+      by both the Website/SEO audit and the Master Audit (`grep "<img "` must return 0). Converted
+      all 8 (navbar logo, faculty/governing-body avatars, gallery grid + lightbox, homepage slider +
+      album cover) to `next/image`, added `images.remotePatterns` to `next.config.mjs` for Azure
+      Blob and the local-upload fallback. Verified via a full `next build` (all pages still
+      generate, First Load JS unchanged).
+- [x] **Real gap found and fixed — zero SEO metadata anywhere on the public website**. All 15
+      website `page.tsx` files are client components (`"use client"`), so none can export
+      `generateMetadata` directly — converting all 15 to a server/client-split pattern was judged
+      too large a refactor for this pass. Instead fixed at the root: `layout.tsx` now has
+      `generateMetadata()` fetching the real institution profile server-side (dynamic title with
+      a `%s | {name}` template, description, OpenGraph, Twitter card, `metadataBase`) plus
+      JSON-LD `EducationalOrganization` structured data — every page now inherits real, correct
+      baseline metadata instead of a hardcoded placeholder. Added `sitemap.ts` (static routes only
+      — see the slug gap below) and `robots.ts` (disallows `/result`, `/api/`, `/admin/`).
+      Live-verified via a production build + serve: title/description/JSON-LD all resolve to the
+      real seeded institution name, `/sitemap.xml` and `/robots.txt` both serve correctly.
+- [ ] **Deferred, explicitly scoped out — slug-based URLs for website content**: the SEO audit's
+      Section A calls for `/notices/{slug}` instead of ID-based URLs. `Notice`/`GalleryAlbum`/
+      `Download` have no `slug` column at all today, and `/notices` doesn't even have a per-notice
+      detail route yet (everything renders inline on one list page). Adding this properly means a
+      schema migration + `slugify` on write + per-content-type detail pages + backfilling the
+      sitemap — a contained but real follow-up feature, not a grep-pass fix, so it's called out
+      here rather than attempted partially.
+- [x] **Real gap found and fixed — no root `.env.example` existed at all**, despite CLAUDE.md
+      explicitly requiring it ("`.env.example` stays up to date"). Each service has its own real
+      `.env` (`packages/db/.env`, `server/api/.env`, `services/device/.env`,
+      `services/notification/.env`) but nothing at the repo root documented the full set for a new
+      environment. Added one, organized by which service loads which variable.
+- [x] Schema/completeness counts checked against the playbook's thresholds: 96 models (≥40 ✅), 54
+      enums (≥25 ✅), 81 audit-timestamp columns (≥30 ✅), 60 indexes (≥20 ✅), 75 settings
+      endpoints (≥40 ✅), 41 website endpoints (≥25 ✅). Soft-delete columns were only 3
+      (Student/Staff/Voucher) before this pass — see the Exam fix above; CLAUDE.md's rule only
+      names student/staff/exam/result data specifically, so this is correct as-is, not a gap.
+- [x] Theme audit (admin panel): 0 `dark:` classes, 0 near-black backgrounds, 0 low-contrast text
+      classes found — clean, matches the light-mode-only spec with no fixes needed.
+- [ ] **Not verifiable in this environment, flagged for manual QA before client handoff**:
+      Lighthouse scores (Performance/Accessibility/Best-Practices/SEO), the browser DevTools
+      accessibility contrast checker, the PWA install-prompt flow and offline-mode toggle on the
+      portal, and responsive layout at 375px/768px/1280px via an actual device toolbar. None of
+      these have a scriptable equivalent — they require a real browser.
+- [x] Full monorepo re-verification after every fix in this pass: `pnpm typecheck` (11/11),
+      `pnpm turbo build` (7/7 buildable packages, admin/portal/website/api all succeed), `vitest
+      run` (52/52 tests: 36 in `@education-erp/api`, 16 in `@education-erp/validators`).
+- Recovered from a recurring Windows-specific pnpm-store corruption (the `next` package's
+  `dist/compiled/jest-worker` or `styled-jsx` intermittently going missing mid-session, most
+  likely real-time antivirus interference rather than anything in this session's own actions,
+  since it recurred even directly after a clean, verified build) three separate times during this
+  pass — each time fixed via `rm -rf` of the specific corrupted package directory in the pnpm
+  store followed by `pnpm install --force`.
 
 ## Phase 19 — Mobile apps (Flutter) — FUTURE, out of scope
 

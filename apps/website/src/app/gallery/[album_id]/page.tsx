@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 import type { GalleryAlbum, GalleryImage } from "@/lib/types";
 
@@ -23,17 +24,17 @@ export default function GalleryAlbumPage() {
 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         {data.images.map((img) => (
-          <button key={img.id} onClick={() => setLightbox(img.image_url)} className="aspect-square overflow-hidden rounded-lg bg-gray-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img.image_url} alt={img.caption ?? ""} className="h-full w-full object-cover transition hover:scale-105" />
+          <button key={img.id} onClick={() => setLightbox(img.image_url)} className="relative aspect-square overflow-hidden rounded-lg bg-gray-100">
+            <Image src={img.image_url} alt={img.caption ?? ""} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover transition hover:scale-105" />
           </button>
         ))}
       </div>
 
       {lightbox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8" onClick={() => setLightbox(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={lightbox} alt="" className="max-h-full max-w-full rounded-lg" />
+          <div className="relative h-[90vh] w-[90vw]">
+            <Image src={lightbox} alt="" fill sizes="90vw" className="rounded-lg object-contain" />
+          </div>
         </div>
       )}
     </main>

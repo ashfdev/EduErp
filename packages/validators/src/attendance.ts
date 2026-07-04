@@ -17,3 +17,15 @@ export const markAttendanceSchema = z.object({
   ),
 });
 export type MarkAttendanceInput = z.infer<typeof markAttendanceSchema>;
+
+export const markStaffAttendanceSchema = z.object({
+  date: z.coerce.date(),
+  records: z.array(
+    z.object({
+      staff_id: z.string().min(1),
+      status: attendanceStatusSchema,
+      override_reason: z.string().optional(),
+    }),
+  ),
+});
+export type MarkStaffAttendanceInput = z.infer<typeof markStaffAttendanceSchema>;

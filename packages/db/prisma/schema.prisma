@@ -609,6 +609,7 @@ model Exam {
   grading_scale_id     String?
   grading_scale        GradingScale?       @relation(fields: [grading_scale_id], references: [id])
   status               ExamStatus          @default(DRAFT)
+  deleted_at           DateTime?
   created_at           DateTime            @default(now())
   updated_at           DateTime            @updatedAt
   subject_configs      ExamSubjectConfig[]
@@ -1676,6 +1677,26 @@ model PushSubscription {
   created_at DateTime @default(now())
 
   @@index([user_id])
+}
+
+// Append-only record of sensitive actions (login/logout, mark entry, result
+// publish, fee waiver, student deletion, role change, template activation).
+// Never updated or deleted — user_id is nullable since a failed login
+// attempt has no authenticated user yet.
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String // e.g. "LOGIN", "RESULT_PUBLISH", "FEE_WAIVE", "STUDENT_DELETE", "ROLE_CHANGE"
+  user_id     String?
+  target_type String? // e.g. "Student", "Invoice", "ResultPublication"
+  target_id   String?
+  metadata    Json?
+  ip_address  String?
+  created_at  DateTime @default(now())
+
+  @@index([action])
+  @@index([user_id])
+  @@index([target_type, target_id])
+  @@index([created_at])
 }
 
 // trigger is nullable because NotificationLog also records plain,

@@ -6,6 +6,7 @@ import { authorize } from "../../middleware/authorize";
 import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { cached } from "../../lib/cache";
+import { sanitizeEmbedCode } from "../../lib/sanitize";
 import { redis } from "../../lib/redis";
 import { SETTINGS_INSTITUTION_ROLES } from "../../lib/roles";
 import { institutionProfileSchema, institutionConfigSchema } from "@education-erp/validators";
@@ -43,6 +44,7 @@ institutionRouter.put(
   authorize(SETTINGS_INSTITUTION_ROLES),
   asyncHandler(async (req, res) => {
     const body = institutionProfileSchema.parse(req.body);
+    if (body.map_embed_code) body.map_embed_code = sanitizeEmbedCode(body.map_embed_code);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: body });
     await redis.del(PROFILE_CACHE_KEY);
     res.json({ success: true, data: profile });

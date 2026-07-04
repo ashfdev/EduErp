@@ -25,7 +25,7 @@ examsRouter.get(
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
     const exams = await prisma.exam.findMany({
-      where: { ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.status && { status: query.status as never }) },
+      where: { deleted_at: null, ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.status && { status: query.status as never }) },
       include: { exam_type_config: true, academic_year: true, subject_configs: true },
       orderBy: { created_at: "desc" },
     });
@@ -109,8 +109,9 @@ examsRouter.delete(
     const existing = await prisma.exam.findUnique({ where: { id } });
     if (!existing) throw notFound("Exam not found");
     if (existing.status !== "DRAFT") throw badRequest("Only DRAFT exams can be deleted");
-    await prisma.examSubjectConfig.deleteMany({ where: { exam_id: id } });
-    await prisma.exam.delete({ where: { id } });
+    // Soft delete, matching Student/Staff — never hard-delete exam data per CLAUDE.md,
+    // even a DRAFT exam with no marks yet, so it stays in the audit trail.
+    await prisma.exam.update({ where: { id }, data: { deleted_at: new Date() } });
     res.status(204).send();
   }),
 );

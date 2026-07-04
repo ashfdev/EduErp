@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 
 interface FacultyMember {
@@ -29,11 +30,8 @@ export default function FacultyPage() {
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {grouped[dept]!.map((m) => (
               <div key={m.id} className="rounded-lg border p-4 text-center">
-                <div className="mx-auto mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-100">
-                  {m.photo_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.photo_url} alt={m.name_en} className="h-full w-full object-cover" />
-                  )}
+                <div className="relative mx-auto mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-100">
+                  {m.photo_url && <Image src={m.photo_url} alt={m.name_en} fill sizes="80px" className="object-cover" />}
                 </div>
                 <p className="text-sm font-medium">{m.name_en}</p>
                 <p className="text-xs text-gray-500">{m.designation}</p>

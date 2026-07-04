@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import pinoHttp from "pino-http";
 import { env } from "./lib/env";
 import { logger } from "./lib/logger";
@@ -37,15 +38,25 @@ import { internalRouter } from "./routes/internal";
 
 const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL].filter((url): url is string => !!url);
 
+if (env.NODE_ENV === "production" && ALLOWED_ORIGINS.length === 0) {
+  // Never fall back to allow-all-with-credentials in production — that
+  // reflects any origin back with credentials enabled, defeating CORS
+  // entirely. Fail fast at boot instead, same as a missing JWT secret.
+  throw new Error("ADMIN_URL, PORTAL_URL, and WEBSITE_URL are all unset in production — refusing to start with an open CORS policy.");
+}
+
 export function createApp(): Express {
   const app = express();
 
   app.use(requestId);
   app.use(helmet());
+  app.use(compression());
   app.use(
     cors({
-      // Falls back to allow-all only when no app URLs are configured at all
-      // (e.g. a bare `pnpm dev` with no .env) so local dev never silently 403s.
+      // Falls back to allow-all only in non-production when no app URLs are
+      // configured at all (e.g. a bare `pnpm dev` with no .env) so local dev
+      // never silently 403s. Production always has ALLOWED_ORIGINS set —
+      // enforced by the boot-time check above.
       origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true,
       credentials: true,
     }),

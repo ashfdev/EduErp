@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 import type { Institution, Slider, Notice, GalleryAlbum, EventItem, AdmissionCycleSummary } from "@/lib/types";
 
@@ -40,8 +41,7 @@ export default function HomePage() {
         <section className="relative h-[360px] w-full overflow-hidden bg-gray-200 md:h-[440px]">
           {sliders.map((s, i) => (
             <div key={s.id} className={`absolute inset-0 transition-opacity duration-700 ${i === slideIndex ? "opacity-100" : "opacity-0"}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.image_url} alt={s.title ?? ""} className="h-full w-full object-cover" />
+              <Image src={s.image_url} alt={s.title ?? ""} fill sizes="100vw" priority={i === 0} className="object-cover" />
               <div className="absolute inset-0 flex flex-col items-start justify-end bg-black/30 p-8 text-white">
                 {s.title && <h2 className="text-3xl font-bold">{s.title}</h2>}
                 {s.subtitle && <p className="mt-1 max-w-xl">{s.subtitle}</p>}
@@ -126,10 +126,9 @@ export default function HomePage() {
         {latestAlbum && (
           <section>
             <h2 className="mb-3 text-xl font-semibold">Photo Gallery</h2>
-            <Link href={`/gallery/${latestAlbum.id}`}>
+            <Link href={`/gallery/${latestAlbum.id}`} className="relative block h-48 w-full overflow-hidden rounded-lg">
               {latestAlbum.cover_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={latestAlbum.cover_url} alt={latestAlbum.name} className="h-48 w-full rounded-lg object-cover" />
+                <Image src={latestAlbum.cover_url} alt={latestAlbum.name} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
               )}
             </Link>
             <Link href="/gallery" className="mt-2 inline-block text-sm text-blue-600 hover:underline">View Gallery →</Link>

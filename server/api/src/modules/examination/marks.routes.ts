@@ -10,6 +10,7 @@ import { submitMarksSchema } from "@education-erp/validators";
 import { calculateGrade } from "../../utils/grading.engine";
 import { computeClassResults } from "../results/results.routes";
 import { sendNotification } from "../../services/notification.service";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const marksRouter = Router();
@@ -137,6 +138,7 @@ marksRouter.post(
       });
     }
 
+    await logAudit("MARK_ENTRY_SUBMIT", { userId: req.user!.sub, targetType: "Exam", targetId: body.exam_id, metadata: { entry_count: body.entries.length }, req });
     res.json({ success: true, message: `Submitted ${body.entries.length} mark entries` });
   }),
 );
@@ -164,6 +166,7 @@ marksRouter.post(
       where: { id: { in: entries.map((e) => e.id) } },
       data: { status: "APPROVED", approved_by_id: req.user!.sub, approved_at: new Date() },
     });
+    await logAudit("RESULT_APPROVE", { userId: req.user!.sub, targetType: "Exam", targetId: examId, metadata: { approved: entries.length }, req });
 
     res.json({ success: true, data: { approved: entries.length } });
   }),
@@ -188,6 +191,7 @@ marksRouter.post(
       create: { exam_id: examId, class_id: classId, is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
       update: { is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
     });
+    await logAudit("RESULT_PUBLISH", { userId: req.user!.sub, targetType: "ResultPublication", targetId: publication.id, metadata: { exam_id: examId, class_id: classId, is_public: body.is_public ?? false }, req });
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     const perStudent = await computeClassResults(examId, classId);

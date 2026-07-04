@@ -762,6 +762,9 @@ GOOGLE_FONTS_KEY=""
 ✅ Comment complex business logic (grading engine, ID generation)
 ✅ Write unit tests for: grading engine, ID generator, fee calculator
 ✅ .env.example stays up to date
+✅ Sensitive actions logged via logAudit() (lib/audit-log.ts) — login/logout,
+   mark entry submit, result approve/publish, fee waiver, student delete,
+   role change, template activate. Never throws into the caller.
 ❌ No hardcoded institution-specific values anywhere in code
 ❌ No synchronous file I/O
 ❌ No unhandled promise rejections

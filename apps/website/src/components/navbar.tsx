@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import type { Institution } from "@/lib/types";
 
 const LINKS = [
@@ -23,8 +24,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-2">
           {institution?.logo_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={institution.logo_url} alt="logo" className="h-10 w-10 rounded object-contain" />
+            <Image src={institution.logo_url} alt="logo" width={40} height={40} className="h-10 w-10 rounded object-contain" priority />
           )}
           <div>
             <p className="font-semibold" style={{ color: "var(--primary)" }}>{institution?.name_en ?? "Institution"}</p>

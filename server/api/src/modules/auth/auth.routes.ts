@@ -10,6 +10,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib
 import { unauthorized, badRequest, notFound } from "../../lib/errors";
 import { sendSms } from "../../services/sms.service";
 import { loginLimiter, loginBanGuard, forgotPasswordLimiter } from "../../middleware/rate-limit";
+import { logAudit } from "../../lib/audit-log";
 import {
   loginSchema,
   changePasswordSchema,
@@ -46,17 +47,24 @@ authRouter.post(
         user = await prisma.user.findUnique({ where: { id: student.user_id } });
       }
     }
-    if (!user) throw unauthorized("Invalid credentials");
+    if (!user) {
+      await logAudit("LOGIN_FAILED", { metadata: { identifier: body.identifier }, req });
+      throw unauthorized("Invalid credentials");
+    }
     if (!user.is_active) throw unauthorized("Account disabled — contact admin");
 
     const validPassword = await bcrypt.compare(body.password, user.password_hash);
-    if (!validPassword) throw unauthorized("Invalid credentials");
+    if (!validPassword) {
+      await logAudit("LOGIN_FAILED", { userId: user.id, metadata: { identifier: body.identifier }, req });
+      throw unauthorized("Invalid credentials");
+    }
 
     const access_token = signAccessToken({ sub: user.id, role: user.role, portal: body.portal });
     const refresh_token = signRefreshToken({ sub: user.id });
     await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
 
     await prisma.user.update({ where: { id: user.id }, data: { last_login_at: new Date() } });
+    await logAudit("LOGIN", { userId: user.id, req });
 
     res.json({ success: true, data: { access_token, refresh_token, user: publicUser(user) } });
   }),
@@ -93,7 +101,9 @@ authRouter.post(
   "/logout",
   asyncHandler(async (req, res) => {
     const body = z.object({ refresh_token: z.string().min(1) }).parse(req.body);
+    const userId = await redis.get(`refresh:${body.refresh_token}`);
     await redis.del(`refresh:${body.refresh_token}`);
+    if (userId) await logAudit("LOGOUT", { userId, req });
     res.status(204).send();
   }),
 );

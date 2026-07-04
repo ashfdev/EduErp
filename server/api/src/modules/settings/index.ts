@@ -10,6 +10,7 @@ import { templatesRouter } from "./templates.routes";
 import { notificationsRouter } from "./notifications.routes";
 import { academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter } from "./academic.routes";
 import { usersRouter } from "./users.routes";
+import { auditLogRouter } from "./audit-log.routes";
 
 export const settingsRouter = Router();
 
@@ -30,3 +31,4 @@ settingsRouter.use("/departments", departmentsRouter);
 settingsRouter.use("/classes", classesRouter);
 settingsRouter.use("/sections", sectionsRouter);
 settingsRouter.use("/users", usersRouter);
+settingsRouter.use("/audit-log", auditLogRouter);

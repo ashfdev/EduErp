@@ -10,6 +10,7 @@ import { authorize } from "../../middleware/authorize";
 import { SETTINGS_USERS_ROLES } from "../../lib/roles";
 import { createUserSchema } from "@education-erp/validators";
 import { sendSms } from "../../services/sms.service";
+import { logAudit } from "../../lib/audit-log";
 import { conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
 
@@ -89,11 +90,13 @@ usersRouter.put(
   "/:id",
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
+    const targetId = reqParam(req, "id");
     const body = z.object({ role: z.nativeEnum(UserRole).optional(), is_active: z.boolean().optional() }).parse(req.body);
     const user = await prisma.user.update({
-      where: { id: reqParam(req, "id") },
+      where: { id: targetId },
       data: { role: body.role, is_active: body.is_active },
     });
+    if (body.role) await logAudit("ROLE_CHANGE", { userId: req.user!.sub, targetType: "User", targetId, metadata: { new_role: body.role }, req });
     res.json({ success: true, data: user });
   }),
 );

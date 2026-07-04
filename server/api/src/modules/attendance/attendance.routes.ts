@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { ATTENDANCE_MARK_ROLES } from "../../lib/roles";
-import { markAttendanceSchema } from "@education-erp/validators";
+import { markAttendanceSchema, markStaffAttendanceSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
 import { badRequest } from "../../lib/errors";
 
@@ -111,6 +111,47 @@ attendanceRouter.post(
     }
 
     res.json({ success: true, data: { saved, conflicts } });
+  }),
+);
+
+// Manual staff attendance — the only other writers of a STAFF AttendanceRecord
+// are the biometric device bridge and leave-approval (LEAVE status only), so
+// an institution with no biometric device for staff had no way to mark it.
+attendanceRouter.post(
+  "/staff/mark",
+  authorize(ATTENDANCE_MARK_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = markStaffAttendanceSchema.parse(req.body);
+    const date = startOfDay(body.date);
+
+    let saved = 0;
+    for (const record of body.records) {
+      const existing = await prisma.attendanceRecord.findFirst({
+        where: { person_id: record.staff_id, person_type: "STAFF", date, shift_id: null, period_no: null },
+      });
+
+      if (existing) {
+        await prisma.attendanceRecord.update({
+          where: { id: existing.id },
+          data: { status: record.status, source: "MANUAL", override_reason: record.override_reason, marked_by_id: req.user!.sub },
+        });
+      } else {
+        await prisma.attendanceRecord.create({
+          data: {
+            person_id: record.staff_id,
+            person_type: "STAFF",
+            date,
+            status: record.status,
+            source: "MANUAL",
+            marked_by_id: req.user!.sub,
+            override_reason: record.override_reason,
+          },
+        });
+      }
+      saved++;
+    }
+
+    res.json({ success: true, data: { saved } });
   }),
 );
 
