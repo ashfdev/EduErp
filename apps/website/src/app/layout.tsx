@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { Inter, Noto_Sans_Bengali } from "next/font/google";
 import "./globals.css";
 import { SiteChrome } from "@/components/site-chrome";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const notoBengali = Noto_Sans_Bengali({ subsets: ["bengali"], variable: "--font-noto-bengali", display: "swap" });
 import { fetchContent } from "@/lib/content-api";
 import type { Institution } from "@/lib/types";
 
@@ -39,8 +43,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="en" className={`${inter.variable} ${notoBengali.variable}`}>
+      <body className="font-sans antialiased">
         {/* eslint-disable-next-line react/no-danger */}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <SiteChrome>{children}</SiteChrome>

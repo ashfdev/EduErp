@@ -5,7 +5,15 @@ export const tailwindBase: Partial<Config> = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "Noto Sans Bengali", "sans-serif"],
+        // Populated by next/font/google in each app's root layout — never
+        // reference the bare family names "Inter"/"Noto Sans Bengali" here.
+        // Those aren't loaded as web fonts unless self-hosted via next/font,
+        // and a same-named font already installed locally on a visitor's OS
+        // (an icon font, a corrupted font, anything) silently wins instead —
+        // this is exactly what happened before this fix: the whole UI
+        // rendered in icon glyphs because a different "Inter" was already
+        // registered on the machine that loaded it.
+        sans: ["var(--font-inter)", "var(--font-noto-bengali)", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
