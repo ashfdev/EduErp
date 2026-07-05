@@ -7,6 +7,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   COMPLETED: "success",
   PUBLISHED: "success",
   SENT: "success",
+  PASSED: "success",
   PENDING: "warning",
   DRAFT: "secondary",
   SUBMITTED: "warning",

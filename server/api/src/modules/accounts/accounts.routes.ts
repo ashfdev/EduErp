@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
+import { parse } from "csv-parse/sync";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
+import { csvUpload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
 import { ACCOUNTS_MANAGE_ROLES } from "../../lib/roles";
 import { accountSchema, financialYearSchema } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
+
+// CSV/JSON booleans arrive as strings ("true"/""/"TRUE") from a spreadsheet,
+// not real booleans — z.coerce.boolean() would wrongly treat "false" as
+// truthy (any non-empty string coerces to true), so this parses explicitly.
+const csvBoolean = z.preprocess((v) => v === true || v === "true" || v === "TRUE" || v === "1", z.boolean());
 
 export const accountsRouter = Router();
 accountsRouter.use(authenticate);
@@ -57,6 +65,135 @@ accountsRouter.get(
     );
 
     res.json({ success: true, data: groupsWithBalances });
+  }),
+);
+
+accountsRouter.get(
+  "/chart/export",
+  asyncHandler(async (_req, res) => {
+    const accounts = await prisma.account.findMany({ include: { account_group: true }, orderBy: { code: "asc" } });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Chart of Accounts");
+    sheet.columns = [
+      { header: "Code", key: "code", width: 12 },
+      { header: "Name", key: "name", width: 30 },
+      { header: "Name (Bangla)", key: "name_bn", width: 20 },
+      { header: "Account Group", key: "account_group", width: 20 },
+      { header: "Account Nature", key: "account_nature", width: 16 },
+      { header: "Opening Balance", key: "opening_balance", width: 16 },
+      { header: "Opening Balance Type", key: "opening_balance_type", width: 14 },
+      { header: "Is Bank Account", key: "is_bank_account", width: 14 },
+      { header: "Is Cash Account", key: "is_cash_account", width: 14 },
+      { header: "Active", key: "is_active", width: 10 },
+    ];
+    for (const a of accounts) {
+      sheet.addRow({
+        code: a.code,
+        name: a.name,
+        name_bn: a.name_bn ?? "",
+        account_group: a.account_group.name,
+        account_nature: a.account_nature,
+        opening_balance: a.opening_balance,
+        opening_balance_type: a.opening_balance_type,
+        is_bank_account: a.is_bank_account,
+        is_cash_account: a.is_cash_account,
+        is_active: a.is_active,
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="Chart_of_Accounts.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  }),
+);
+
+accountsRouter.post(
+  "/chart/bulk-import",
+  authorize(ACCOUNTS_MANAGE_ROLES),
+  csvUpload.single("file"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A CSV file is required");
+    const records: Record<string, string>[] = parse(req.file.buffer.toString("utf-8"), {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+
+    const groups = await prisma.accountGroup.findMany();
+    const groupByName = new Map(groups.map((g) => [g.name.toLowerCase(), g]));
+    const existingCodes = new Set((await prisma.account.findMany({ select: { code: true } })).map((a) => a.code));
+    const seenInFile = new Set<string>();
+
+    const preview = records.map((row, index) => {
+      const errors: string[] = [];
+      const group = row.account_group ? groupByName.get(row.account_group.trim().toLowerCase()) : undefined;
+
+      if (!row.code) errors.push("code is required");
+      if (!row.name) errors.push("name is required");
+      if (!row.account_group) errors.push("account_group is required");
+      else if (!group) errors.push(`account_group "${row.account_group}" does not match any existing group`);
+      if (!row.account_nature || !["DEBIT_NORMAL", "CREDIT_NORMAL"].includes(row.account_nature)) {
+        errors.push("account_nature must be DEBIT_NORMAL or CREDIT_NORMAL");
+      }
+      if (row.code) {
+        if (SYSTEM_RESERVED_CODES.includes(row.code)) errors.push("code is reserved for a system account");
+        if (existingCodes.has(row.code)) errors.push("an account with this code already exists");
+        if (seenInFile.has(row.code)) errors.push("duplicate code within this file");
+        seenInFile.add(row.code);
+      }
+
+      return {
+        row: index + 1,
+        data: { ...row, account_group_id: group?.id },
+        valid: errors.length === 0,
+        errors,
+      };
+    });
+
+    res.json({ success: true, data: { total: preview.length, valid: preview.filter((p) => p.valid).length, preview } });
+  }),
+);
+
+accountsRouter.post(
+  "/chart/bulk-import/confirm",
+  authorize(ACCOUNTS_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        rows: z.array(
+          z.object({
+            code: z.string().min(1),
+            name: z.string().min(1),
+            name_bn: z.string().optional(),
+            account_group_id: z.string().min(1),
+            account_nature: z.enum(["DEBIT_NORMAL", "CREDIT_NORMAL"]),
+            opening_balance: z.coerce.number().default(0),
+            opening_balance_type: z.enum(["DEBIT", "CREDIT"]).default("DEBIT"),
+            is_bank_account: csvBoolean.default(false),
+            is_cash_account: csvBoolean.default(false),
+          }),
+        ),
+      })
+      .parse(req.body);
+
+    const created: string[] = [];
+    const failed: { row: number; reason: string }[] = [];
+
+    for (const [index, row] of body.rows.entries()) {
+      try {
+        if (SYSTEM_RESERVED_CODES.includes(row.code)) throw new Error("code is reserved for a system account");
+        const existing = await prisma.account.findUnique({ where: { code: row.code } });
+        if (existing) throw new Error("An account with this code already exists");
+        const account = await prisma.account.create({ data: row });
+        created.push(account.code);
+      } catch (err) {
+        failed.push({ row: index + 1, reason: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+
+    res.json({ success: true, data: { created: created.length, failed } });
   }),
 );
 

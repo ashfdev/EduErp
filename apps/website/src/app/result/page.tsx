@@ -54,14 +54,20 @@ export default function ResultLookupPage() {
       <h1 className="mb-2 text-2xl font-semibold">Result Lookup</h1>
       <p className="mb-6 text-sm text-gray-600">Search for a published exam result using your Student ID, or your Roll and Registration numbers.</p>
 
-      <div className="mb-4 flex gap-4 text-sm">
+      <div className="mb-1 flex gap-4 text-sm">
         <label className="flex items-center gap-1">
-          <input type="radio" checked={mode === "uid"} onChange={() => setMode("uid")} /> Student ID
+          <input type="radio" checked={mode === "uid"} onChange={() => setMode("uid")} /> Student ID <span className="text-xs font-medium text-green-700">(Recommended)</span>
         </label>
         <label className="flex items-center gap-1">
           <input type="radio" checked={mode === "roll"} onChange={() => setMode("roll")} /> Roll + Registration No
         </label>
       </div>
+      {mode === "roll" && (
+        <p className="mb-3 text-xs text-amber-700">
+          This mode only works if a Registration No was recorded for the student. If your search returns nothing, try Student ID instead.
+        </p>
+      )}
+      {mode === "uid" && <div className="mb-3" />}
 
       <form onSubmit={search} className="space-y-3">
         {mode === "uid" ? (

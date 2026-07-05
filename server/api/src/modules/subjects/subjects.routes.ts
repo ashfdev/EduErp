@@ -24,6 +24,22 @@ subjectsRouter.get(
   }),
 );
 
+// Same-name subjects (different codes) render as visually-identical, confusing
+// duplicate columns everywhere the subject list is used (mark entry, exam
+// config) even though they're technically distinct rows — only (class_id,
+// code) is unique at the DB level, so this is enforced here instead.
+async function assertNoDuplicateName(classId: string, nameEn: string, excludeId?: string) {
+  const clash = await prisma.subject.findFirst({
+    where: {
+      class_id: classId,
+      is_active: true,
+      name_en: { equals: nameEn, mode: "insensitive" },
+      ...(excludeId && { id: { not: excludeId } }),
+    },
+  });
+  if (clash) throw conflict("A subject with this name already exists in this class");
+}
+
 subjectsRouter.post(
   "/",
   authorize(SETTINGS_ACADEMIC_ROLES),
@@ -31,6 +47,7 @@ subjectsRouter.post(
     const body = subjectSchema.parse(req.body);
     const existing = await prisma.subject.findUnique({ where: { class_id_code: { class_id: body.class_id, code: body.code } } });
     if (existing) throw conflict("A subject with this code already exists in this class");
+    await assertNoDuplicateName(body.class_id, body.name_en);
 
     const subject = await prisma.subject.create({ data: body });
     res.status(201).json({ success: true, data: subject });
@@ -55,6 +72,10 @@ subjectsRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = subjectSchema.partial().parse(req.body);
+    if (body.name_en) {
+      const existing = await prisma.subject.findUniqueOrThrow({ where: { id } });
+      await assertNoDuplicateName(body.class_id ?? existing.class_id, body.name_en, id);
+    }
     const subject = await prisma.subject.update({ where: { id }, data: body });
     res.json({ success: true, data: subject });
   }),

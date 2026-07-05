@@ -27,7 +27,7 @@ export default function MarkEntryGridPage() {
     queryFn: async () => (await api.get(`/api/marks/${exam_id}/${class_id}/${section_id}`)).data.data,
   });
 
-  const [edits, setEdits] = useState<Record<string, { marks_theory?: number; is_absent?: boolean }>>({});
+  const [edits, setEdits] = useState<Record<string, { marks_theory?: number; marks_practical?: number; is_absent?: boolean }>>({});
 
   function key(studentId: string, subjectId: string) {
     return `${studentId}:${subjectId}`;
@@ -37,14 +37,26 @@ export default function MarkEntryGridPage() {
     const k = key(studentId, subjectId);
     if (edits[k]) return edits[k];
     const existing = data?.students.find((s) => s.id === studentId)?.marks[subjectId];
-    return { marks_theory: existing?.marks_theory ?? undefined, is_absent: existing?.is_absent ?? false };
+    return {
+      marks_theory: existing?.marks_theory ?? undefined,
+      marks_practical: existing?.marks_practical ?? undefined,
+      is_absent: existing?.is_absent ?? false,
+    };
+  }
+
+  // An empty box must stay empty, not snap to 0 — Number("") === 0, so it's
+  // treated as "not entered yet" (undefined) instead of coercing on every keystroke.
+  function parseMarkInput(raw: string): number | undefined {
+    if (raw === "") return undefined;
+    const n = Number(raw);
+    return Number.isNaN(n) ? undefined : n;
   }
 
   const submitMutation = useMutation({
     mutationFn: () => {
       const entries = Object.entries(edits).map(([k, v]) => {
         const [student_id, subject_id] = k.split(":");
-        return { student_id, subject_id, marks_theory: v.marks_theory, is_absent: v.is_absent };
+        return { student_id, subject_id, marks_theory: v.marks_theory, marks_practical: v.marks_practical, is_absent: v.is_absent };
       });
       return api.post("/api/marks/submit", { exam_id, entries });
     },
@@ -80,7 +92,15 @@ export default function MarkEntryGridPage() {
                   <th className="p-2">Roll</th>
                   <th className="p-2">Name</th>
                   {data.subjects.map((s) => (
-                    <th key={s.id} className="p-2">{s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span></th>
+                    <th key={s.id} className="p-2">
+                      {s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span>
+                      {!!s.config?.full_marks_practical && (
+                        <div className="flex gap-1 text-[10px] font-normal normal-case text-muted-foreground">
+                          <span className="w-16">Theory/{s.config.full_marks_theory}</span>
+                          <span className="w-16">Practical/{s.config.full_marks_practical}</span>
+                        </div>
+                      )}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -96,11 +116,30 @@ export default function MarkEntryGridPage() {
                           <div className="flex items-center gap-1">
                             <Input
                               type="number"
-                              className="h-8 w-20"
+                              min={0}
+                              max={s.config?.full_marks_theory}
+                              title={s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
+                              className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                               disabled={v.is_absent}
                               value={v.marks_theory ?? ""}
-                              onChange={(e) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: Number(e.target.value) } }))}
+                              onChange={(e) =>
+                                setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
+                              }
                             />
+                            {!!s.config?.full_marks_practical && (
+                              <Input
+                                type="number"
+                                min={0}
+                                max={s.config.full_marks_practical}
+                                title={`Practical, out of ${s.config.full_marks_practical}`}
+                                className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                disabled={v.is_absent}
+                                value={v.marks_practical ?? ""}
+                                onChange={(e) =>
+                                  setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
+                                }
+                              />
+                            )}
                             <label className="flex items-center gap-1 text-xs">
                               <Checkbox
                                 checked={v.is_absent ?? false}

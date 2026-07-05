@@ -28,6 +28,17 @@ interface SubjectAnalysis {
   average_marks: number;
 }
 
+interface StudentResult {
+  student_id: string;
+  student_uid: string;
+  name_en: string;
+  roll_no: string | null;
+  total_gpa: number;
+  overall_grade: string | null;
+  has_failed: boolean;
+  position: number | null;
+}
+
 export default function ExamResultsPage() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const [classId, setClassId] = useState("");
@@ -49,6 +60,12 @@ export default function ExamResultsPage() {
     enabled: !!classId,
   });
 
+  const { data: allStudents } = useQuery<StudentResult[]>({
+    queryKey: ["results", "exam", exam_id, classId],
+    queryFn: async () => (await api.get(`/api/results/exam/${exam_id}`, { params: { class_id: classId } })).data.data,
+    enabled: !!classId,
+  });
+
   return (
     <PageWrapper>
       <PageHeader title="Exam Results" breadcrumbs={[{ label: "Results", href: "/results" }, { label: "Detail" }]} />
@@ -59,11 +76,46 @@ export default function ExamResultsPage() {
       </select>
 
       {classId && (
-        <Tabs defaultValue="merit">
+        <Tabs defaultValue="all">
           <TabsList>
+            <TabsTrigger value="all">All Students</TabsTrigger>
             <TabsTrigger value="merit">Merit List</TabsTrigger>
             <TabsTrigger value="analysis">Subject Analysis</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="all">
+            {!allStudents?.length && <EmptyState title="No results yet" description="Marks may not be entered or approved for this class yet." />}
+            {!!allStudents?.length && (
+              <Card>
+                <CardContent className="pt-6">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="p-2">Position</th>
+                        <th className="p-2">Roll</th>
+                        <th className="p-2">Name</th>
+                        <th className="p-2">GPA</th>
+                        <th className="p-2">Grade</th>
+                        <th className="p-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allStudents.map((s) => (
+                        <tr key={s.student_id} className="border-b">
+                          <td className="p-2">{s.has_failed ? "—" : s.position}</td>
+                          <td className="p-2">{s.roll_no}</td>
+                          <td className="p-2">{s.name_en}</td>
+                          <td className="p-2">{s.total_gpa}</td>
+                          <td className="p-2">{s.overall_grade}</td>
+                          <td className="p-2"><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
           <TabsContent value="merit">
             {!merit?.length && <EmptyState title="No merit list yet" description="All students may have failed, or results aren't approved." />}

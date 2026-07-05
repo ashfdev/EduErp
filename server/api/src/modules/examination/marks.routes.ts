@@ -37,8 +37,18 @@ marksRouter.get(
       subjectIds = assignments.map((a) => a.subject_id);
     }
 
-    const subjects = await prisma.subject.findMany({
+    const rawSubjects = await prisma.subject.findMany({
       where: { class_id: classId, is_active: true, ...(subjectIds && { id: { in: subjectIds } }) },
+    });
+    // Defensive: two active subject rows can share a display name (only
+    // (class_id, code) is unique), which would otherwise render as two
+    // visually-identical columns in the grid below.
+    const seenNames = new Set<string>();
+    const subjects = rawSubjects.filter((s) => {
+      const k = s.name_en.trim().toLowerCase();
+      if (seenNames.has(k)) return false;
+      seenNames.add(k);
+      return true;
     });
 
     const students = await prisma.student.findMany({
@@ -172,6 +182,19 @@ marksRouter.post(
   }),
 );
 
+marksRouter.get(
+  "/publish-status/:exam_id",
+  authorize(RESULT_PUBLISH_ROLES),
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const publications = await prisma.resultPublication.findMany({ where: { exam_id: examId } });
+    res.json({
+      success: true,
+      data: publications.map((p) => ({ class_id: p.class_id, is_published: p.is_published, is_public: p.is_public, published_at: p.published_at })),
+    });
+  }),
+);
+
 marksRouter.post(
   "/publish/:exam_id/:class_id",
   authorize(RESULT_PUBLISH_ROLES),
@@ -179,6 +202,10 @@ marksRouter.post(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const body = z.object({ is_public: z.boolean().optional() }).parse(req.body);
+    // "Public on website" defaults ON — staff can already see the result
+    // regardless of this flag, so the more common mistake is publishing and
+    // assuming the public site updated too, not accidentally exposing it.
+    const isPublic = body.is_public ?? true;
 
     const subjects = await prisma.subject.findMany({ where: { class_id: classId } });
     const unapproved = await prisma.markEntry.findFirst({
@@ -188,10 +215,23 @@ marksRouter.post(
 
     const publication = await prisma.resultPublication.upsert({
       where: { exam_id_class_id: { exam_id: examId, class_id: classId } },
-      create: { exam_id: examId, class_id: classId, is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
-      update: { is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: body.is_public ?? false },
+      create: { exam_id: examId, class_id: classId, is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: isPublic },
+      update: { is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: isPublic },
     });
-    await logAudit("RESULT_PUBLISH", { userId: req.user!.sub, targetType: "ResultPublication", targetId: publication.id, metadata: { exam_id: examId, class_id: classId, is_public: body.is_public ?? false }, req });
+    await logAudit("RESULT_PUBLISH", { userId: req.user!.sub, targetType: "ResultPublication", targetId: publication.id, metadata: { exam_id: examId, class_id: classId, is_public: isPublic }, req });
+
+    // An exam can span multiple classes (via ExamSubjectConfig) — only flip
+    // Exam.status to PUBLISHED once every one of those classes has actually
+    // been published, so it isn't misleadingly marked done after just one.
+    const examClassIds = await prisma.subject
+      .findMany({ where: { exam_subject_configs: { some: { exam_id: examId } } }, select: { class_id: true }, distinct: ["class_id"] })
+      .then((rows) => [...new Set(rows.map((r) => r.class_id))]);
+    const publishedClassIds = await prisma.resultPublication
+      .findMany({ where: { exam_id: examId, is_published: true, class_id: { in: examClassIds } }, select: { class_id: true } })
+      .then((rows) => new Set(rows.map((r) => r.class_id)));
+    if (examClassIds.length > 0 && examClassIds.every((id) => publishedClassIds.has(id))) {
+      await prisma.exam.update({ where: { id: examId }, data: { status: "PUBLISHED" } });
+    }
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     const perStudent = await computeClassResults(examId, classId);

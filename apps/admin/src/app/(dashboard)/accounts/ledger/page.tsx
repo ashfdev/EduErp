@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -46,6 +46,18 @@ export default function LedgerPage() {
     enabled: !!accountId,
   });
 
+  async function exportLedger() {
+    const res = await api.get(`/api/accounts/ledger/${accountId}/export`, {
+      params: { from_date: fromDate || undefined, to_date: toDate || undefined },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Ledger_${ledger?.account.code ?? accountId}.xlsx`;
+    a.click();
+  }
+
   return (
     <PageWrapper>
       <PageHeader title="Ledger" breadcrumbs={[{ label: "Accounts" }, { label: "Ledger" }]} />
@@ -63,6 +75,7 @@ export default function LedgerPage() {
           </div>
           <div className="space-y-1.5"><Label className="text-xs">From</Label><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></div>
           <div className="space-y-1.5"><Label className="text-xs">To</Label><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></div>
+          <Button variant="outline" disabled={!accountId} onClick={exportLedger}>Export</Button>
         </CardContent>
       </Card>
 

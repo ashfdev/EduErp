@@ -52,7 +52,25 @@ export default function ChartOfAccountsPage() {
       <PageHeader
         title="Chart of Accounts"
         breadcrumbs={[{ label: "Accounts" }, { label: "Chart of Accounts" }]}
-        action={<Button size="sm" onClick={() => setShowNew(true)}>+ Add Account</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const res = await api.get("/api/accounts/chart/export", { responseType: "blob" });
+                const url = URL.createObjectURL(res.data);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "Chart_of_Accounts.xlsx";
+                a.click();
+              }}
+            >
+              Export
+            </Button>
+            <Button size="sm" onClick={() => setShowNew(true)}>+ Add Account</Button>
+          </div>
+        }
       />
 
       <div className="space-y-4">

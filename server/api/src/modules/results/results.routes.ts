@@ -123,9 +123,20 @@ resultsRouter.get(
       });
       if (!student) return { found: false };
 
-      const publications = await prisma.resultPublication.findMany({
-        where: { is_published: true, is_public: true, class_id: student.current_class_id ?? undefined, ...(query.exam_id && { exam_id: query.exam_id }) },
+      // A student's class at the time of an exam may differ from their
+      // current class if they've since been promoted — resolve per-exam via
+      // StudentAcademicHistory instead of always trusting current_class_id,
+      // otherwise a promoted student's older published result "disappears".
+      const histories = await prisma.studentAcademicHistory.findMany({ where: { student_id: student.id } });
+      const classForYear = new Map(histories.map((h) => [h.academic_year_id, h.class_id]));
+
+      const candidatePublications = await prisma.resultPublication.findMany({
+        where: { is_published: true, is_public: true, ...(query.exam_id && { exam_id: query.exam_id }) },
         include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
+      });
+      const publications = candidatePublications.filter((pub) => {
+        const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
+        return resolvedClassId === pub.class_id;
       });
 
       const results = [];

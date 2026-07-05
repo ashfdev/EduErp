@@ -59,6 +59,7 @@ export default function AccountsDashboardPage() {
             <Link href="/accounts/chart"><Button variant="outline" size="sm">Chart of Accounts</Button></Link>
             <Link href="/accounts/ledger"><Button variant="outline" size="sm">Ledger</Button></Link>
             <Link href="/accounts/reports"><Button variant="outline" size="sm">Reports</Button></Link>
+            <Link href="/accounts/import-export"><Button variant="outline" size="sm">Import / Export</Button></Link>
             <Link href="/accounts/vouchers/new"><Button size="sm">+ New Voucher</Button></Link>
           </div>
         }
