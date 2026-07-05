@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -24,8 +25,14 @@ import { api } from "@/lib/api";
 const DOC_TYPES = [
   "STUDENT_ID_CARD", "STAFF_ID_CARD", "ADMIT_CARD", "REGISTRATION_CARD", "MARKSHEET", "REPORT_CARD",
   "TABULATION_SHEET", "TESTIMONIAL", "TRANSFER_CERTIFICATE", "ATTENDANCE_SHEET", "ATTENDANCE_BLANK",
-  "FEE_RECEIPT", "PAYSLIP", "SYLLABUS", "MERIT_LIST",
+  "FEE_RECEIPT", "PAYSLIP", "SYLLABUS", "MERIT_LIST", "CERTIFICATE", "TRANSPORT_CARD", "HOSTEL_CARD",
 ];
+
+// Doc types the drag-and-drop visual designer supports — every other type
+// stays hand-authored-HTML-only (marksheet, payslip, TC, etc.).
+const VISUAL_DOC_TYPES = new Set([
+  "STUDENT_ID_CARD", "STAFF_ID_CARD", "TRANSPORT_CARD", "HOSTEL_CARD", "CERTIFICATE", "TESTIMONIAL", "REGISTRATION_CARD",
+]);
 
 interface Template {
   id: string;
@@ -33,6 +40,7 @@ interface Template {
   name: string;
   is_active: boolean;
   version: number;
+  layout_json: unknown;
 }
 
 export default function TemplatesPage() {
@@ -120,6 +128,11 @@ export default function TemplatesPage() {
             <h3 className="font-medium">{selectedType.replace(/_/g, " ")}</h3>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={loadPreview}>Preview</Button>
+              {VISUAL_DOC_TYPES.has(selectedType) && (
+                <Link href={`/settings/templates/design/${selectedType}`}>
+                  <Button size="sm" variant="outline">Design (Visual)</Button>
+                </Link>
+              )}
               <Button size="sm" onClick={() => setOpen(true)}>Upload Custom Template</Button>
             </div>
           </div>
@@ -133,8 +146,14 @@ export default function TemplatesPage() {
                   <div>
                     <p className="font-medium">{t.name} <span className="text-xs text-muted-foreground">v{t.version}</span></p>
                     {t.is_active && <Badge variant="success">Active</Badge>}
+                    {!!t.layout_json && <Badge variant="outline">Visual Design</Badge>}
                   </div>
                   <div className="flex gap-2">
+                    {!!t.layout_json && (
+                      <Link href={`/settings/templates/design/${selectedType}/${t.id}`}>
+                        <Button size="sm" variant="outline">Edit in Designer</Button>
+                      </Link>
+                    )}
                     {!t.is_active && <Button size="sm" variant="outline" onClick={() => activateMutation.mutate(t.id)}>Set Active</Button>}
                     <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(t.id)}>Delete</Button>
                   </div>

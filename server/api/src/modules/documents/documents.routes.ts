@@ -546,3 +546,52 @@ documentsRouter.get(
     sendPdf(res, pdf, "id-cards-all-staff.pdf", req.query.download === "true");
   }),
 );
+
+documentsRouter.get(
+  "/student/:id/transport-card",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+    const transportRecord = await prisma.studentTransport.findUnique({ where: { student_id: id }, include: { route: { include: { vehicles: true } } } });
+    if (!transportRecord) throw badRequest("This student has no transport allocation");
+
+    const pdf = await renderDocument(
+      "TRANSPORT_CARD",
+      { student, transport: { route: transportRecord.route, vehicle_no: transportRecord.route.vehicles[0]?.vehicle_no ?? "" } },
+      { pageSize: "ID_CARD" },
+    );
+    sendPdf(res, pdf, `${student.student_uid}-transport-card.pdf`, req.query.download === "true");
+  }),
+);
+
+documentsRouter.get(
+  "/student/:id/hostel-card",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+    const allocation = await prisma.hostelAllocation.findFirst({ where: { student_id: id, is_active: true }, include: { room: { include: { block: true } } } });
+    if (!allocation) throw badRequest("This student has no active hostel allocation");
+
+    const pdf = await renderDocument(
+      "HOSTEL_CARD",
+      { student, hostel: { room: allocation.room, bed_no: allocation.bed_no } },
+      { pageSize: "ID_CARD" },
+    );
+    sendPdf(res, pdf, `${student.student_uid}-hostel-card.pdf`, req.query.download === "true");
+  }),
+);
+
+documentsRouter.post(
+  "/certificate",
+  asyncHandler(async (req, res) => {
+    const body = z.object({ recipient_name: z.string().min(1), issue_date: z.coerce.date().optional() }).parse(req.body);
+    const pdf = await renderDocument(
+      "CERTIFICATE",
+      { recipient: { name: body.recipient_name }, issue_date: body.issue_date ?? new Date() },
+      { pageSize: "A4" },
+    );
+    sendPdf(res, pdf, `certificate-${body.recipient_name.replace(/\s+/g, "_")}.pdf`, req.query.download === "true");
+  }),
+);

@@ -10,6 +10,7 @@ import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { DocumentType } from "@education-erp/types";
+import { cardDesignSchema, compileCardDesign } from "@education-erp/validators";
 
 export const templatesRouter = Router();
 templatesRouter.use(authenticate);
@@ -79,6 +80,43 @@ templatesRouter.post(
       },
     });
     res.status(201).json({ success: true, data: template });
+  }),
+);
+
+const saveDesignSchema = z.object({
+  doc_type: z.nativeEnum(DocumentType),
+  name: z.string().min(1),
+  layout_json: cardDesignSchema,
+});
+
+templatesRouter.post(
+  "/design",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = saveDesignSchema.parse(req.body);
+    const { html_content, css_content } = compileCardDesign(body.layout_json, body.doc_type);
+    const template = await prisma.documentTemplate.create({
+      data: { doc_type: body.doc_type, name: body.name, layout_json: body.layout_json, html_content, css_content },
+    });
+    res.status(201).json({ success: true, data: template });
+  }),
+);
+
+templatesRouter.put(
+  "/:id/design",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.documentTemplate.findUnique({ where: { id } });
+    if (!existing) throw notFound("Template not found");
+
+    const body = z.object({ name: z.string().min(1).optional(), layout_json: cardDesignSchema }).parse(req.body);
+    const { html_content, css_content } = compileCardDesign(body.layout_json, existing.doc_type);
+    const template = await prisma.documentTemplate.update({
+      where: { id },
+      data: { name: body.name ?? existing.name, layout_json: body.layout_json, html_content, css_content },
+    });
+    res.json({ success: true, data: template });
   }),
 );
 

@@ -11,6 +11,10 @@ interface StatusResult {
   cycle_name?: string;
   status?: string;
   merit_rank?: number | null;
+  requires_test?: boolean;
+  test_date?: string | null;
+  test_venue?: string | null;
+  admit_card_available?: boolean;
 }
 
 export default function AdmissionStatusPage() {
@@ -62,6 +66,26 @@ export default function AdmissionStatusPage() {
           <p className="mt-1 font-mono text-xs text-gray-500">{result.admission_roll}</p>
           <p className="mt-2">Status: <span className="font-medium">{result.status}</span></p>
           {result.merit_rank && <p>Merit Rank: #{result.merit_rank}</p>}
+
+          {result.requires_test && (
+            <div className="mt-3 border-t pt-3">
+              <p className="font-medium">Admission Test</p>
+              {result.test_date && <p>Date: {new Date(result.test_date).toLocaleString()}</p>}
+              {result.test_venue && <p>Venue: {result.test_venue}</p>}
+              {result.admit_card_available ? (
+                <a
+                  href={`${API_URL}/api/admission/application/admit-card?admission_roll=${encodeURIComponent(admissionRoll)}&phone=${encodeURIComponent(phone)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-block rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  Download Admit Card
+                </a>
+              ) : (
+                <p className="mt-1 text-gray-600">Your admit card will be available here once published by the institution.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </main>

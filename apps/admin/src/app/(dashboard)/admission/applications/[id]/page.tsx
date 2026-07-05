@@ -14,7 +14,15 @@ interface Application {
   merit_rank: number | null;
   guardian_info: { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
   personal_info: Record<string, unknown>;
-  previous_result: { institution?: string; class_passed?: string; gpa?: number; total_marks?: number } | null;
+  previous_result: {
+    institution?: string;
+    class_passed?: string;
+    gpa?: number;
+    gpa_scale?: "5" | "4" | "OTHER";
+    marks_obtained?: number;
+    marks_total_out_of?: number;
+    total_marks?: number; // legacy field from applications submitted before gpa_scale/marks_total_out_of existed
+  } | null;
   selected_subjects: string[] | null;
   documents: Record<string, string> | null;
   enrolled_student_id: string | null;
@@ -100,8 +108,13 @@ export default function AdmissionApplicationDetailPage() {
             <p className="font-medium">Previous Academic Record</p>
             <p className="text-sm">Institution: {app.previous_result?.institution ?? "-"}</p>
             <p className="text-sm">Class Passed: {app.previous_result?.class_passed ?? "-"}</p>
-            <p className="text-sm">GPA: {app.previous_result?.gpa ?? "-"}</p>
-            <p className="text-sm">Total Marks: {app.previous_result?.total_marks ?? "-"}</p>
+            <p className="text-sm">GPA: {app.previous_result?.gpa != null ? `${app.previous_result.gpa} (out of ${app.previous_result.gpa_scale ?? "5"})` : "-"}</p>
+            <p className="text-sm">
+              Total Marks:{" "}
+              {app.previous_result?.marks_obtained != null
+                ? `${app.previous_result.marks_obtained}${app.previous_result.marks_total_out_of ? ` / ${app.previous_result.marks_total_out_of}` : ""}`
+                : (app.previous_result?.total_marks ?? "-")}
+            </p>
           </CardContent>
         </Card>
 

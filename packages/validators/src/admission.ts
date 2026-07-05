@@ -58,8 +58,10 @@ export const submitAdmissionApplicationSchema = z.object({
     .object({
       institution: z.string().optional(),
       class_passed: z.string().optional(),
-      gpa: z.number().min(0).max(5).optional(),
-      total_marks: z.number().optional(),
+      gpa: z.number().min(0).optional(),
+      gpa_scale: z.enum(["5", "4", "OTHER"]).default("5"),
+      marks_obtained: z.number().optional(),
+      marks_total_out_of: z.number().optional(),
     })
     .optional(),
   selected_subjects: z.array(z.string()).optional(),
@@ -91,3 +93,19 @@ export const admissionStatusLookupSchema = z.object({
   admission_roll: z.string().min(1),
   phone: z.string().regex(/^01\d{9}$/, "phone must be 11 digits starting with 01"),
 });
+
+export const scheduleAdmissionTestSchema = z.object({
+  requires_test: z.boolean(),
+  test_date: z.coerce.date().optional(),
+  test_venue: z.string().optional(),
+  test_duration_minutes: z.number().int().min(1).optional(),
+  test_instructions: z.string().optional(),
+});
+export type ScheduleAdmissionTestInput = z.infer<typeof scheduleAdmissionTestSchema>;
+
+export const generateTestSeatPlanSchema = z.object({
+  statuses: z.array(z.enum(["SHORTLISTED", "WAITLISTED"])).min(1),
+  halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).min(1),
+  start_seat: z.number().int().min(1).default(1),
+});
+export type GenerateTestSeatPlanInput = z.infer<typeof generateTestSeatPlanSchema>;

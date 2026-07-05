@@ -38,9 +38,32 @@ export default function AdmissionApplyPage() {
   const [applicantName, setApplicantName] = useState("");
   const [personalInfo, setPersonalInfo] = useState<Record<string, string>>({});
   const [guardian, setGuardian] = useState({ father_name: "", mother_name: "", phone: "", email: "", address: "" });
-  const [previousResult, setPreviousResult] = useState({ institution: "", class_passed: "", gpa: "", total_marks: "" });
+  const [previousResult, setPreviousResult] = useState({ institution: "", class_passed: "", gpa: "", gpa_scale: "5", marks_obtained: "", marks_total_out_of: "" });
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [documents, setDocuments] = useState<Record<string, string>>({});
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
+  async function handleDocumentSelect(key: string, file: File | undefined) {
+    if (!file) return;
+    setUploadingKey(key);
+    setUploadErrors((prev) => ({ ...prev, [key]: "" }));
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${API_URL}/api/admission/upload-document`, { method: "POST", body: form });
+      const body = await res.json();
+      if (!res.ok) {
+        setUploadErrors((prev) => ({ ...prev, [key]: body.error?.message ?? "Upload failed" }));
+        return;
+      }
+      setDocuments((prev) => ({ ...prev, [key]: body.data.url }));
+    } catch {
+      setUploadErrors((prev) => ({ ...prev, [key]: "Could not reach the server — please try again." }));
+    } finally {
+      setUploadingKey(null);
+    }
+  }
 
   useEffect(() => {
     fetch(`${API_URL}/api/admission/public/cycles/${cycle_id}`)
@@ -62,7 +85,14 @@ export default function AdmissionApplyPage() {
           guardian_info: guardian,
           personal_info: personalInfo,
           previous_result: previousResult.institution || previousResult.gpa
-            ? { institution: previousResult.institution, class_passed: previousResult.class_passed, gpa: previousResult.gpa ? Number(previousResult.gpa) : undefined, total_marks: previousResult.total_marks ? Number(previousResult.total_marks) : undefined }
+            ? {
+                institution: previousResult.institution,
+                class_passed: previousResult.class_passed,
+                gpa: previousResult.gpa ? Number(previousResult.gpa) : undefined,
+                gpa_scale: previousResult.gpa_scale,
+                marks_obtained: previousResult.marks_obtained ? Number(previousResult.marks_obtained) : undefined,
+                marks_total_out_of: previousResult.marks_total_out_of ? Number(previousResult.marks_total_out_of) : undefined,
+              }
             : undefined,
           selected_subjects: selectedSubjects,
           documents,
@@ -153,9 +183,23 @@ export default function AdmissionApplyPage() {
         <div className="space-y-3">
           <input placeholder="Previous Institution" value={previousResult.institution} onChange={(e) => setPreviousResult((p) => ({ ...p, institution: e.target.value }))} className="w-full rounded-md border px-3 py-2 text-sm" />
           <input placeholder="Class Passed" value={previousResult.class_passed} onChange={(e) => setPreviousResult((p) => ({ ...p, class_passed: e.target.value }))} className="w-full rounded-md border px-3 py-2 text-sm" />
-          <div className="grid grid-cols-2 gap-3">
-            <input type="number" step="0.01" placeholder="GPA" value={previousResult.gpa} onChange={(e) => setPreviousResult((p) => ({ ...p, gpa: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
-            <input type="number" placeholder="Total Marks" value={previousResult.total_marks} onChange={(e) => setPreviousResult((p) => ({ ...p, total_marks: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
+          <div>
+            <label className="mb-1 block text-xs text-gray-600">GPA (select the scale it's out of)</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" step="0.01" placeholder="GPA" value={previousResult.gpa} onChange={(e) => setPreviousResult((p) => ({ ...p, gpa: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
+              <select value={previousResult.gpa_scale} onChange={(e) => setPreviousResult((p) => ({ ...p, gpa_scale: e.target.value }))} className="rounded-md border px-3 py-2 text-sm">
+                <option value="5">Out of 5</option>
+                <option value="4">Out of 4</option>
+                <option value="OTHER">Other scale</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-600">Total Marks (marks obtained, and out of how much)</label>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" placeholder="Marks Obtained" value={previousResult.marks_obtained} onChange={(e) => setPreviousResult((p) => ({ ...p, marks_obtained: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
+              <input type="number" placeholder="Out of (e.g. 500)" value={previousResult.marks_total_out_of} onChange={(e) => setPreviousResult((p) => ({ ...p, marks_total_out_of: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
+            </div>
           </div>
         </div>
       )}
@@ -181,11 +225,25 @@ export default function AdmissionApplyPage() {
       )}
 
       {step === 4 && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">Accepted: images (JPG/PNG/WebP) or PDF, up to 10MB.</p>
           {(cycle.form_config?.document_uploads ?? []).map((d) => (
             <div key={d.key}>
-              <label className="text-sm text-gray-600">{d.label_en}{d.required ? " *" : ""}</label>
-              <input placeholder="Document URL" value={documents[d.key] ?? ""} onChange={(e) => setDocuments((prev) => ({ ...prev, [d.key]: e.target.value }))} className="w-full rounded-md border px-3 py-2 text-sm" />
+              <label className="mb-1 block text-sm text-gray-600">{d.label_en}{d.required ? " *" : ""}</label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                disabled={uploadingKey === d.key}
+                onChange={(e) => handleDocumentSelect(d.key, e.target.files?.[0])}
+                className="w-full rounded-md border px-3 py-2 text-sm"
+              />
+              {uploadingKey === d.key && <p className="mt-1 text-xs text-gray-500">Uploading...</p>}
+              {uploadErrors[d.key] && <p className="mt-1 text-xs text-red-600">{uploadErrors[d.key]}</p>}
+              {documents[d.key] && !uploadErrors[d.key] && (
+                <p className="mt-1 text-xs text-green-700">
+                  Uploaded — <a href={documents[d.key]} target="_blank" rel="noreferrer" className="underline">view file</a>
+                </p>
+              )}
             </div>
           ))}
           {!(cycle.form_config?.document_uploads ?? []).length && <p className="text-sm text-gray-600">No documents required for this cycle.</p>}
@@ -216,7 +274,7 @@ export default function AdmissionApplyPage() {
             Next
           </button>
         ) : (
-          <button disabled={submitting || !applicantName || !guardian.phone} onClick={submit} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <button disabled={submitting || !applicantName || !guardian.phone || !!uploadingKey} onClick={submit} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
             {submitting ? "Submitting..." : "Submit Application"}
           </button>
         )}

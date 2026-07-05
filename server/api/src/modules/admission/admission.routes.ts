@@ -7,6 +7,8 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { publicEndpointLimiter } from "../../middleware/rate-limit";
+import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { ADMISSION_MANAGE_ROLES, ADMISSION_ENROLL_ROLES } from "../../lib/roles";
 import {
@@ -20,23 +22,78 @@ import {
   admissionEnrollSchema,
   admissionPaymentInitiateSchema,
   admissionStatusLookupSchema,
+  scheduleAdmissionTestSchema,
+  generateTestSeatPlanSchema,
 } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
 import { getPaymentAdapter } from "../../services/payment";
+import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
 import { badRequest, notFound, conflict } from "../../lib/errors";
+import type { AdmissionApplication, AdmissionCycle, AdmissionTestSeatPlan, Class, AcademicYear } from "@education-erp/db";
 
 export const admissionRouter = Router();
 
-type PreviousResult = { gpa?: number; total_marks?: number } | null | undefined;
+type PreviousResult = {
+  gpa?: number;
+  gpa_scale?: "5" | "4" | "OTHER";
+  marks_obtained?: number;
+  marks_total_out_of?: number;
+  total_marks?: number; // legacy shape from applications submitted before gpa_scale/marks_total_out_of existed
+} | null | undefined;
 
 function meritScoreOf(previousResult: unknown): number {
   const r = (previousResult ?? {}) as PreviousResult;
-  const gpa = typeof r?.gpa === "number" ? r.gpa : 0;
-  const totalMarks = typeof r?.total_marks === "number" ? r.total_marks : 0;
-  return gpa * 1000 + totalMarks / 1000;
+  const rawGpa = typeof r?.gpa === "number" ? r.gpa : 0;
+  // Normalize a 4-scale GPA onto the 5-scale before ranking, so merit order
+  // stays fair across applicants reporting different GPA scales.
+  const gpa = r?.gpa_scale === "4" ? rawGpa * (5 / 4) : rawGpa;
+  const marks = typeof r?.marks_obtained === "number" ? r.marks_obtained : (typeof r?.total_marks === "number" ? r.total_marks : 0);
+  const marksOutOf = typeof r?.marks_total_out_of === "number" && r.marks_total_out_of > 0 ? r.marks_total_out_of : 100;
+  // Same reasoning applies to marks — normalize onto a common /100 scale so
+  // "450/500" and "450/1000" aren't scored as if they were equal.
+  const normalizedMarks = (marks / marksOutOf) * 100;
+  return gpa * 1000 + normalizedMarks / 1000;
+}
+
+type ApplicationForCard = AdmissionApplication & {
+  cycle: AdmissionCycle & { class: Class; academic_year: AcademicYear };
+  test_seat: AdmissionTestSeatPlan | null;
+};
+
+// Shared by the single-application and bulk admit-card endpoints — builds
+// the REGISTRATION_CARD template's data shape (applicant/test), not the
+// academic student.* shape, since no Student row exists pre-enrollment.
+function buildRegistrationCardData(application: ApplicationForCard) {
+  const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string } | null;
+  const documents = application.documents as Record<string, string> | null;
+  const cycle = application.cycle;
+  const seat = application.test_seat;
+
+  return {
+    applicant: {
+      name: application.applicant_name,
+      roll: application.admission_roll,
+      father_name: guardianInfo?.father_name ?? "",
+      mother_name: guardianInfo?.mother_name ?? "",
+      class_name: cycle.class.name_en,
+      photo_url: documents?.photo ?? null,
+    },
+    test: {
+      date: cycle.test_date,
+      day: cycle.test_date ? new Date(cycle.test_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
+      time: cycle.test_date ? new Date(cycle.test_date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "",
+      duration_minutes: cycle.test_duration_minutes,
+      venue: cycle.test_venue ?? "TBA",
+      hall: seat?.hall_name ?? "TBA",
+      seat_no: seat?.seat_number ?? "TBA",
+      instructions: cycle.test_instructions ?? "Please arrive 30 minutes before the scheduled time with this card and a valid photo ID.",
+    },
+    cycle_name: cycle.name,
+    academic_year_label: cycle.academic_year.label,
+  };
 }
 
 async function cycleStats(cycleId: string) {
@@ -269,6 +326,18 @@ admissionRouter.get(
 );
 
 admissionRouter.post(
+  "/upload-document",
+  publicEndpointLimiter,
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A file is required");
+    const { url } = await uploadBuffer("admission-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    res.status(201).json({ success: true, data: { url } });
+  }),
+);
+
+admissionRouter.post(
   "/apply",
   publicEndpointLimiter,
   asyncHandler(async (req, res) => {
@@ -364,7 +433,7 @@ admissionRouter.get(
     const query = admissionStatusLookupSchema.parse(req.query);
     const application = await prisma.admissionApplication.findUnique({
       where: { admission_roll: query.admission_roll },
-      include: { cycle: { select: { name: true, merit_list_published_at: true } } },
+      include: { cycle: { select: { name: true, merit_list_published_at: true, requires_test: true, test_date: true, test_venue: true, admit_card_published_at: true } } },
     });
     if (!application) return res.json({ success: true, data: { found: false } });
 
@@ -376,6 +445,14 @@ admissionRouter.get(
     // applicants until they deliberately click "Publish & Notify".
     const meritPublished = application.cycle.merit_list_published_at !== null;
 
+    // Same gating pattern as merit_rank above — the admit card must stay
+    // undownloadable until the admin deliberately publishes it, even though
+    // seat-plan/admit-card PDFs can already be generated by staff earlier.
+    const admitCardAvailable =
+      application.cycle.requires_test &&
+      application.cycle.admit_card_published_at !== null &&
+      (ADMIT_CARD_ELIGIBLE_STATUSES as readonly string[]).includes(application.status);
+
     res.json({
       success: true,
       data: {
@@ -385,8 +462,40 @@ admissionRouter.get(
         cycle_name: application.cycle.name,
         status: application.status,
         merit_rank: meritPublished ? application.merit_rank : null,
+        requires_test: application.cycle.requires_test,
+        test_date: application.cycle.requires_test ? application.cycle.test_date : null,
+        test_venue: application.cycle.requires_test ? application.cycle.test_venue : null,
+        admit_card_available: admitCardAvailable,
       },
     });
+  }),
+);
+
+admissionRouter.get(
+  "/application/admit-card",
+  publicEndpointLimiter,
+  asyncHandler(async (req, res) => {
+    const query = admissionStatusLookupSchema.parse(req.query);
+    const application = await prisma.admissionApplication.findUnique({
+      where: { admission_roll: query.admission_roll },
+      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+    });
+    if (!application) throw notFound("Application not found");
+
+    const guardianInfo = application.guardian_info as { phone?: string } | null;
+    if (guardianInfo?.phone !== query.phone) throw notFound("Application not found");
+
+    const eligible =
+      application.cycle.requires_test &&
+      application.cycle.admit_card_published_at !== null &&
+      (ADMIT_CARD_ELIGIBLE_STATUSES as readonly string[]).includes(application.status);
+    if (!eligible) throw badRequest("Admit card is not available for this application yet");
+
+    const data = buildRegistrationCardData(application);
+    const pdf = await renderDocument("REGISTRATION_CARD", data, { pageSize: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="Admit_Card_${application.admission_roll}.pdf"`);
+    res.send(pdf);
   }),
 );
 
@@ -649,28 +758,167 @@ admissionRouter.post(
   }),
 );
 
-// ───────────────────────── Documents (structured JSON — PDF rendering lands in Phase 10) ─────────────────────────
+// ───────────────────────── Admission Test + Admit Card Workflow ─────────────────────────
+
+const ADMIT_CARD_ELIGIBLE_STATUSES = ["SHORTLISTED", "WAITLISTED", "CONFIRMED"] as const;
+
+admissionRouter.put(
+  "/cycles/:id/test",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = scheduleAdmissionTestSchema.parse(req.body);
+    const existing = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!existing) throw notFound("Admission cycle not found");
+
+    const updated = await prisma.admissionCycle.update({
+      where: { id },
+      data: {
+        requires_test: body.requires_test,
+        test_date: body.test_date,
+        test_venue: body.test_venue,
+        test_duration_minutes: body.test_duration_minutes,
+        test_instructions: body.test_instructions,
+      },
+    });
+    res.json({ success: true, data: updated });
+  }),
+);
+
+admissionRouter.post(
+  "/cycles/:id/test/seat-plan",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = generateTestSeatPlanSchema.parse(req.body);
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!cycle) throw notFound("Admission cycle not found");
+
+    const applications = await prisma.admissionApplication.findMany({
+      where: { cycle_id: id, status: { in: body.statuses } },
+      orderBy: [{ merit_rank: "asc" }, { admission_roll: "asc" }],
+    });
+
+    const totalCapacity = body.halls.reduce((sum, h) => sum + h.capacity, 0);
+    const overflow = Math.max(0, applications.length - totalCapacity);
+
+    const assignments: { application_id: string; cycle_id: string; hall_name: string; seat_number: string }[] = [];
+    let index = 0;
+    for (const hall of body.halls) {
+      for (let seat = body.start_seat; seat < body.start_seat + hall.capacity && index < applications.length; seat++, index++) {
+        assignments.push({ application_id: applications[index]!.id, cycle_id: id, hall_name: hall.name, seat_number: String(seat) });
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.admissionTestSeatPlan.deleteMany({ where: { cycle_id: id } }),
+      prisma.admissionTestSeatPlan.createMany({ data: assignments }),
+    ]);
+
+    res.json({ success: true, data: { assigned: assignments.length, total_applications: applications.length, overflow } });
+  }),
+);
+
+admissionRouter.get(
+  "/cycles/:id/test/seat-plan",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const seatPlans = await prisma.admissionTestSeatPlan.findMany({
+      where: { cycle_id: id },
+      include: { application: { select: { admission_roll: true, applicant_name: true, status: true } } },
+      orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
+    });
+    res.json({
+      success: true,
+      data: seatPlans.map((s) => ({
+        hall_name: s.hall_name,
+        seat_number: s.seat_number,
+        admission_roll: s.application.admission_roll,
+        applicant_name: s.application.applicant_name,
+        status: s.application.status,
+      })),
+    });
+  }),
+);
+
+// ───────────────────────── Documents ─────────────────────────
 
 admissionRouter.get(
   "/applications/:id/admit-card",
   authenticate,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: { include: { class: true } } } });
+    const application = await prisma.admissionApplication.findUnique({
+      where: { id },
+      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+    });
     if (!application) throw notFound("Application not found");
     if (application.status === "PENDING" || application.status === "REJECTED") throw badRequest("Admit card is only available for shortlisted/waitlisted/confirmed applications");
 
-    res.json({
-      success: true,
-      data: {
-        admission_roll: application.admission_roll,
-        applicant_name: application.applicant_name,
-        cycle_name: application.cycle.name,
-        class_name: application.cycle.class.name_en,
-        status: application.status,
-        note: "PDF rendering for admit cards is implemented in Phase 10 (Document Generation) — this is the structured data payload.",
-      },
+    const data = buildRegistrationCardData(application);
+    const pdf = await renderDocument("REGISTRATION_CARD", data, { pageSize: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="Admit_Card_${application.admission_roll}.pdf"`);
+    res.send(pdf);
+  }),
+);
+
+admissionRouter.get(
+  "/cycles/:id/admit-cards",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!cycle) throw notFound("Admission cycle not found");
+
+    const applications = await prisma.admissionApplication.findMany({
+      where: { cycle_id: id, status: { in: [...ADMIT_CARD_ELIGIBLE_STATUSES] } },
+      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+      orderBy: { admission_roll: "asc" },
     });
+    if (!applications.length) throw badRequest("No eligible applications to generate admit cards for");
+
+    const dataList = applications.map(buildRegistrationCardData);
+    const pdf = await renderDocumentBatch("REGISTRATION_CARD", dataList, { pageSize: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Admit_Cards_${cycle.name.replace(/\s+/g, "_")}.pdf"`);
+    res.send(pdf);
+  }),
+);
+
+admissionRouter.post(
+  "/cycles/:id/admit-card/publish",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!cycle) throw notFound("Admission cycle not found");
+    if (!cycle.requires_test) throw badRequest("This cycle does not require an admission test");
+    if (!cycle.test_date) throw badRequest("Schedule the test date and venue before publishing admit cards");
+
+    const applications = await prisma.admissionApplication.findMany({
+      where: { cycle_id: id, status: { in: [...ADMIT_CARD_ELIGIBLE_STATUSES] } },
+    });
+
+    let notified = 0;
+    for (const app of applications) {
+      const guardianInfo = app.guardian_info as { phone?: string } | null;
+      if (guardianInfo?.phone) {
+        await sendSms(
+          guardianInfo.phone,
+          `Admission test for ${app.applicant_name} (Roll: ${app.admission_roll}) is scheduled on ${cycle.test_date?.toLocaleDateString()} at ${cycle.test_venue ?? "the institution"}. Download the admit card from our website status page.`,
+        );
+        notified++;
+      }
+    }
+
+    await prisma.admissionCycle.update({ where: { id }, data: { admit_card_published_at: new Date() } });
+    res.json({ success: true, data: { notified } });
   }),
 );
 
@@ -679,16 +927,29 @@ admissionRouter.get(
   authenticate,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id }, include: { class: true, academic_year: true } });
+    if (!cycle) throw notFound("Admission cycle not found");
+
     const applications = await prisma.admissionApplication.findMany({
       where: { cycle_id: id, merit_rank: { not: null } },
       orderBy: { merit_rank: "asc" },
     });
-    res.json({
-      success: true,
-      data: {
-        rows: applications.map((a) => ({ rank: a.merit_rank, admission_roll: a.admission_roll, applicant_name: a.applicant_name, status: a.status })),
-        note: "PDF rendering lands in Phase 10 (Document Generation) — this is the structured data payload.",
-      },
-    });
+
+    const rows = applications.map((a) => ({
+      rank: a.merit_rank,
+      roll_no: a.admission_roll,
+      student_uid: a.admission_roll,
+      name_en: a.applicant_name,
+      total_gpa: (a.previous_result as { gpa?: number } | null)?.gpa ?? "-",
+    }));
+    const pdf = await renderDocument(
+      "MERIT_LIST",
+      { exam_name: `${cycle.name} — Merit List`, class_name: cycle.class.name_en, academic_year_label: cycle.academic_year.label, rows },
+      { pageSize: "A4" },
+    );
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Merit_List_${cycle.name.replace(/\s+/g, "_")}.pdf"`);
+    res.send(pdf);
   }),
 );

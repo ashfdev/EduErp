@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { prisma } from "../lib/prisma";
 import type { DocumentType } from "@education-erp/types";
+import { cardDesignSchema, SIZE_PRESETS, FIELD_CATALOG, type CardDesign } from "@education-erp/validators";
 
 const DEFAULT_TEMPLATES_DIR = join(__dirname, "..", "templates", "defaults");
 
@@ -12,6 +13,7 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   STUDENT_ID_CARD: "student-id-card",
   STAFF_ID_CARD: "staff-id-card",
   ADMIT_CARD: "admit-card",
+  REGISTRATION_CARD: "registration-card",
   MARKSHEET: "marksheet",
   REPORT_CARD: "report-card",
   TABULATION_SHEET: "tabulation-sheet",
@@ -22,6 +24,9 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   ATTENDANCE_BLANK: "attendance-blank",
   FEE_RECEIPT: "fee-receipt",
   PAYSLIP: "payslip",
+  CERTIFICATE: "certificate",
+  TRANSPORT_CARD: "transport-card",
+  HOSTEL_CARD: "hostel-card",
 };
 
 let helpersRegistered = false;
@@ -89,6 +94,7 @@ interface SignatureSlot {
 
 async function getInstitutionBranding() {
   const profile = await prisma.institutionProfile.findUnique({ where: { id: "singleton" } });
+  const config = await prisma.institutionConfig.findUnique({ where: { id: "singleton" } });
   return {
     name_en: profile?.name_en ?? "Institution Name",
     name_bn: profile?.name_bn ?? "",
@@ -98,6 +104,15 @@ async function getInstitutionBranding() {
     phone: profile?.phone_primary ?? "",
     primary_color: profile?.primary_color ?? "#1a3c4a",
     secondary_color: profile?.secondary_color ?? "#2e7d9a",
+    // Institution-type-aware terminology, reused by the card designer's
+    // class/section fields so a university's card reads "Course" instead of
+    // "Class" — same InstitutionConfig-driven system CLAUDE.md documents
+    // elsewhere (nav labels, grading presets, etc.), just exposed to PDFs too.
+    terms: {
+      class: config?.term_class ?? "Class",
+      section: config?.term_section ?? "Section",
+      department: "Department",
+    },
   };
 }
 
@@ -122,7 +137,7 @@ async function getSignatureSlots(docType: DocumentType): Promise<SignatureSlot[]
   return slots;
 }
 
-async function getOrSeedActiveTemplate(docType: DocumentType): Promise<{ html_content: string; css_content: string | null }> {
+async function getOrSeedActiveTemplate(docType: DocumentType): Promise<{ html_content: string; css_content: string | null; layout_json: unknown }> {
   const existing = await prisma.documentTemplate.findFirst({ where: { doc_type: docType, is_active: true } });
   if (existing) return existing;
 
@@ -136,12 +151,43 @@ async function getOrSeedActiveTemplate(docType: DocumentType): Promise<{ html_co
   return created;
 }
 
+function getByPath(obj: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, key) => {
+    if (acc == null || typeof acc !== "object") return undefined;
+    return (acc as Record<string, unknown>)[key];
+  }, obj);
+}
+
+// BARCODE/QR fields in a layout_json design reference a data_path (via the
+// matching FIELD_CATALOG descriptor) rather than embedding generation logic
+// in the template itself — Handlebars helpers run synchronously, but
+// QRCode.toDataURL is async, so every record's barcode/QR image is
+// pre-computed here, once per record, before Handlebars ever compiles.
+async function withBarcodeData(design: CardDesign, docType: DocumentType, dataList: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const descriptors = FIELD_CATALOG[docType] ?? [];
+  const descByKey = new Map(descriptors.map((d) => [d.field_key, d]));
+  const barcodeBoxes = [...design.faces.front, ...(design.faces.back ?? [])].filter((b) => b.kind === "BARCODE" || b.kind === "QR");
+  if (!barcodeBoxes.length) return dataList;
+
+  return Promise.all(
+    dataList.map(async (data) => {
+      const extra: Record<string, string> = {};
+      for (const box of barcodeBoxes) {
+        const path = descByKey.get(box.field_key)?.data_path;
+        const value = path ? getByPath(data, path) : undefined;
+        if (value) extra[`__barcode_${box.id}`] = await generateQrDataUrl(String(value));
+      }
+      return { ...data, ...extra };
+    }),
+  );
+}
+
 export async function generateQrDataUrl(text: string): Promise<string> {
   return QRCode.toDataURL(text, { margin: 1, width: 160 });
 }
 
 export interface RenderOptions {
-  pageSize?: "A4" | "A5" | "A3" | "ID_CARD";
+  pageSize?: "A4" | "A5" | "A3" | "ID_CARD" | "ID_CARD_PORTRAIT" | "BADGE" | "LETTER";
   orientation?: "portrait" | "landscape";
 }
 
@@ -150,6 +196,9 @@ const PAGE_SIZE_TO_PUPPETEER: Record<string, { format?: "A4" | "A5" | "A3"; widt
   A5: { format: "A5" },
   A3: { format: "A3" },
   ID_CARD: { width: "85.6mm", height: "54mm" },
+  ID_CARD_PORTRAIT: { width: `${SIZE_PRESETS.ID_CARD_PORTRAIT!.width_mm}mm`, height: `${SIZE_PRESETS.ID_CARD_PORTRAIT!.height_mm}mm` },
+  BADGE: { width: `${SIZE_PRESETS.BADGE!.width_mm}mm`, height: `${SIZE_PRESETS.BADGE!.height_mm}mm` },
+  LETTER: { width: `${SIZE_PRESETS.LETTER!.width_mm}mm`, height: `${SIZE_PRESETS.LETTER!.height_mm}mm` },
 };
 
 export async function renderDocument(docType: DocumentType, data: Record<string, unknown>, options?: RenderOptions): Promise<Buffer> {
@@ -167,6 +216,16 @@ export async function renderDocumentBatch(docType: DocumentType, dataList: Recor
   const template = await getOrSeedActiveTemplate(docType);
   const signatures = await getSignatureSlots(docType);
   const compiled = Handlebars.compile(template.html_content);
+
+  // When the active template was built via the visual designer, its
+  // layout_json is the source of truth for page size (overriding whatever
+  // the caller's `options.pageSize` was) and drives barcode/QR pre-computation.
+  const designResult = template.layout_json ? cardDesignSchema.safeParse(template.layout_json) : undefined;
+  const design = designResult?.success ? designResult.data : undefined;
+  if (design) {
+    dataList = await withBarcodeData(design, docType, dataList);
+    options = { ...options, pageSize: design.canvas.size_preset as RenderOptions["pageSize"] };
+  }
 
   // Each default template is itself a full <html> document (its own <head>/
   // <style>). Chromium's HTML5 parser merges repeated <html>/<head>/<body>

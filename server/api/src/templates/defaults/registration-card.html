@@ -1,0 +1,69 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 12mm; font-size: 12px; }
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header img { height: 16mm; }
+  .header .center { text-align: center; }
+  .header .center h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .header .title { font-size: 18px; font-weight: 700; }
+  table.info { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  table.info td { padding: 4px 6px; border: 1px solid #ddd; }
+  .photo { width: 25mm; height: 32mm; object-fit: cover; border: 1px solid #999; float: right; }
+  table.schedule { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  table.schedule th, table.schedule td { border: 1px solid #999; padding: 5px; font-size: 11px; text-align: center; }
+  table.schedule th { background: {{institution.primary_color}}; color: #fff; }
+  .instructions { margin-top: 10px; border: 1px dashed #999; padding: 8px; font-size: 10px; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+  .sig-label { font-size: 9px; color: #555; }
+</style>
+</head>
+<body>
+  <div class="header">
+    {{institutionLogo}}
+    <div class="center">
+      <h1>{{institution.name_en}}</h1>
+      <p>{{institution.address}} | EIIN: {{institution.eiin}}</p>
+    </div>
+    <div class="title">ADMISSION TEST<br/>REGISTRATION CARD</div>
+  </div>
+
+  <img class="photo" src="{{applicant.photo_url}}" />
+  <table class="info">
+    <tr><td>Name</td><td>{{applicant.name}}</td><td>Admission Roll</td><td>{{applicant.roll}}</td></tr>
+    <tr><td>Father's Name</td><td>{{applicant.father_name}}</td><td>Mother's Name</td><td>{{applicant.mother_name}}</td></tr>
+    <tr><td>Applying For</td><td>{{applicant.class_name}}</td><td>Academic Year</td><td>{{academic_year_label}}</td></tr>
+    <tr><td>Admission Cycle</td><td colspan="3">{{cycle_name}}</td></tr>
+  </table>
+
+  <table class="schedule">
+    <thead><tr><th>Date</th><th>Day</th><th>Time</th><th>Duration</th><th>Hall</th><th>Seat No</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>{{banglaDate test.date}}</td>
+        <td>{{test.day}}</td>
+        <td>{{test.time}}</td>
+        <td>{{test.duration_minutes}} min</td>
+        <td>{{test.hall}}</td>
+        <td>{{test.seat_no}}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p><strong>Venue:</strong> {{test.venue}}</p>
+
+  <div class="instructions">Instructions: {{test.instructions}}</div>
+
+  <div class="signatures">
+    <div class="signature-block"><div class="sig-line"></div><p class="sig-label">Signature of Candidate</p></div>
+    {{signatureBlock 1}}
+    {{signatureBlock 2}}
+  </div>
+</body>
+</html>

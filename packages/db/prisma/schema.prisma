@@ -190,6 +190,11 @@ model DocumentTemplate {
   name         String
   html_content String       @db.Text
   css_content  String?      @db.Text
+  // When present, this is the source of truth and html_content/css_content
+  // are compiled artifacts regenerated on every save via compileCardDesign()
+  // — the renderer itself stays unaware of this column. Null for hand-authored
+  // templates (marksheet, payslip, TC, etc.), which never use the designer.
+  layout_json  Json?
   is_default   Boolean      @default(false)
   is_active    Boolean      @default(false)
   version      Int          @default(1)
@@ -1453,8 +1458,21 @@ model AdmissionCycle {
   // committing) but that must not be visible to applicants until the admin
   // deliberately publishes.
   merit_list_published_at DateTime?
+  // Offline admission-test workflow (alternative/supplement to pure merit
+  // selection) — requires_test gates whether the Admission Test tab's
+  // schedule/seat-plan/admit-card actions apply to this cycle at all.
+  requires_test           Boolean   @default(false)
+  test_date               DateTime?
+  test_venue              String?
+  test_duration_minutes   Int?
+  test_instructions       String?   @db.Text
+  // Mirrors merit_list_published_at's gate pattern — admit cards can be
+  // generated/previewed by staff before this is set, but only become
+  // self-downloadable by applicants once this is set.
+  admit_card_published_at DateTime?
   created_at       DateTime               @default(now())
   applications     AdmissionApplication[]
+  test_seat_plans  AdmissionTestSeatPlan[]
 }
 
 model AdmissionApplication {
@@ -1474,6 +1492,23 @@ model AdmissionApplication {
   enrolled_student_id  String?
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
+  test_seat            AdmissionTestSeatPlan?
+
+  @@index([cycle_id])
+}
+
+// Per-candidate hall/seat for the offline admission test — keyed to the
+// application (not Student), since no Student row exists until enrollment.
+model AdmissionTestSeatPlan {
+  id             String               @id @default(cuid())
+  application_id String               @unique
+  application    AdmissionApplication @relation(fields: [application_id], references: [id])
+  cycle_id       String // denormalized for bulk query/delete-by-cycle
+  cycle          AdmissionCycle       @relation(fields: [cycle_id], references: [id])
+  hall_name      String?
+  seat_number    String?
+  created_at     DateTime             @default(now())
+  updated_at     DateTime             @updatedAt
 
   @@index([cycle_id])
 }
@@ -1962,6 +1997,9 @@ enum DocumentType {
   PAYSLIP
   SYLLABUS
   MERIT_LIST
+  CERTIFICATE
+  TRANSPORT_CARD
+  HOSTEL_CARD
 }
 
 enum NoticeAudience {

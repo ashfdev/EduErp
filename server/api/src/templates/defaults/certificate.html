@@ -1,0 +1,40 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Great+Vibes&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Puppeteer's own 10mm page margin (set in renderHtmlToPdf for A4) already
+     provides page padding — no additional body padding, or the two stack
+     and push the frame past 297mm onto a second, mostly-blank page. */
+  body { font-family: 'Noto Sans Bengali', Arial, sans-serif; }
+  .frame { border: 3px double {{institution.primary_color}}; height: 269mm; padding: 12mm; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .frame img { height: 20mm; margin-bottom: 6mm; }
+  .institution-name { font-family: 'Playfair Display', serif; font-size: 28px; color: {{institution.primary_color}}; margin-bottom: 2mm; }
+  .cert-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 600; letter-spacing: 2px; margin: 8mm 0; }
+  .body-text { font-size: 13px; line-height: 1.9; max-width: 140mm; }
+  .recipient-name { font-family: 'Great Vibes', cursive; font-size: 34px; margin: 6mm 0; color: {{institution.primary_color}}; }
+  .footer { display: flex; justify-content: space-around; width: 100%; margin-top: 20mm; }
+  .signature-block { text-align: center; }
+  .sig-line { border-top: 1px solid #333; margin-top: 20mm; width: 40mm; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+  .issue-date { font-size: 10px; margin-top: 4mm; color: #555; }
+</style>
+</head>
+<body>
+  <div class="frame">
+    {{institutionLogo}}
+    <p class="institution-name">{{institution.name_en}}</p>
+    <p class="cert-title">CERTIFICATE OF EXCELLENCE</p>
+    <p class="body-text">This certificate is proudly presented to</p>
+    <p class="recipient-name">{{recipient.name}}</p>
+    <p class="body-text">in recognition of outstanding achievement and dedication.</p>
+    <p class="issue-date">Issued on {{banglaDate issue_date}}</p>
+    <div class="footer">
+      {{signatureBlock 1}}
+      {{signatureBlock 2}}
+    </div>
+  </div>
+</body>
+</html>
