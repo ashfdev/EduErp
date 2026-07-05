@@ -88,6 +88,6 @@ export const admissionPaymentInitiateSchema = z.object({
 });
 
 export const admissionStatusLookupSchema = z.object({
-  application_id: z.string().min(1),
+  admission_roll: z.string().min(1),
   phone: z.string().regex(/^01\d{9}$/, "phone must be 11 digits starting with 01"),
 });

@@ -362,7 +362,7 @@ admissionRouter.get(
   publicEndpointLimiter,
   asyncHandler(async (req, res) => {
     const query = admissionStatusLookupSchema.parse(req.query);
-    const application = await prisma.admissionApplication.findUnique({ where: { id: query.application_id }, include: { cycle: { select: { name: true } } } });
+    const application = await prisma.admissionApplication.findUnique({ where: { admission_roll: query.admission_roll }, include: { cycle: { select: { name: true } } } });
     if (!application) return res.json({ success: true, data: { found: false } });
 
     const guardianInfo = application.guardian_info as { phone?: string } | null;

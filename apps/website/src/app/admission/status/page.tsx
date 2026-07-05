@@ -14,7 +14,7 @@ interface StatusResult {
 }
 
 export default function AdmissionStatusPage() {
-  const [applicationId, setApplicationId] = useState("");
+  const [admissionRoll, setAdmissionRoll] = useState("");
   const [phone, setPhone] = useState("");
   const [result, setResult] = useState<StatusResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,7 +26,7 @@ export default function AdmissionStatusPage() {
     setError(null);
     setResult(null);
     try {
-      const params = new URLSearchParams({ application_id: applicationId, phone });
+      const params = new URLSearchParams({ admission_roll: admissionRoll, phone });
       const res = await fetch(`${API_URL}/api/admission/application/status?${params.toString()}`);
       const body = await res.json();
       if (!res.ok) {
@@ -44,10 +44,10 @@ export default function AdmissionStatusPage() {
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="mb-2 text-2xl font-semibold">Check Application Status</h1>
-      <p className="mb-6 text-sm text-gray-600">Enter your Application ID and the guardian phone number used when applying.</p>
+      <p className="mb-6 text-sm text-gray-600">Enter your admission roll number and the guardian phone number used when applying.</p>
 
       <form onSubmit={check} className="space-y-3">
-        <input required placeholder="Application ID" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
+        <input required placeholder="Admission Roll Number" value={admissionRoll} onChange={(e) => setAdmissionRoll(e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
         <input required placeholder="Guardian Phone (01XXXXXXXXX)" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" />
         <button type="submit" disabled={loading} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           {loading ? "Checking..." : "Check Status"}
