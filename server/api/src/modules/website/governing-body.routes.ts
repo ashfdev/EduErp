@@ -8,6 +8,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { governingBodyMemberSchema, governingBodyReorderSchema } from "@education-erp/validators";
+import { triggerRevalidation } from "../../services/revalidate.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const governingBodyRouter = Router();
@@ -32,6 +33,7 @@ governingBodyRouter.post(
     const body = governingBodyMemberSchema.parse(req.body);
     const count = await prisma.governingBodyMember.count();
     const member = await prisma.governingBodyMember.create({ data: { ...body, display_order: body.display_order ?? count } });
+    if (member.is_active) await triggerRevalidation(["/governing-body"]);
     res.status(201).json({ success: true, data: member });
   }),
 );
@@ -42,6 +44,7 @@ governingBodyRouter.put(
   asyncHandler(async (req, res) => {
     const body = governingBodyReorderSchema.parse(req.body);
     await prisma.$transaction(body.map((m) => prisma.governingBodyMember.update({ where: { id: m.id }, data: { display_order: m.display_order } })));
+    await triggerRevalidation(["/governing-body"]);
     res.json({ success: true, message: "Order updated" });
   }),
 );
@@ -52,6 +55,7 @@ governingBodyRouter.put(
   asyncHandler(async (req, res) => {
     const body = governingBodyMemberSchema.partial().parse(req.body);
     const member = await prisma.governingBodyMember.update({ where: { id: reqParam(req, "id") }, data: body });
+    await triggerRevalidation(["/governing-body"]);
     res.json({ success: true, data: member });
   }),
 );
@@ -61,6 +65,7 @@ governingBodyRouter.delete(
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.governingBodyMember.delete({ where: { id: reqParam(req, "id") } });
+    await triggerRevalidation(["/governing-body"]);
     res.status(204).send();
   }),
 );
@@ -78,6 +83,7 @@ governingBodyRouter.post(
 
     const { url } = await uploadBuffer("governing-body", req.file.originalname, req.file.buffer, req.file.mimetype);
     const member = await prisma.governingBodyMember.update({ where: { id }, data: { photo_url: url } });
+    await triggerRevalidation(["/governing-body"]);
     res.json({ success: true, data: member });
   }),
 );

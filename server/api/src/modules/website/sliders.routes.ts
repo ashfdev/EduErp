@@ -9,6 +9,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { sliderSchema, sliderReorderSchema } from "@education-erp/validators";
+import { triggerRevalidation } from "../../services/revalidate.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const slidersRouter = Router();
@@ -34,6 +35,7 @@ slidersRouter.post(
     const { url } = await uploadBuffer("sliders", req.file.originalname, req.file.buffer, req.file.mimetype);
     const count = await prisma.sliderImage.count();
     const slider = await prisma.sliderImage.create({ data: { ...body, image_url: url, display_order: count } });
+    if (slider.is_active) await triggerRevalidation(["/"]);
     res.status(201).json({ success: true, data: slider });
   }),
 );
@@ -44,6 +46,7 @@ slidersRouter.put(
   asyncHandler(async (req, res) => {
     const body = sliderReorderSchema.parse(req.body);
     await prisma.$transaction(body.map((s) => prisma.sliderImage.update({ where: { id: s.id }, data: { display_order: s.display_order } })));
+    await triggerRevalidation(["/"]);
     res.json({ success: true, message: "Slider order updated" });
   }),
 );
@@ -54,6 +57,7 @@ slidersRouter.put(
   asyncHandler(async (req, res) => {
     const body = z.object({ is_active: z.boolean() }).parse(req.body);
     const slider = await prisma.sliderImage.update({ where: { id: reqParam(req, "id") }, data: body });
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: slider });
   }),
 );
@@ -74,6 +78,7 @@ slidersRouter.put(
     }
 
     const slider = await prisma.sliderImage.update({ where: { id: existing.id }, data: { ...body, ...(image_url && { image_url }) } });
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: slider });
   }),
 );
@@ -83,6 +88,7 @@ slidersRouter.delete(
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.sliderImage.delete({ where: { id: reqParam(req, "id") } });
+    await triggerRevalidation(["/"]);
     res.status(204).send();
   }),
 );

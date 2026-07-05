@@ -9,6 +9,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { downloadMetaSchema } from "@education-erp/validators";
+import { triggerRevalidation } from "../../services/revalidate.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const downloadsRouter = Router();
@@ -41,6 +42,7 @@ downloadsRouter.post(
 
     const { url } = await uploadBuffer("downloads", req.file.originalname, req.file.buffer, req.file.mimetype);
     const download = await prisma.download.create({ data: { ...body, file_url: url, file_name: req.file.originalname } });
+    if (download.is_public) await triggerRevalidation(["/downloads"]);
     res.status(201).json({ success: true, data: download });
   }),
 );
@@ -53,6 +55,7 @@ downloadsRouter.put(
     if (!existing) throw notFound("Download not found");
     const body = downloadMetaSchema.partial().parse(req.body);
     const download = await prisma.download.update({ where: { id: existing.id }, data: body });
+    await triggerRevalidation(["/downloads"]);
     res.json({ success: true, data: download });
   }),
 );
@@ -62,6 +65,7 @@ downloadsRouter.delete(
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.download.delete({ where: { id: reqParam(req, "id") } });
+    await triggerRevalidation(["/downloads"]);
     res.status(204).send();
   }),
 );

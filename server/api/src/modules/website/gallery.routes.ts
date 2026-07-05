@@ -8,6 +8,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { galleryAlbumSchema, galleryImageReorderSchema } from "@education-erp/validators";
+import { triggerRevalidation } from "../../services/revalidate.service";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const galleryRouter = Router();
@@ -39,6 +40,7 @@ galleryRouter.post(
   asyncHandler(async (req, res) => {
     const body = galleryAlbumSchema.parse({ ...req.body, is_public: req.body.is_public === "true" || req.body.is_public === true || req.body.is_public === undefined });
     const album = await prisma.galleryAlbum.create({ data: body });
+    if (album.is_public) await triggerRevalidation(["/gallery"]);
     res.status(201).json({ success: true, data: album });
   }),
 );
@@ -49,6 +51,7 @@ galleryRouter.put(
   asyncHandler(async (req, res) => {
     const body = galleryAlbumSchema.partial().parse(req.body);
     const album = await prisma.galleryAlbum.update({ where: { id: reqParam(req, "id") }, data: body });
+    await triggerRevalidation(["/gallery", `/gallery/${album.id}`]);
     res.json({ success: true, data: album });
   }),
 );
@@ -60,6 +63,7 @@ galleryRouter.delete(
     const id = reqParam(req, "id");
     await prisma.galleryImage.deleteMany({ where: { album_id: id } });
     await prisma.galleryAlbum.delete({ where: { id } });
+    await triggerRevalidation(["/gallery", `/gallery/${id}`]);
     res.status(204).send();
   }),
 );
@@ -74,6 +78,7 @@ galleryRouter.post(
     if (!req.file) throw badRequest("A cover image file is required");
     const { url } = await uploadBuffer("gallery", req.file.originalname, req.file.buffer, req.file.mimetype);
     const album = await prisma.galleryAlbum.update({ where: { id }, data: { cover_url: url } });
+    await triggerRevalidation(["/gallery", `/gallery/${id}`]);
     res.json({ success: true, data: album });
   }),
 );
@@ -110,6 +115,7 @@ galleryRouter.post(
       if (firstImage) await prisma.galleryAlbum.update({ where: { id: albumId }, data: { cover_url: firstImage.image_url } });
     }
 
+    if (uploaded > 0) await triggerRevalidation(["/gallery", `/gallery/${albumId}`]);
     res.status(201).json({ success: true, data: { uploaded, failed } });
   }),
 );
@@ -118,7 +124,8 @@ galleryRouter.delete(
   "/images/:id",
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
-    await prisma.galleryImage.delete({ where: { id: reqParam(req, "id") } });
+    const image = await prisma.galleryImage.delete({ where: { id: reqParam(req, "id") } });
+    await triggerRevalidation(["/gallery", `/gallery/${image.album_id}`]);
     res.status(204).send();
   }),
 );
@@ -128,7 +135,9 @@ galleryRouter.put(
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
     const body = galleryImageReorderSchema.parse(req.body);
-    await prisma.$transaction(body.map((i) => prisma.galleryImage.update({ where: { id: i.id }, data: { display_order: i.display_order } })));
+    const updated = await prisma.$transaction(body.map((i) => prisma.galleryImage.update({ where: { id: i.id }, data: { display_order: i.display_order } })));
+    const albumIds = [...new Set(updated.map((i) => i.album_id))];
+    await triggerRevalidation(["/gallery", ...albumIds.map((id) => `/gallery/${id}`)]);
     res.json({ success: true, message: "Image order updated" });
   }),
 );

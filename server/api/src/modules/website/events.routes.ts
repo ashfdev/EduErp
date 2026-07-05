@@ -7,6 +7,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
 import { eventSchema } from "@education-erp/validators";
+import { triggerRevalidation } from "../../services/revalidate.service";
 
 export const eventsRouter = Router();
 eventsRouter.use(authenticate);
@@ -30,6 +31,7 @@ eventsRouter.post(
   asyncHandler(async (req, res) => {
     const body = eventSchema.parse(req.body);
     const event = await prisma.event.create({ data: body });
+    if (event.is_public) await triggerRevalidation(["/events"]);
     res.status(201).json({ success: true, data: event });
   }),
 );
@@ -40,6 +42,7 @@ eventsRouter.put(
   asyncHandler(async (req, res) => {
     const body = eventSchema.partial().parse(req.body);
     const event = await prisma.event.update({ where: { id: reqParam(req, "id") }, data: body });
+    await triggerRevalidation(["/events"]);
     res.json({ success: true, data: event });
   }),
 );
@@ -49,6 +52,7 @@ eventsRouter.delete(
   authorize(WEBSITE_CONTENT_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.event.delete({ where: { id: reqParam(req, "id") } });
+    await triggerRevalidation(["/events"]);
     res.status(204).send();
   }),
 );
