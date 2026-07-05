@@ -1447,6 +1447,12 @@ model AdmissionCycle {
   is_open          Boolean                @default(false)
   is_published     Boolean                @default(false)
   form_config      Json?
+  // Null until "Publish & Notify" runs — gates merit_rank visibility in the
+  // public status lookup, since Generate Merit List itself already assigns
+  // ranks to every application (needed so the admin can review before
+  // committing) but that must not be visible to applicants until the admin
+  // deliberately publishes.
+  merit_list_published_at DateTime?
   created_at       DateTime               @default(now())
   applications     AdmissionApplication[]
 }

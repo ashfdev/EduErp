@@ -362,11 +362,19 @@ admissionRouter.get(
   publicEndpointLimiter,
   asyncHandler(async (req, res) => {
     const query = admissionStatusLookupSchema.parse(req.query);
-    const application = await prisma.admissionApplication.findUnique({ where: { admission_roll: query.admission_roll }, include: { cycle: { select: { name: true } } } });
+    const application = await prisma.admissionApplication.findUnique({
+      where: { admission_roll: query.admission_roll },
+      include: { cycle: { select: { name: true, merit_list_published_at: true } } },
+    });
     if (!application) return res.json({ success: true, data: { found: false } });
 
     const guardianInfo = application.guardian_info as { phone?: string } | null;
     if (guardianInfo?.phone !== query.phone) return res.json({ success: true, data: { found: false } });
+
+    // merit_rank is assigned the moment "Generate Merit List" runs (so the
+    // admin can review before committing), but must stay invisible to
+    // applicants until they deliberately click "Publish & Notify".
+    const meritPublished = application.cycle.merit_list_published_at !== null;
 
     res.json({
       success: true,
@@ -376,7 +384,7 @@ admissionRouter.get(
         applicant_name: application.applicant_name,
         cycle_name: application.cycle.name,
         status: application.status,
-        merit_rank: application.merit_rank,
+        merit_rank: meritPublished ? application.merit_rank : null,
       },
     });
   }),
@@ -521,6 +529,10 @@ admissionRouter.post(
         notified++;
       }
     }
+
+    // This is the actual moment merit_rank becomes visible via the public
+    // status lookup — see /application/status above.
+    await prisma.admissionCycle.update({ where: { id }, data: { merit_list_published_at: new Date() } });
 
     res.json({ success: true, data: { notified } });
   }),

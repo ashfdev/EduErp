@@ -16,6 +16,7 @@ interface Cycle {
   app_fee: number;
   is_open: boolean;
   is_published: boolean;
+  merit_list_published_at: string | null;
   stats: { total_applications: number; shortlisted: number; waitlisted: number; confirmed: number; enrolled: number; rejected: number };
   seats_remaining: number;
 }
@@ -34,6 +35,8 @@ export default function AdmissionCycleDetailPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<"applied" | "rank">("applied");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const { data: cycle } = useQuery<Cycle>({ queryKey: ["admission", "cycles", id], queryFn: async () => (await api.get(`/api/admission/cycles/${id}`)).data.data });
   const { data: applications } = useQuery<Application[]>({
@@ -61,7 +64,10 @@ export default function AdmissionCycleDetailPage() {
 
   const publishMeritListMutation = useMutation({
     mutationFn: () => api.post(`/api/admission/cycles/${id}/merit-list/publish`),
-    onSuccess: (res) => toast.success(`Notified ${res.data.data.notified} applicants`),
+    onSuccess: (res) => {
+      toast.success(`Notified ${res.data.data.notified} applicants`);
+      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
+    },
   });
 
   const bulkActionMutation = useMutation({
@@ -73,6 +79,33 @@ export default function AdmissionCycleDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", id] });
     },
   });
+
+  function toggleSort(column: "applied" | "rank") {
+    if (sortBy === column) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDir("asc");
+    }
+  }
+
+  const sortedApplications = [...(applications ?? [])].sort((a, b) => {
+    let cmp: number;
+    if (sortBy === "rank") {
+      // Unranked applications (null) always sort to the end regardless of direction.
+      if (a.merit_rank == null && b.merit_rank == null) cmp = 0;
+      else if (a.merit_rank == null) cmp = 1;
+      else if (b.merit_rank == null) cmp = -1;
+      else cmp = a.merit_rank - b.merit_rank;
+    } else {
+      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const meritList = (applications ?? [])
+    .filter((a): a is Application & { merit_rank: number } => a.merit_rank != null)
+    .sort((a, b) => a.merit_rank - b.merit_rank);
 
   if (!cycle) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
@@ -133,13 +166,17 @@ export default function AdmissionCycleDetailPage() {
                       <th className="p-2"></th>
                       <th className="p-2">Roll</th>
                       <th className="p-2">Applicant</th>
-                      <th className="p-2">Rank</th>
+                      <th className="p-2 cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("rank")}>
+                        Rank {sortBy === "rank" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </th>
                       <th className="p-2">Status</th>
-                      <th className="p-2">Applied On</th>
+                      <th className="p-2 cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("applied")}>
+                        Applied On {sortBy === "applied" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {applications.map((a) => (
+                    {sortedApplications.map((a) => (
                       <tr key={a.id} className="border-b">
                         <td className="p-2"><Checkbox checked={selected.includes(a.id)} onCheckedChange={(v) => setSelected((prev) => (v ? [...prev, a.id] : prev.filter((x) => x !== a.id)))} /></td>
                         <td className="p-2 font-mono text-xs">{a.admission_roll ?? "-"}</td>
@@ -157,13 +194,46 @@ export default function AdmissionCycleDetailPage() {
         </TabsContent>
 
         <TabsContent value="merit">
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button onClick={() => meritListMutation.mutate()} disabled={meritListMutation.isPending}>Generate Merit List</Button>
-            <Button variant="outline" onClick={() => publishMeritListMutation.mutate()} disabled={publishMeritListMutation.isPending}>Publish &amp; Notify</Button>
+            <Button variant="outline" onClick={() => publishMeritListMutation.mutate()} disabled={publishMeritListMutation.isPending || !meritList.length}>Publish &amp; Notify</Button>
+            {cycle.merit_list_published_at ? (
+              <span className="text-xs text-emerald-600">Published {new Date(cycle.merit_list_published_at).toLocaleString()} — visible to applicants</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Not yet published — applicants can&apos;t see their rank until you click Publish &amp; Notify</span>
+            )}
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Ranks applications by previous-result merit score. Top {cycle.seat_count} become SHORTLISTED, the rest WAITLISTED. Switch to the Applications tab and sort by Rank to review.
+            Ranks applications by previous-result merit score. Top {cycle.seat_count} become SHORTLISTED, the rest WAITLISTED.
           </p>
+
+          {!meritList.length && <EmptyState title="No merit list generated yet" description="Click Generate Merit List to rank every application in this cycle." />}
+          {!!meritList.length && (
+            <Card className="mt-3">
+              <CardContent className="pt-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="p-2">Rank</th>
+                      <th className="p-2">Roll</th>
+                      <th className="p-2">Applicant</th>
+                      <th className="p-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {meritList.map((a) => (
+                      <tr key={a.id} className="border-b">
+                        <td className="p-2 font-medium">#{a.merit_rank}</td>
+                        <td className="p-2 font-mono text-xs">{a.admission_roll ?? "-"}</td>
+                        <td className="p-2"><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></td>
+                        <td className="p-2"><StatusBadge status={a.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </PageWrapper>
