@@ -104,6 +104,16 @@ const DOC_TYPES: DocDef[] = [
     ],
   },
   {
+    key: "blank-marksheet",
+    title: "Blank Marksheet",
+    description: "Empty grid (all students × subjects) for manual mark entry, e.g. offline exam invigilation.",
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/blank-marksheet/${p.class_id}`,
+    fields: [
+      { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
+      { key: "class_id", label: "Class", kind: "select-class", required: true },
+    ],
+  },
+  {
     key: "merit-list",
     title: "Merit List",
     description: "Ranked merit list for a class exam.",

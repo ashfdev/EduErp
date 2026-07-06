@@ -11,6 +11,8 @@ import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, c
 import { calculateLateFee } from "../../utils/late-fee";
 import { getPaymentAdapter } from "../../services/payment";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
+import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
+import { createMonthlyInvoiceIfMissing } from "./invoice-helpers";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
@@ -103,6 +105,7 @@ feesRouter.post(
       }
       await prisma.invoice.create({
         data: {
+          invoice_no: await generateInvoiceNo(prisma),
           student_id: student.id,
           fee_structure_id: structure.id,
           academic_year_id: structure.academic_year_id,
@@ -139,27 +142,10 @@ feesRouter.post(
           ...(structure.section_id && { current_section_id: structure.section_id }),
         },
       });
-      const dueDate = new Date(body.year, body.month - 1, structure.due_day ?? 10);
       for (const student of students) {
-        const existing = await prisma.invoice.findFirst({ where: { student_id: student.id, fee_structure_id: structure.id, month: body.month, year: body.year } });
-        if (existing) {
-          skipped++;
-          continue;
-        }
-        await prisma.invoice.create({
-          data: {
-            student_id: student.id,
-            fee_structure_id: structure.id,
-            academic_year_id: structure.academic_year_id,
-            category: structure.category,
-            description: structure.name,
-            amount_due: structure.amount,
-            due_date: dueDate,
-            month: body.month,
-            year: body.year,
-          },
-        });
-        created++;
+        const result = await createMonthlyInvoiceIfMissing(prisma, student.id, structure, body.month, body.year);
+        if (result.created) created++;
+        else skipped++;
       }
     }
 
@@ -227,6 +213,7 @@ feesRouter.post(
 
     const payment = await prisma.payment.create({
       data: {
+        receipt_no: result.status === "COMPLETED" ? await generateReceiptNo(prisma) : undefined,
         invoice_id: invoice.id,
         gateway: body.gateway,
         amount: body.amount,

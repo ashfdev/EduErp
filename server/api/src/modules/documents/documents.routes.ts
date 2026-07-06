@@ -283,6 +283,35 @@ documentsRouter.get(
 );
 
 documentsRouter.get(
+  "/result/:exam_id/blank-marksheet/:class_id",
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const classId = reqParam(req, "class_id");
+    const [exam, classInfo, subjectConfigs, students] = await Promise.all([
+      prisma.exam.findUnique({ where: { id: examId } }),
+      prisma.class.findUnique({ where: { id: classId } }),
+      prisma.examSubjectConfig.findMany({ where: { exam_id: examId, subject: { class_id: classId } }, include: { subject: true } }),
+      prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null }, orderBy: { current_roll_no: "asc" } }),
+    ]);
+    if (!exam) throw notFound("Exam not found");
+    if (!subjectConfigs.length) throw badRequest("No subjects configured for this exam/class");
+
+    const pdf = await renderDocument(
+      "BLANK_MARKSHEET",
+      {
+        exam_name: exam.name,
+        class_name: classInfo?.name_en ?? "",
+        academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
+        subjects: subjectConfigs.map((c) => ({ name_en: c.subject.name_en, full_marks: c.full_marks_theory + c.full_marks_practical })),
+        students: students.map((s, i) => ({ sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en })),
+      },
+      { pageSize: "A3", orientation: "landscape" },
+    );
+    sendPdf(res, pdf, `blank-marksheet-${classId}.pdf`, req.query.download === "true");
+  }),
+);
+
+documentsRouter.get(
   "/result/:exam_id/merit-list/:class_id",
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
@@ -428,7 +457,7 @@ documentsRouter.get(
 
     const qr = await generateQrDataUrl(`receipt:${payment.id}`);
     const pdf = await renderDocument("FEE_RECEIPT", {
-      receipt_no: payment.id,
+      receipt_no: payment.receipt_no ?? payment.id,
       date: payment.paid_at ?? payment.created_at,
       student: payment.invoice.student,
       items: [{ category: payment.invoice.category, description: payment.invoice.description, amount: payment.amount, fine: 0 }],
@@ -450,7 +479,7 @@ documentsRouter.get(
     if (!invoice) throw notFound("Invoice not found");
 
     const pdf = await renderDocument("FEE_RECEIPT", {
-      receipt_no: invoice.id,
+      receipt_no: invoice.invoice_no ?? invoice.id,
       date: invoice.due_date,
       student: invoice.student,
       items: [{ category: invoice.category, description: invoice.description, amount: invoice.amount_due, fine: invoice.fine_amount }],

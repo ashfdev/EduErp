@@ -43,5 +43,5 @@ export const waiveInvoiceSchema = z.object({
 
 export const initiatePaymentSchema = z.object({
   invoice_id: z.string().min(1),
-  gateway: z.enum(["BKASH", "NAGAD", "SSLCOMMERZ"]),
+  gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"]),
 });

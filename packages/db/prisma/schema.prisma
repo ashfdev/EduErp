@@ -530,6 +530,8 @@ model Staff {
   leave_requests      LeaveRequest[]
   payroll_records     PayrollRecord[]
   assigned_assets     Asset[]
+  routine_slots       RoutineSlot[]
+  documents           StaffDocument[]
 
   @@index([department_id])
   @@index([salary_structure_id])
@@ -666,14 +668,21 @@ model MarkEntry {
 }
 
 model ExamSeatPlan {
-  id             String  @id @default(cuid())
+  id             String    @id @default(cuid())
   exam_id        String
-  exam           Exam    @relation(fields: [exam_id], references: [id])
+  exam           Exam      @relation(fields: [exam_id], references: [id])
   student_id     String
-  student        Student @relation(fields: [student_id], references: [id])
+  student        Student   @relation(fields: [student_id], references: [id])
   hall_name      String?
   seat_number    String?
   invigilator_id String?
+  // Third leg of the admit-card clearance gate (accounts due -> library
+  // fine -> exam office approval) — a manual sign-off, since nothing about
+  // "is this student allowed to sit this specific exam" can be derived from
+  // existing data the way the other two checks can.
+  exam_office_cleared      Boolean   @default(false)
+  exam_office_cleared_by_id String?
+  exam_office_cleared_at   DateTime?
 
   @@unique([exam_id, student_id])
 }
@@ -713,6 +722,7 @@ model FeeStructure {
 
 model Invoice {
   id               String        @id @default(cuid())
+  invoice_no       String        @unique
   student_id       String
   student          Student       @relation(fields: [student_id], references: [id])
   fee_structure_id String?
@@ -737,6 +747,10 @@ model Invoice {
 
 model Payment {
   id              String         @id @default(cuid())
+  // Null until the payment actually completes (COMPLETED) — an INITIATED/
+  // FAILED gateway attempt never gets a receipt number, since a receipt
+  // implies money was actually received. See generateReceiptNo().
+  receipt_no      String?        @unique
   invoice_id      String
   invoice         Invoice        @relation(fields: [invoice_id], references: [id])
   gateway         PaymentGateway
@@ -1269,6 +1283,22 @@ model LeaveRequest {
   @@index([staff_id])
 }
 
+model StaffDocument {
+  id              String       @id @default(cuid())
+  staff_id        String
+  staff           Staff        @relation(fields: [staff_id], references: [id])
+  doc_type        StaffDocType
+  title           String
+  blob_key        String
+  original_filename String
+  mime_type       String
+  uploaded_at     DateTime     @default(now())
+  verified_by_id  String?
+  verified_at     DateTime?
+
+  @@index([staff_id])
+}
+
 model SalaryStructure {
   id             String   @id @default(cuid())
   name           String
@@ -1449,6 +1479,7 @@ model AdmissionCycle {
   close_date       DateTime
   seat_count       Int
   app_fee          Float                  @default(0)
+  form_fee         Float                  @default(0)
   is_open          Boolean                @default(false)
   is_published     Boolean                @default(false)
   form_config      Json?
@@ -1701,10 +1732,12 @@ model RoutineSlot {
   subject_id  String?
   subject     Subject? @relation(fields: [subject_id], references: [id])
   teacher_id  String?
+  teacher     Staff?   @relation(fields: [teacher_id], references: [id])
   start_time  String
   end_time    String
 
   @@index([class_id])
+  @@index([teacher_id])
   @@index([section_id])
 }
 
@@ -1905,6 +1938,7 @@ enum MarkStatus {
 
 enum FeeCategory {
   ADMISSION
+  FORM
   TUITION
   EXAM
   TRANSPORT
@@ -1959,6 +1993,14 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum StaffDocType {
+  CERTIFICATE
+  NID
+  TIN
+  CONTRACT
+  OTHER
+}
+
 enum PayrollStatus {
   DRAFT
   FINALIZED
@@ -1987,6 +2029,7 @@ enum DocumentType {
   ADMIT_CARD
   REGISTRATION_CARD
   MARKSHEET
+  BLANK_MARKSHEET
   REPORT_CARD
   TABULATION_SHEET
   TESTIMONIAL

@@ -32,6 +32,7 @@ export const createAdmissionCycleSchema = z.object({
   close_date: z.coerce.date(),
   seat_count: z.number().int().min(1),
   app_fee: z.number().min(0).default(0),
+  form_fee: z.number().min(0).default(0),
   form_config: admissionFormConfigSchema.optional(),
 });
 export type CreateAdmissionCycleInput = z.infer<typeof createAdmissionCycleSchema>;

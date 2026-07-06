@@ -28,6 +28,16 @@ interface AuthState {
   isAuthenticated: boolean;
   students: PortalStudent[];
   activeStudentId: string | null;
+  // Next.js server-renders with the store's pre-persist default
+  // (isAuthenticated: false); zustand/persist then reads localStorage
+  // client-side, which lands after React's first render. A redirect-on-mount
+  // effect that trusts isAuthenticated before this flips true bounces an
+  // already-logged-in user to /login on every hard refresh or direct URL
+  // visit — hasHydrated gates that check. (Confirmed reproducing here via
+  // direct navigation to /subjects and /transport-hostel, same as the
+  // apps/teacher instance of this bug.)
+  hasHydrated: boolean;
+  setHasHydrated: (value: boolean) => void;
   setSession: (data: { user: AuthUser; access_token: string; refresh_token: string }) => void;
   setStudents: (students: PortalStudent[]) => void;
   setActiveStudent: (id: string) => void;
@@ -43,6 +53,8 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       students: [],
       activeStudentId: null,
+      hasHydrated: false,
+      setHasHydrated: (value) => set({ hasHydrated: value }),
       setSession: ({ user, access_token, refresh_token }) =>
         set({ user, accessToken: access_token, refreshToken: refresh_token, isAuthenticated: true }),
       setStudents: (students) =>
@@ -60,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
         students: state.students,
         activeStudentId: state.activeStudentId,
       }),
+      onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
     },
   ),
 );

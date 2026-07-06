@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, StatusBadge, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner } from "@education-erp/ui";
 
 interface Invoice {
   id: string;
@@ -19,28 +19,48 @@ interface Invoice {
   payments: { id: string; amount: number; gateway: string; status: string; paid_at: string | null }[];
 }
 
+interface UpcomingDue {
+  category: string;
+  name: string;
+  amount: number;
+  frequency: string;
+}
+
 const GATEWAYS = [
   { key: "BKASH", label: "bKash" },
   { key: "NAGAD", label: "Nagad" },
+  { key: "ROCKET", label: "Rocket" },
   { key: "SSLCOMMERZ", label: "SSLCommerz" },
+  { key: "BANK_TRANSFER", label: "Bank Transfer" },
 ];
 
 function FeesContent() {
   const { activeStudentId } = useAuthStore();
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [pendingSlipPaymentId, setPendingSlipPaymentId] = useState<string | null>(null);
+  const [slipFile, setSlipFile] = useState<File | null>(null);
 
   const { data, isLoading, refetch } = useQuery<Invoice[]>({
     queryKey: ["portal", "fees", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/fees`)).data.data,
     enabled: !!activeStudentId,
   });
+  const { data: upcoming } = useQuery<UpcomingDue[]>({
+    queryKey: ["portal", "upcoming-dues", activeStudentId],
+    queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/upcoming-dues`)).data.data,
+    enabled: !!activeStudentId,
+  });
 
   const payMutation = useMutation({
     mutationFn: ({ invoiceId, gateway }: { invoiceId: string; gateway: string }) => api.post("/api/portal/fees/pay", { invoice_id: invoiceId, gateway }),
     onSuccess: (res) => {
-      if (res.data.data.payment_url) window.location.href = res.data.data.payment_url;
-      else toast.success("Payment initiated");
+      if (res.data.data.payment_url) {
+        window.location.href = res.data.data.payment_url;
+        return;
+      }
+      // Bank transfer: no redirect — collect the slip next instead.
+      setPendingSlipPaymentId(res.data.data.payment_id);
       setPayingInvoice(null);
       refetch();
     },
@@ -48,6 +68,21 @@ function FeesContent() {
       toast.error("Payment gateway not configured yet — merchant credentials pending");
       setPayingInvoice(null);
     },
+  });
+
+  const slipMutation = useMutation({
+    mutationFn: () => {
+      const formData = new FormData();
+      formData.append("slip", slipFile!);
+      return api.post(`/api/portal/fees/payments/${pendingSlipPaymentId}/slip`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Slip uploaded — staff will verify it against the bank statement");
+      setPendingSlipPaymentId(null);
+      setSlipFile(null);
+      refetch();
+    },
+    onError: () => toast.error("Failed to upload slip"),
   });
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
@@ -69,6 +104,18 @@ function FeesContent() {
         </Card>
       )}
 
+      {pendingSlipPaymentId && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="space-y-2 pt-6">
+            <p className="text-sm font-medium text-amber-800">Upload your bank transfer slip</p>
+            <Input type="file" onChange={(e) => setSlipFile(e.target.files?.[0] ?? null)} />
+            <Button size="sm" onClick={() => slipMutation.mutate()} disabled={!slipFile || slipMutation.isPending}>
+              {slipMutation.isPending ? "Uploading..." : "Upload Slip"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {!unpaid.length && <p className="text-sm text-gray-500">No outstanding invoices.</p>}
       {unpaid.map((inv) => (
         <Card key={inv.id}>
@@ -80,7 +127,7 @@ function FeesContent() {
             <p className="text-sm text-gray-500">Due {new Date(inv.due_date).toLocaleDateString()}</p>
             <p className="text-sm">৳{inv.amount_due} {inv.fine_amount > 0 && <span className="text-red-600">+ ৳{inv.fine_amount} fine</span>}</p>
             {payingInvoice === inv.id ? (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {GATEWAYS.map((g) => (
                   <Button key={g.key} size="sm" variant="outline" disabled={payMutation.isPending} onClick={() => payMutation.mutate({ invoiceId: inv.id, gateway: g.key })}>
                     {g.label}
@@ -93,6 +140,23 @@ function FeesContent() {
           </CardContent>
         </Card>
       ))}
+
+      {!!upcoming?.length && (
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-700">Upcoming (Projected)</p>
+          <div className="space-y-2">
+            {upcoming.map((u, i) => (
+              <div key={i} className="flex items-center justify-between rounded-md border border-dashed p-3 text-sm text-gray-600">
+                <div>
+                  <p>{u.name}</p>
+                  <p className="text-xs text-gray-400">{u.frequency} · not yet invoiced</p>
+                </div>
+                <p className="font-medium">৳{u.amount}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <button onClick={() => setShowHistory((s) => !s)} className="text-sm font-medium text-[var(--primary,#1a3c4a)]">
         {showHistory ? "Hide" : "Show"} Payment History

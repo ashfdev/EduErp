@@ -8,7 +8,7 @@ import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/uploa
 import { uploadBuffer } from "../../services/storage.service";
 import { sanitizeHtml } from "../../lib/sanitize";
 import { reqParam } from "../../lib/req-param";
-import { WEBSITE_CONTENT_ROLES } from "../../lib/roles";
+import { WEBSITE_CONTENT_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { noticeSchema } from "@education-erp/validators";
 import { sendNotification, type NotificationRecipient } from "../../services/notification.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
@@ -46,6 +46,12 @@ async function audienceRecipients(audience: string): Promise<NotificationRecipie
 
 noticesRouter.get(
   "/",
+  // This is the admin-panel management list (dashboard "recent notices" widget for
+  // any staff role, plus the Notices admin page for WEBSITE_CONTENT_ROLES) — it
+  // returns every audience including unpublished drafts, so it must never be
+  // reachable by STUDENT/GUARDIAN tokens. Those roles have their own
+  // ownership-scoped GET /api/portal/student/:id/notices instead.
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ audience: z.string().optional(), is_published: z.string().optional(), search: z.string().optional() }).parse(req.query);
     const notices = await prisma.notice.findMany({

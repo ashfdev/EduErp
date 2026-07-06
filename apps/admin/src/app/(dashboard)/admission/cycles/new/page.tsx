@@ -22,6 +22,7 @@ export default function NewAdmissionCyclePage() {
   const [closeDate, setCloseDate] = useState("");
   const [seatCount, setSeatCount] = useState(50);
   const [appFee, setAppFee] = useState(500);
+  const [formFee, setFormFee] = useState(0);
 
   const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
@@ -36,6 +37,7 @@ export default function NewAdmissionCyclePage() {
         close_date: closeDate,
         seat_count: seatCount,
         app_fee: appFee,
+        form_fee: formFee,
       }),
     onSuccess: (res) => {
       toast.success("Admission cycle created");
@@ -71,11 +73,12 @@ export default function NewAdmissionCyclePage() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-5 gap-4">
             <div className="space-y-1.5"><Label>Open Date</Label><Input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Close Date</Label><Input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Seat Count</Label><Input type="number" value={seatCount} onChange={(e) => setSeatCount(Number(e.target.value))} /></div>
             <div className="space-y-1.5"><Label>Application Fee (৳)</Label><Input type="number" value={appFee} onChange={(e) => setAppFee(Number(e.target.value))} /></div>
+            <div className="space-y-1.5"><Label>Form Fee (৳)</Label><Input type="number" value={formFee} onChange={(e) => setFormFee(Number(e.target.value))} /></div>
           </div>
           <Button disabled={!canSubmit || createMutation.isPending} onClick={() => createMutation.mutate()}>
             {createMutation.isPending ? "Creating..." : "Create Cycle"}

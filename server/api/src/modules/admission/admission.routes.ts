@@ -26,6 +26,8 @@ import {
   generateTestSeatPlanSchema,
 } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
+import { generateInvoiceNo } from "../fees/fee-number.generator";
+import { createMonthlyInvoiceIfMissing } from "../fees/invoice-helpers";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
@@ -731,6 +733,7 @@ admissionRouter.post(
       if (application.cycle.app_fee > 0) {
         await tx.invoice.create({
           data: {
+            invoice_no: await generateInvoiceNo(tx),
             student_id: created.id,
             academic_year_id: application.cycle.academic_year_id,
             category: "ADMISSION",
@@ -740,6 +743,40 @@ admissionRouter.post(
             status: "PENDING",
           },
         });
+      }
+
+      if (application.cycle.form_fee > 0) {
+        await tx.invoice.create({
+          data: {
+            invoice_no: await generateInvoiceNo(tx),
+            student_id: created.id,
+            academic_year_id: application.cycle.academic_year_id,
+            category: "FORM",
+            description: `Form Fee — ${application.cycle.name}`,
+            amount_due: application.cycle.form_fee,
+            due_date: new Date(),
+            status: "PENDING",
+          },
+        });
+      }
+
+      // First month's tuition, invoiced immediately at enrollment rather than
+      // waiting for the next manual/scheduled generate-bulk-monthly run —
+      // reuses that same idempotent create-if-missing check, so if bulk
+      // generation for this month already ran (or runs again later), this
+      // never produces a duplicate invoice for the same student+structure.
+      const now = new Date();
+      const monthlyStructures = await tx.feeStructure.findMany({
+        where: {
+          academic_year_id: application.cycle.academic_year_id,
+          frequency: "MONTHLY",
+          is_active: true,
+          OR: [{ class_id: null }, { class_id: application.cycle.class_id }],
+        },
+      });
+      for (const structure of monthlyStructures) {
+        if (structure.section_id && structure.section_id !== body.section_id) continue;
+        await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
       }
 
       await tx.admissionApplication.update({ where: { id: application.id }, data: { status: "ENROLLED", enrolled_student_id: created.id } });

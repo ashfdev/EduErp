@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
+import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
 import { Card, CardContent, StatusBadge, LoadingSpinner } from "@education-erp/ui";
 
@@ -19,6 +20,7 @@ interface Dashboard {
 
 function HomeContent() {
   const { activeStudentId } = useAuthStore();
+  const { terms } = useInstitution();
 
   const { data, isLoading } = useQuery<Dashboard>({
     queryKey: ["portal", "dashboard", activeStudentId],
@@ -59,7 +61,7 @@ function HomeContent() {
             <p className="font-medium">Today</p>
             <StatusBadge status={data.attendance.today_status} />
           </div>
-          <p className="text-sm text-gray-500">{data.student.class} {data.student.section && `· Section ${data.student.section}`} {data.student.roll && `· Roll ${data.student.roll}`}</p>
+          <p className="text-sm text-gray-500">{data.student.class} {data.student.section && `· ${terms.term_section} ${data.student.section}`} {data.student.roll && `· ${terms.term_roll} ${data.student.roll}`}</p>
         </CardContent>
       </Card>
 
@@ -78,13 +80,30 @@ function HomeContent() {
               return (
                 <div key={e.id} className="flex items-center justify-between border-b py-2 text-sm last:border-0">
                   <span>{e.name}</span>
-                  {days !== null && <span className="text-xs text-gray-500">{days > 0 ? `in ${days}d` : "today"}</span>}
+                  <div className="flex items-center gap-2">
+                    {days !== null && <span className="text-xs text-gray-500">{days > 0 ? `in ${days}d` : "today"}</span>}
+                    <Link href={`/admit-card/${e.id}`} className="text-xs text-[var(--primary,#1a3c4a)]">Admit Card →</Link>
+                  </div>
                 </div>
               );
             })}
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">My {terms.term_class} Subjects</p>
+          <Link href="/subjects" className="text-xs text-[var(--primary,#1a3c4a)]">View →</Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">Transport & Hostel</p>
+          <Link href="/transport-hostel" className="text-xs text-[var(--primary,#1a3c4a)]">View →</Link>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6">

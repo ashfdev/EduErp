@@ -10,11 +10,12 @@ import type { PortalStudent } from "@/stores/auth-store";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, setStudents } = useAuthStore();
+  const { isAuthenticated, hasHydrated, setStudents } = useAuthStore();
 
   useEffect(() => {
+    if (!hasHydrated) return; // wait for localStorage rehydration before trusting isAuthenticated
     if (!isAuthenticated) router.replace("/login");
-  }, [isAuthenticated, router]);
+  }, [hasHydrated, isAuthenticated, router]);
 
   useQuery({
     queryKey: ["portal", "me"],
@@ -26,7 +27,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     enabled: isAuthenticated,
   });
 
-  if (!isAuthenticated) {
+  if (!hasHydrated || !isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <LoadingSpinner />

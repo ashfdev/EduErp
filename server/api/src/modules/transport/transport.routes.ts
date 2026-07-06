@@ -6,6 +6,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { TRANSPORT_MANAGE_ROLES } from "../../lib/roles";
 import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema } from "@education-erp/validators";
+import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { notFound } from "../../lib/errors";
 
 export const transportRouter = Router();
@@ -110,6 +111,7 @@ transportRouter.post(
       if (activeYear) {
         await prisma.invoice.create({
           data: {
+            invoice_no: await generateInvoiceNo(prisma),
             student_id: body.student_id,
             academic_year_id: activeYear.id,
             category: "TRANSPORT",

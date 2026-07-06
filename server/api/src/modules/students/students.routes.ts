@@ -12,6 +12,7 @@ import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
+import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendSms } from "../../services/sms.service";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
@@ -131,6 +132,12 @@ studentsRouter.get(
     const outstandingTotal = student.invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
     const paidTotal = student.invoices.reduce((sum, inv) => sum + inv.amount_paid, 0);
 
+    const [libraryFines, transport, hostelAllocation] = await Promise.all([
+      computeStudentLibraryFines(student.id),
+      prisma.studentTransport.findUnique({ where: { student_id: student.id }, include: { route: { select: { name: true, fare: true } } } }),
+      prisma.hostelAllocation.findFirst({ where: { student_id: student.id, is_active: true }, include: { room: { select: { room_no: true, block: { select: { name: true } } } } } }),
+    ]);
+
     res.json({
       success: true,
       data: {
@@ -185,9 +192,9 @@ studentsRouter.get(
           outstanding_total: outstandingTotal,
           paid_total: paidTotal,
         },
-        library: { issued_books: [], total_fines: 0 },
-        transport: null,
-        hostel: null,
+        library: libraryFines,
+        transport: transport ? { route_name: transport.route.name, fare: transport.route.fare, pickup_stop: transport.pickup_stop } : null,
+        hostel: hostelAllocation ? { block_name: hostelAllocation.room.block.name, room_no: hostelAllocation.room.room_no, bed_no: hostelAllocation.bed_no } : null,
         discipline: [],
       },
     });

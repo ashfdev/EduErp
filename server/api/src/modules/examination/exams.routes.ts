@@ -208,3 +208,21 @@ examsRouter.get(
     res.json({ success: true, data: plans });
   }),
 );
+
+// Third leg of the admit-card clearance gate — a manual sign-off exam
+// office staff give per student per exam (e.g. after confirming no
+// disciplinary hold). Bulk so a whole class/hall can be cleared in one go
+// once everything else checks out.
+examsRouter.post(
+  "/:id/seat-plan/clear",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ student_ids: z.array(z.string().min(1)).min(1) }).parse(req.body);
+    const result = await prisma.examSeatPlan.updateMany({
+      where: { exam_id: id, student_id: { in: body.student_ids } },
+      data: { exam_office_cleared: true, exam_office_cleared_by_id: req.user!.sub, exam_office_cleared_at: new Date() },
+    });
+    res.json({ success: true, data: { cleared: result.count } });
+  }),
+);

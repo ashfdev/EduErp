@@ -12,6 +12,9 @@ import { cached } from "../../lib/cache";
 import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument } from "../../services/pdf.service";
 import { buildMarksheetData } from "../documents/documents.routes";
+import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { uploadBuffer } from "../../services/storage.service";
+import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const portalRouter = Router();
@@ -213,6 +216,50 @@ portalRouter.get(
   }),
 );
 
+// Forecast only — diffs active FeeStructure rows against Invoices that
+// already exist for this student, so the portal can show "Exam Fee: not yet
+// invoiced, projected ৳X" ahead of time. Never creates a real Invoice and
+// never touches the Accounts auto-journal — this is display-only, distinct
+// from the real due/outstanding totals already served by /fees above.
+portalRouter.get(
+  "/student/:id/upcoming-dues",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.current_class_id) return res.json({ success: true, data: [] });
+
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    if (!activeYear) return res.json({ success: true, data: [] });
+
+    const structures = await prisma.feeStructure.findMany({
+      where: {
+        academic_year_id: activeYear.id,
+        is_active: true,
+        OR: [{ class_id: null }, { class_id: student.current_class_id }],
+      },
+    });
+
+    const now = new Date();
+    const projected: { category: string; name: string; amount: number; frequency: string }[] = [];
+    for (const structure of structures) {
+      if (structure.section_id && structure.section_id !== student.current_section_id) continue;
+
+      if (structure.frequency === "MONTHLY") {
+        const existing = await prisma.invoice.findFirst({
+          where: { student_id: id, fee_structure_id: structure.id, month: now.getMonth() + 1, year: now.getFullYear() },
+        });
+        if (!existing) projected.push({ category: structure.category, name: structure.name, amount: structure.amount, frequency: "This month" });
+      } else {
+        const existing = await prisma.invoice.findFirst({ where: { student_id: id, fee_structure_id: structure.id, academic_year_id: activeYear.id } });
+        if (!existing) projected.push({ category: structure.category, name: structure.name, amount: structure.amount, frequency: structure.frequency === "YEARLY" ? "This year" : "One-time" });
+      }
+    }
+
+    res.json({ success: true, data: projected });
+  }),
+);
+
 portalRouter.get(
   "/student/:id/homework",
   asyncHandler(async (req, res) => {
@@ -282,6 +329,104 @@ portalRouter.get(
   }),
 );
 
+portalRouter.get(
+  "/student/:id/transport-hostel",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const [transport, hostel] = await Promise.all([
+      prisma.studentTransport.findUnique({
+        where: { student_id: id },
+        include: { route: { select: { name: true, fare: true } } },
+      }),
+      prisma.hostelAllocation.findFirst({
+        where: { student_id: id, is_active: true },
+        include: { room: { select: { room_no: true, block: { select: { name: true } } } } },
+        orderBy: { from_date: "desc" },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        transport: transport ? { route_name: transport.route.name, fare: transport.route.fare, pickup_stop: transport.pickup_stop } : null,
+        hostel: hostel ? { block_name: hostel.room.block.name, room_no: hostel.room.room_no, bed_no: hostel.bed_no, from_date: hostel.from_date } : null,
+      },
+    });
+  }),
+);
+
+// Clearance gate: accounts due -> library fine -> exam office approval.
+// Accounts is only enforced if FeeRules.block_admit_on_due is set (an
+// existing, previously-dead Settings flag) — library and exam-office are
+// always checked, matching the fixed 3-stage pipeline this was asked for.
+async function checkAdmitCardClearance(studentId: string, examId: string) {
+  const rules = await prisma.feeRules.findUnique({ where: { id: "singleton" } });
+  const invoices = await prisma.invoice.findMany({ where: { student_id: studentId, status: { notIn: ["PAID", "WAIVED"] } } });
+  const dueAmount = invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+  const accountsRequired = rules?.block_admit_on_due ?? false;
+  const accountsClear = !accountsRequired || dueAmount <= 0;
+
+  const { total_fines } = await computeStudentLibraryFines(studentId);
+  const libraryClear = total_fines <= 0;
+
+  const seatPlan = await prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: studentId } } });
+  const examOfficeClear = seatPlan?.exam_office_cleared ?? false;
+
+  return {
+    accounts: { required: accountsRequired, clear: accountsClear, due_amount: dueAmount },
+    library: { clear: libraryClear, fine_amount: total_fines },
+    exam_office: { clear: examOfficeClear },
+    all_clear: accountsClear && libraryClear && examOfficeClear,
+  };
+}
+
+portalRouter.get(
+  "/student/:id/admit-card/:exam_id/clearance",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const examId = reqParam(req, "exam_id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    res.json({ success: true, data: await checkAdmitCardClearance(id, examId) });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/admit-card/:exam_id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const examId = reqParam(req, "exam_id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const clearance = await checkAdmitCardClearance(id, examId);
+    if (!clearance.all_clear) throw forbidden("Admit card is locked — clear all pending items first");
+
+    const [exam, student, subjectConfigs, seatPlan] = await Promise.all([
+      prisma.exam.findUnique({ where: { id: examId } }),
+      prisma.student.findUnique({ where: { id }, include: { current_class: true, current_section: true } }),
+      prisma.examSubjectConfig.findMany({ where: { exam_id: examId }, include: { subject: true } }),
+      prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: id } } }),
+    ]);
+    if (!exam || !student) throw notFound("Exam or student not found");
+
+    const academicYear = exam.academic_year_id ? await prisma.academicYear.findUnique({ where: { id: exam.academic_year_id } }) : null;
+    const schedule = subjectConfigs.map((sc) => ({
+      date: exam.start_date,
+      day: exam.start_date ? new Date(exam.start_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
+      subject_name: sc.subject.name_en,
+      time: "10:00 AM - 1:00 PM",
+      hall: seatPlan?.hall_name ?? "TBA",
+      seat_no: seatPlan?.seat_number ?? "TBA",
+    }));
+
+    const pdf = await renderDocument("ADMIT_CARD", { student, exam_name: exam.name, academic_year_label: academicYear?.label ?? "", schedule } as unknown as Record<string, unknown>);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="admit-card-${student.student_uid}.pdf"`);
+    res.send(pdf);
+  }),
+);
+
 portalRouter.post(
   "/fees/pay",
   asyncHandler(async (req, res) => {
@@ -295,9 +440,29 @@ portalRouter.post(
 
     const transactionId = randomUUID();
     const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });
-    await prisma.payment.create({ data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: invoice.amount_due - invoice.amount_paid, status: "INITIATED" } });
+    const payment = await prisma.payment.create({ data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: invoice.amount_due - invoice.amount_paid, status: "INITIATED" } });
 
-    res.json({ success: true, data: { payment_url: result.payment_url, session_id: result.session_id } });
+    res.json({ success: true, data: { payment_id: payment.id, payment_url: result.payment_url, session_id: result.session_id } });
+  }),
+);
+
+// Bank-transfer only — student uploads their slip right after /fees/pay
+// creates the INITIATED payment, so staff has something to verify against.
+portalRouter.post(
+  "/fees/payments/:id/slip",
+  documentUpload.single("slip"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const payment = await prisma.payment.findUnique({ where: { id }, include: { invoice: true } });
+    if (!payment) throw notFound("Payment not found");
+    await assertAccess(req.user!.sub, req.user!.role, payment.invoice.student_id);
+    if (payment.gateway !== "BANK_TRANSFER") throw badRequest("Slip upload only applies to bank-transfer payments");
+    if (!req.file) throw badRequest("A slip image/PDF is required");
+
+    const { url } = await uploadBuffer("bank-slips", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const updated = await prisma.payment.update({ where: { id }, data: { receipt_url: url } });
+    res.json({ success: true, data: updated });
   }),
 );
 

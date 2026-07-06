@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SeatPlanRow {
   id: string;
   hall_name: string;
   seat_number: string;
+  student_id: string;
+  exam_office_cleared: boolean;
   student: { name_en: string; student_uid: string; current_class: { name_en: string } };
 }
 
@@ -18,6 +20,7 @@ export default function SeatPlanPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [halls, setHalls] = useState([{ name: "Hall A", capacity: 50 }]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: plans } = useQuery<SeatPlanRow[]>({
     queryKey: ["exams", id, "seat-plan"],
@@ -31,6 +34,24 @@ export default function SeatPlanPage() {
       queryClient.invalidateQueries({ queryKey: ["exams", id, "seat-plan"] });
     },
   });
+
+  const clearMutation = useMutation({
+    mutationFn: () => api.post(`/api/exams/${id}/seat-plan/clear`, { student_ids: [...selected] }),
+    onSuccess: (res) => {
+      toast.success(`Cleared ${res.data.data.cleared} student(s) for admit card`);
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["exams", id, "seat-plan"] });
+    },
+  });
+
+  function toggle(studentId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
+  }
 
   return (
     <PageWrapper>
@@ -55,15 +76,22 @@ export default function SeatPlanPage() {
       {plans && plans.length > 0 && (
         <Card>
           <CardContent className="pt-6">
+            <div className="mb-3 flex justify-end">
+              <Button size="sm" onClick={() => clearMutation.mutate()} disabled={!selected.size || clearMutation.isPending}>
+                Clear Selected for Admit Card ({selected.size})
+              </Button>
+            </div>
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Student</th><th className="p-2">Class</th></tr></thead>
+              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2" /><th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Student</th><th className="p-2">Class</th><th className="p-2">Exam Office</th></tr></thead>
               <tbody>
                 {plans.map((p) => (
                   <tr key={p.id} className="border-b">
+                    <td className="p-2"><Checkbox checked={selected.has(p.student_id)} onCheckedChange={() => toggle(p.student_id)} disabled={p.exam_office_cleared} /></td>
                     <td className="p-2">{p.hall_name}</td>
                     <td className="p-2">{p.seat_number}</td>
                     <td className="p-2">{p.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.student.student_uid}</span></td>
                     <td className="p-2">{p.student.current_class.name_en}</td>
+                    <td className="p-2">{p.exam_office_cleared ? <StatusBadge status="APPROVED" /> : <StatusBadge status="PENDING" />}</td>
                   </tr>
                 ))}
               </tbody>

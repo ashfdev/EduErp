@@ -14,5 +14,5 @@ export const pushUnsubscribeSchema = z.object({
 
 export const portalPaySchema = z.object({
   invoice_id: z.string().min(1),
-  gateway: z.enum(["BKASH", "NAGAD", "SSLCOMMERZ"]),
+  gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ", "BANK_TRANSFER"]),
 });

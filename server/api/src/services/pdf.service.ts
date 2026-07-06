@@ -15,6 +15,7 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   ADMIT_CARD: "admit-card",
   REGISTRATION_CARD: "registration-card",
   MARKSHEET: "marksheet",
+  BLANK_MARKSHEET: "blank-marksheet",
   REPORT_CARD: "report-card",
   TABULATION_SHEET: "tabulation-sheet",
   MERIT_LIST: "merit-list",

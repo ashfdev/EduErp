@@ -9,7 +9,35 @@ import { reqParam } from "../../lib/req-param";
 import { ATTENDANCE_MARK_ROLES } from "../../lib/roles";
 import { markAttendanceSchema, markStaffAttendanceSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
-import { badRequest } from "../../lib/errors";
+import { badRequest, forbidden, notFound } from "../../lib/errors";
+
+// CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
+// actually attached to — either as the section's class teacher, or via a
+// SubjectTeacherAssignment covering this section (or the whole class, when
+// section_id is null on the assignment). ADMIN/SUPER_ADMIN always bypass this
+// entirely, matching marks.routes.ts's existing subject-ownership pattern.
+async function assertSectionOwnership(userId: string, role: string, sectionId: string) {
+  if (role === "ADMIN" || role === "SUPER_ADMIN") return;
+
+  const section = await prisma.section.findUnique({ where: { id: sectionId } });
+  if (!section) throw notFound("Section not found");
+
+  const staff = await prisma.staff.findFirst({ where: { user_id: userId } });
+  if (staff && section.class_teacher_id === staff.id) return;
+
+  const assignment = staff
+    ? await prisma.subjectTeacherAssignment.findFirst({
+        where: {
+          staff_id: staff.id,
+          OR: [{ section_id: sectionId }, { section_id: null }],
+          subject: { class_id: section.class_id },
+        },
+      })
+    : null;
+  if (assignment) return;
+
+  throw forbidden("You are not assigned to this section");
+}
 
 export const attendanceRouter = Router();
 attendanceRouter.use(authenticate);
@@ -26,6 +54,7 @@ attendanceRouter.post(
   authorize(ATTENDANCE_MARK_ROLES),
   asyncHandler(async (req, res) => {
     const body = markAttendanceSchema.parse(req.body);
+    await assertSectionOwnership(req.user!.sub, req.user!.role, body.section_id);
     const date = startOfDay(body.date);
 
     const studentIds = body.records.map((r) => r.student_id);
