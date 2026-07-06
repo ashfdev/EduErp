@@ -32,6 +32,24 @@ export const seatPlanGenerateSchema = z.object({
   halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).min(1),
 });
 
+export const markComponentConfigSchema = z.object({
+  components: z
+    .array(
+      z.object({
+        key: z
+          .string()
+          .min(1)
+          .max(40)
+          .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
+        label: z.string().min(1).max(100),
+        max_marks: z.number().min(0),
+        display_order: z.number().int().min(0).optional(),
+      }),
+    )
+    .max(20),
+});
+export type MarkComponentConfigInput = z.infer<typeof markComponentConfigSchema>;
+
 export const submitMarksSchema = z.object({
   exam_id: z.string().min(1),
   entries: z.array(
@@ -40,6 +58,7 @@ export const submitMarksSchema = z.object({
       subject_id: z.string().min(1),
       marks_theory: z.number().min(0).optional().nullable(),
       marks_practical: z.number().min(0).optional().nullable(),
+      component_marks: z.record(z.string(), z.number().min(0)).optional(),
       is_absent: z.boolean().optional(),
     }),
   ),

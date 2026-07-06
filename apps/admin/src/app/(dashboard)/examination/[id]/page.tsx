@@ -5,7 +5,21 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge } from "@education-erp/ui";
+import {
+  PageWrapper,
+  PageHeader,
+  Card,
+  CardContent,
+  Button,
+  Input,
+  Label,
+  StatusBadge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SubjectConfig {
@@ -19,11 +33,31 @@ interface SubjectConfig {
   subject: { name_en: string; class: { name_en: string } };
 }
 
+interface ComponentConfig {
+  id: string;
+  subject_id: string;
+  key: string;
+  label: string;
+  max_marks: number;
+  display_order: number;
+}
+
 interface Exam {
   id: string;
   name: string;
   status: string;
   subject_configs: SubjectConfig[];
+  component_configs: ComponentConfig[];
+}
+
+interface ComponentDraftRow {
+  key: string;
+  label: string;
+  max_marks: number;
+}
+
+function slugifyKey(label: string): string {
+  return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "component";
 }
 
 const NEXT_STATUS: Record<string, string | null> = {
@@ -75,6 +109,37 @@ export default function ExamDetailPage() {
     setConfigs({ ...effectiveConfigs, [subjectId]: { ...effectiveConfigs[subjectId]!, ...patch } });
   }
 
+  const [componentSubjectId, setComponentSubjectId] = useState<string | null>(null);
+  const [componentDraft, setComponentDraft] = useState<ComponentDraftRow[]>([]);
+
+  function openComponentEditor(subjectId: string) {
+    const existing = (exam?.component_configs ?? [])
+      .filter((c) => c.subject_id === subjectId)
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((c) => ({ key: c.key, label: c.label, max_marks: c.max_marks }));
+    setComponentDraft(existing);
+    setComponentSubjectId(subjectId);
+  }
+
+  const saveComponentsMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/exams/${id}/subject-config/${componentSubjectId}/components`, {
+        components: componentDraft.map((c, i) => ({ ...c, display_order: i })),
+      }),
+    onSuccess: () => {
+      toast.success("Components saved");
+      setComponentSubjectId(null);
+      queryClient.invalidateQueries({ queryKey: ["exams", id] });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save components";
+      toast.error(message);
+    },
+  });
+
+  const componentDraftTotal = componentDraft.reduce((sum, c) => sum + (c.max_marks || 0), 0);
+  const componentSubject = Object.values(effectiveConfigs).find((c) => c.subject_id === componentSubjectId);
+
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   const next = NEXT_STATUS[exam.status];
@@ -104,19 +169,28 @@ export default function ExamDetailPage() {
                 <th className="p-2">Pass (Theory)</th>
                 <th className="p-2">Pass (Practical)</th>
                 <th className="p-2">Total Marks</th>
+                <th className="p-2">Theory Breakdown</th>
               </tr>
             </thead>
             <tbody>
-              {Object.values(effectiveConfigs).map((c) => (
-                <tr key={c.subject_id} className="border-b">
-                  <td className="p-2">{c.subject.name_en}</td>
-                  <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></td>
-                  <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></td>
-                  <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></td>
-                  <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_practical} onChange={(e) => updateConfig(c.subject_id, { pass_marks_practical: Number(e.target.value) })} /></td>
-                  <td className="p-2 font-medium">{c.full_marks_theory + c.full_marks_practical}</td>
-                </tr>
-              ))}
+              {Object.values(effectiveConfigs).map((c) => {
+                const componentCount = (exam.component_configs ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
+                return (
+                  <tr key={c.subject_id} className="border-b">
+                    <td className="p-2">{c.subject.name_en}</td>
+                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></td>
+                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></td>
+                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></td>
+                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_practical} onChange={(e) => updateConfig(c.subject_id, { pass_marks_practical: Number(e.target.value) })} /></td>
+                    <td className="p-2 font-medium">{c.full_marks_theory + c.full_marks_practical}</td>
+                    <td className="p-1">
+                      <Button size="sm" variant="outline" onClick={() => openComponentEditor(c.subject_id)}>
+                        {componentCount ? `${componentCount} component(s)` : "Plain theory mark"}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <Button className="mt-4" size="sm" onClick={() => saveConfigMutation.mutate()} disabled={saveConfigMutation.isPending}>
@@ -124,6 +198,71 @@ export default function ExamDetailPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={!!componentSubjectId} onOpenChange={(open) => !open && setComponentSubjectId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Theory Mark Breakdown — {componentSubject?.subject.name_en}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Optionally split the theory mark into named components (assignment, quiz, mid-term, attendance, lab/viva,
+            etc.). Leave empty to keep a single plain theory mark. When set, the theory mark is always the sum of
+            these components.
+          </p>
+
+          <div className="space-y-2">
+            {componentDraft.map((row, i) => (
+              <div key={i} className="flex items-end gap-2">
+                <div className="flex-1 space-y-1">
+                  {i === 0 && <Label className="text-xs">Label</Label>}
+                  <Input
+                    value={row.label}
+                    placeholder="e.g. Assignment"
+                    onChange={(e) =>
+                      setComponentDraft((prev) => prev.map((r, idx) => (idx === i ? { ...r, label: e.target.value, key: slugifyKey(e.target.value) } : r)))
+                    }
+                  />
+                </div>
+                <div className="w-28 space-y-1">
+                  {i === 0 && <Label className="text-xs">Max Marks</Label>}
+                  <Input
+                    type="number"
+                    min={0}
+                    value={row.max_marks}
+                    onChange={(e) => setComponentDraft((prev) => prev.map((r, idx) => (idx === i ? { ...r, max_marks: Number(e.target.value) } : r)))}
+                  />
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setComponentDraft((prev) => prev.filter((_, idx) => idx !== i))}>
+                  Remove
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setComponentDraft((prev) => [...prev, { key: `component_${prev.length + 1}`, label: "", max_marks: 0 }])}
+            >
+              + Add Component
+            </Button>
+          </div>
+
+          {componentDraft.length > 0 && componentSubject && (
+            <p className={`text-sm ${componentDraftTotal > componentSubject.full_marks_theory ? "text-red-600" : "text-muted-foreground"}`}>
+              Components total: {componentDraftTotal} / Theory full marks: {componentSubject.full_marks_theory}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComponentSubjectId(null)}>Cancel</Button>
+            <Button
+              onClick={() => saveComponentsMutation.mutate()}
+              disabled={saveComponentsMutation.isPending || componentDraft.some((r) => !r.label.trim())}
+            >
+              {saveComponentsMutation.isPending ? "Saving..." : "Save Components"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

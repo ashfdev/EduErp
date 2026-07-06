@@ -279,6 +279,7 @@ model Class {
   admission_cycles AdmissionCycle[]
   homework         Homework[]
   routine_slots    RoutineSlot[]
+  teaching_resources TeachingResource[]
 
   @@index([academic_year_id])
 }
@@ -299,6 +300,7 @@ model Section {
   attendance       AttendanceRecord[]
   homework         Homework[]
   routine_slots    RoutineSlot[]
+  teaching_resources TeachingResource[]
 
   @@index([class_id])
 }
@@ -323,8 +325,10 @@ model Subject {
   student_subjects StudentSubject[]
   mark_entries     MarkEntry[]
   exam_subject_configs ExamSubjectConfig[]
+  component_configs MarkComponentConfig[]
   homework         Homework[]
   routine_slots    RoutineSlot[]
+  teaching_resources TeachingResource[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -532,6 +536,7 @@ model Staff {
   assigned_assets     Asset[]
   routine_slots       RoutineSlot[]
   documents           StaffDocument[]
+  teaching_resources  TeachingResource[]
 
   @@index([department_id])
   @@index([salary_structure_id])
@@ -620,6 +625,7 @@ model Exam {
   created_at           DateTime            @default(now())
   updated_at           DateTime            @updatedAt
   subject_configs      ExamSubjectConfig[]
+  component_configs    MarkComponentConfig[]
   mark_entries         MarkEntry[]
   seat_plans           ExamSeatPlan[]
   result_publications  ResultPublication[]
@@ -642,6 +648,28 @@ model ExamSubjectConfig {
   @@unique([exam_id, subject_id])
 }
 
+// Optional, per-subject-per-exam breakdown of the theory mark into named
+// parts (assignment/quiz/mid-term/attendance/lab-viva, etc.) — admin/exam
+// staff configurable, mirroring the GradingScale->GradeRange pattern rather
+// than a hardcoded fixed list. When no rows exist for an exam+subject, that
+// subject's mark entry stays the plain theory/practical model unchanged.
+model MarkComponentConfig {
+  id            String   @id @default(cuid())
+  exam_id       String
+  exam          Exam     @relation(fields: [exam_id], references: [id])
+  subject_id    String
+  subject       Subject  @relation(fields: [subject_id], references: [id])
+  key           String
+  label         String
+  max_marks     Float
+  display_order Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([exam_id, subject_id, key])
+  @@index([exam_id, subject_id])
+}
+
 model MarkEntry {
   id              String     @id @default(cuid())
   exam_id         String
@@ -652,6 +680,11 @@ model MarkEntry {
   subject         Subject    @relation(fields: [subject_id], references: [id])
   marks_theory    Float?
   marks_practical Float?
+  // Set only when MarkComponentConfig rows exist for this exam+subject —
+  // { [component_key]: marks }. marks_theory is then server-computed as the
+  // sum of these, never accepted directly from the client, so the two can
+  // never disagree.
+  component_marks Json?
   marks_total     Float?
   is_absent       Boolean    @default(false)
   grade_letter    String?
@@ -1719,6 +1752,45 @@ model Homework {
 
   @@index([class_id])
   @@index([section_id])
+}
+
+enum TeachingResourceType {
+  LECTURE_SLIDE
+  HANDOUT
+  ASSIGNMENT
+  OTHER
+}
+
+// Teacher-published class materials ("Smart Routing Engine" targeting),
+// deliberately mirroring Homework's class/section/subject/teacher shape.
+// blob_key is private (never a public file_url) — the only intended way to
+// read the file is a short-lived signed URL issued after the eligibility
+// re-check in the resources/portal routes, not a permanent link.
+model TeachingResource {
+  id                String               @id @default(cuid())
+  class_id          String
+  class             Class                @relation(fields: [class_id], references: [id])
+  section_id        String?
+  section           Section?             @relation(fields: [section_id], references: [id])
+  subject_id        String?
+  subject           Subject?             @relation(fields: [subject_id], references: [id])
+  teacher_id        String?
+  teacher           Staff?               @relation(fields: [teacher_id], references: [id])
+  title             String
+  description       String?              @db.Text
+  resource_type     TeachingResourceType @default(OTHER)
+  blob_key          String
+  original_filename String
+  mime_type         String
+  is_published      Boolean              @default(true)
+  publish_at        DateTime?
+  expire_at         DateTime?
+  created_at        DateTime             @default(now())
+  updated_at        DateTime             @updatedAt
+
+  @@index([class_id])
+  @@index([section_id])
+  @@index([teacher_id])
 }
 
 model RoutineSlot {

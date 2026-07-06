@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -73,6 +74,15 @@ marksRouter.get(
     const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } } });
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
 
+    const componentConfigs = await prisma.markComponentConfig.findMany({
+      where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } },
+      orderBy: { display_order: "asc" },
+    });
+    const componentsBySubject = new Map<string, typeof componentConfigs>();
+    for (const c of componentConfigs) {
+      componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
+    }
+
     res.json({
       success: true,
       data: {
@@ -81,7 +91,7 @@ marksRouter.get(
           is_open: exam.status === "MARK_ENTRY",
           time_remaining: exam.mark_entry_closes_at ? Math.max(0, exam.mark_entry_closes_at.getTime() - Date.now()) : null,
         },
-        subjects: subjects.map((s) => ({ ...s, config: configBySubject.get(s.id) })),
+        subjects: subjects.map((s) => ({ ...s, config: configBySubject.get(s.id), components: componentsBySubject.get(s.id) ?? [] })),
         students: students.map((s) => ({
           id: s.id,
           name_en: s.name_en,
@@ -120,9 +130,34 @@ marksRouter.post(
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
     const scale = exam.grading_scale?.ranges ?? [];
 
+    const componentConfigs = await prisma.markComponentConfig.findMany({ where: { exam_id: body.exam_id, subject_id: { in: subjectIds } } });
+    const componentsBySubject = new Map<string, typeof componentConfigs>();
+    for (const c of componentConfigs) {
+      componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
+    }
+
     for (const entry of body.entries) {
       const config = configBySubject.get(entry.subject_id);
-      const marksTotal = (entry.marks_theory ?? 0) + (entry.marks_practical ?? 0);
+      const components = componentsBySubject.get(entry.subject_id);
+
+      // When a subject has configured components, the theory mark is always
+      // the server-computed sum of those components — never trust a
+      // client-submitted marks_theory that could silently disagree with it.
+      let marksTheory = entry.marks_theory ?? null;
+      let componentMarks: Record<string, number> | null = null;
+      if (components && components.length > 0 && !entry.is_absent) {
+        const provided = entry.component_marks ?? {};
+        const configByKey = new Map(components.map((c) => [c.key, c]));
+        for (const [k, v] of Object.entries(provided)) {
+          const conf = configByKey.get(k);
+          if (!conf) throw badRequest(`Unknown mark component "${k}" for subject`);
+          if (v < 0 || v > conf.max_marks) throw badRequest(`${conf.label} must be between 0 and ${conf.max_marks}`);
+        }
+        componentMarks = provided;
+        marksTheory = Object.values(provided).reduce((sum, v) => sum + v, 0);
+      }
+
+      const marksTotal = (marksTheory ?? 0) + (entry.marks_practical ?? 0);
       if (config && marksTotal > config.full_marks_theory + config.full_marks_practical) {
         throw badRequest(`Marks for subject exceed full marks (${config.full_marks_theory + config.full_marks_practical})`);
       }
@@ -135,8 +170,9 @@ marksRouter.post(
           exam_id: body.exam_id,
           student_id: entry.student_id,
           subject_id: entry.subject_id,
-          marks_theory: entry.marks_theory,
+          marks_theory: marksTheory,
           marks_practical: entry.marks_practical,
+          component_marks: componentMarks ?? undefined,
           marks_total: entry.is_absent ? null : marksTotal,
           is_absent: !!entry.is_absent,
           grade_letter: grade.grade_letter,
@@ -145,8 +181,9 @@ marksRouter.post(
           entered_by_id: req.user!.sub,
         },
         update: {
-          marks_theory: entry.marks_theory,
+          marks_theory: marksTheory,
           marks_practical: entry.marks_practical,
+          component_marks: componentMarks ?? Prisma.DbNull,
           marks_total: entry.is_absent ? null : marksTotal,
           is_absent: !!entry.is_absent,
           grade_letter: grade.grade_letter,

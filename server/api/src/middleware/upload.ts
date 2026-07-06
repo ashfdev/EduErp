@@ -22,8 +22,10 @@ const DOCUMENT_ACCEPT_MIME_TYPES = [
   "application/pdf",
   "application/msword",
   "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 const DOCUMENT_DETECTED_MIME_TYPES = [
   ...IMAGE_MIME_TYPES,
@@ -31,6 +33,7 @@ const DOCUMENT_DETECTED_MIME_TYPES = [
   "application/x-cfb",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;

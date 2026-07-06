@@ -32,6 +32,7 @@ import { hostelRouter } from "./modules/hostel/hostel.routes";
 import { analyticsRouter } from "./modules/reports/analytics.routes";
 import { portalRouter } from "./modules/portal/portal.routes";
 import { teacherRouter } from "./modules/teacher/teacher.routes";
+import { resourcesRouter } from "./modules/resources/resources.routes";
 import { devicesRouter } from "./modules/devices/devices.routes";
 import { accountsModuleRouter } from "./modules/accounts";
 import { inventoryModuleRouter } from "./modules/inventory";
@@ -97,6 +98,7 @@ export function createApp(): Express {
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/teacher", teacherRouter);
+  app.use("/api/resources", resourcesRouter);
   app.use("/api/devices", devicesRouter);
   app.use("/api/accounts", accountsModuleRouter);
   app.use("/api/inventory", inventoryModuleRouter);

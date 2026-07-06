@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES } from "../../lib/roles";
-import { createExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema } from "@education-erp/validators";
+import { createExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const examsRouter = Router();
@@ -39,7 +39,13 @@ examsRouter.get(
     const id = reqParam(req, "id");
     const exam = await prisma.exam.findUnique({
       where: { id },
-      include: { exam_type_config: true, academic_year: true, grading_scale: true, subject_configs: { include: { subject: { include: { class: true } } } } },
+      include: {
+        exam_type_config: true,
+        academic_year: true,
+        grading_scale: true,
+        subject_configs: { include: { subject: { include: { class: true } } } },
+        component_configs: { orderBy: { display_order: "asc" } },
+      },
     });
     if (!exam) throw notFound("Exam not found");
     res.json({ success: true, data: exam });
@@ -154,6 +160,44 @@ examsRouter.put(
 
     const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: id }, include: { subject: true } });
     res.json({ success: true, data: configs });
+  }),
+);
+
+// Full replace, not upsert-by-key — a subject's component list is short and
+// edited as a whole from one small admin form, so there's no benefit to
+// diffing individual rows the way subject-config (one row per subject,
+// edited independently) does.
+examsRouter.put(
+  "/:id/subject-config/:subject_id/components",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const subjectId = reqParam(req, "subject_id");
+    const body = markComponentConfigSchema.parse(req.body);
+
+    const keys = body.components.map((c) => c.key);
+    if (new Set(keys).size !== keys.length) throw badRequest("Component keys must be unique within a subject");
+
+    await prisma.$transaction([
+      prisma.markComponentConfig.deleteMany({ where: { exam_id: id, subject_id: subjectId } }),
+      ...(body.components.length
+        ? [
+            prisma.markComponentConfig.createMany({
+              data: body.components.map((c, i) => ({
+                exam_id: id,
+                subject_id: subjectId,
+                key: c.key,
+                label: c.label,
+                max_marks: c.max_marks,
+                display_order: c.display_order ?? i,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+
+    const components = await prisma.markComponentConfig.findMany({ where: { exam_id: id, subject_id: subjectId }, orderBy: { display_order: "asc" } });
+    res.json({ success: true, data: components });
   }),
 );
 

@@ -13,7 +13,7 @@ import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument } from "../../services/pdf.service";
 import { buildMarksheetData } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
-import { uploadBuffer } from "../../services/storage.service";
+import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
@@ -274,6 +274,72 @@ portalRouter.get(
       orderBy: { due_date: "desc" },
     });
     res.json({ success: true, data: homework });
+  }),
+);
+
+// Second of the three required access-control layers for the Resource
+// Library (list-filter is the first, signed-URL file serving is the third):
+// re-checked against this ONE resource's actual targeting before anything is
+// returned, never just trusted from the list query that got the caller here.
+function isResourceEligible(
+  resource: { class_id: string; section_id: string | null; is_published: boolean; publish_at: Date | null; expire_at: Date | null },
+  studentClassId: string,
+  studentSectionId: string | null,
+): boolean {
+  const now = new Date();
+  if (resource.class_id !== studentClassId) return false;
+  if (resource.section_id !== null && resource.section_id !== studentSectionId) return false;
+  if (!resource.is_published) return false;
+  if (resource.publish_at && resource.publish_at > now) return false;
+  if (resource.expire_at && resource.expire_at <= now) return false;
+  return true;
+}
+
+portalRouter.get(
+  "/student/:id/resources",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.current_class_id) return res.json({ success: true, data: [] });
+
+    const now = new Date();
+    const resources = await prisma.teachingResource.findMany({
+      where: {
+        class_id: student.current_class_id,
+        is_published: true,
+        AND: [
+          { OR: [{ section_id: student.current_section_id }, { section_id: null }] },
+          { OR: [{ publish_at: null }, { publish_at: { lte: now } }] },
+          { OR: [{ expire_at: null }, { expire_at: { gt: now } }] },
+        ],
+      },
+      include: { subject: { select: { name_en: true } }, teacher: { select: { name_en: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: resources });
+  }),
+);
+
+// The single-resource endpoint a direct-object-reference attack would target
+// (guessing/enumerating resource_id values) — 404s exactly like a genuinely
+// nonexistent id would, so an ineligible caller can't distinguish "wrong
+// section" from "doesn't exist" (never 403 here, that would confirm existence).
+portalRouter.get(
+  "/student/:id/resources/:resource_id/download",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.current_class_id) throw notFound("Resource not found");
+
+    const resource = await prisma.teachingResource.findUnique({ where: { id: reqParam(req, "resource_id") } });
+    if (!resource || !isResourceEligible(resource, student.current_class_id, student.current_section_id)) {
+      throw notFound("Resource not found");
+    }
+
+    const url = await getSignedDownloadUrl(resource.blob_key);
+    res.json({ success: true, data: { url } });
   }),
 );
 
