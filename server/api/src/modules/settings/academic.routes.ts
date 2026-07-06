@@ -6,16 +6,17 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
-import { academicYearSchema, shiftSchema, departmentSchema, classSchema, sectionSchema } from "@education-erp/validators";
-import { conflict } from "../../lib/errors";
+import { academicYearSchema, shiftSchema, departmentSchema, classSchema, sectionSchema, routineSlotSchema } from "@education-erp/validators";
+import { badRequest, conflict } from "../../lib/errors";
 
 export const academicYearsRouter = Router();
 export const shiftsRouter = Router();
 export const departmentsRouter = Router();
 export const classesRouter = Router();
 export const sectionsRouter = Router();
+export const routineRouter = Router();
 
-for (const r of [academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter]) {
+for (const r of [academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter, routineRouter]) {
   r.use(authenticate);
 }
 
@@ -252,5 +253,82 @@ sectionsRouter.put(
     const body = z.object({ class_teacher_id: z.string().nullable() }).parse(req.body);
     const section = await prisma.section.update({ where: { id: reqParam(req, "id") }, data: body });
     res.json({ success: true, data: section });
+  }),
+);
+
+// ── Routine / Timetable ──────────────────────────────────────────
+// RoutineSlot existed in the schema since Phase 15 purely to back the
+// student portal's read-only "my routine" view — nothing ever wrote to it.
+// This is the first create/edit path.
+
+// A teacher physically cannot teach two different slots at the same
+// day/period, regardless of class/section — so any other RoutineSlot row
+// for the same teacher at this exact day_of_week+period_no is a clash.
+async function assertNoTeacherClash(input: { teacher_id?: string | null; day_of_week: number; period_no: number }, excludeId?: string) {
+  if (!input.teacher_id) return;
+  const clash = await prisma.routineSlot.findFirst({
+    where: {
+      id: excludeId ? { not: excludeId } : undefined,
+      teacher_id: input.teacher_id,
+      day_of_week: input.day_of_week,
+      period_no: input.period_no,
+    },
+    include: { class: { select: { name_en: true } }, section: { select: { name: true } } },
+  });
+  if (clash) {
+    throw badRequest(
+      `This teacher is already booked for period ${input.period_no} on this day, in ${clash.class.name_en}${clash.section ? ` (${clash.section.name})` : ""}`,
+    );
+  }
+}
+
+routineRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional() }).parse(req.query);
+    const slots = await prisma.routineSlot.findMany({
+      where: {
+        ...(query.class_id && { class_id: query.class_id }),
+        ...(query.section_id && { section_id: query.section_id }),
+      },
+      include: { subject: { select: { name_en: true } }, teacher: { select: { name_en: true } } },
+      orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
+    });
+    res.json({ success: true, data: slots });
+  }),
+);
+
+routineRouter.post(
+  "/",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = routineSlotSchema.parse(req.body);
+    await assertNoTeacherClash(body);
+    const slot = await prisma.routineSlot.create({ data: body });
+    res.status(201).json({ success: true, data: slot });
+  }),
+);
+
+routineRouter.put(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = routineSlotSchema.partial().parse(req.body);
+    const existing = await prisma.routineSlot.findUnique({ where: { id } });
+    if (!existing) throw badRequest("Routine slot not found");
+    const merged = { ...existing, ...body };
+    await assertNoTeacherClash(merged, id);
+    const slot = await prisma.routineSlot.update({ where: { id }, data: body });
+    res.json({ success: true, data: slot });
+  }),
+);
+
+routineRouter.delete(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    await prisma.routineSlot.delete({ where: { id: reqParam(req, "id") } });
+    res.status(204).send();
   }),
 );

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { UserRole } from "@education-erp/types";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -7,7 +8,16 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, LEAVE_APPROVE_ROLES } from "../../lib/roles";
 import { leaveTypeSchema, applyLeaveSchema, rejectLeaveSchema } from "@education-erp/validators";
-import { badRequest, notFound } from "../../lib/errors";
+import { resolveOwnStaffId } from "../../lib/own-staff";
+import { badRequest, forbidden, notFound } from "../../lib/errors";
+
+// GET / and POST /apply took a caller-supplied staff_id with no ownership
+// check at all — any authenticated staff member could list every other
+// staff member's leave history, or file a leave request under someone
+// else's name. HR_MANAGE_ROLES (ADMIN/PRINCIPAL) may still act on any
+// staff_id — that's the existing, legitimate "HR files leave on behalf of a
+// staff member" flow from the admin Staff Detail page — everyone else is
+// pinned to their own resolved staff row.
 
 export const leaveTypesRouter = Router();
 export const leavesRouter = Router();
@@ -69,9 +79,12 @@ leavesRouter.get(
       .object({ staff_id: z.string().optional(), status: z.string().optional(), from_date: z.string().optional(), to_date: z.string().optional(), leave_type_id: z.string().optional() })
       .parse(req.query);
 
+    const isPrivileged = HR_MANAGE_ROLES.includes(req.user!.role as UserRole);
+    const staffIdFilter = isPrivileged ? query.staff_id : await resolveOwnStaffId(req.user!.sub);
+
     const leaves = await prisma.leaveRequest.findMany({
       where: {
-        ...(query.staff_id && { staff_id: query.staff_id }),
+        ...(staffIdFilter && { staff_id: staffIdFilter }),
         ...(query.status && { status: query.status as never }),
         ...(query.leave_type_id && { leave_type_id: query.leave_type_id }),
         ...(query.from_date && { from_date: { gte: new Date(query.from_date) } }),
@@ -87,7 +100,13 @@ leavesRouter.get(
 leavesRouter.get(
   "/balance/:staff_id",
   asyncHandler(async (req, res) => {
-    const staffId = reqParam(req, "staff_id");
+    // "me" lets a self-service caller (e.g. the teacher app) fetch their own
+    // balance without needing to already know their own Staff.id client-side.
+    const rawStaffId = reqParam(req, "staff_id");
+    const staffId = rawStaffId === "me" ? await resolveOwnStaffId(req.user!.sub) : rawStaffId;
+    if (!HR_MANAGE_ROLES.includes(req.user!.role as UserRole) && staffId !== (await resolveOwnStaffId(req.user!.sub))) {
+      throw forbidden("You can only view your own leave balance");
+    }
     const yearStart = new Date(new Date().getFullYear(), 0, 1);
     const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
 
@@ -109,6 +128,9 @@ leavesRouter.post(
   "/apply",
   asyncHandler(async (req, res) => {
     const body = applyLeaveSchema.parse(req.body);
+    if (!HR_MANAGE_ROLES.includes(req.user!.role as UserRole)) {
+      body.staff_id = await resolveOwnStaffId(req.user!.sub);
+    }
     if (body.to_date < body.from_date) throw badRequest("to_date must be on or after from_date");
 
     const leaveType = await prisma.leaveType.findUnique({ where: { id: body.leave_type_id } });

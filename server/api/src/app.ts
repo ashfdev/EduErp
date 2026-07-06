@@ -31,18 +31,19 @@ import { transportRouter } from "./modules/transport/transport.routes";
 import { hostelRouter } from "./modules/hostel/hostel.routes";
 import { analyticsRouter } from "./modules/reports/analytics.routes";
 import { portalRouter } from "./modules/portal/portal.routes";
+import { teacherRouter } from "./modules/teacher/teacher.routes";
 import { devicesRouter } from "./modules/devices/devices.routes";
 import { accountsModuleRouter } from "./modules/accounts";
 import { inventoryModuleRouter } from "./modules/inventory";
 import { internalRouter } from "./routes/internal";
 
-const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL].filter((url): url is string => !!url);
+const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL, env.TEACHER_URL].filter((url): url is string => !!url);
 
 if (env.NODE_ENV === "production" && ALLOWED_ORIGINS.length === 0) {
   // Never fall back to allow-all-with-credentials in production — that
   // reflects any origin back with credentials enabled, defeating CORS
   // entirely. Fail fast at boot instead, same as a missing JWT secret.
-  throw new Error("ADMIN_URL, PORTAL_URL, and WEBSITE_URL are all unset in production — refusing to start with an open CORS policy.");
+  throw new Error("ADMIN_URL, PORTAL_URL, WEBSITE_URL, and TEACHER_URL are all unset in production — refusing to start with an open CORS policy.");
 }
 
 export function createApp(): Express {
@@ -95,6 +96,7 @@ export function createApp(): Express {
   app.use("/api/hostel", hostelRouter);
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/portal", portalRouter);
+  app.use("/api/teacher", teacherRouter);
   app.use("/api/devices", devicesRouter);
   app.use("/api/accounts", accountsModuleRouter);
   app.use("/api/inventory", inventoryModuleRouter);

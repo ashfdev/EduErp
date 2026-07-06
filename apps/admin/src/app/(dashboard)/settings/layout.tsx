@@ -8,6 +8,7 @@ const GROUPS = [
       { href: "/settings/academic", label: "Academic Structure" },
       { href: "/settings/departments", label: "Departments" },
       { href: "/settings/subjects", label: "Subjects" },
+      { href: "/settings/routine", label: "Routine / Timetable" },
     ],
   },
   {

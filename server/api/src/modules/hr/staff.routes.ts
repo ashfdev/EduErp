@@ -6,16 +6,30 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
-import { uploadBuffer } from "../../services/storage.service";
+import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES } from "../../lib/roles";
-import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema } from "@education-erp/validators";
+import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { sendSms } from "../../services/sms.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
-import { badRequest, conflict, notFound } from "../../lib/errors";
+import { resolveOwnStaffId } from "../../lib/own-staff";
+import { badRequest, conflict, forbidden, notFound } from "../../lib/errors";
 import type { UserRole } from "@education-erp/types";
+
+// Faculty document vault: a staff member manages their own documents;
+// HR_MANAGE_ROLES may manage anyone's (e.g. onboarding uploads a new hire's
+// certificates before that person even has login access yet). "me" lets a
+// self-service caller (the teacher app) avoid needing to already know their
+// own Staff.id — returns the resolved, real staff_id to use in the query.
+async function resolveDocumentStaffId(req: import("express").Request, rawStaffId: string): Promise<string> {
+  const staffId = rawStaffId === "me" ? await resolveOwnStaffId(req.user!.sub) : rawStaffId;
+  if (HR_MANAGE_ROLES.includes(req.user!.role as UserRole)) return staffId;
+  const ownId = await resolveOwnStaffId(req.user!.sub);
+  if (ownId !== staffId) throw forbidden("You can only manage your own documents");
+  return staffId;
+}
 
 export const hrStaffRouter = Router();
 hrStaffRouter.use(authenticate);
@@ -221,5 +235,62 @@ hrStaffRouter.put(
 
     const updated = await prisma.staff.update({ where: { id }, data: { salary_structure_id: body.salary_structure_id } });
     res.json({ success: true, data: updated });
+  }),
+);
+
+// ── Faculty Document Vault ────────────────────────────────────────
+
+hrStaffRouter.get(
+  "/:id/documents",
+  asyncHandler(async (req, res) => {
+    const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
+    const documents = await prisma.staffDocument.findMany({ where: { staff_id: id }, orderBy: { uploaded_at: "desc" } });
+    res.json({ success: true, data: documents });
+  }),
+);
+
+hrStaffRouter.post(
+  "/:id/documents",
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
+    if (!req.file) throw badRequest("A file is required");
+    const body = staffDocumentSchema.parse(req.body);
+
+    const { blobKey } = await uploadBuffer("staff-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const document = await prisma.staffDocument.create({
+      data: {
+        staff_id: id,
+        doc_type: body.doc_type,
+        title: body.title,
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        mime_type: req.file.mimetype,
+      },
+    });
+    res.status(201).json({ success: true, data: document });
+  }),
+);
+
+hrStaffRouter.get(
+  "/:id/documents/:doc_id/download",
+  asyncHandler(async (req, res) => {
+    const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
+    const document = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });
+    if (!document) throw notFound("Document not found");
+    const url = await getSignedDownloadUrl(document.blob_key);
+    res.json({ success: true, data: { url } });
+  }),
+);
+
+hrStaffRouter.delete(
+  "/:id/documents/:doc_id",
+  asyncHandler(async (req, res) => {
+    const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
+    const document = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });
+    if (!document) throw notFound("Document not found");
+    await prisma.staffDocument.delete({ where: { id: document.id } });
+    res.status(204).send();
   }),
 );

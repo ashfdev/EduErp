@@ -12,6 +12,7 @@ const envSchema = z.object({
   ADMIN_URL: z.string().url().optional(),
   PORTAL_URL: z.string().url().optional(),
   WEBSITE_URL: z.string().url().optional(),
+  TEACHER_URL: z.string().url().optional(),
   WEBSITE_REVALIDATE_SECRET: z.string().optional(),
   DEVICE_SERVICE_URL: z.string().url().optional(),
   DEVICE_SERVICE_SECRET: z.string().optional(),

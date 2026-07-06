@@ -25,6 +25,11 @@ export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 
 export const updateStaffSchema = createStaffSchema.partial().omit({ create_login: true, role: true });
 
+export const staffDocumentSchema = z.object({
+  doc_type: z.enum(["CERTIFICATE", "NID", "TIN", "CONTRACT", "OTHER"]),
+  title: z.string().min(1),
+});
+
 export const leaveTypeSchema = z.object({
   name: z.string().min(1),
   days_allowed: z.number().int().min(0),

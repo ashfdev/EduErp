@@ -36,6 +36,14 @@ interface StaffDetail {
   payroll_records: { id: string; month: number; year: number; net_salary: number; status: string; payslip_url: string | null }[];
 }
 
+interface StaffDocumentRow {
+  id: string;
+  doc_type: string;
+  title: string;
+  original_filename: string;
+  uploaded_at: string;
+}
+
 interface LeaveType {
   id: string;
   name: string;
@@ -75,6 +83,48 @@ export default function StaffDetailPage() {
     },
   });
 
+  const { data: documents } = useQuery<StaffDocumentRow[]>({
+    queryKey: ["hr", "staff", id, "documents"],
+    queryFn: async () => (await api.get(`/api/hr/staff/${id}/documents`)).data.data,
+  });
+  const [docUploadOpen, setDocUploadOpen] = useState(false);
+  const [docType, setDocType] = useState("CERTIFICATE");
+  const [docTitle, setDocTitle] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+
+  const uploadDocMutation = useMutation({
+    mutationFn: () => {
+      const formData = new FormData();
+      formData.append("doc_type", docType);
+      formData.append("title", docTitle);
+      formData.append("file", docFile!);
+      return api.post(`/api/hr/staff/${id}/documents`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Document uploaded");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "documents"] });
+      setDocUploadOpen(false);
+      setDocTitle(""); setDocFile(null); setDocType("CERTIFICATE");
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      toast.error(message ?? "Failed to upload document");
+    },
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => api.delete(`/api/hr/staff/${id}/documents/${docId}`),
+    onSuccess: () => {
+      toast.success("Document removed");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "documents"] });
+    },
+  });
+
+  async function downloadStaffDocument(docId: string) {
+    const res = await api.get(`/api/hr/staff/${id}/documents/${docId}/download`);
+    window.open(res.data.data.url, "_blank");
+  }
+
   async function downloadPayslip(payrollId: string) {
     const res = await api.get(`/api/documents/payroll/payslip/${payrollId}`, { params: { download: "true" }, responseType: "blob" });
     const url = URL.createObjectURL(res.data);
@@ -108,6 +158,7 @@ export default function StaffDetailPage() {
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
           <TabsTrigger value="payroll">Payroll</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -194,7 +245,58 @@ export default function StaffDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="documents">
+          <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setDocUploadOpen(true)}>+ Upload Document</Button></div>
+          <Card>
+            <CardContent className="pt-6">
+              {!documents?.length && <EmptyState title="No documents uploaded yet" />}
+              <table className="w-full text-sm">
+                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Type</th><th className="p-2">Title</th><th className="p-2">File</th><th className="p-2">Uploaded</th><th className="p-2" /></tr></thead>
+                <tbody>
+                  {documents?.map((d) => (
+                    <tr key={d.id} className="border-b">
+                      <td className="p-2">{d.doc_type}</td>
+                      <td className="p-2">{d.title}</td>
+                      <td className="p-2 text-muted-foreground">{d.original_filename}</td>
+                      <td className="p-2">{new Date(d.uploaded_at).toLocaleDateString()}</td>
+                      <td className="p-2 text-right">
+                        <button onClick={() => downloadStaffDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
+                        <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={docUploadOpen} onOpenChange={setDocUploadOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Upload Document</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Document Type</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={docType} onChange={(e) => setDocType(e.target.value)}>
+                <option value="CERTIFICATE">Certificate</option>
+                <option value="NID">NID</option>
+                <option value="TIN">TIN</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1.5"><Label>Title</Label><Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder="e.g. B.Ed Certificate" /></div>
+            <div className="space-y-1.5"><Label>File</Label><Input type="file" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} /></div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => uploadDocMutation.mutate()} disabled={uploadDocMutation.isPending || !docTitle || !docFile}>
+              {uploadDocMutation.isPending ? "Uploading..." : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
         <DialogContent>

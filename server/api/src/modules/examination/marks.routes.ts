@@ -5,7 +5,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { MARK_ENTRY_ROLES, MARK_APPROVAL_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
+import { MARK_ENTRY_ROLES, MARK_VIEW_ROLES, MARK_APPROVAL_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { submitMarksSchema } from "@education-erp/validators";
 import { calculateGrade } from "../../utils/grading.engine";
 import { computeClassResults } from "../results/results.routes";
@@ -18,6 +18,7 @@ marksRouter.use(authenticate);
 
 marksRouter.get(
   "/:exam_id/:class_id/:section_id",
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
@@ -26,6 +27,14 @@ marksRouter.get(
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
+
+    if (req.user!.role === "CLASS_TEACHER") {
+      const section = await prisma.section.findUnique({ where: { id: sectionId } });
+      const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
+      if (!section || section.class_teacher_id !== staff?.id) {
+        throw forbidden("You are not the class teacher for this section");
+      }
+    }
 
     let subjectIds: string[] | undefined;
     if (query.subject_id) {

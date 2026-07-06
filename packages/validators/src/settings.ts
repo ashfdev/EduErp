@@ -183,6 +183,17 @@ export const sectionSchema = z.object({
   capacity: z.number().int().min(1).optional(),
 });
 
+export const routineSlotSchema = z.object({
+  class_id: z.string().min(1),
+  section_id: z.string().optional().nullable(),
+  day_of_week: z.number().int().min(0).max(6),
+  period_no: z.number().int().min(1),
+  subject_id: z.string().optional().nullable(),
+  teacher_id: z.string().optional().nullable(),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
 export const createUserSchema = z.object({
   name_en: z.string().min(1),
   name_bn: z.string().optional().nullable(),

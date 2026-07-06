@@ -1,0 +1,252 @@
+"use client";
+
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  PageWrapper,
+  PageHeader,
+  Card,
+  CardContent,
+  Button,
+  Label,
+  Input,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  EmptyState,
+} from "@education-erp/ui";
+import { api } from "@/lib/api";
+
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+interface ClassOption {
+  id: string;
+  name_en: string;
+  sections: { id: string; name: string }[];
+}
+interface Subject {
+  id: string;
+  name_en: string;
+}
+interface Teacher {
+  id: string;
+  name_en: string;
+  designation: string;
+}
+interface RoutineSlotRow {
+  id: string;
+  section_id: string | null;
+  day_of_week: number;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+  subject: { name_en: string } | null;
+  teacher: { name_en: string } | null;
+}
+
+const emptyForm = { section_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "" };
+
+export default function RoutineSettingsPage() {
+  const queryClient = useQueryClient();
+  const [classId, setClassId] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+
+  const { data: classes } = useQuery<ClassOption[]>({
+    queryKey: ["settings", "classes"],
+    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const sections = classes?.find((c) => c.id === classId)?.sections ?? [];
+
+  const { data: subjects } = useQuery<Subject[]>({
+    queryKey: ["subjects", classId],
+    queryFn: async () => (await api.get("/api/subjects", { params: { class_id: classId } })).data.data,
+    enabled: !!classId,
+  });
+  const { data: teachers } = useQuery<Teacher[]>({
+    queryKey: ["staff", "teachers"],
+    queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
+  });
+
+  const { data: slots } = useQuery<RoutineSlotRow[]>({
+    queryKey: ["settings", "routine", classId, sectionFilter],
+    queryFn: async () => (await api.get("/api/settings/routine", { params: { class_id: classId, ...(sectionFilter && { section_id: sectionFilter }) } })).data.data,
+    enabled: !!classId,
+  });
+
+  function openCreate() {
+    setEditingId(null);
+    setForm({ ...emptyForm, section_id: sectionFilter });
+    setDialogOpen(true);
+  }
+  function openEdit(s: RoutineSlotRow) {
+    setEditingId(s.id);
+    setForm({
+      section_id: s.section_id ?? "",
+      day_of_week: s.day_of_week,
+      period_no: s.period_no,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      subject_id: "",
+      teacher_id: "",
+    });
+    setDialogOpen(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
+        class_id: classId,
+        section_id: form.section_id || null,
+        day_of_week: Number(form.day_of_week),
+        period_no: Number(form.period_no),
+        start_time: form.start_time,
+        end_time: form.end_time,
+        subject_id: form.subject_id || null,
+        teacher_id: form.teacher_id || null,
+      };
+      return editingId ? api.put(`/api/settings/routine/${editingId}`, payload) : api.post("/api/settings/routine", payload);
+    },
+    onSuccess: () => {
+      toast.success(editingId ? "Slot updated" : "Slot added");
+      queryClient.invalidateQueries({ queryKey: ["settings", "routine"] });
+      setDialogOpen(false);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save slot";
+      toast.error(message);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/settings/routine/${id}`),
+    onSuccess: () => {
+      toast.success("Slot removed");
+      queryClient.invalidateQueries({ queryKey: ["settings", "routine"] });
+    },
+  });
+
+  return (
+    <PageWrapper>
+      <PageHeader title="Routine / Timetable" subtitle="Weekly class schedule — period, subject, and teacher" breadcrumbs={[{ label: "Settings" }, { label: "Routine" }]} />
+
+      <Card>
+        <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>Class</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionFilter(""); }}>
+              <option value="">Select...</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Section (optional)</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)} disabled={!classId}>
+              <option value="">All Sections</option>
+              {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <Button onClick={openCreate} disabled={!classId}>+ Add Slot</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {classId && (
+        <Card>
+          <CardContent className="overflow-x-auto pt-6">
+            {!slots?.length && <EmptyState title="No routine slots yet for this class/section" />}
+            {!!slots?.length && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="p-2">Day</th>
+                    <th className="p-2">Period</th>
+                    <th className="p-2">Time</th>
+                    <th className="p-2">Section</th>
+                    <th className="p-2">Subject</th>
+                    <th className="p-2">Teacher</th>
+                    <th className="p-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {slots.map((s) => (
+                    <tr key={s.id} className="border-b">
+                      <td className="p-2">{DAYS[s.day_of_week]}</td>
+                      <td className="p-2">{s.period_no}</td>
+                      <td className="p-2">{s.start_time}–{s.end_time}</td>
+                      <td className="p-2">{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</td>
+                      <td className="p-2">{s.subject?.name_en ?? "-"}</td>
+                      <td className="p-2">{s.teacher?.name_en ?? "-"}</td>
+                      <td className="p-2 text-right">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>{" "}
+                        <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingId ? "Edit Slot" : "Add Slot"}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Day</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.day_of_week} onChange={(e) => setForm({ ...form, day_of_week: Number(e.target.value) })}>
+                {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Period No.</Label>
+              <Input type="number" min={1} value={form.period_no} onChange={(e) => setForm({ ...form, period_no: Number(e.target.value) })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Start Time</Label>
+              <Input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>End Time</Label>
+              <Input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Section</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.section_id} onChange={(e) => setForm({ ...form, section_id: e.target.value })}>
+                <option value="">All Sections</option>
+                {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.subject_id} onChange={(e) => setForm({ ...form, subject_id: e.target.value })}>
+                <option value="">None</option>
+                {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Teacher</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.teacher_id} onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}>
+                <option value="">None</option>
+                {teachers?.map((t) => <option key={t.id} value={t.id}>{t.name_en} ({t.designation})</option>)}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !form.start_time || !form.end_time}>
+              {saveMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageWrapper>
+  );
+}

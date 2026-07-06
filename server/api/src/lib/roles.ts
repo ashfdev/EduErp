@@ -14,6 +14,10 @@ export const STAFF_READ_ROLES: UserRole[] = [
 export const ATTENDANCE_MARK_ROLES: UserRole[] = ["ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"];
 export const EXAM_MANAGE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const MARK_ENTRY_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"];
+// Read-only grid access — adds CLASS_TEACHER on top of MARK_ENTRY_ROLES so a
+// class teacher can monitor their own class's marks even though they can't
+// submit/edit them (that stays gated to MARK_ENTRY_ROLES on POST /submit).
+export const MARK_VIEW_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"];
 export const MARK_APPROVAL_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const RESULT_PUBLISH_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const FEE_COLLECTION_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
@@ -37,6 +41,10 @@ export const STAFF_ONLY_ROLES: UserRole[] = [
   "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
   "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
   "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
+];
+// Gates the new apps/teacher app's own endpoints (schedule/today, my-sections).
+export const TEACHER_APP_ROLES: UserRole[] = [
+  "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT",
 ];
 export const DEVICE_MANAGE_ROLES: UserRole[] = ["ADMIN", "IT_ADMIN"];
 export const ACCOUNTS_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
