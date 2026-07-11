@@ -85,10 +85,16 @@ quizzesRouter.post(
   }),
 );
 
+const QUIZ_OVERSIGHT_ROLES = ["ADMIN", "SUPER_ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
+
 async function loadOwnQuizOr404(quizId: string, userId: string, role: string) {
   const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
   if (!quiz) throw notFound("Quiz not found");
-  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+  // Bypass list must match assertSubjectOwnership's exactly — otherwise a
+  // PRINCIPAL/EXAM_CONTROLLER who can create a quiz for any subject (via
+  // assertSubjectOwnership) gets 404'd trying to publish/view attempts on a
+  // quiz a teacher created, breaking the intended exam-office oversight role.
+  if (!QUIZ_OVERSIGHT_ROLES.includes(role)) {
     const staffId = await resolveOwnStaffId(userId);
     if (quiz.created_by_id !== userId && quiz.created_by_id !== staffId) {
       // created_by_id stores the User id (req.user.sub), not staff id —

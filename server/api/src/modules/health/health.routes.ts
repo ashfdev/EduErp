@@ -7,6 +7,7 @@ import { reqParam } from "../../lib/req-param";
 import { HEALTH_MANAGE_ROLES } from "../../lib/roles";
 import { healthProfileSchema, healthIncidentSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
+import { assertClassTeacherOfStudent } from "../../lib/class-teacher-ownership";
 
 // Staff-only (ADMIN/PRINCIPAL/CLASS_TEACHER) — medical data, never surfaced
 // to the STUDENT/GUARDIAN portal in this pass, same boundary as discipline.
@@ -17,6 +18,7 @@ studentHealthRouter.get(
   "/student/:student_id",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
+    await assertClassTeacherOfStudent(req.user!.sub, req.user!.role, studentId);
     const [profile, incidents] = await Promise.all([
       prisma.studentHealthProfile.findUnique({ where: { student_id: studentId } }),
       prisma.healthIncident.findMany({ where: { student_id: studentId }, orderBy: { date: "desc" } }),
@@ -29,6 +31,7 @@ studentHealthRouter.put(
   "/student/:student_id/profile",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
+    await assertClassTeacherOfStudent(req.user!.sub, req.user!.role, studentId);
     const body = healthProfileSchema.parse(req.body);
     const profile = await prisma.studentHealthProfile.upsert({
       where: { student_id: studentId },
@@ -44,6 +47,7 @@ studentHealthRouter.post(
   "/student/:student_id/incidents",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
+    await assertClassTeacherOfStudent(req.user!.sub, req.user!.role, studentId);
     const body = healthIncidentSchema.parse(req.body);
     const incident = await prisma.healthIncident.create({
       data: { student_id: studentId, ...body, recorded_by_id: req.user!.sub },

@@ -7,7 +7,7 @@ import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, COMPLAINT_MANAGE_ROLES } from "../../lib/roles";
 import { createComplaintSchema, updateComplaintSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
-import { notFound } from "../../lib/errors";
+import { badRequest, notFound } from "../../lib/errors";
 
 // Staff-side surface. Portal callers use the separate routes in
 // portal.routes.ts — STAFF_ONLY_ROLES and PORTAL_ROLES are disjoint role
@@ -47,6 +47,10 @@ complaintsRouter.put(
     if (!existing) throw notFound("Complaint not found");
 
     const body = updateComplaintSchema.parse(req.body);
+    if (body.assigned_to_id) {
+      const staff = await prisma.staff.findUnique({ where: { id: body.assigned_to_id } });
+      if (!staff) throw badRequest("assigned_to_id does not refer to a real staff member");
+    }
     const resolving = body.status === "RESOLVED" || body.status === "CLOSED";
     const complaint = await prisma.complaint.update({
       where: { id },

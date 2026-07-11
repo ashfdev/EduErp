@@ -7,6 +7,7 @@ import { authorize } from "../../middleware/authorize";
 import { FEE_COLLECTION_ROLES } from "../../lib/roles";
 import { initiatePaymentSchema } from "@education-erp/validators";
 import { getPaymentAdapter } from "../../services/payment";
+import { getSignedDownloadUrl } from "../../services/storage.service";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateReceiptNo } from "./fee-number.generator";
@@ -87,8 +88,10 @@ paymentsRouter.post("/callback/sslcommerz", asyncHandler(async (req, res) => res
 
 // ── Bank transfer manual verification ─────────────────────────────
 // Bank transfers have no webhook — a student uploads a slip (sets
-// Payment.receipt_url via the portal), then staff cross-checks it against
-// the actual bank statement and verifies here.
+// Payment.slip_blob_key via the portal), then staff cross-checks it against
+// the actual bank statement and verifies here. The slip is a financial
+// document with account numbers/names, so it's served as a short-lived
+// signed URL to FEE_COLLECTION_ROLES only, never a permanent public link.
 
 paymentsRouter.get(
   "/bank-transfers/pending",
@@ -100,7 +103,10 @@ paymentsRouter.get(
       include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
       orderBy: { created_at: "desc" },
     });
-    res.json({ success: true, data: payments });
+    const withSlipUrls = await Promise.all(
+      payments.map(async (p) => ({ ...p, slip_url: p.slip_blob_key ? await getSignedDownloadUrl(p.slip_blob_key) : null })),
+    );
+    res.json({ success: true, data: withSlipUrls });
   }),
 );
 

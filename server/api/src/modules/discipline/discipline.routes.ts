@@ -7,6 +7,7 @@ import { reqParam } from "../../lib/req-param";
 import { DISCIPLINE_MANAGE_ROLES } from "../../lib/roles";
 import { disciplineRecordSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
+import { assertClassTeacherOfStudent } from "../../lib/class-teacher-ownership";
 
 // Staff-only (ADMIN/PRINCIPAL/CLASS_TEACHER) — mirrors the legacy scope
 // exactly: never surfaced in the STUDENT/GUARDIAN portal.
@@ -17,6 +18,7 @@ disciplineRouter.get(
   "/student/:student_id",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
+    await assertClassTeacherOfStudent(req.user!.sub, req.user!.role, studentId);
     const records = await prisma.disciplineRecord.findMany({ where: { student_id: studentId }, orderBy: { occurred_at: "desc" } });
     res.json({ success: true, data: records });
   }),
@@ -26,6 +28,7 @@ disciplineRouter.post(
   "/student/:student_id",
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
+    await assertClassTeacherOfStudent(req.user!.sub, req.user!.role, studentId);
     const body = disciplineRecordSchema.parse(req.body);
     const record = await prisma.disciplineRecord.create({
       data: { student_id: studentId, ...body, recorded_by_id: req.user!.sub },

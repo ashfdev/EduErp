@@ -200,6 +200,16 @@ portalRouter.get(
     const examId = reqParam(req, "exam_id");
     await assertAccess(req.user!.sub, req.user!.role, id);
 
+    // FeeRules.block_result_on_due — previously a dead flag with zero
+    // enforcement anywhere; mirrors the due-amount check already used for
+    // admit-card clearance (checkAdmitCardClearance's accounts stage).
+    const rules = await prisma.feeRules.findUnique({ where: { id: "singleton" } });
+    if (rules?.block_result_on_due) {
+      const invoices = await prisma.invoice.findMany({ where: { student_id: id, status: { notIn: ["PAID", "WAIVED"] } } });
+      const dueAmount = invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+      if (dueAmount > 0) throw forbidden("Result is locked — please clear outstanding dues first");
+    }
+
     const data = await buildMarksheetData(examId, id);
     const pdf = await renderDocument("MARKSHEET", data as unknown as Record<string, unknown>);
     res.setHeader("Content-Type", "application/pdf");
@@ -557,8 +567,8 @@ portalRouter.post(
     if (payment.gateway !== "BANK_TRANSFER") throw badRequest("Slip upload only applies to bank-transfer payments");
     if (!req.file) throw badRequest("A slip image/PDF is required");
 
-    const { url } = await uploadBuffer("bank-slips", req.file.originalname, req.file.buffer, req.file.mimetype);
-    const updated = await prisma.payment.update({ where: { id }, data: { receipt_url: url } });
+    const { blobKey } = await uploadBuffer("bank-slips", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const updated = await prisma.payment.update({ where: { id }, data: { slip_blob_key: blobKey } });
     res.json({ success: true, data: updated });
   }),
 );

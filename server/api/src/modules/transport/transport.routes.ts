@@ -43,6 +43,7 @@ transportRouter.post(
 
 transportRouter.get(
   "/routes",
+  authorize(TRANSPORT_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const routes = await prisma.transportRoute.findMany({
       include: { stops: { orderBy: { stop_order: "asc" } }, _count: { select: { vehicles: true, students: true } } },
@@ -103,11 +104,11 @@ transportRouter.put(
 
 transportRouter.get(
   "/vehicles",
+  authorize(TRANSPORT_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     // device_api_key is fetched only to derive a boolean and is stripped
-    // before the response — this list is visible to any authenticated staff
-    // role, not just TRANSPORT_MANAGE_ROLES, and the key itself is a live
-    // secret (see /vehicles/:id/device-key for the one-time, gated reveal).
+    // before the response — the raw key itself is a live secret regardless
+    // of role (see /vehicles/:id/device-key for the one-time, gated reveal).
     const vehicles = await prisma.vehicle.findMany({
       select: {
         id: true, route_id: true, vehicle_no: true, type: true, capacity: true,
@@ -150,6 +151,7 @@ transportRouter.delete(
 
 transportRouter.get(
   "/vehicles/:id/locations/latest",
+  authorize(TRANSPORT_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const vehicleId = reqParam(req, "id");
     const latest = await prisma.vehicleLocationPing.findFirst({
@@ -162,6 +164,7 @@ transportRouter.get(
 
 transportRouter.get(
   "/vehicles/:id/locations",
+  authorize(TRANSPORT_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const vehicleId = reqParam(req, "id");
     const pings = await prisma.vehicleLocationPing.findMany({
@@ -213,6 +216,7 @@ transportRouter.post(
 
 transportRouter.get(
   "/routes/:id/students",
+  authorize(TRANSPORT_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const routeId = reqParam(req, "id");
     const students = await prisma.studentTransport.findMany({

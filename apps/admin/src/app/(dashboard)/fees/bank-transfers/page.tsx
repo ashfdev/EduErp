@@ -9,7 +9,7 @@ interface PendingTransfer {
   id: string;
   amount: number;
   transaction_id: string | null;
-  receipt_url: string | null;
+  slip_url: string | null;
   created_at: string;
   invoice: { description: string; student: { name_en: string; student_uid: string } };
 }
@@ -55,15 +55,15 @@ export default function BankTransfersPage() {
                 <p className="font-medium">{p.invoice.student.name_en} <span className="text-xs text-muted-foreground">({p.invoice.student.student_uid})</span></p>
                 <p className="text-sm text-muted-foreground">{p.invoice.description} · ৳{p.amount}</p>
                 <p className="text-xs text-muted-foreground">Submitted {new Date(p.created_at).toLocaleDateString()}</p>
-                {p.receipt_url ? (
-                  <a href={p.receipt_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View Slip</a>
+                {p.slip_url ? (
+                  <a href={p.slip_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View Slip</a>
                 ) : (
                   <p className="text-xs text-amber-600">No slip uploaded yet</p>
                 )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="destructive" onClick={() => rejectMutation.mutate(p.id)} disabled={rejectMutation.isPending}>Reject</Button>
-                <Button size="sm" onClick={() => verifyMutation.mutate(p.id)} disabled={verifyMutation.isPending || !p.receipt_url}>Verify</Button>
+                <Button size="sm" onClick={() => verifyMutation.mutate(p.id)} disabled={verifyMutation.isPending || !p.slip_url}>Verify</Button>
               </div>
             </CardContent>
           </Card>

@@ -961,6 +961,10 @@ model Payment {
   status          PaymentStatus
   paid_at         DateTime?
   receipt_url     String?
+  // Bank-transfer slip storage — a blob_key, not a public URL (financial
+  // document with account numbers/names); a signed URL is minted on read
+  // for FEE_COLLECTION_ROLES only, same pattern as teaching-resource files.
+  slip_blob_key   String?
   notes           String?
   collected_by_id String?
   created_at      DateTime       @default(now())
