@@ -102,3 +102,32 @@ export const defaultApiLimiter = rateLimit({
   },
   message: RATE_LIMITED_ERROR,
 });
+
+// Quiz anti-cheat tamper-flag endpoint (Phase 36) — called frequently
+// client-side (every tab-switch/blur during an active attempt), needs a
+// generous but real cap so it can't be used to flood the API.
+export const quizFlagLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:quiz-flag:"),
+  message: RATE_LIMITED_ERROR,
+});
+
+// Vehicle location-ping ingestion (Phase 37) — runs before deviceKeyAuth, so
+// this is keyed by the raw x-device-key header rather than req.vehicle.id
+// (bucketing per claimed device, same spirit as forgotPasswordLimiter keying
+// on the phone in the body rather than IP).
+export const vehiclePingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:vehicle-ping:"),
+  keyGenerator: (req) => {
+    const key = req.headers["x-device-key"];
+    return typeof key === "string" && key ? key : (req.ip ?? "unknown");
+  },
+  message: RATE_LIMITED_ERROR,
+});

@@ -289,6 +289,7 @@ model Class {
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
   course_enrollments CourseEnrollment[]
+  ptm_slots        PTMSlot[]
 
   @@index([academic_year_id])
   @@index([program_id])
@@ -339,6 +340,8 @@ model Subject {
   homework         Homework[]
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
+  questions        Question[]
+  quizzes          Quiz[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -408,6 +411,7 @@ model Guardian {
   created_at DateTime         @default(now())
   updated_at DateTime         @updatedAt
   students   Student[]
+  ptm_bookings PTMBooking[]
 }
 
 model Student {
@@ -451,6 +455,9 @@ model Student {
   previous_result       String?
   photo_url             String?
   signature_url         String?
+  // Alumni directory (Phase 29) — set when status flips to GRADUATED;
+  // reuses the existing status value instead of a redundant new one.
+  graduation_year       Int?
   status                StudentStatus @default(ACTIVE)
   has_disability        Boolean     @default(false)
   disability_note       String?
@@ -472,6 +479,12 @@ model Student {
   transport             StudentTransport?
   hostel_allocations    HostelAllocation[]
   course_enrollments    CourseEnrollment[]
+  health_profile        StudentHealthProfile?
+  health_incidents      HealthIncident[]
+  discipline_records    DisciplineRecord[]
+  ptm_bookings          PTMBooking[]
+  assignment_submissions AssignmentSubmission[]
+  quiz_attempts          QuizAttempt[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -496,6 +509,136 @@ model StudentAcademicHistory {
   created_at       DateTime      @default(now())
 
   @@index([student_id])
+}
+
+// Phase 30 — health profile (1:1, the standing facts) + incident log
+// (1:many, dated events). Staff-only (ADMIN/PRINCIPAL/CLASS_TEACHER) — no
+// dedicated NURSE role exists in UserRole today, not inventing one for
+// this pass. No guardian self-entry in this pass either.
+model StudentHealthProfile {
+  id                      String   @id @default(cuid())
+  student_id              String   @unique
+  student                 Student  @relation(fields: [student_id], references: [id])
+  allergies               String?
+  chronic_conditions      String?
+  emergency_contact_name  String?
+  emergency_contact_phone String?
+  notes                   String?
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+}
+
+model HealthIncident {
+  id              String   @id @default(cuid())
+  student_id      String
+  student         Student  @relation(fields: [student_id], references: [id])
+  date            DateTime
+  description     String
+  action_taken    String?
+  recorded_by_id  String?
+  created_at      DateTime @default(now())
+
+  @@index([student_id])
+}
+
+// Phase 31 — mirrors the legacy shape exactly (category doubles as the
+// "type": negative incidents, counseling notes, and positive commendations
+// all live in one enum). Staff-only, list+create only — never shown in the
+// STUDENT/GUARDIAN portal, and not editable after the fact.
+enum DisciplineCategory {
+  INCIDENT
+  COUNSELING
+  COMMENDATION
+}
+
+model DisciplineRecord {
+  id             String             @id @default(cuid())
+  student_id     String
+  student        Student            @relation(fields: [student_id], references: [id])
+  recorded_by_id String?
+  category       DisciplineCategory
+  description    String
+  action_taken   String?
+  occurred_at    DateTime           @default(now())
+  created_at     DateTime           @default(now())
+
+  @@index([student_id])
+}
+
+// Phase 32 — one table, two thin route surfaces (staff-side and portal-side)
+// since STAFF_ONLY_ROLES/PORTAL_ROLES are disjoint and use different auth
+// conventions in this codebase. raised_by_user_id/assigned_to_id are bare
+// ids (no relation), same pattern as MarkEntry.entered_by_id.
+enum ComplaintCategory {
+  ACADEMIC
+  FACILITY
+  STAFF_CONDUCT
+  BULLYING
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model Complaint {
+  id                String            @id @default(cuid())
+  raised_by_user_id String
+  category          ComplaintCategory
+  description       String
+  status            ComplaintStatus   @default(OPEN)
+  assigned_to_id    String?
+  resolution_notes  String?
+  resolved_at       DateTime?
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+
+  @@index([raised_by_user_id])
+  @@index([status])
+}
+
+// Phase 33 — the general school calendar already exists (Event model);
+// this is only the slot-booking layer on top, for parent-teacher meetings
+// specifically. Booking a slot must be atomic (checked in a $transaction
+// at the route level) so two guardians can't win the same slot.
+model PTMSlot {
+  id         String        @id @default(cuid())
+  teacher_id String
+  teacher    Staff         @relation(fields: [teacher_id], references: [id])
+  date       DateTime
+  start_time String
+  end_time   String
+  is_booked  Boolean       @default(false)
+  class_id   String?
+  class      Class?        @relation(fields: [class_id], references: [id])
+  created_at DateTime      @default(now())
+  booking    PTMBooking?
+
+  @@index([teacher_id])
+  @@index([date])
+}
+
+enum PTMBookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model PTMBooking {
+  id          String            @id @default(cuid())
+  slot_id     String            @unique
+  slot        PTMSlot           @relation(fields: [slot_id], references: [id])
+  guardian_id String
+  guardian    Guardian          @relation(fields: [guardian_id], references: [id])
+  student_id  String
+  student     Student           @relation(fields: [student_id], references: [id])
+  notes       String?
+  status      PTMBookingStatus  @default(CONFIRMED)
+  booked_at   DateTime          @default(now())
+
+  @@index([guardian_id])
 }
 
 model StudentSubject {
@@ -553,6 +696,8 @@ model Staff {
   routine_slots       RoutineSlot[]
   documents           StaffDocument[]
   teaching_resources  TeachingResource[]
+  ptm_slots           PTMSlot[]
+  performance_reviews PerformanceReview[]
 
   @@index([department_id])
   @@index([salary_structure_id])
@@ -645,6 +790,7 @@ model Exam {
   mark_entries         MarkEntry[]
   seat_plans           ExamSeatPlan[]
   result_publications  ResultPublication[]
+  quizzes              Quiz[]
 
   @@index([academic_year_id])
 }
@@ -1670,19 +1816,40 @@ model RouteStop {
 }
 
 model Vehicle {
-  id            String          @id @default(cuid())
-  route_id      String?
-  route         TransportRoute? @relation(fields: [route_id], references: [id])
-  vehicle_no    String
-  type          String
-  capacity      Int
-  driver_name   String?
-  driver_phone  String?
-  insurance_exp DateTime?
-  is_active     Boolean         @default(true)
-  created_at    DateTime        @default(now())
+  id             String              @id @default(cuid())
+  route_id       String?
+  route          TransportRoute?     @relation(fields: [route_id], references: [id])
+  vehicle_no     String
+  type           String
+  capacity       Int
+  driver_name    String?
+  driver_phone   String?
+  insurance_exp  DateTime?
+  is_active      Boolean             @default(true)
+  created_at     DateTime            @default(now())
+  // Phase 37 — per-vehicle secret for the GPS-ping ingestion endpoint. A
+  // tracker unit can't hold a staff JWT, so this is a separate machine-to-
+  // machine auth mechanism, not a user credential. Null until an admin
+  // issues one for that vehicle.
+  device_api_key String?             @unique
+  location_pings VehicleLocationPing[]
 
   @@index([route_id])
+}
+
+model VehicleLocationPing {
+  id          String   @id @default(cuid())
+  vehicle_id  String
+  vehicle     Vehicle  @relation(fields: [vehicle_id], references: [id])
+  lat         Float
+  lng         Float
+  speed       Float?
+  // "MANUAL" covers simulated/test pings sent before real hardware is
+  // installed; a real tracker would send its own source identifier.
+  source      String   @default("MANUAL")
+  recorded_at DateTime @default(now())
+
+  @@index([vehicle_id, recorded_at])
 }
 
 model StudentTransport {
@@ -1808,12 +1975,158 @@ model TeachingResource {
   is_published      Boolean              @default(true)
   publish_at        DateTime?
   expire_at         DateTime?
+  // Phase 34 — only meaningful for resource_type: ASSIGNMENT; null for
+  // everything else. Shared with Phase 36 as the one answer to "how do we
+  // timestamp/deadline a gradeable thing" rather than inventing a second one.
+  due_date          DateTime?
   created_at        DateTime             @default(now())
   updated_at        DateTime             @updatedAt
+  submissions       AssignmentSubmission[]
 
   @@index([class_id])
   @@index([section_id])
   @@index([teacher_id])
+}
+
+enum AssignmentSubmissionStatus {
+  SUBMITTED
+  LATE
+  GRADED
+}
+
+model AssignmentSubmission {
+  id                String                      @id @default(cuid())
+  resource_id       String
+  resource          TeachingResource            @relation(fields: [resource_id], references: [id])
+  student_id        String
+  student           Student                     @relation(fields: [student_id], references: [id])
+  blob_key          String
+  original_filename String
+  submitted_at      DateTime                    @default(now())
+  grade             Float?
+  feedback          String?
+  graded_by_id      String?
+  status            AssignmentSubmissionStatus  @default(SUBMITTED)
+
+  @@unique([resource_id, student_id])
+  @@index([resource_id])
+}
+
+// Phase 35 — a lighter, deliberately simplified variant of the
+// MarkComponentConfig pattern: criteria lives as Json directly on the
+// template (not a separate row-per-criterion table) since a review
+// template's criteria list is small and static, unlike a live exam grid.
+// overall_score is always server-computed from scores against
+// template.criteria[].max_score — never trusted from the client, same
+// discipline as MarkEntry.marks_total.
+model AppraisalTemplate {
+  id         String             @id @default(cuid())
+  name       String
+  criteria   Json
+  is_active  Boolean            @default(true)
+  created_at DateTime           @default(now())
+  updated_at DateTime           @updatedAt
+  reviews    PerformanceReview[]
+}
+
+enum PerformanceReviewStatus {
+  DRAFT
+  SUBMITTED
+  ACKNOWLEDGED
+}
+
+model PerformanceReview {
+  id               String                  @id @default(cuid())
+  staff_id         String
+  staff            Staff                   @relation(fields: [staff_id], references: [id])
+  template_id      String
+  template         AppraisalTemplate       @relation(fields: [template_id], references: [id])
+  review_period    String
+  reviewer_id      String?
+  scores           Json?
+  overall_score    Float?
+  overall_comments String?
+  status           PerformanceReviewStatus @default(DRAFT)
+  submitted_at     DateTime?
+  acknowledged_at  DateTime?
+  created_at       DateTime                @default(now())
+  updated_at       DateTime                @updatedAt
+
+  @@index([staff_id])
+}
+
+// Phase 36 — rebuilds the legacy quiz feature (also delivers "online exams"
+// from the feature backlog — same thing, one build). QuizQuestion is a real
+// join table, not legacy's denormalized Json array of question ids.
+// tamper_flags is new vs. legacy — a log of tab-switch/blur timestamps for
+// the "moderate" anti-cheat tier the owner chose. duration_minutes is
+// enforced server-side on submit AND auto-checked on read (legacy stored it
+// but never enforced it at all).
+model Question {
+  id             String   @id @default(cuid())
+  subject_id     String
+  subject        Subject  @relation(fields: [subject_id], references: [id])
+  question_text  String
+  options        Json
+  correct_option String
+  marks          Float    @default(1)
+  created_by_id  String?
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  quiz_questions QuizQuestion[]
+
+  @@index([subject_id])
+}
+
+model Quiz {
+  id               String         @id @default(cuid())
+  subject_id       String
+  subject          Subject        @relation(fields: [subject_id], references: [id])
+  exam_id          String?
+  exam             Exam?          @relation(fields: [exam_id], references: [id])
+  title            String
+  duration_minutes Int
+  is_published     Boolean        @default(false)
+  created_by_id    String?
+  created_at       DateTime       @default(now())
+  questions        QuizQuestion[]
+  attempts         QuizAttempt[]
+
+  @@index([subject_id])
+}
+
+model QuizQuestion {
+  id            String   @id @default(cuid())
+  quiz_id       String
+  quiz          Quiz     @relation(fields: [quiz_id], references: [id])
+  question_id   String
+  question      Question @relation(fields: [question_id], references: [id])
+  display_order Int      @default(0)
+
+  @@unique([quiz_id, question_id])
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+model QuizAttempt {
+  id             String            @id @default(cuid())
+  quiz_id        String
+  quiz           Quiz              @relation(fields: [quiz_id], references: [id])
+  student_id     String
+  student        Student           @relation(fields: [student_id], references: [id])
+  question_order Json
+  answers        Json?
+  score          Float?
+  status         QuizAttemptStatus @default(IN_PROGRESS)
+  started_at     DateTime          @default(now())
+  submitted_at   DateTime?
+  tamper_flags   Json?
+
+  @@unique([quiz_id, student_id])
 }
 
 // ── University Program/Course/CGPA modeling (Phase 25) ─────────────

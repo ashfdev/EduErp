@@ -28,7 +28,10 @@ export const HR_MANAGE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL"];
 export const LEAVE_APPROVE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL"];
 export const PAYROLL_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
 export const LIBRARY_MANAGE_ROLES: UserRole[] = ["ADMIN", "LIBRARIAN"];
-export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["ADMIN", "TRANSPORT_MANAGER"];
+// SUPER_ADMIN added 2026-07-11 (Phase 37) — this array is touched directly by
+// the new device-key management route; flagged per Plan Two's rule rather
+// than silently left inconsistent with the newer arrays below.
+export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "TRANSPORT_MANAGER"];
 export const HOSTEL_MANAGE_ROLES: UserRole[] = ["ADMIN", "HOSTEL_MANAGER"];
 export const PORTAL_ROLES: UserRole[] = ["STUDENT", "GUARDIAN"];
 
@@ -52,3 +55,13 @@ export const VOUCHER_APPROVE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT", "PRINCI
 export const VOUCHER_POST_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
 export const INVENTORY_MANAGE_ROLES: UserRole[] = ["ADMIN", "ACCOUNTANT"];
 export const REQUISITION_APPROVE_ROLES: UserRole[] = ["ADMIN", "PRINCIPAL", "HEAD_OF_DEPT"];
+
+// Plan Two (Phases 29-37). Every array below explicitly includes both
+// "ADMIN" and "SUPER_ADMIN" — several older arrays above (e.g.
+// EXAM_MANAGE_ROLES) inconsistently omit SUPER_ADMIN; don't copy that.
+export const HEALTH_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER"];
+export const DISCIPLINE_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER"];
+export const COMPLAINT_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
+export const PTM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER", "SUBJECT_TEACHER"];
+export const APPRAISAL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
+export const QUIZ_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"];

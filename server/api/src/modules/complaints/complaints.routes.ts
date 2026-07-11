@@ -1,0 +1,61 @@
+import { Router } from "express";
+import { prisma } from "../../lib/prisma";
+import { asyncHandler } from "../../middleware/async-handler";
+import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
+import { reqParam } from "../../lib/req-param";
+import { STAFF_ONLY_ROLES, COMPLAINT_MANAGE_ROLES } from "../../lib/roles";
+import { createComplaintSchema, updateComplaintSchema } from "@education-erp/validators";
+import { logAudit } from "../../lib/audit-log";
+import { notFound } from "../../lib/errors";
+
+// Staff-side surface. Portal callers use the separate routes in
+// portal.routes.ts — STAFF_ONLY_ROLES and PORTAL_ROLES are disjoint role
+// sets gated by different auth conventions in this codebase, so this can't
+// be one router serving both.
+export const complaintsRouter = Router();
+complaintsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
+
+const manageAll = (role: string) => COMPLAINT_MANAGE_ROLES.includes(role as never);
+
+complaintsRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const complaints = await prisma.complaint.findMany({
+      where: manageAll(req.user!.role) ? {} : { raised_by_user_id: req.user!.sub },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: complaints });
+  }),
+);
+
+complaintsRouter.post(
+  "/",
+  asyncHandler(async (req, res) => {
+    const body = createComplaintSchema.parse(req.body);
+    const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
+    res.status(201).json({ success: true, data: complaint });
+  }),
+);
+
+complaintsRouter.put(
+  "/:id",
+  authorize(COMPLAINT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.complaint.findUnique({ where: { id } });
+    if (!existing) throw notFound("Complaint not found");
+
+    const body = updateComplaintSchema.parse(req.body);
+    const resolving = body.status === "RESOLVED" || body.status === "CLOSED";
+    const complaint = await prisma.complaint.update({
+      where: { id },
+      data: { ...body, ...(resolving && { resolved_at: new Date() }) },
+    });
+
+    if (resolving) {
+      await logAudit("COMPLAINT_RESOLVE", { userId: req.user!.sub, targetType: "Complaint", targetId: id, metadata: { status: body.status }, req });
+    }
+    res.json({ success: true, data: complaint });
+  }),
+);

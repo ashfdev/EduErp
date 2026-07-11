@@ -54,6 +54,12 @@ export const promoteStudentSchema = z.object({
 });
 export type PromoteStudentInput = z.infer<typeof promoteStudentSchema>;
 
+export const graduateStudentSchema = z.object({
+  graduation_year: z.number().int().min(2000).max(2100),
+  notes: z.string().optional().nullable(),
+});
+export type GraduateStudentInput = z.infer<typeof graduateStudentSchema>;
+
 export const bulkPromoteSchema = z.object({
   class_id: z.string().min(1),
   section_id: z.string().optional().nullable(),

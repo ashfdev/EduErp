@@ -11,6 +11,7 @@ export const createTeachingResourceSchema = z.object({
   resource_type: z.enum(RESOURCE_TYPES).default("OTHER"),
   publish_at: z.coerce.date().optional().nullable(),
   expire_at: z.coerce.date().optional().nullable(),
+  due_date: z.coerce.date().optional().nullable(),
 });
 export type CreateTeachingResourceInput = z.infer<typeof createTeachingResourceSchema>;
 
@@ -21,5 +22,6 @@ export const updateTeachingResourceSchema = z.object({
   is_published: z.boolean().optional(),
   publish_at: z.coerce.date().optional().nullable(),
   expire_at: z.coerce.date().optional().nullable(),
+  due_date: z.coerce.date().optional().nullable(),
 });
 export type UpdateTeachingResourceInput = z.infer<typeof updateTeachingResourceSchema>;

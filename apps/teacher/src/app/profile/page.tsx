@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { TeacherShell } from "@/components/teacher-shell";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -14,6 +14,15 @@ interface StaffDocumentRow {
   title: string;
   original_filename: string;
   uploaded_at: string;
+}
+interface ReviewRow {
+  id: string;
+  review_period: string;
+  status: string;
+  overall_score: number | null;
+  overall_comments?: string | null;
+  template: { name: string; criteria: { key: string; label: string; max_score: number }[] };
+  scores: Record<string, number>;
 }
 
 export default function TeacherProfilePage() {
@@ -27,6 +36,19 @@ export default function TeacherProfilePage() {
   const { data: documents } = useQuery<StaffDocumentRow[]>({
     queryKey: ["staff", "me", "documents"],
     queryFn: async () => (await api.get("/api/hr/staff/me/documents")).data.data,
+  });
+
+  const { data: reviews } = useQuery<ReviewRow[]>({
+    queryKey: ["appraisals", "me"],
+    queryFn: async () => (await api.get("/api/appraisals/reviews", { params: { staff_id: "me" } })).data.data,
+  });
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (reviewId: string) => api.put(`/api/appraisals/reviews/${reviewId}/acknowledge`),
+    onSuccess: () => {
+      toast.success("Review acknowledged");
+      queryClient.invalidateQueries({ queryKey: ["appraisals", "me"] });
+    },
   });
 
   const uploadMutation = useMutation({
@@ -94,6 +116,36 @@ export default function TeacherProfilePage() {
                       <button onClick={() => download(d.id)} className="text-primary hover:underline">Download</button>
                       <button onClick={() => deleteMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div>
+          <p className="mb-3 text-sm font-medium">My Reviews</p>
+          <Card>
+            <CardContent className="pt-6">
+              {!reviews?.length && <EmptyState title="No performance reviews yet" />}
+              <div className="space-y-2">
+                {reviews?.map((r) => (
+                  <div key={r.id} className="rounded-md border p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium">{r.template.name} · {r.review_period}</p>
+                      <Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge>
+                    </div>
+                    {r.status !== "DRAFT" && (
+                      <>
+                        <p className="mt-1 text-xs text-muted-foreground">Overall Score: {r.overall_score}</p>
+                        {r.overall_comments && <p className="text-xs text-muted-foreground">{r.overall_comments}</p>}
+                        {r.status === "SUBMITTED" && (
+                          <Button size="sm" className="mt-2" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
+                            Acknowledge
+                          </Button>
+                        )}
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

@@ -9,7 +9,7 @@ import { authorize } from "../../middleware/authorize";
 import { csvUpload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema } from "@education-erp/validators";
+import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
@@ -32,6 +32,8 @@ const STUDENT_LIST_SELECT = {
   photo_url: true,
   current_roll_no: true,
   status: true,
+  graduation_year: true,
+  father_phone: true,
   current_class: { select: { id: true, name_en: true } },
   current_section: { select: { id: true, name: true } },
   guardian: { select: { phone: true } },
@@ -403,6 +405,44 @@ studentsRouter.post(
 
       await inheritSubjectsForClass(tx, id, body.new_class_id, body.new_academic_year_id);
       return result;
+    });
+
+    res.json({ success: true, data: updated });
+  }),
+);
+
+// Alumni directory (Phase 29) — a dedicated transition, not a raw status
+// edit via PUT /:id, so a graduation always gets a StudentAcademicHistory
+// row too, same discipline as /promote.
+studentsRouter.post(
+  "/:id/graduate",
+  authorize(STUDENT_PROMOTE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = graduateStudentSchema.parse(req.body);
+
+    const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!existing) throw notFound("Student not found");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (existing.current_class_id) {
+        const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
+        if (activeYear) {
+          await tx.studentAcademicHistory.create({
+            data: {
+              student_id: id,
+              academic_year_id: activeYear.id,
+              class_id: existing.current_class_id,
+              section_id: existing.current_section_id,
+              roll_no: existing.current_roll_no,
+              status: "GRADUATED",
+              notes: body.notes,
+              promoted_at: new Date(),
+            },
+          });
+        }
+      }
+      return tx.student.update({ where: { id }, data: { status: "GRADUATED", graduation_year: body.graduation_year } });
     });
 
     res.json({ success: true, data: updated });

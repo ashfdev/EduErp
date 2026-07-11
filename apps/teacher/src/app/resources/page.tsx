@@ -48,9 +48,18 @@ interface ResourceRow {
   original_filename: string;
   is_published: boolean;
   created_at: string;
+  due_date: string | null;
   class: { name_en: string };
   section: { name: string } | null;
   subject: { name_en: string } | null;
+}
+interface Submission {
+  id: string;
+  original_filename: string;
+  status: string;
+  grade: number | null;
+  feedback: string | null;
+  student: { name_en: string; student_uid: string };
 }
 
 const RESOURCE_TYPES = [
@@ -72,7 +81,9 @@ function ResourcesContent() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [resourceType, setResourceType] = useState("OTHER");
+  const [dueDate, setDueDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [submissionsResourceId, setSubmissionsResourceId] = useState<string | null>(null);
 
   // Admin can target any class/section; a teacher can only pick from
   // classes/sections they're actually assigned to (server-enforced too).
@@ -106,7 +117,7 @@ function ResourcesContent() {
   });
 
   function resetForm() {
-    setClassId(""); setSectionId(""); setSubjectId(""); setTitle(""); setDescription(""); setResourceType("OTHER"); setFile(null);
+    setClassId(""); setSectionId(""); setSubjectId(""); setTitle(""); setDescription(""); setResourceType("OTHER"); setDueDate(""); setFile(null);
   }
 
   const uploadMutation = useMutation({
@@ -118,6 +129,7 @@ function ResourcesContent() {
       formData.append("title", title);
       if (description) formData.append("description", description);
       formData.append("resource_type", resourceType);
+      if (resourceType === "ASSIGNMENT" && dueDate) formData.append("due_date", dueDate);
       formData.append("file", file!);
       return api.post("/api/resources", formData, { headers: { "Content-Type": "multipart/form-data" } });
     },
@@ -132,6 +144,27 @@ function ResourcesContent() {
       toast.error(message);
     },
   });
+
+  const { data: submissions } = useQuery<Submission[]>({
+    queryKey: ["resources", submissionsResourceId, "submissions"],
+    queryFn: async () => (await api.get(`/api/resources/${submissionsResourceId}/submissions`)).data.data,
+    enabled: !!submissionsResourceId,
+  });
+
+  const [gradeDrafts, setGradeDrafts] = useState<Record<string, { grade?: number; feedback?: string }>>({});
+  const gradeMutation = useMutation({
+    mutationFn: ({ submissionId, data }: { submissionId: string; data: { grade: number; feedback?: string } }) =>
+      api.put(`/api/resources/submissions/${submissionId}/grade`, data),
+    onSuccess: () => {
+      toast.success("Grade saved");
+      queryClient.invalidateQueries({ queryKey: ["resources", submissionsResourceId, "submissions"] });
+    },
+  });
+
+  async function downloadSubmission(id: string) {
+    const res = await api.get(`/api/resources/submissions/${id}/download`);
+    window.open(res.data.data.url, "_blank");
+  }
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_published }: { id: string; is_published: boolean }) => api.put(`/api/resources/${id}`, { is_published }),
@@ -179,6 +212,9 @@ function ResourcesContent() {
                       <Switch checked={r.is_published} onCheckedChange={(v) => toggleMutation.mutate({ id: r.id, is_published: v })} />
                       Published
                     </label>
+                    {r.resource_type === "ASSIGNMENT" && (
+                      <button onClick={() => setSubmissionsResourceId(r.id)} className="text-primary hover:underline">Submissions</button>
+                    )}
                     <button onClick={() => download(r.id)} className="text-primary hover:underline">Download</button>
                     <button onClick={() => deleteMutation.mutate(r.id)} className="text-destructive hover:underline">Delete</button>
                   </div>
@@ -222,6 +258,9 @@ function ResourcesContent() {
                 {RESOURCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
+            {resourceType === "ASSIGNMENT" && (
+              <div className="space-y-1.5"><Label>Due Date (optional)</Label><Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+            )}
             <div className="space-y-1.5"><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Chapter 4 - Newton's Laws" /></div>
             <div className="space-y-1.5"><Label>Description (optional)</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} /></div>
             <div className="space-y-1.5"><Label>File</Label><Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
@@ -230,6 +269,52 @@ function ResourcesContent() {
             <Button onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !classId || !title || !file}>
               {uploadMutation.isPending ? "Publishing..." : "Publish"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!submissionsResourceId} onOpenChange={(o) => !o && setSubmissionsResourceId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Submissions</DialogTitle></DialogHeader>
+          {!submissions?.length && <p className="text-sm text-muted-foreground">No submissions yet.</p>}
+          <div className="space-y-2">
+            {submissions?.map((s) => {
+              const draft = gradeDrafts[s.id] ?? {};
+              return (
+                <div key={s.id} className="rounded-md border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">{s.student.name_en} <span className="font-mono text-xs text-muted-foreground">{s.student.student_uid}</span></p>
+                    <Badge variant={s.status === "GRADED" ? "default" : "outline"}>{s.status}</Badge>
+                  </div>
+                  <button onClick={() => downloadSubmission(s.id)} className="text-xs text-primary hover:underline">Download {s.original_filename}</button>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Grade"
+                      className="h-8 w-20"
+                      value={draft.grade ?? s.grade ?? ""}
+                      onChange={(e) => setGradeDrafts((prev) => ({ ...prev, [s.id]: { ...prev[s.id], grade: Number(e.target.value) } }))}
+                    />
+                    <Input
+                      placeholder="Feedback"
+                      className="h-8 flex-1"
+                      value={draft.feedback ?? s.feedback ?? ""}
+                      onChange={(e) => setGradeDrafts((prev) => ({ ...prev, [s.id]: { ...prev[s.id], feedback: e.target.value } }))}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => gradeMutation.mutate({ submissionId: s.id, data: { grade: draft.grade ?? s.grade ?? 0, feedback: draft.feedback ?? s.feedback ?? undefined } })}
+                      disabled={gradeMutation.isPending}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmissionsResourceId(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

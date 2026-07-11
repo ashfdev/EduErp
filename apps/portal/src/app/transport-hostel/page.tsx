@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
@@ -33,6 +34,7 @@ function TransportHostelContent() {
               <p>Route: {data.transport.route_name}</p>
               <p>Pickup Stop: {data.transport.pickup_stop ?? "N/A"}</p>
               <p>Fare: ৳{data.transport.fare}</p>
+              <Link href="/bus-tracker" className="mt-1 inline-block text-xs text-[var(--primary,#1a3c4a)]">Track Bus Live →</Link>
             </div>
           ) : (
             <p className="text-sm text-gray-500">N/A</p>

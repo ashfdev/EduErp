@@ -113,6 +113,27 @@ function HomeContent() {
       </Card>
 
       <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">Complaints</p>
+          <Link href="/complaints" className="text-xs text-[var(--primary,#1a3c4a)]">View →</Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">Parent-Teacher Meetings</p>
+          <Link href="/ptm" className="text-xs text-[var(--primary,#1a3c4a)]">View →</Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">Quizzes</p>
+          <Link href="/quizzes" className="text-xs text-[var(--primary,#1a3c4a)]">View →</Link>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="pt-6">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-medium">Recent Notices</p>

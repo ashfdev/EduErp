@@ -1,15 +1,34 @@
 import { Router } from "express";
+import { randomBytes } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
+import { deviceKeyAuth } from "../../middleware/device-key-auth";
+import { vehiclePingLimiter } from "../../middleware/rate-limit";
 import { reqParam } from "../../lib/req-param";
 import { TRANSPORT_MANAGE_ROLES } from "../../lib/roles";
-import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema } from "@education-erp/validators";
+import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema, locationPingSchema } from "@education-erp/validators";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { notFound } from "../../lib/errors";
 
 export const transportRouter = Router();
+
+// Device-authenticated ingestion — must be registered before the blanket
+// authenticate() below, since a GPS tracker has no staff JWT at all.
+transportRouter.post(
+  "/vehicles/ping",
+  vehiclePingLimiter,
+  deviceKeyAuth,
+  asyncHandler(async (req, res) => {
+    const body = locationPingSchema.parse(req.body);
+    const ping = await prisma.vehicleLocationPing.create({
+      data: { vehicle_id: req.vehicle!.id, ...body },
+    });
+    res.status(201).json({ success: true, data: ping });
+  }),
+);
+
 transportRouter.use(authenticate);
 
 transportRouter.post(
@@ -85,8 +104,72 @@ transportRouter.put(
 transportRouter.get(
   "/vehicles",
   asyncHandler(async (_req, res) => {
-    const vehicles = await prisma.vehicle.findMany({ include: { route: { select: { name: true } } }, orderBy: { vehicle_no: "asc" } });
-    res.json({ success: true, data: vehicles });
+    // device_api_key is fetched only to derive a boolean and is stripped
+    // before the response — this list is visible to any authenticated staff
+    // role, not just TRANSPORT_MANAGE_ROLES, and the key itself is a live
+    // secret (see /vehicles/:id/device-key for the one-time, gated reveal).
+    const vehicles = await prisma.vehicle.findMany({
+      select: {
+        id: true, route_id: true, vehicle_no: true, type: true, capacity: true,
+        driver_name: true, driver_phone: true, insurance_exp: true, is_active: true, created_at: true,
+        device_api_key: true,
+        route: { select: { name: true } },
+      },
+      orderBy: { vehicle_no: "asc" },
+    });
+    res.json({
+      success: true,
+      data: vehicles.map(({ device_api_key, ...v }) => ({ ...v, has_device_key: !!device_api_key })),
+    });
+  }),
+);
+
+// Phase 37 — issue/rotate a vehicle's GPS-ping device key. Returned exactly
+// once here; the stored value is never included in any other response.
+transportRouter.post(
+  "/vehicles/:id/device-key",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.vehicle.findUnique({ where: { id } });
+    if (!existing) throw notFound("Vehicle not found");
+    const device_api_key = randomBytes(24).toString("hex");
+    await prisma.vehicle.update({ where: { id }, data: { device_api_key } });
+    res.json({ success: true, data: { device_api_key } });
+  }),
+);
+
+transportRouter.delete(
+  "/vehicles/:id/device-key",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    await prisma.vehicle.update({ where: { id: reqParam(req, "id") }, data: { device_api_key: null } });
+    res.status(204).send();
+  }),
+);
+
+transportRouter.get(
+  "/vehicles/:id/locations/latest",
+  asyncHandler(async (req, res) => {
+    const vehicleId = reqParam(req, "id");
+    const latest = await prisma.vehicleLocationPing.findFirst({
+      where: { vehicle_id: vehicleId },
+      orderBy: { recorded_at: "desc" },
+    });
+    res.json({ success: true, data: latest });
+  }),
+);
+
+transportRouter.get(
+  "/vehicles/:id/locations",
+  asyncHandler(async (req, res) => {
+    const vehicleId = reqParam(req, "id");
+    const pings = await prisma.vehicleLocationPing.findMany({
+      where: { vehicle_id: vehicleId },
+      orderBy: { recorded_at: "desc" },
+      take: 100,
+    });
+    res.json({ success: true, data: pings });
   }),
 );
 

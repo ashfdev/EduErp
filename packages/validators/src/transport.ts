@@ -30,3 +30,11 @@ export const assignTransportSchema = z.object({
   route_id: z.string().min(1),
   pickup_stop: z.string().optional(),
 });
+
+// Phase 37 — live transport tracking.
+export const locationPingSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  speed: z.number().min(0).optional(),
+  source: z.string().min(1).optional(),
+});

@@ -15,7 +15,11 @@ export type AuditAction =
   | "ROLE_CHANGE"
   | "TEMPLATE_ACTIVATE"
   | "COURSE_ENROLL"
-  | "COURSE_GRADE_ENTRY";
+  | "COURSE_GRADE_ENTRY"
+  | "HEALTH_RECORD_CREATE"
+  | "DISCIPLINE_RECORD_CREATE"
+  | "COMPLAINT_RESOLVE"
+  | "APPRAISAL_SUBMIT";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

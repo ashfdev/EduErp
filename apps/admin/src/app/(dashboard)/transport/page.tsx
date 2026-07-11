@@ -24,6 +24,7 @@ export default function TransportDashboardPage() {
         breadcrumbs={[{ label: "Transport" }]}
         action={
           <div className="flex gap-2">
+            <Link href="/transport/vehicles"><Button variant="outline">Vehicles & Tracking</Button></Link>
             <Link href="/transport/assign"><Button variant="outline">Assign Student</Button></Link>
             <Link href="/transport/routes/new"><Button>+ New Route</Button></Link>
           </div>

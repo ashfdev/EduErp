@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
@@ -6,7 +7,8 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema } from "@education-erp/validators";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema } from "@education-erp/validators";
+import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
 import { getPaymentAdapter } from "../../services/payment";
@@ -423,6 +425,35 @@ portalRouter.get(
   }),
 );
 
+// Phase 37 — live position of the vehicle(s) on the student's assigned
+// route. A route can carry more than one vehicle in this schema, so this
+// returns each vehicle's latest ping rather than assuming exactly one.
+portalRouter.get(
+  "/student/:id/vehicle-location",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const transport = await prisma.studentTransport.findUnique({
+      where: { student_id: id },
+      include: { route: { select: { id: true, name: true, vehicles: { where: { is_active: true }, select: { id: true, vehicle_no: true } } } } },
+    });
+    if (!transport) {
+      res.json({ success: true, data: { route_name: null, vehicles: [] } });
+      return;
+    }
+
+    const vehicles = await Promise.all(
+      transport.route.vehicles.map(async (v) => {
+        const latest = await prisma.vehicleLocationPing.findFirst({ where: { vehicle_id: v.id }, orderBy: { recorded_at: "desc" } });
+        return { vehicle_id: v.id, vehicle_no: v.vehicle_no, latest_ping: latest };
+      }),
+    );
+
+    res.json({ success: true, data: { route_name: transport.route.name, vehicles } });
+  }),
+);
+
 // Clearance gate: accounts due -> library fine -> exam office approval.
 // Accounts is only enforced if FeeRules.block_admit_on_due is set (an
 // existing, previously-dead Settings flag) — library and exam-office are
@@ -551,5 +582,291 @@ portalRouter.delete(
     const body = pushUnsubscribeSchema.parse(req.body);
     await prisma.pushSubscription.deleteMany({ where: { endpoint: body.endpoint, user_id: req.user!.sub } });
     res.status(204).send();
+  }),
+);
+
+// Phase 32 — complaints raised by the logged-in portal user directly (not
+// scoped through a student_id — a guardian's complaint isn't necessarily
+// about one specific child). Filtered by the caller's own User id, same as
+// the staff-side surface in complaints.routes.ts; portal users never reach
+// the manage-all view, matching how PORTAL_ROLES never had staff access.
+portalRouter.get(
+  "/complaints",
+  asyncHandler(async (req, res) => {
+    const complaints = await prisma.complaint.findMany({ where: { raised_by_user_id: req.user!.sub }, orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: complaints });
+  }),
+);
+
+portalRouter.post(
+  "/complaints",
+  asyncHandler(async (req, res) => {
+    const body = createComplaintSchema.parse(req.body);
+    const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
+    res.status(201).json({ success: true, data: complaint });
+  }),
+);
+
+// Phase 33 — only unbooked, future slots are listed; booking is wrapped in
+// a transaction that re-checks is_booked before flipping it, so two
+// guardians racing for the same slot can't both win it.
+portalRouter.get(
+  "/ptm-slots",
+  asyncHandler(async (req, res) => {
+    const query = req.query as { teacher_id?: string };
+    const slots = await prisma.pTMSlot.findMany({
+      where: { is_booked: false, date: { gte: new Date() }, ...(query.teacher_id && { teacher_id: query.teacher_id }) },
+      include: { teacher: { select: { name_en: true } }, class: { select: { name_en: true } } },
+      orderBy: { date: "asc" },
+    });
+    res.json({ success: true, data: slots });
+  }),
+);
+
+// Phase 34 — student uploads their work back for an ASSIGNMENT-type
+// resource. Re-checks eligibility with the same isResourceEligible() used
+// for downloads (a student can't submit to a resource they can't see), not
+// just a student_id ownership check. Resubmission always allowed; if the
+// prior submission was already GRADED, a new upload resets it back to
+// SUBMITTED/LATE and clears the grade — the teacher must re-grade.
+portalRouter.post(
+  "/student/:id/resources/:resource_id/submit",
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    if (!req.file) throw badRequest("A file is required");
+
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.current_class_id) throw notFound("Resource not found");
+
+    const resource = await prisma.teachingResource.findUnique({ where: { id: reqParam(req, "resource_id") } });
+    if (!resource || resource.resource_type !== "ASSIGNMENT" || !isResourceEligible(resource, student.current_class_id, student.current_section_id)) {
+      throw notFound("Resource not found");
+    }
+
+    const { blobKey } = await uploadBuffer("assignment-submissions", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const isLate = !!resource.due_date && new Date() > resource.due_date;
+
+    const submission = await prisma.assignmentSubmission.upsert({
+      where: { resource_id_student_id: { resource_id: resource.id, student_id: id } },
+      create: {
+        resource_id: resource.id,
+        student_id: id,
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        status: isLate ? "LATE" : "SUBMITTED",
+      },
+      update: {
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        submitted_at: new Date(),
+        status: isLate ? "LATE" : "SUBMITTED",
+        grade: null,
+        feedback: null,
+        graded_by_id: null,
+      },
+    });
+    res.status(201).json({ success: true, data: submission });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/resources/:resource_id/submission",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const submission = await prisma.assignmentSubmission.findUnique({
+      where: { resource_id_student_id: { resource_id: reqParam(req, "resource_id"), student_id: id } },
+    });
+    res.json({ success: true, data: submission });
+  }),
+);
+
+portalRouter.post(
+  "/ptm-slots/:id/book",
+  asyncHandler(async (req, res) => {
+    const slotId = reqParam(req, "id");
+    const body = ptmBookSchema.parse(req.body);
+    await assertAccess(req.user!.sub, req.user!.role, body.student_id);
+
+    const guardian = await prisma.guardian.findUnique({ where: { user_id: req.user!.sub } });
+    if (!guardian) throw forbidden("Only guardians can book PTM slots");
+
+    const booking = await prisma.$transaction(async (tx) => {
+      const slot = await tx.pTMSlot.findUnique({ where: { id: slotId } });
+      if (!slot) throw notFound("Slot not found");
+      if (slot.is_booked) throw badRequest("This slot has already been booked");
+
+      await tx.pTMSlot.update({ where: { id: slotId }, data: { is_booked: true } });
+      return tx.pTMBooking.create({
+        data: { slot_id: slotId, guardian_id: guardian.id, student_id: body.student_id, notes: body.notes },
+      });
+    });
+
+    res.status(201).json({ success: true, data: booking });
+  }),
+);
+
+// Phase 36 — quizzes/online exams. Score is always computed server-side
+// from the quiz's actual correct_option values, never trusted from the
+// client. An IN_PROGRESS attempt read past its deadline auto-finalizes
+// right there (legacy stored duration_minutes but never enforced it at
+// all) — a closed tab or dead connection can't leave an attempt stuck
+// forever blocking the teacher's results view.
+async function computeQuizScore(quizId: string, answers: Record<string, string>): Promise<number> {
+  const quizQuestions = await prisma.quizQuestion.findMany({ where: { quiz_id: quizId }, include: { question: true } });
+  let score = 0;
+  for (const qq of quizQuestions) {
+    if (answers[qq.question_id] === qq.question.correct_option) score += qq.question.marks;
+  }
+  return score;
+}
+
+async function finalizeExpiredAttempt(attempt: { id: string; status: string; answers: unknown }) {
+  const score = await computeQuizScore(
+    (await prisma.quizAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).quiz_id,
+    (attempt.answers as Record<string, string> | null) ?? {},
+  );
+  return prisma.quizAttempt.update({ where: { id: attempt.id }, data: { status: "GRADED", submitted_at: new Date(), score } });
+}
+
+portalRouter.get(
+  "/quizzes",
+  asyncHandler(async (req, res) => {
+    const query = req.query as { student_id?: string };
+    const id = query.student_id;
+    if (!id) throw badRequest("student_id is required");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student?.current_class_id) return res.json({ success: true, data: [] });
+
+    const quizzes = await prisma.quiz.findMany({
+      where: { is_published: true, subject: { class_id: student.current_class_id } },
+      include: { subject: { select: { name_en: true } }, _count: { select: { questions: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: quizzes });
+  }),
+);
+
+portalRouter.post(
+  "/quizzes/:id/start",
+  asyncHandler(async (req, res) => {
+    const quizId = reqParam(req, "id");
+    const body = z.object({ student_id: z.string().min(1) }).parse(req.body);
+    await assertAccess(req.user!.sub, req.user!.role, body.student_id);
+
+    const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
+    if (!quiz || !quiz.is_published) throw notFound("Quiz not found");
+
+    const existing = await prisma.quizAttempt.findUnique({ where: { quiz_id_student_id: { quiz_id: quizId, student_id: body.student_id } } });
+    if (existing) return res.json({ success: true, data: existing });
+
+    const quizQuestions = await prisma.quizQuestion.findMany({ where: { quiz_id: quizId }, orderBy: { display_order: "asc" } });
+    const questionIds = quizQuestions.map((qq) => qq.question_id);
+    // Fisher-Yates shuffle — legacy shuffled question order per attempt too.
+    for (let i = questionIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questionIds[i], questionIds[j]] = [questionIds[j]!, questionIds[i]!];
+    }
+
+    const attempt = await prisma.quizAttempt.create({
+      data: { quiz_id: quizId, student_id: body.student_id, question_order: questionIds },
+    });
+    res.status(201).json({ success: true, data: attempt });
+  }),
+);
+
+portalRouter.get(
+  "/quizzes/:id/attempt",
+  asyncHandler(async (req, res) => {
+    const quizId = reqParam(req, "id");
+    const query = req.query as { student_id?: string };
+    if (!query.student_id) throw badRequest("student_id is required");
+    await assertAccess(req.user!.sub, req.user!.role, query.student_id);
+
+    const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
+    if (!quiz) throw notFound("Quiz not found");
+
+    let attempt = await prisma.quizAttempt.findUnique({ where: { quiz_id_student_id: { quiz_id: quizId, student_id: query.student_id } } });
+    if (!attempt) throw notFound("Attempt not started");
+
+    const deadline = attempt.started_at.getTime() + quiz.duration_minutes * 60 * 1000;
+    if (attempt.status === "IN_PROGRESS" && Date.now() > deadline) {
+      attempt = await finalizeExpiredAttempt(attempt);
+    }
+
+    const quizQuestions = await prisma.quizQuestion.findMany({ where: { quiz_id: quizId }, include: { question: true } });
+    const byId = new Map(quizQuestions.map((qq) => [qq.question_id, qq.question]));
+    const order = (attempt.question_order as string[]) ?? [];
+    const stillInProgress = attempt.status === "IN_PROGRESS";
+
+    const questions = order
+      .map((qId) => byId.get(qId))
+      .filter((q): q is NonNullable<typeof q> => !!q)
+      .map((q) => ({
+        id: q.id,
+        question_text: q.question_text,
+        options: q.options,
+        marks: q.marks,
+        // Never serialize the answer key while an attempt is still open —
+        // same discipline as the Resource Library's eligibility re-check.
+        ...(stillInProgress ? {} : { correct_option: q.correct_option }),
+      }));
+
+    res.json({
+      success: true,
+      data: {
+        attempt: { id: attempt.id, status: attempt.status, started_at: attempt.started_at, submitted_at: attempt.submitted_at, score: attempt.score, answers: stillInProgress ? undefined : attempt.answers },
+        deadline_at: new Date(deadline),
+        questions,
+      },
+    });
+  }),
+);
+
+portalRouter.put(
+  "/quizzes/attempts/:id/flag",
+  quizFlagLimiter,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = flagQuizAttemptSchema.parse(req.body);
+    const attempt = await prisma.quizAttempt.findUnique({ where: { id } });
+    if (!attempt) throw notFound("Attempt not found");
+    await assertAccess(req.user!.sub, req.user!.role, attempt.student_id);
+
+    const flags = Array.isArray(attempt.tamper_flags) ? (attempt.tamper_flags as { type: string; at: string }[]) : [];
+    flags.push({ type: body.type, at: new Date().toISOString() });
+    await prisma.quizAttempt.update({ where: { id }, data: { tamper_flags: flags } });
+    res.status(204).send();
+  }),
+);
+
+portalRouter.post(
+  "/quizzes/attempts/:id/submit",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const attempt = await prisma.quizAttempt.findUnique({ where: { id } });
+    if (!attempt) throw notFound("Attempt not found");
+    await assertAccess(req.user!.sub, req.user!.role, attempt.student_id);
+    if (attempt.status !== "IN_PROGRESS") throw badRequest("This attempt has already been submitted");
+
+    const body = submitQuizAttemptSchema.parse(req.body);
+    const quiz = await prisma.quiz.findUniqueOrThrow({ where: { id: attempt.quiz_id } });
+    const deadline = attempt.started_at.getTime() + quiz.duration_minutes * 60 * 1000;
+    const isLate = Date.now() > deadline;
+
+    const score = await computeQuizScore(attempt.quiz_id, body.answers);
+    const flags = Array.isArray(attempt.tamper_flags) ? (attempt.tamper_flags as { type: string; at: string }[]) : [];
+    if (isLate) flags.push({ type: "LATE_SUBMISSION", at: new Date().toISOString() });
+
+    const updated = await prisma.quizAttempt.update({
+      where: { id },
+      data: { answers: body.answers, status: "GRADED", submitted_at: new Date(), score, tamper_flags: flags },
+    });
+    res.json({ success: true, data: updated });
   }),
 );

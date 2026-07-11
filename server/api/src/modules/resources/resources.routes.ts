@@ -9,7 +9,7 @@ import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.servi
 import { reqParam } from "../../lib/req-param";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { TEACHER_APP_ROLES } from "../../lib/roles";
-import { createTeachingResourceSchema, updateTeachingResourceSchema } from "@education-erp/validators";
+import { createTeachingResourceSchema, updateTeachingResourceSchema, gradeSubmissionSchema } from "@education-erp/validators";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 // Teacher-side ownership check for the "smart routing" targeting: a teacher
@@ -83,14 +83,14 @@ resourcesRouter.post(
         mime_type: req.file.mimetype,
         publish_at: body.publish_at ?? null,
         expire_at: body.expire_at ?? null,
+        due_date: body.due_date ?? null,
       },
     });
     res.status(201).json({ success: true, data: resource });
   }),
 );
 
-async function loadOwnResourceOr404(req: import("express").Request): Promise<{ id: string; teacher_id: string | null; blob_key: string }> {
-  const id = reqParam(req, "id");
+async function loadOwnResourceById(id: string, req: import("express").Request): Promise<{ id: string; teacher_id: string | null; blob_key: string }> {
   const resource = await prisma.teachingResource.findUnique({ where: { id }, select: { id: true, teacher_id: true, blob_key: true } });
   if (!resource) throw notFound("Resource not found");
   if (!MANAGE_ALL_ROLES.includes(req.user!.role)) {
@@ -98,6 +98,10 @@ async function loadOwnResourceOr404(req: import("express").Request): Promise<{ i
     if (resource.teacher_id !== staffId) throw notFound("Resource not found");
   }
   return resource;
+}
+
+async function loadOwnResourceOr404(req: import("express").Request): Promise<{ id: string; teacher_id: string | null; blob_key: string }> {
+  return loadOwnResourceById(reqParam(req, "id"), req);
 }
 
 resourcesRouter.put(
@@ -114,6 +118,7 @@ resourcesRouter.put(
         ...(body.is_published !== undefined && { is_published: body.is_published }),
         ...(body.publish_at !== undefined && { publish_at: body.publish_at }),
         ...(body.expire_at !== undefined && { expire_at: body.expire_at }),
+        ...(body.due_date !== undefined && { due_date: body.due_date }),
       },
     });
     res.json({ success: true, data: resource });
@@ -135,5 +140,49 @@ resourcesRouter.delete(
     const existing = await loadOwnResourceOr404(req);
     await prisma.teachingResource.delete({ where: { id: existing.id } });
     res.status(204).send();
+  }),
+);
+
+// Phase 34 — grading, reusing the same ownership check as every other
+// resource-management route in this file.
+resourcesRouter.get(
+  "/:id/submissions",
+  asyncHandler(async (req, res) => {
+    const existing = await loadOwnResourceOr404(req);
+    const submissions = await prisma.assignmentSubmission.findMany({
+      where: { resource_id: existing.id },
+      include: { student: { select: { name_en: true, student_uid: true } } },
+      orderBy: { submitted_at: "desc" },
+    });
+    res.json({ success: true, data: submissions });
+  }),
+);
+
+resourcesRouter.get(
+  "/submissions/:submission_id/download",
+  asyncHandler(async (req, res) => {
+    const submissionId = reqParam(req, "submission_id");
+    const submission = await prisma.assignmentSubmission.findUnique({ where: { id: submissionId } });
+    if (!submission) throw notFound("Submission not found");
+    await loadOwnResourceById(submission.resource_id, req);
+    const url = await getSignedDownloadUrl(submission.blob_key);
+    res.json({ success: true, data: { url } });
+  }),
+);
+
+resourcesRouter.put(
+  "/submissions/:submission_id/grade",
+  asyncHandler(async (req, res) => {
+    const submissionId = reqParam(req, "submission_id");
+    const submission = await prisma.assignmentSubmission.findUnique({ where: { id: submissionId } });
+    if (!submission) throw notFound("Submission not found");
+    await loadOwnResourceById(submission.resource_id, req);
+
+    const body = gradeSubmissionSchema.parse(req.body);
+    const updated = await prisma.assignmentSubmission.update({
+      where: { id: submissionId },
+      data: { grade: body.grade, feedback: body.feedback ?? null, graded_by_id: req.user!.sub, status: "GRADED" },
+    });
+    res.json({ success: true, data: updated });
   }),
 );
