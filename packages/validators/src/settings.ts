@@ -172,6 +172,7 @@ export const departmentSchema = z.object({
 export const classSchema = z.object({
   academic_year_id: z.string().min(1),
   department_id: z.string().optional().nullable(),
+  program_id: z.string().optional().nullable(),
   name_en: z.string().min(1),
   name_bn: z.string().optional().nullable(),
   numeric_level: z.number().int(),

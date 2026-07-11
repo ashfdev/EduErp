@@ -13,7 +13,9 @@ export type AuditAction =
   | "FEE_WAIVE"
   | "STUDENT_DELETE"
   | "ROLE_CHANGE"
-  | "TEMPLATE_ACTIVATE";
+  | "TEMPLATE_ACTIVATE"
+  | "COURSE_ENROLL"
+  | "COURSE_GRADE_ENTRY";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

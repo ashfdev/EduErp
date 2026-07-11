@@ -9,6 +9,7 @@ import { signaturesRouter, authorityConfigRouter } from "./signatures.routes";
 import { templatesRouter } from "./templates.routes";
 import { notificationsRouter } from "./notifications.routes";
 import { academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter, routineRouter } from "./academic.routes";
+import { programsRouter, coursesRouter } from "./university.routes";
 import { usersRouter } from "./users.routes";
 import { auditLogRouter } from "./audit-log.routes";
 
@@ -31,5 +32,7 @@ settingsRouter.use("/departments", departmentsRouter);
 settingsRouter.use("/classes", classesRouter);
 settingsRouter.use("/sections", sectionsRouter);
 settingsRouter.use("/routine", routineRouter);
+settingsRouter.use("/programs", programsRouter);
+settingsRouter.use("/courses", coursesRouter);
 settingsRouter.use("/users", usersRouter);
 settingsRouter.use("/audit-log", auditLogRouter);

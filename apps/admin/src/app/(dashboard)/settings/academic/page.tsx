@@ -57,6 +57,10 @@ export default function AcademicSettingsPage() {
     queryKey: ["settings", "shifts"],
     queryFn: async () => (await api.get("/api/settings/shifts")).data.data,
   });
+  const { data: programs } = useQuery<{ id: string; name_en: string }[]>({
+    queryKey: ["settings", "programs"],
+    queryFn: async () => (await api.get("/api/settings/programs")).data.data,
+  });
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
@@ -92,9 +96,9 @@ export default function AcademicSettingsPage() {
   });
 
   const [classOpen, setClassOpen] = useState(false);
-  const [classForm, setClassForm] = useState({ name_en: "", numeric_level: 1, academic_year_id: "" });
+  const [classForm, setClassForm] = useState({ name_en: "", numeric_level: 1, academic_year_id: "", program_id: "" });
   const createClass = useMutation({
-    mutationFn: () => api.post("/api/settings/classes", classForm),
+    mutationFn: () => api.post("/api/settings/classes", { ...classForm, program_id: classForm.program_id || undefined }),
     onSuccess: () => {
       toast.success("Class created");
       queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
@@ -215,6 +219,13 @@ export default function AcademicSettingsPage() {
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={classForm.academic_year_id} onChange={(e) => setClassForm({ ...classForm, academic_year_id: e.target.value })}>
                 <option value="">Select...</option>
                 {years?.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Program (university mode only — leave unset otherwise)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={classForm.program_id} onChange={(e) => setClassForm({ ...classForm, program_id: e.target.value })}>
+                <option value="">None</option>
+                {programs?.map((p) => <option key={p.id} value={p.id}>{p.name_en}</option>)}
               </select>
             </div>
           </div>

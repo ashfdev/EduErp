@@ -99,6 +99,65 @@ export interface PositionResult extends PositionInput {
   position: number;
 }
 
+// ── University SGPA/CGPA (Phase 25) ─────────────────────────────────
+// Purely additive — never called from calculateStudentResult/
+// calculatePositions above, which stay exactly as-is for school/college/
+// madrasah grading.
+
+export interface CourseGradeInput {
+  course_id: string;
+  credit_hours: number;
+  marks_total: number | null;
+  is_absent: boolean;
+}
+
+export interface CourseGradeResult {
+  course_id: string;
+  credit_hours: number;
+  grade_letter: string;
+  grade_point: number;
+}
+
+export interface SGPAResult {
+  courses: CourseGradeResult[];
+  sgpa: number;
+  total_credit_hours: number;
+}
+
+/** One semester's course grades -> SGPA, credit-weighted (not a plain average). */
+export function calculateSGPA(entries: CourseGradeInput[], scale: GradeRangeLike[]): SGPAResult {
+  const courses: CourseGradeResult[] = entries.map((e) => {
+    const g = calculateGrade(e.marks_total ?? 0, e.is_absent, scale);
+    return { course_id: e.course_id, credit_hours: e.credit_hours, grade_letter: g.grade_letter, grade_point: g.grade_point };
+  });
+
+  const total_credit_hours = courses.reduce((sum, c) => sum + c.credit_hours, 0);
+  const weightedSum = courses.reduce((sum, c) => sum + c.grade_point * c.credit_hours, 0);
+  const sgpa = total_credit_hours > 0 ? Math.round((weightedSum / total_credit_hours) * 100) / 100 : 0;
+
+  return { courses, sgpa, total_credit_hours };
+}
+
+export interface CGPACourseHistoryEntry {
+  grade_point: number;
+  credit_hours: number;
+}
+
+/**
+ * Cumulative CGPA across a student's ENTIRE course history:
+ * Σ(grade_point × credit_hours) / Σ(credit_hours).
+ * Deliberately NOT an average of per-semester SGPAs — that silently gives
+ * the wrong number whenever credit loads differ semester to semester.
+ * Caller is responsible for only passing COMPLETED/FAILED enrollments
+ * (in-progress/dropped/withdrawn courses have no final grade to weight).
+ */
+export function calculateCGPA(history: CGPACourseHistoryEntry[]): number {
+  const total_credit_hours = history.reduce((sum, h) => sum + h.credit_hours, 0);
+  if (total_credit_hours === 0) return 0;
+  const weightedSum = history.reduce((sum, h) => sum + h.grade_point * h.credit_hours, 0);
+  return Math.round((weightedSum / total_credit_hours) * 100) / 100;
+}
+
 /** Sort by GPA desc (tie-break: total marks desc); ties share a position, next rank skips. */
 export function calculatePositions(results: PositionInput[]): PositionResult[] {
   const sorted = [...results].sort((a, b) => b.total_gpa - a.total_gpa || b.total_marks - a.total_marks);

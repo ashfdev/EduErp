@@ -17,3 +17,4 @@ export * from "./accounts";
 export * from "./inventory";
 export * from "./card-design";
 export * from "./resources";
+export * from "./university";

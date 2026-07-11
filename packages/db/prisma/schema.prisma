@@ -233,6 +233,7 @@ model AcademicYear {
   student_academic_histories StudentAcademicHistory[]
   admission_cycles          AdmissionCycle[]
   fee_structures            FeeStructure[]
+  course_enrollments        CourseEnrollment[]
 }
 
 model Shift {
@@ -259,6 +260,7 @@ model Department {
   updated_at  DateTime  @updatedAt
   classes     Class[]
   assets      Asset[]
+  programs    Program[]
 }
 
 model Class {
@@ -267,6 +269,12 @@ model Class {
   academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
   department_id    String?
   department       Department?  @relation(fields: [department_id], references: [id])
+  // Null for every non-university row — set only when this Class row
+  // represents one semester offering of a university Program (the
+  // terminology cascade already renders Class as "Semester" for
+  // InstitutionType.UNIVERSITY; no separate Semester model needed).
+  program_id       String?
+  program          Program?     @relation(fields: [program_id], references: [id])
   name_en          String
   name_bn          String?
   numeric_level    Int
@@ -280,8 +288,10 @@ model Class {
   homework         Homework[]
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
+  course_enrollments CourseEnrollment[]
 
   @@index([academic_year_id])
+  @@index([program_id])
 }
 
 model Section {
@@ -444,6 +454,11 @@ model Student {
   status                StudentStatus @default(ACTIVE)
   has_disability        Boolean     @default(false)
   disability_note       String?
+  // Both null for every non-university student — cgpa is recomputed from
+  // CourseEnrollment history (never a naive average of per-semester SGPAs)
+  // whenever a course grade is finalized.
+  cgpa                  Float?
+  current_semester      Int?
   deleted_at            DateTime?
   created_at            DateTime    @default(now())
   updated_at            DateTime    @updatedAt
@@ -456,6 +471,7 @@ model Student {
   exam_seat_plans       ExamSeatPlan[]
   transport             StudentTransport?
   hostel_allocations    HostelAllocation[]
+  course_enrollments    CourseEnrollment[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -743,6 +759,11 @@ model FeeStructure {
   academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
   class_id         String?
   section_id       String?
+  // University fee scoping (Phase 27 F.1, folded into this migration since
+  // it needs Program to exist) — e.g. a per-program semester tuition fee,
+  // independent of/in addition to the existing class/section scoping.
+  program_id       String?
+  program          Program?     @relation(fields: [program_id], references: [id])
   category         FeeCategory
   name             String
   amount           Float
@@ -751,6 +772,8 @@ model FeeStructure {
   is_active        Boolean      @default(true)
   created_at       DateTime     @default(now())
   invoices         Invoice[]
+
+  @@index([program_id])
 }
 
 model Invoice {
@@ -1791,6 +1814,100 @@ model TeachingResource {
   @@index([class_id])
   @@index([section_id])
   @@index([teacher_id])
+}
+
+// ── University Program/Course/CGPA modeling (Phase 25) ─────────────
+// Purely additive: every field/table here stays unused for SCHOOL/COLLEGE/
+// MADRASAH institutions. Existing grading (calculateGrade/
+// calculateStudentResult/calculatePositions) is untouched — SGPA/CGPA are
+// new, separate functions in grading.engine.ts.
+
+model Program {
+  id                 String         @id @default(cuid())
+  name_en            String
+  name_bn            String?
+  code               String         @unique
+  department_id      String?
+  department         Department?    @relation(fields: [department_id], references: [id])
+  duration_semesters Int
+  total_credit_hours Float
+  is_active          Boolean        @default(true)
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  courses            Course[]
+  classes            Class[]
+  fee_structures     FeeStructure[]
+
+  @@index([department_id])
+}
+
+// Catalog-level — deliberately NOT tied to one Class row (unlike Subject),
+// so Prerequisite chains and multi-year CourseEnrollment history stay
+// stable across academic years/semester offerings.
+model Course {
+  id                String             @id @default(cuid())
+  program_id        String
+  program           Program            @relation(fields: [program_id], references: [id])
+  semester_number    Int
+  code              String
+  name_en           String
+  name_bn           String?
+  credit_hours      Float
+  course_type       SubjectType        @default(THEORY)
+  component_weights Json?
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @updatedAt
+  required_for      Prerequisite[]     @relation("CourseRequires")
+  required_by       Prerequisite[]     @relation("PrerequisiteFor")
+  enrollments       CourseEnrollment[]
+
+  @@unique([program_id, code])
+  @@index([program_id])
+}
+
+model Prerequisite {
+  id                      String @id @default(cuid())
+  course_id               String
+  course                  Course @relation("CourseRequires", fields: [course_id], references: [id])
+  prerequisite_course_id  String
+  prerequisite_course     Course @relation("PrerequisiteFor", fields: [prerequisite_course_id], references: [id])
+
+  @@unique([course_id, prerequisite_course_id])
+}
+
+enum CourseEnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  FAILED
+  DROPPED
+  WITHDRAWN
+}
+
+model CourseEnrollment {
+  id               String                 @id @default(cuid())
+  student_id       String
+  student          Student                @relation(fields: [student_id], references: [id])
+  course_id        String
+  course           Course                 @relation(fields: [course_id], references: [id])
+  // Anchors the specific semester offering this enrollment belongs to.
+  class_id         String
+  class            Class                  @relation(fields: [class_id], references: [id])
+  // Denormalized, mirrors StudentSubject's existing pattern.
+  academic_year_id String
+  academic_year    AcademicYear           @relation(fields: [academic_year_id], references: [id])
+  status           CourseEnrollmentStatus @default(ENROLLED)
+  component_marks  Json?
+  marks_total      Float?
+  grade_letter     String?
+  grade_point      Float?
+  enrolled_at      DateTime               @default(now())
+  entered_by_id    String?
+
+  @@unique([student_id, course_id, class_id])
+  @@index([student_id])
+  @@index([course_id])
+  @@index([class_id])
 }
 
 model RoutineSlot {
