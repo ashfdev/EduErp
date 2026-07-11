@@ -87,8 +87,11 @@ export default function DashboardPage() {
 
   const smsMutation = useMutation({
     mutationFn: (studentId: string) => api.post(`/api/analytics/defaulters-risk/${studentId}/remind`),
-    onSuccess: () => toast.success("Reminder queued (SMS stub — see server logs)"),
-    onError: () => toast.error("Failed to send reminder"),
+    onSuccess: () => toast.success("Reminder sent to guardian"),
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to send reminder";
+      toast.error(message);
+    },
   });
 
   function sendReminder(studentId: string) {

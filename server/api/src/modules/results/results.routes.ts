@@ -3,9 +3,11 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
 import { publicEndpointLimiter } from "../../middleware/rate-limit";
 import { cached } from "../../lib/cache";
 import { reqParam } from "../../lib/req-param";
+import { STAFF_ONLY_ROLES, MARK_VIEW_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { calculateStudentResult, calculatePositions } from "../../utils/grading.engine";
 import { badRequest, notFound } from "../../lib/errors";
 
@@ -41,9 +43,15 @@ export async function computeClassResults(examId: string, classId: string) {
   return perStudent.map((p) => ({ ...p, position: positionByStudent.get(p.student.id) ?? null }));
 }
 
+// Staff-only lookup of a specific student's result history. Portal callers
+// (STUDENT/GUARDIAN) must go through the ownership-checked
+// GET /api/portal/student/:id/results instead — this route trusted the :id
+// param with no ownership check, letting any portal token pull up any
+// other student's results.
 resultsRouter.get(
   "/student/:id",
   authenticate,
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
@@ -73,6 +81,7 @@ resultsRouter.get(
 resultsRouter.get(
   "/exam/:exam_id",
   authenticate,
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
@@ -164,6 +173,7 @@ resultsRouter.get(
 resultsRouter.get(
   "/tabulation/:exam_id/:class_id",
   authenticate,
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
@@ -192,6 +202,7 @@ resultsRouter.get(
 resultsRouter.get(
   "/reports/merit-list/:exam_id/:class_id",
   authenticate,
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
@@ -209,6 +220,7 @@ resultsRouter.get(
 resultsRouter.get(
   "/reports/subject-analysis/:exam_id/:class_id",
   authenticate,
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
@@ -237,6 +249,7 @@ resultsRouter.get(
 resultsRouter.get(
   "/reports/campus-wide/:exam_id",
   authenticate,
+  authorize(RESULT_PUBLISH_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const publications = await prisma.resultPublication.findMany({ where: { exam_id: examId }, include: { exam: true } });

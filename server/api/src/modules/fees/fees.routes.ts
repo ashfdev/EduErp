@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { FEE_COLLECTION_ROLES } from "../../lib/roles";
+import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema } from "@education-erp/validators";
 import { calculateLateFee } from "../../utils/late-fee";
 import { getPaymentAdapter } from "../../services/payment";
@@ -23,6 +23,7 @@ feesRouter.use(authenticate);
 
 feesRouter.get(
   "/structures",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().optional(), class_id: z.string().optional() }).parse(req.query);
     const structures = await prisma.feeStructure.findMany({
@@ -153,8 +154,12 @@ feesRouter.post(
   }),
 );
 
+// Staff-only. Portal callers (STUDENT/GUARDIAN) must go through the
+// ownership-checked GET /api/portal/student/:id/fees instead — this route
+// trusted a client-supplied student_id query param with no ownership check.
 feesRouter.get(
   "/invoices",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ student_id: z.string().optional(), status: z.string().optional(), class_id: z.string().optional(), month: z.coerce.number().optional(), year: z.coerce.number().optional() }).parse(req.query);
     const invoices = await prisma.invoice.findMany({
@@ -174,6 +179,7 @@ feesRouter.get(
 
 feesRouter.get(
   "/invoices/:id",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const invoice = await prisma.invoice.findUnique({ where: { id }, include: { payments: true, student: true } });
@@ -242,6 +248,7 @@ feesRouter.post(
 
 feesRouter.get(
   "/reports/daily-collection",
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.coerce.date() }).parse(req.query);
     const start = new Date(query.date.getFullYear(), query.date.getMonth(), query.date.getDate());
@@ -256,6 +263,7 @@ feesRouter.get(
 
 feesRouter.get(
   "/reports/monthly-summary",
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ month: z.coerce.number(), year: z.coerce.number() }).parse(req.query);
     const start = new Date(query.year, query.month - 1, 1);
@@ -277,6 +285,7 @@ feesRouter.get(
 
 feesRouter.get(
   "/reports/dues",
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), days_overdue: z.coerce.number().optional() }).parse(req.query);
     const invoices = await prisma.invoice.findMany({
@@ -298,6 +307,7 @@ feesRouter.get(
 
 feesRouter.get(
   "/reports/defaulters",
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), days_overdue: z.coerce.number().default(30) }).parse(req.query);
     const invoices = await prisma.invoice.findMany({
@@ -323,6 +333,7 @@ feesRouter.get(
 
 feesRouter.get(
   "/reports/export",
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ from: z.coerce.date(), to: z.coerce.date() }).parse(req.query);
     const payments = await prisma.payment.findMany({
