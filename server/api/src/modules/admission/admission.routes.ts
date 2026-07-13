@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -31,10 +30,13 @@ import { createMonthlyInvoiceIfMissing } from "../fees/invoice-helpers";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
+import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { env } from "../../lib/env";
 import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
 import { badRequest, notFound, conflict } from "../../lib/errors";
-import type { AdmissionApplication, AdmissionCycle, AdmissionTestSeatPlan, Class, AcademicYear } from "@education-erp/db";
+import type { AdmissionApplication, AdmissionCycle, AdmissionTestSeatPlan, Class, AcademicYear, AdmissionStatus } from "@education-erp/db";
+import { Prisma } from "@education-erp/db";
 
 export const admissionRouter = Router();
 
@@ -366,23 +368,52 @@ admissionRouter.post(
       if (missingDocs.length) throw badRequest(`Missing required documents: ${missingDocs.join(", ")}`, missingDocs);
     }
 
-    const applicationCount = await prisma.admissionApplication.count({ where: { cycle_id: cycle.id } });
-    const prefix = cycle.name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "ADM";
-    const admission_roll = `${prefix}-${new Date().getFullYear()}-${String(applicationCount + 1).padStart(4, "0")}`;
-
-    const application = await prisma.admissionApplication.create({
-      data: {
-        cycle_id: cycle.id,
-        admission_roll,
-        applicant_name: body.applicant_name,
-        guardian_info: body.guardian_info,
-        personal_info: body.personal_info,
-        previous_result: body.previous_result ?? undefined,
-        selected_subjects: body.selected_subjects ?? undefined,
-        documents: body.documents ?? undefined,
-        status: "PENDING",
-      },
+    // One guardian phone can only apply once per cycle — a second POST /apply
+    // for the same cycle+phone is a resubmission, not a new applicant.
+    const existingForPhone = await prisma.admissionApplication.findFirst({
+      where: { cycle_id: cycle.id, guardian_info: { path: ["phone"], equals: body.guardian_info.phone } },
     });
+    if (existingForPhone) throw conflict("An application for this cycle already exists for this guardian phone number");
+
+    const prefix = cycle.name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "ADM";
+    const year = new Date().getFullYear();
+
+    // The count-then-format-then-create sequence below is only a starting
+    // candidate — two concurrent /apply requests can both pass the "not
+    // taken yet" moment before either commits (classic check-then-insert
+    // race), so retrying the *insert* itself on a unique-constraint
+    // conflict (mirroring createWithUniqueAssetUid()'s pattern) is the real
+    // fix, not the count alone. This was very likely the cause of
+    // "submission fails or errors out" — a raw 500 on the 2nd of two
+    // concurrent submissions, now a clean retry instead.
+    let application: Awaited<ReturnType<typeof prisma.admissionApplication.create>> | undefined;
+    let admission_roll = "";
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const applicationCount = await prisma.admissionApplication.count({ where: { cycle_id: cycle.id } });
+      admission_roll = `${prefix}-${year}-${String(applicationCount + 1 + attempt).padStart(4, "0")}`;
+      try {
+        application = await prisma.admissionApplication.create({
+          data: {
+            cycle_id: cycle.id,
+            admission_roll,
+            applicant_name: body.applicant_name,
+            guardian_info: body.guardian_info,
+            personal_info: body.personal_info,
+            previous_result: body.previous_result ?? undefined,
+            selected_subjects: body.selected_subjects ?? undefined,
+            documents: body.documents ?? undefined,
+            status: "PENDING",
+          },
+        });
+        break;
+      } catch (err) {
+        const isRollCollision =
+          err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && (err.meta?.target as string[] | undefined)?.includes("admission_roll") === true;
+        if (isRollCollision && attempt < 4) continue;
+        throw err;
+      }
+    }
+    if (!application) throw new Error("Could not create application with a unique admission roll after 5 attempts");
 
     await sendSms(body.guardian_info.phone, `Application received for ${body.applicant_name}. Roll: ${admission_roll}. Track status at our website.`);
 
@@ -409,6 +440,12 @@ admissionRouter.post(
   }),
 );
 
+// Only PENDING/SHORTLISTED/WAITLISTED may move to CONFIRMED via a payment
+// callback — a REJECTED application must not be re-confirmable this way, and
+// an already-CONFIRMED/ENROLLED application must not be touched again by a
+// replayed or duplicate gateway callback (idempotent no-op instead).
+const CONFIRMABLE_STATUSES: AdmissionStatus[] = ["PENDING", "SHORTLISTED", "WAITLISTED"];
+
 async function handleAdmissionCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ", payload: unknown) {
   const adapter = getPaymentAdapter(gateway);
   const verified = await adapter.verifyCallback(payload);
@@ -416,7 +453,7 @@ async function handleAdmissionCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ"
   const application = await prisma.admissionApplication.findFirst({ where: { payment_id: verified.transaction_id } });
   if (!application) throw notFound("Application not found for this transaction");
 
-  if (verified.success) {
+  if (verified.success && CONFIRMABLE_STATUSES.includes(application.status)) {
     await prisma.admissionApplication.update({ where: { id: application.id }, data: { status: "CONFIRMED" } });
   }
   return { received: true };
@@ -554,6 +591,21 @@ admissionRouter.get(
   }),
 );
 
+// Forward-only state machine — previously only ENROLLED was locked, so a
+// CONFIRMED (possibly already-paid) application could be walked backward to
+// SHORTLISTED/WAITLISTED/REJECTED with no guard at all. REJECTED and
+// CONFIRMED are terminal via this route: rejecting is a final decision, and
+// moving a confirmed applicant forward happens only through the dedicated
+// /applications/:id/enroll endpoint, never a generic status edit.
+const ALLOWED_STATUS_TRANSITIONS: Record<AdmissionStatus, AdmissionStatus[]> = {
+  PENDING: ["SHORTLISTED", "WAITLISTED", "REJECTED"],
+  SHORTLISTED: ["WAITLISTED", "REJECTED", "CONFIRMED"],
+  WAITLISTED: ["SHORTLISTED", "REJECTED", "CONFIRMED"],
+  REJECTED: [],
+  CONFIRMED: [],
+  ENROLLED: [],
+};
+
 admissionRouter.put(
   "/applications/:id/status",
   authenticate,
@@ -564,6 +616,9 @@ admissionRouter.put(
     const existing = await prisma.admissionApplication.findUnique({ where: { id } });
     if (!existing) throw notFound("Application not found");
     if (existing.status === "ENROLLED") throw conflict("Cannot change status of an already-enrolled application");
+    if (!ALLOWED_STATUS_TRANSITIONS[existing.status].includes(body.status)) {
+      throw conflict(`Cannot change status from ${existing.status} to ${body.status}`);
+    }
 
     const updated = await prisma.admissionApplication.update({ where: { id }, data: { status: body.status } });
 
@@ -655,9 +710,17 @@ admissionRouter.post(
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const application = await prisma.admissionApplication.findUnique({ where: { id } });
+    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true } });
     if (!application) throw notFound("Application not found");
     if (application.status !== "SHORTLISTED") throw badRequest("Only shortlisted applications can be confirmed");
+
+    // Previously only enforced at merit-list generation — an admin could
+    // still confirm/enroll past the configured seat count with no guard at
+    // this actual commit point.
+    const takenSeats = await prisma.admissionApplication.count({
+      where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] } },
+    });
+    if (takenSeats >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
 
     const updated = await prisma.admissionApplication.update({ where: { id }, data: { status: "CONFIRMED" } });
     res.json({ success: true, data: updated });
@@ -676,14 +739,30 @@ admissionRouter.post(
     if (application.status !== "CONFIRMED") throw badRequest("Only confirmed applications can be enrolled");
     if (application.enrolled_student_id) throw conflict("This application has already been enrolled");
 
+    const takenSeats = await prisma.admissionApplication.count({
+      where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] }, id: { not: application.id } },
+    });
+    if (takenSeats >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
+
     const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
     const personalInfo = application.personal_info as Record<string, unknown>;
 
-    const student = await prisma.$transaction(async (tx) => {
+    const { student, studentLogin, guardianLogin, guardianEmail, guardianUserId } = await prisma.$transaction(async (tx) => {
       let guardian = await tx.guardian.findFirst({ where: { phone: guardianInfo.phone } });
+      let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
       if (!guardian) {
+        // Guardians previously got no portal login at all through this
+        // enrollment path — every other admission/creation path either
+        // creates one or (for manual student add) always does. Fixed here
+        // to match.
+        guardianLoginResult = await createOrLinkPortalLogin(tx, {
+          role: "GUARDIAN",
+          phone: guardianInfo.phone,
+          name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian",
+        });
         guardian = await tx.guardian.create({
           data: {
+            user_id: guardianLoginResult.userId,
             name_en: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian",
             relation: "FATHER",
             phone: guardianInfo.phone,
@@ -695,16 +774,16 @@ admissionRouter.post(
 
       const student_uid = await generateStudentUID(application.cycle.class_id);
       const studentPhone = typeof personalInfo.phone === "string" ? personalInfo.phone : undefined;
-      const tempPassword = `Stu${randomBytes(4).toString("hex")}!1`;
-      const password_hash = await bcrypt.hash(tempPassword, 10);
-
-      const user = studentPhone
-        ? await tx.user.create({ data: { name_en: application.applicant_name, role: "STUDENT", phone: studentPhone, password_hash } })
+      // Previously generated and hashed but never sent or returned anywhere
+      // — an unusable, effectively lost credential. Now flows through the
+      // same shared helper + notification pipeline as every other login.
+      const studentLoginResult = studentPhone
+        ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: studentPhone, name: application.applicant_name })
         : null;
 
       const created = await tx.student.create({
         data: {
-          user_id: user?.id,
+          user_id: studentLoginResult?.userId,
           student_uid,
           name_en: application.applicant_name,
           gender: (typeof personalInfo.gender === "string" ? personalInfo.gender : "OTHER") as never,
@@ -781,15 +860,50 @@ admissionRouter.post(
 
       await tx.admissionApplication.update({ where: { id: application.id }, data: { status: "ENROLLED", enrolled_student_id: created.id } });
 
-      return created;
+      return {
+        student: created,
+        studentLogin: studentLoginResult,
+        guardianLogin: guardianLoginResult,
+        guardianEmail: guardian.email,
+        guardianUserId: guardian.user_id,
+      };
     });
 
-    const guardian = await prisma.guardian.findFirst({ where: { phone: guardianInfo.phone }, select: { user_id: true, email: true } });
+    // Resolved directly from the transaction's own guardian row (whichever
+    // branch created/found it) instead of a post-commit re-query by phone —
+    // the old re-query could pick a different Guardian row than the one
+    // just linked if two guardians ever shared a phone.
     await sendNotification({
       trigger: "ADMISSION_CONFIRM",
-      recipients: [{ name: application.applicant_name, phone: guardianInfo.phone, email: guardian?.email, user_id: guardian?.user_id, person_id: student.id }],
+      recipients: [{ name: application.applicant_name, phone: guardianInfo.phone, email: guardianEmail, user_id: guardianUserId, person_id: student.id }],
       template_data: { student_name: application.applicant_name, student_uid: student.student_uid },
     });
+
+    const studentPhoneForNotify = typeof personalInfo.phone === "string" ? personalInfo.phone : undefined;
+    if (studentLogin?.tempPassword && studentPhoneForNotify) {
+      await sendNotification({
+        trigger: "PORTAL_LOGIN_CREATED",
+        recipients: [{ name: application.applicant_name, phone: studentPhoneForNotify }],
+        template_data: {
+          name: application.applicant_name,
+          phone: studentPhoneForNotify,
+          password: studentLogin.tempPassword,
+          portal_url: env.PORTAL_URL ?? "",
+        },
+      });
+    }
+    if (guardianLogin?.tempPassword) {
+      await sendNotification({
+        trigger: "PORTAL_LOGIN_CREATED",
+        recipients: [{ name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian", phone: guardianInfo.phone }],
+        template_data: {
+          name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian",
+          phone: guardianInfo.phone,
+          password: guardianLogin.tempPassword,
+          portal_url: env.PORTAL_URL ?? "",
+        },
+      });
+    }
 
     res.status(201).json({ success: true, data: student });
   }),

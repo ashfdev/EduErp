@@ -19,6 +19,19 @@ const TRIGGER_EMAIL_SUBJECT: Record<NotificationTrigger, string> = {
   RESULT_PUBLISHED: "Result Published",
   NOTICE: "Notice",
   ADMISSION_CONFIRM: "Admission Confirmed",
+  PORTAL_LOGIN_CREATED: "Your Portal Account",
+};
+
+// Triggers whose template_data contains a secret (a plaintext temporary
+// password) — the real message still goes to the SMS/email/push queue for
+// actual delivery, but NotificationLog.message (browsable via the
+// admin-facing /settings/notifications/logs screen) is rendered from a
+// redacted copy of template_data instead, so the password isn't left
+// sitting in a log forever. Re-interpolating with the key masked (rather
+// than regexing the rendered string) is robust to wherever the template
+// happens to place the placeholder.
+const REDACT_TEMPLATE_KEYS: Partial<Record<NotificationTrigger, string[]>> = {
+  PORTAL_LOGIN_CREATED: ["password"],
 };
 
 function interpolate(template: string, data: Record<string, string>): string {
@@ -42,10 +55,16 @@ export async function sendNotification(params: {
   let queued = 0;
   let skipped = 0;
 
+  const redactKeys = REDACT_TEMPLATE_KEYS[params.trigger];
+  const logTemplateData = redactKeys
+    ? { ...params.template_data, ...Object.fromEntries(redactKeys.map((k) => [k, "[REDACTED]"])) }
+    : params.template_data;
+
   for (const recipient of params.recipients) {
     for (const config of configs) {
       const template = recipient.lang === "EN" ? config.template_en : config.template_bn;
       const message = interpolate(template, params.template_data);
+      const logMessage = redactKeys ? interpolate(template, logTemplateData) : message;
 
       try {
         if (config.channel === "SMS") {
@@ -54,7 +73,7 @@ export async function sendNotification(params: {
             continue;
           }
           const log = await prisma.notificationLog.create({
-            data: { trigger: params.trigger, channel: "SMS", recipient: recipient.phone, person_id: recipient.person_id, status: "QUEUED", message },
+            data: { trigger: params.trigger, channel: "SMS", recipient: recipient.phone, person_id: recipient.person_id, status: "QUEUED", message: logMessage },
           });
           await smsQueue.add("send", { log_id: log.id, phone: recipient.phone, message }, DEFAULT_JOB_OPTS);
           queued++;
@@ -64,7 +83,7 @@ export async function sendNotification(params: {
             continue;
           }
           const log = await prisma.notificationLog.create({
-            data: { trigger: params.trigger, channel: "EMAIL", recipient: recipient.email, person_id: recipient.person_id, status: "QUEUED", message },
+            data: { trigger: params.trigger, channel: "EMAIL", recipient: recipient.email, person_id: recipient.person_id, status: "QUEUED", message: logMessage },
           });
           await emailQueue.add(
             "send",
@@ -78,7 +97,7 @@ export async function sendNotification(params: {
             continue;
           }
           const log = await prisma.notificationLog.create({
-            data: { trigger: params.trigger, channel: "PUSH", recipient: recipient.user_id, person_id: recipient.person_id, status: "QUEUED", message },
+            data: { trigger: params.trigger, channel: "PUSH", recipient: recipient.user_id, person_id: recipient.person_id, status: "QUEUED", message: logMessage },
           });
           await pushQueue.add(
             "send",

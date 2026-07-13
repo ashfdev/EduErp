@@ -62,10 +62,6 @@ assetsRouter.delete(
 
 // ── Fixed Assets ──────────────────────────────────────────────────
 
-function computeBookValue(purchasePrice: number, accumulatedDep: number): number {
-  return Math.max(0, purchasePrice - accumulatedDep);
-}
-
 assetsRouter.get(
   "/assets",
   asyncHandler(async (req, res) => {

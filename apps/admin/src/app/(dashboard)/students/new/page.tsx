@@ -166,13 +166,13 @@ export default function NewStudentPage() {
 
           {step === 1 && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label>Father's Name</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Father's Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
-              <div className="space-y-1.5"><Label>Father's Occupation</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s Name</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s Occupation</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
               <div />
-              <div className="space-y-1.5"><Label>Mother's Name</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Mother's Phone</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Mother's Occupation</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Name</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Phone</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Occupation</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
             </div>
           )}
 

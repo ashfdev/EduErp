@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -21,11 +22,21 @@ const manageAll = (role: string) => COMPLAINT_MANAGE_ROLES.includes(role as neve
 complaintsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const complaints = await prisma.complaint.findMany({
-      where: manageAll(req.user!.role) ? {} : { raised_by_user_id: req.user!.sub },
-      orderBy: { created_at: "desc" },
-    });
-    res.json({ success: true, data: complaints });
+    const query = z
+      .object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) })
+      .parse(req.query);
+    const where = manageAll(req.user!.role) ? {} : { raised_by_user_id: req.user!.sub };
+
+    const [complaints, total] = await Promise.all([
+      prisma.complaint.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.complaint.count({ where }),
+    ]);
+    res.json({ success: true, data: complaints, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

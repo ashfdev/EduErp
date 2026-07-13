@@ -28,7 +28,6 @@ function QuizAttemptContent() {
   const queryClient = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const flaggedRef = useRef(false);
 
   const { data, isLoading, error, refetch } = useQuery<AttemptView>({
     queryKey: ["portal", "quiz-attempt", quizId, activeStudentId],

@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
+  PageWrapper, Card, CardContent, Button, Input, Label, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";

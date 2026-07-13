@@ -53,16 +53,27 @@ noticesRouter.get(
   // ownership-scoped GET /api/portal/student/:id/notices instead.
   authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
-    const query = z.object({ audience: z.string().optional(), is_published: z.string().optional(), search: z.string().optional() }).parse(req.query);
-    const notices = await prisma.notice.findMany({
-      where: {
-        ...(query.audience && { audience: query.audience as never }),
-        ...(query.is_published !== undefined && { is_published: query.is_published === "true" }),
-        ...(query.search && { title: { contains: query.search, mode: "insensitive" } }),
-      },
-      orderBy: [{ is_pinned: "desc" }, { created_at: "desc" }],
-    });
-    res.json({ success: true, data: notices });
+    const query = z
+      .object({
+        audience: z.string().optional(), is_published: z.string().optional(), search: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(200).default(50),
+      })
+      .parse(req.query);
+    const where = {
+      ...(query.audience && { audience: query.audience as never }),
+      ...(query.is_published !== undefined && { is_published: query.is_published === "true" }),
+      ...(query.search && { title: { contains: query.search, mode: "insensitive" as const } }),
+    };
+    const [notices, total] = await Promise.all([
+      prisma.notice.findMany({
+        where,
+        orderBy: [{ is_pinned: "desc" }, { created_at: "desc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.notice.count({ where }),
+    ]);
+    res.json({ success: true, data: notices, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

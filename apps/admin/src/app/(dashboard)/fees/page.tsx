@@ -35,7 +35,7 @@ export default function FeesDashboardPage() {
         }
       />
       <div className="grid grid-cols-4 gap-4">
-        <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{daily?.total ?? 0}</p><p className="text-sm text-muted-foreground">Today's Collection</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{daily?.total ?? 0}</p><p className="text-sm text-muted-foreground">Today&apos;s Collection</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{monthly?.total ?? 0}</p><p className="text-sm text-muted-foreground">This Month</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{defaulters?.length ?? 0}</p><p className="text-sm text-muted-foreground">Defaulters (30+ days)</p></CardContent></Card>
         <Card><CardContent className="pt-6 space-y-1"><Link href="/fees/invoices" className="block text-primary hover:underline">View Invoices →</Link><Link href="/fees/reports" className="block text-primary hover:underline">View Reports →</Link><Link href="/fees/bank-transfers" className="block text-primary hover:underline">Verify Bank Transfers →</Link></CardContent></Card>

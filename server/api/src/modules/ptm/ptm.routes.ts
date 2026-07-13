@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -57,16 +58,25 @@ ptmRouter.delete(
 ptmRouter.get(
   "/bookings",
   authorize(COMPLAINT_MANAGE_ROLES),
-  asyncHandler(async (_req, res) => {
-    const bookings = await prisma.pTMBooking.findMany({
-      where: { status: "CONFIRMED" },
-      include: {
-        slot: { include: { teacher: { select: { name_en: true } } } },
-        student: { select: { name_en: true, student_uid: true } },
-        guardian: { select: { name_en: true, phone: true } },
-      },
-      orderBy: { booked_at: "desc" },
-    });
-    res.json({ success: true, data: bookings });
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) })
+      .parse(req.query);
+    const where = { status: "CONFIRMED" as const };
+    const [bookings, total] = await Promise.all([
+      prisma.pTMBooking.findMany({
+        where,
+        include: {
+          slot: { include: { teacher: { select: { name_en: true } } } },
+          student: { select: { name_en: true, student_uid: true } },
+          guardian: { select: { name_en: true, phone: true } },
+        },
+        orderBy: { booked_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.pTMBooking.count({ where }),
+    ]);
+    res.json({ success: true, data: bookings, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );

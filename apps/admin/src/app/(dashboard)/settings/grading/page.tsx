@@ -13,7 +13,6 @@ import {
   Button,
   Badge,
   Input,
-  Label,
   EmptyState,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";

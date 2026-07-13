@@ -68,7 +68,7 @@ export default function AccountsDashboardPage() {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Cash in Hand</p><p className="text-2xl font-semibold">{fmt(cashInHand)}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Cash at Bank</p><p className="text-2xl font-semibold">{fmt(cashAtBank)}</p></CardContent></Card>
-        <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Today's Vouchers</p><p className="text-2xl font-semibold">{dayBook?.length ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Today&apos;s Vouchers</p><p className="text-2xl font-semibold">{dayBook?.length ?? 0}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Pending Approvals</p><p className="text-2xl font-semibold">{pendingApprovals.length}</p></CardContent></Card>
       </div>
 

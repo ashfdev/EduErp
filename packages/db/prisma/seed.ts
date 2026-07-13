@@ -99,7 +99,7 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   OTHER: "4011",
 };
 
-const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM"] as const;
+const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
 const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
@@ -126,6 +126,10 @@ const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { b
   ADMISSION_CONFIRM: {
     bn: "অভিনন্দন! {{student_name}} ভর্তি নিশ্চিত হয়েছে। শিক্ষার্থী আইডি: {{student_uid}}",
     en: "Congratulations! {{student_name}} has been admitted. Student ID: {{student_uid}}",
+  },
+  PORTAL_LOGIN_CREATED: {
+    bn: "{{name}}, আপনার পোর্টাল অ্যাকাউন্ট তৈরি হয়েছে। ফোন: {{phone}}, অস্থায়ী পাসওয়ার্ড: {{password}}। {{portal_url}} এ লগইন করুন।",
+    en: "{{name}}, your portal account has been created. Phone: {{phone}}, temporary password: {{password}}. Log in at {{portal_url}}.",
   },
 };
 

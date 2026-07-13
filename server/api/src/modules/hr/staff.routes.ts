@@ -12,8 +12,10 @@ import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES } from "../../lib/roles";
 import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
 import { generateStaffUid } from "../../utils/staff-id.generator";
-import { sendSms } from "../../services/sms.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
+import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { sendNotification } from "../../services/notification.service";
+import { env } from "../../lib/env";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors";
 import type { UserRole } from "@education-erp/types";
@@ -108,18 +110,18 @@ hrStaffRouter.post(
       if (existingUser) throw conflict("A user with this phone number already exists");
     }
 
+    let tempPassword: string | null = null;
     const staff = await prisma.$transaction(async (tx) => {
       const staff_uid = await generateStaffUid();
       let userId: string | undefined;
-      let tempPassword: string | undefined;
 
       if (body.create_login && body.phone) {
-        tempPassword = `Stf${randomBytes(4).toString("hex")}!1`;
-        const password_hash = await bcrypt.hash(tempPassword, 10);
-        const user = await tx.user.create({
-          data: { name_en: body.name_en, name_bn: body.name_bn, phone: body.phone, email: body.email, role: body.role as UserRole, password_hash },
-        });
-        userId = user.id;
+        // The pre-check above already rejected an existing phone (409) — a
+        // staff account must never silently link to an unrelated existing
+        // login, unlike the guardian-sibling-sharing-a-phone case elsewhere.
+        const login = await createOrLinkPortalLogin(tx, { role: body.role as UserRole, phone: body.phone, name: body.name_en });
+        userId = login.userId;
+        tempPassword = login.tempPassword;
       } else {
         // Staff.user_id is a required, unique FK — every Staff row needs a User
         // row even when no interactive login is granted, so create a
@@ -157,12 +159,16 @@ hrStaffRouter.post(
         },
       });
 
-      if (body.create_login && body.phone && tempPassword) {
-        await sendSms(body.phone, `Your staff account has been created. Temporary password: ${tempPassword}`);
-      }
-
       return created;
     });
+
+    if (body.create_login && body.phone && tempPassword) {
+      await sendNotification({
+        trigger: "PORTAL_LOGIN_CREATED",
+        recipients: [{ name: body.name_en, phone: body.phone }],
+        template_data: { name: body.name_en, phone: body.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
+      });
+    }
 
     if (body.show_on_website) await triggerRevalidation(["/faculty"]);
 

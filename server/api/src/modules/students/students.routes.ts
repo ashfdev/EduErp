@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { parse } from "csv-parse/sync";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
@@ -13,10 +12,11 @@ import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPro
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
-import { sendSms } from "../../services/sms.service";
+import { sendNotification } from "../../services/notification.service";
+import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
-import { randomBytes } from "node:crypto";
 
 export const studentsRouter = Router();
 // Full 360-degree profiles (incl. fees/results/attendance) for any given id
@@ -208,54 +208,35 @@ studentsRouter.post(
   authorize(STUDENT_CRUD_ROLES),
   asyncHandler(async (req, res) => {
     const body = createStudentSchema.parse(req.body);
-    if (body.father_phone) {
-      // no strict uniqueness requirement across guardians — phone can repeat for siblings
-    }
 
-    let guardianTempPassword: string | undefined;
-
-    const student = await prisma.$transaction(async (tx) => {
+    const { student, studentLogin, guardianLogin, student_uid } = await prisma.$transaction(async (tx) => {
       let guardianId = body.guardian_id ?? null;
+      let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
       if (!guardianId && body.father_phone) {
         const existingGuardian = await tx.guardian.findFirst({ where: { phone: body.father_phone } });
         if (existingGuardian) {
           guardianId = existingGuardian.id;
         } else {
-          // Guardians get a portal login too (role=GUARDIAN), same optional-account
-          // pattern already used for students below — the phone may already belong
-          // to a User from an older sibling's guardian record, in which case we
-          // just link the new Guardian row to that existing account.
-          const existingGuardianUser = await tx.user.findUnique({ where: { phone: body.father_phone } });
-          let guardianUserId: string | undefined = existingGuardianUser?.id;
-          if (!existingGuardianUser) {
-            guardianTempPassword = `Grd${randomBytes(4).toString("hex")}!1`;
-            const guardianPasswordHash = await bcrypt.hash(guardianTempPassword, 10);
-            const guardianUser = await tx.user.create({
-              data: { name_en: body.father_name ?? "Guardian", role: "GUARDIAN", phone: body.father_phone, password_hash: guardianPasswordHash },
-            });
-            guardianUserId = guardianUser.id;
-          }
-
+          // Guardians get a portal login too — the phone may already belong
+          // to a User from an older sibling's guardian record, in which case
+          // this links the new Guardian row to that existing account instead
+          // of erroring or creating a duplicate.
+          guardianLoginResult = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone: body.father_phone, name: body.father_name ?? "Guardian" });
           const guardian = await tx.guardian.create({
-            data: { user_id: guardianUserId, name_en: body.father_name ?? "Guardian", relation: "FATHER", phone: body.father_phone },
+            data: { user_id: guardianLoginResult.userId, name_en: body.father_name ?? "Guardian", relation: "FATHER", phone: body.father_phone },
           });
           guardianId = guardian.id;
         }
       }
 
       const student_uid = await generateStudentUID(body.current_class_id);
-      const tempPassword = `Stu${randomBytes(4).toString("hex")}!1`;
-      const password_hash = await bcrypt.hash(tempPassword, 10);
-
-      const user = body.phone
-        ? await tx.user.create({
-            data: { name_en: body.name_en, name_bn: body.name_bn, role: "STUDENT", phone: body.phone, password_hash },
-          })
+      const studentLoginResult = body.phone
+        ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: body.phone, name: body.name_en })
         : null;
 
       const created = await tx.student.create({
         data: {
-          user_id: user?.id,
+          user_id: studentLoginResult?.userId,
           student_uid,
           name_en: body.name_en,
           name_bn: body.name_bn,
@@ -294,20 +275,32 @@ studentsRouter.post(
 
       await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids);
 
-      if (body.send_portal_login_sms !== false && body.father_phone) {
-        const guardianLoginNote = guardianTempPassword ? ` Guardian portal login: ${body.father_phone} / temp password: ${guardianTempPassword}.` : "";
-        const studentLoginNote = user ? ` Student portal login: ${student_uid} / temp password sent to the student's own phone.` : "";
-        await sendSms(
-          body.father_phone,
-          `${body.name_en} has been admitted. Student ID: ${student_uid}.${studentLoginNote}${guardianLoginNote}`,
-        );
-        if (user && body.phone) {
-          await sendSms(body.phone, `Your student portal account is ready. Student ID: ${student_uid}. Temp password: ${tempPassword}.`);
-        }
-      }
-
-      return created;
+      return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid };
     });
+
+    if (body.send_portal_login_sms !== false) {
+      if (body.father_phone) {
+        await sendNotification({
+          trigger: "ADMISSION_CONFIRM",
+          recipients: [{ name: body.father_name ?? "Guardian", phone: body.father_phone }],
+          template_data: { student_name: body.name_en, student_uid },
+        });
+      }
+      if (guardianLogin?.tempPassword && body.father_phone) {
+        await sendNotification({
+          trigger: "PORTAL_LOGIN_CREATED",
+          recipients: [{ name: body.father_name ?? "Guardian", phone: body.father_phone }],
+          template_data: { name: body.father_name ?? "Guardian", phone: body.father_phone, password: guardianLogin.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+        });
+      }
+      if (studentLogin?.tempPassword && body.phone) {
+        await sendNotification({
+          trigger: "PORTAL_LOGIN_CREATED",
+          recipients: [{ name: body.name_en, phone: body.phone }],
+          template_data: { name: body.name_en, phone: body.phone, password: studentLogin.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+        });
+      }
+    }
 
     res.status(201).json({ success: true, data: student });
   }),
@@ -319,7 +312,9 @@ studentsRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = updateStudentSchema.parse(req.body);
-    const { selected_optional_subject_ids, send_portal_login_sms, ...fields } = body;
+    // send_portal_login_sms is create-only (see POST / below) — destructured
+    // here purely to exclude it from the prisma update payload.
+    const { selected_optional_subject_ids, send_portal_login_sms: _send_portal_login_sms, ...fields } = body;
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
@@ -606,16 +601,38 @@ studentsRouter.post(
     const created: string[] = [];
     const failed: { row: number; reason: string }[] = [];
 
+    // Sequential per-row loop with a bcrypt hash + a queued SMS added per
+    // row (for the new guardian login) — fine for a realistic school import
+    // (tens to low hundreds of rows), not built to guarantee no timeout on
+    // a multi-thousand-row CSV against this synchronous endpoint. Accepted
+    // as a known limit rather than building an async bulk-job system here.
     for (const [index, row] of body.rows.entries()) {
       try {
         const student_uid = await generateStudentUID(row.current_class_id);
-        const student = await prisma.$transaction(async (tx) => {
+        const { student, guardianLogin } = await prisma.$transaction(async (tx) => {
+          // Same guardian-dedup shape as the manual single-add path: reuse
+          // an existing Guardian row by phone, or find-or-link a login and
+          // create a new one.
+          let guardianId: string | null = null;
+          let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
+          const existingGuardian = await tx.guardian.findFirst({ where: { phone: row.father_phone } });
+          if (existingGuardian) {
+            guardianId = existingGuardian.id;
+          } else {
+            guardianLoginResult = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone: row.father_phone, name: row.father_name ?? "Guardian" });
+            const guardian = await tx.guardian.create({
+              data: { user_id: guardianLoginResult.userId, name_en: row.father_name ?? "Guardian", relation: "FATHER", phone: row.father_phone },
+            });
+            guardianId = guardian.id;
+          }
+
           const s = await tx.student.create({
             data: {
               student_uid,
               name_en: row.name_en,
               name_bn: row.name_bn,
               gender: row.gender,
+              guardian_id: guardianId,
               father_name: row.father_name,
               father_phone: row.father_phone,
               current_class_id: row.current_class_id,
@@ -624,8 +641,17 @@ studentsRouter.post(
             },
           });
           await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id);
-          return s;
+          return { student: s, guardianLogin: guardianLoginResult };
         });
+
+        if (guardianLogin?.tempPassword) {
+          await sendNotification({
+            trigger: "PORTAL_LOGIN_CREATED",
+            recipients: [{ name: row.father_name ?? "Guardian", phone: row.father_phone }],
+            template_data: { name: row.father_name ?? "Guardian", phone: row.father_phone, password: guardianLogin.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+          });
+        }
+
         created.push(student.student_uid);
       } catch (err) {
         failed.push({ row: index + 1, reason: err instanceof Error ? err.message : "Unknown error" });

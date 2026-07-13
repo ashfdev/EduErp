@@ -33,7 +33,9 @@ export default function AdmissionApplyPage() {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<{ admission_roll: string; app_fee: number } | null>(null);
+  const [submitted, setSubmitted] = useState<{ id: string; admission_roll: string; app_fee: number } | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const [applicantName, setApplicantName] = useState("");
   const [personalInfo, setPersonalInfo] = useState<Record<string, string>>({});
@@ -111,6 +113,48 @@ export default function AdmissionApplyPage() {
     }
   }
 
+  async function payNow(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ") {
+    if (!submitted) return;
+    setPaying(true);
+    setPaymentError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/admission/payment/initiate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: submitted.id, gateway }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setPaymentError(body.error?.message ?? "Could not start payment");
+        return;
+      }
+      if (body.data?.payment_url) {
+        window.location.href = body.data.payment_url;
+      }
+    } catch {
+      setPaymentError("Could not reach the server — please try again.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  // Real per-step validation — previously only step 0 was gated (via the
+  // Next button's disabled check below), so a user could click through
+  // steps 1-4 with required fields empty and only find out from a late,
+  // confusing server-side 400 on final submit. There was also no <form>
+  // element at all, so HTML5 `required` attributes on the inputs never did
+  // anything on their own.
+  function isStepValid(i: number): boolean {
+    if (i === 0) {
+      if (!applicantName.trim()) return false;
+      const requiredCustomFields = (cycle?.form_config?.fields ?? []).filter((f) => !f.is_default && f.required);
+      return requiredCustomFields.every((f) => !!personalInfo[f.key]);
+    }
+    if (i === 1) return /^01\d{9}$/.test(guardian.phone);
+    if (i === 4) return (cycle?.form_config?.document_uploads ?? []).filter((d) => d.required).every((d) => !!documents[d.key]);
+    return true;
+  }
+
   if (!cycle) return <main className="mx-auto max-w-2xl p-8"><p className="text-sm text-gray-600">Loading...</p></main>;
 
   if (submitted) {
@@ -119,9 +163,28 @@ export default function AdmissionApplyPage() {
         <div className="rounded-md border border-green-200 bg-green-50 p-6">
           <h1 className="mb-2 text-xl font-semibold text-green-800">Application Submitted</h1>
           <p className="text-sm text-green-700">Your admission roll number is <strong className="font-mono">{submitted.admission_roll}</strong>.</p>
-          {submitted.app_fee > 0 && <p className="mt-2 text-sm text-green-700">Application fee: ৳{submitted.app_fee} — payment gateways are being configured; you will be contacted for payment instructions.</p>}
-          <p className="mt-4 text-sm text-gray-600">Save this roll number and your guardian's phone number — you'll need both to check your application status.</p>
+          <p className="mt-4 text-sm text-gray-600">Save this roll number and your guardian&apos;s phone number — you&apos;ll need both to check your application status.</p>
         </div>
+
+        {submitted.app_fee > 0 && (
+          <div className="mt-4 rounded-md border p-6">
+            <p className="mb-1 text-sm font-medium">Application fee: ৳{submitted.app_fee}</p>
+            <p className="mb-4 text-sm text-gray-600">Pay now to complete your application, or come back to this later using your roll number.</p>
+            <div className="flex flex-wrap gap-2">
+              {(["BKASH", "NAGAD", "SSLCOMMERZ"] as const).map((gateway) => (
+                <button
+                  key={gateway}
+                  disabled={paying}
+                  onClick={() => payNow(gateway)}
+                  className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Pay with {gateway === "SSLCOMMERZ" ? "SSLCommerz" : gateway.charAt(0) + gateway.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+            {paymentError && <p className="mt-3 text-sm text-red-600">{paymentError}</p>}
+          </div>
+        )}
       </main>
     );
   }
@@ -184,7 +247,7 @@ export default function AdmissionApplyPage() {
           <input placeholder="Previous Institution" value={previousResult.institution} onChange={(e) => setPreviousResult((p) => ({ ...p, institution: e.target.value }))} className="w-full rounded-md border px-3 py-2 text-sm" />
           <input placeholder="Class Passed" value={previousResult.class_passed} onChange={(e) => setPreviousResult((p) => ({ ...p, class_passed: e.target.value }))} className="w-full rounded-md border px-3 py-2 text-sm" />
           <div>
-            <label className="mb-1 block text-xs text-gray-600">GPA (select the scale it's out of)</label>
+            <label className="mb-1 block text-xs text-gray-600">GPA (select the scale it&apos;s out of)</label>
             <div className="grid grid-cols-2 gap-3">
               <input type="number" step="0.01" placeholder="GPA" value={previousResult.gpa} onChange={(e) => setPreviousResult((p) => ({ ...p, gpa: e.target.value }))} className="rounded-md border px-3 py-2 text-sm" />
               <select value={previousResult.gpa_scale} onChange={(e) => setPreviousResult((p) => ({ ...p, gpa_scale: e.target.value }))} className="rounded-md border px-3 py-2 text-sm">
@@ -267,14 +330,18 @@ export default function AdmissionApplyPage() {
         </button>
         {step < STEPS.length - 1 ? (
           <button
-            disabled={step === 0 && !applicantName}
+            disabled={!isStepValid(step)}
             onClick={() => setStep((s) => s + 1)}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             Next
           </button>
         ) : (
-          <button disabled={submitting || !applicantName || !guardian.phone || !!uploadingKey} onClick={submit} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <button
+            disabled={submitting || !isStepValid(0) || !isStepValid(1) || !isStepValid(4) || !!uploadingKey}
+            onClick={submit}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
             {submitting ? "Submitting..." : "Submit Application"}
           </button>
         )}

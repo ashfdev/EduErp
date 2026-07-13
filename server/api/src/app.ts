@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import pinoHttp from "pino-http";
+import swaggerUi from "swagger-ui-express";
+import { generateOpenApiDocument } from "./openapi/generate";
 import { env } from "./lib/env";
 import { logger } from "./lib/logger";
 import { requestId } from "./middleware/request-id";
@@ -76,6 +78,14 @@ export function createApp(): Express {
 
   app.use("/health", healthRouter);
   app.use("/api/health", healthRouter);
+
+  // Non-production only — a live schema/example browser is convenience
+  // tooling for dev/staging, not something to expose on a real deployment.
+  if (env.NODE_ENV !== "production") {
+    const openApiDocument = generateOpenApiDocument();
+    app.get("/api/docs.json", (_req, res) => res.json(openApiDocument));
+    app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+  }
 
   // Global default limiter for everything else — routes with their own
   // stricter/looser limiter (login, forgot-password, /api/content) still get

@@ -100,7 +100,7 @@ function ChartImportExport() {
           <p className="font-medium">Import</p>
           <p className="text-sm text-muted-foreground">
             CSV columns: <code className="rounded bg-muted px-1">code, name, name_bn, account_group, account_nature, opening_balance, opening_balance_type, is_bank_account, is_cash_account</code>.
-            {" "}<code className="rounded bg-muted px-1">account_group</code> must match an existing group name exactly (e.g. "Assets"); <code className="rounded bg-muted px-1">account_nature</code> must be DEBIT_NORMAL or CREDIT_NORMAL.
+            {" "}<code className="rounded bg-muted px-1">account_group</code> must match an existing group name exactly (e.g. &quot;Assets&quot;); <code className="rounded bg-muted px-1">account_nature</code> must be DEBIT_NORMAL or CREDIT_NORMAL.
           </p>
           <div className="flex items-center gap-3">
             <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
@@ -231,9 +231,9 @@ function VoucherImportExport() {
         <CardContent className="space-y-3 pt-6">
           <p className="font-medium">Import</p>
           <p className="text-sm text-muted-foreground">
-            "Wide" CSV — one row per journal-entry line, grouped into a voucher by a shared <code className="rounded bg-muted px-1">row_group_id</code>. Columns:{" "}
+            &quot;Wide&quot; CSV — one row per journal-entry line, grouped into a voucher by a shared <code className="rounded bg-muted px-1">row_group_id</code>. Columns:{" "}
             <code className="rounded bg-muted px-1">row_group_id, date, narration, debit_account_code, credit_account_code, amount</code>.
-            Each row must have exactly one of debit/credit account code, and each group's debits must equal its credits.
+            Each row must have exactly one of debit/credit account code, and each group&apos;s debits must equal its credits.
           </p>
           <div className="flex items-center gap-3">
             <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />

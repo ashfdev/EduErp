@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Input, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Input, EmptyState, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AlumniRow {
@@ -76,6 +76,14 @@ export default function AlumniPage() {
           </table>
         </CardContent>
       </Card>
+
+      {!!meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+        </div>
+      )}
     </PageWrapper>
   );
 }

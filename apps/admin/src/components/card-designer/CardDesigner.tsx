@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { DocumentType } from "@education-erp/types";
 import { FIELD_CATALOG, compileCardDesign, type CardDesign, type FieldBox, type FieldDescriptor } from "@education-erp/validators";
-import { PageWrapper, PageHeader, Button, Input, Label, Dialog, DialogContent, DialogHeader, DialogTitle, Tabs, TabsList, TabsTrigger, TabsContent } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, Tabs, TabsList, TabsTrigger } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { FieldPalette } from "./FieldPalette";
 import { CanvasFace } from "./CanvasFace";

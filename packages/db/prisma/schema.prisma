@@ -2566,6 +2566,7 @@ enum NotificationTrigger {
   RESULT_PUBLISHED
   NOTICE
   ADMISSION_CONFIRM
+  PORTAL_LOGIN_CREATED
 }
 
 enum NotificationChannel {

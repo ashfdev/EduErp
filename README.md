@@ -117,7 +117,9 @@ Once running:
 | Admin panel | http://localhost:3000 |
 | Student/Guardian portal | http://localhost:3001 |
 | Public website | http://localhost:3002 |
+| Teacher app | http://localhost:3003 (not in docker-compose yet — run via `pnpm dev --filter=@education-erp/teacher`) |
 | Core API | http://localhost:4000 |
+| API docs (Swagger UI, non-production only) | http://localhost:4000/api/docs |
 | Device service | http://localhost:4500 |
 | Notification service | http://localhost:4600 |
 
@@ -145,6 +147,7 @@ run just one (e.g. `pnpm dev --filter=api`).
 pnpm dev                 # everything, in parallel
 pnpm dev --filter=api    # just the core API
 pnpm build               # build all apps/services
+pnpm lint                # ESLint across every app/package
 pnpm typecheck           # typecheck all packages
 pnpm test                # unit/integration tests (vitest)
 
@@ -154,10 +157,12 @@ pnpm --filter=@education-erp/db exec prisma db seed        # reseed
 pnpm --filter=@education-erp/db exec prisma studio         # browse the DB
 ```
 
-`.github/workflows/ci.yml` runs typecheck/test/build against real Postgres + Redis service
-containers on every push/PR to `main`. Linting isn't wired into CI yet — ESLint was never
-actually configured for any app/package in this monorepo (see `packages/config/eslint-base.js`,
-currently unused); tracked as a known gap rather than silently claimed as working.
+`.github/workflows/ci.yml` runs lint/typecheck/test/build against real Postgres + Redis service
+containers on every push/PR to `main`. Each of the 4 frontend apps (`.eslintrc.js`) extends
+`next/core-web-vitals` plus the shared `packages/config/eslint-base.js`; `server/api` extends
+just the shared base. Non-Next packages (`packages/db`, `validators`, `ui`, `types`, `services/*`)
+don't have a `lint` script yet — turbo skips packages without one, so this is additive, not a
+regression to fix.
 
 ## Environment Variables
 

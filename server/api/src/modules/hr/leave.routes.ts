@@ -76,24 +76,35 @@ leavesRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const query = z
-      .object({ staff_id: z.string().optional(), status: z.string().optional(), from_date: z.string().optional(), to_date: z.string().optional(), leave_type_id: z.string().optional() })
+      .object({
+        staff_id: z.string().optional(), status: z.string().optional(), from_date: z.string().optional(),
+        to_date: z.string().optional(), leave_type_id: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
       .parse(req.query);
 
     const isPrivileged = HR_MANAGE_ROLES.includes(req.user!.role as UserRole);
     const staffIdFilter = isPrivileged ? query.staff_id : await resolveOwnStaffId(req.user!.sub);
 
-    const leaves = await prisma.leaveRequest.findMany({
-      where: {
-        ...(staffIdFilter && { staff_id: staffIdFilter }),
-        ...(query.status && { status: query.status as never }),
-        ...(query.leave_type_id && { leave_type_id: query.leave_type_id }),
-        ...(query.from_date && { from_date: { gte: new Date(query.from_date) } }),
-        ...(query.to_date && { to_date: { lte: new Date(query.to_date) } }),
-      },
-      include: { staff: { select: { name_en: true, staff_uid: true } }, leave_type: true },
-      orderBy: { created_at: "desc" },
-    });
-    res.json({ success: true, data: leaves });
+    const where = {
+      ...(staffIdFilter && { staff_id: staffIdFilter }),
+      ...(query.status && { status: query.status as never }),
+      ...(query.leave_type_id && { leave_type_id: query.leave_type_id }),
+      ...(query.from_date && { from_date: { gte: new Date(query.from_date) } }),
+      ...(query.to_date && { to_date: { lte: new Date(query.to_date) } }),
+    };
+
+    const [leaves, total] = await Promise.all([
+      prisma.leaveRequest.findMany({
+        where,
+        include: { staff: { select: { name_en: true, staff_uid: true } }, leave_type: true },
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.leaveRequest.count({ where }),
+    ]);
+    res.json({ success: true, data: leaves, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

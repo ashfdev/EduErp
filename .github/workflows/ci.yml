@@ -60,12 +60,8 @@ jobs:
       - name: Prisma migrate (test db)
         run: pnpm --filter=@education-erp/db exec prisma migrate deploy
 
-      # `pnpm lint` is intentionally not run here — ESLint was never actually
-      # wired up in this monorepo (no .eslintrc in any app/package despite
-      # packages/config/eslint-base.js existing), so `next lint` prompts
-      # interactively and fails non-interactively. Not a regression from this
-      # change; flagged in ROADMAP.md as deferred rather than silently
-      # claimed as working.
+      - name: Lint
+        run: pnpm lint
 
       - name: Typecheck
         run: pnpm typecheck
