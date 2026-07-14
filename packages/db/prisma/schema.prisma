@@ -260,13 +260,15 @@ model Shift {
 // breakdown. Admin configures this once per shift (Settings → Shifts);
 // the routine auto-generator (Phase 45) is the first consumer.
 model ShiftPeriod {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   shift_id   String
-  shift      Shift   @relation(fields: [shift_id], references: [id])
+  shift      Shift    @relation(fields: [shift_id], references: [id])
   period_no  Int
   start_time String
   end_time   String
-  is_break   Boolean @default(false)
+  is_break   Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@unique([shift_id, period_no])
 }
@@ -2299,6 +2301,17 @@ model RoutineSlot {
   // only what it created and never clobber a human's hand-fix.
   generated   Boolean  @default(false)
 
+  // NOTE: this constraint alone does not stop two rows from colliding when
+  // section_id is NULL (Postgres treats each NULL as distinct in a unique
+  // index) — a partial unique index on (class_id, day_of_week, period_no)
+  // WHERE section_id IS NULL closes that gap. Also, a teacher can't be in
+  // two places at once regardless of class/section — a second partial
+  // unique index on (teacher_id, day_of_week, period_no) WHERE teacher_id
+  // IS NOT NULL backstops the auto-generator's app-level clash check
+  // against a race between two concurrent "Generate" requests. Prisma's
+  // schema language can't express a partial index, so both exist only in
+  // migrations 20260714150000_review_fixes and
+  // 20260714150500_routine_teacher_clash_constraint, not here.
   @@unique([class_id, section_id, day_of_week, period_no])
   @@index([class_id])
   @@index([teacher_id])

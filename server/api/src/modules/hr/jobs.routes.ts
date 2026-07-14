@@ -12,6 +12,7 @@ import { HR_MANAGE_ROLES } from "../../lib/roles";
 import { jobPostingSchema, jobApplicationSchema, jobApplicationStatusSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 import { triggerRevalidation } from "../../services/revalidate.service";
+import { logAudit } from "../../lib/audit-log";
 
 export const jobsRouter = Router();
 
@@ -132,6 +133,15 @@ jobsRouter.put(
       where: { id: reqParam(req, "application_id") },
       data: body,
     });
+
+    await logAudit("JOB_APPLICATION_STATUS_CHANGE", {
+      userId: req.user!.sub,
+      targetType: "JobApplication",
+      targetId: application.id,
+      metadata: { status: application.status },
+      req,
+    });
+
     res.json({ success: true, data: application });
   }),
 );

@@ -116,8 +116,19 @@ examsRouter.post(
     const newYear = await prisma.academicYear.findUnique({ where: { id: body.academic_year_id } });
     if (!newYear) throw notFound("Academic year not found");
 
+    const targetClasses = await prisma.class.findMany({ where: { id: { in: body.class_ids } } });
+    if (targetClasses.length !== body.class_ids.length) throw notFound("One or more classes not found");
+    if (targetClasses.some((c) => c.academic_year_id !== body.academic_year_id)) {
+      throw badRequest("All selected classes must belong to the target academic year");
+    }
+
     const name = body.name?.trim() || `${source.exam_type_config.name} ${newYear.label}`;
-    const overridesByCode = new Map(source.subject_configs.map((c) => [c.subject.code, c]));
+    // Keyed by class_id+code, not code alone — Subject.code is only unique
+    // per class (@@unique([class_id, code])), so a multi-class source exam
+    // can have the same code in two different classes with different
+    // overrides; keying by code alone would let one class's override
+    // silently clobber the other's in this map.
+    const overridesByCode = new Map(source.subject_configs.map((c) => [`${c.subject.class_id}::${c.subject.code}`, c]));
 
     const exam = await prisma.$transaction(async (tx) => {
       const created = await tx.exam.create({
@@ -137,7 +148,7 @@ examsRouter.post(
       if (subjects.length > 0) {
         await tx.examSubjectConfig.createMany({
           data: subjects.map((s) => {
-            const override = overridesByCode.get(s.code);
+            const override = overridesByCode.get(`${s.class_id}::${s.code}`);
             return {
               exam_id: created.id,
               subject_id: s.id,

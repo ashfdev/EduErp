@@ -21,11 +21,17 @@ const CONFIG_ID = "singleton";
 const PROFILE_CACHE_KEY = "settings-cache:institution-profile";
 const PROFILE_CACHE_TTL_SECONDS = 60 * 60;
 
+// Every field below is set explicitly for every type (never omitted) because
+// Prisma's update() only writes keys present in `data` — an omitted key
+// leaves the previous type's value in place. A prior version of this map
+// only set term_section for UNIVERSITY, so switching e.g. UNIVERSITY ->
+// SCHOOL left term_section stuck at "Batch" instead of resetting to
+// "Section". Keep every entry fully explicit to avoid repeating that bug.
 const TYPE_CASCADE: Record<InstitutionType, Record<string, unknown>> = {
-  SCHOOL: { term_class: "Class", term_teacher: "Teacher", term_principal: "Headmaster", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
-  COLLEGE: { term_class: "Class", term_teacher: "Teacher", term_principal: "Principal", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
+  SCHOOL: { term_class: "Class", term_section: "Section", term_teacher: "Teacher", term_principal: "Headmaster", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
+  COLLEGE: { term_class: "Class", term_section: "Section", term_teacher: "Teacher", term_principal: "Principal", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
   UNIVERSITY: { term_class: "Semester", term_section: "Batch", term_teacher: "Professor", term_principal: "Vice Chancellor", has_shifts: false, has_departments: true, has_semesters: true, extra_course_enrollment: true },
-  MADRASAH: { term_class: "Class", term_teacher: "Ustaz", term_principal: "Muhtamim", show_hijri_calendar: true, has_shifts: true, has_departments: false, has_semesters: false, extra_course_enrollment: false },
+  MADRASAH: { term_class: "Class", term_section: "Section", term_teacher: "Ustaz", term_principal: "Muhtamim", show_hijri_calendar: true, has_shifts: true, has_departments: false, has_semesters: false, extra_course_enrollment: false },
 };
 
 // GET is intentionally public (no auth) — the admin login page and public

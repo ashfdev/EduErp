@@ -18,6 +18,7 @@ import {
   generateRoutineSchema,
 } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
 
 export const academicYearsRouter = Router();
 export const shiftsRouter = Router();
@@ -630,6 +631,14 @@ routineRouter.post(
         failures.push({ class_id: classId, error: err instanceof Error ? err.message : "Unknown error" });
       }
     }
+
+    await logAudit("ROUTINE_GENERATE", {
+      userId: req.user!.sub,
+      targetType: "RoutineSlot",
+      targetId: body.scope === "CLASS" ? body.class_id! : "CAMPUS",
+      metadata: { scope: body.scope, class_count: classIds.length, placed: results.reduce((sum, r) => sum + r.placed_count, 0), failed: failures.length },
+      req,
+    });
 
     res.json({ success: true, data: { results, failures } });
   }),

@@ -4,8 +4,9 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { BULK_SMS_ROLES } from "../../lib/roles";
+import type { z } from "zod";
 import { bulkSmsSchema } from "@education-erp/validators";
-import { sendSms } from "../../services/sms.service";
+import { smsQueue, DEFAULT_JOB_OPTS } from "../../lib/queues";
 import { logAudit } from "../../lib/audit-log";
 
 export const bulkSmsRouter = Router();
@@ -18,24 +19,37 @@ interface Recipient {
 
 // Shared by both the preview and send routes so the count shown to the
 // admin before sending always matches who actually gets messaged.
-async function resolveRecipients(body: {
-  audience: "STUDENTS" | "GUARDIANS" | "STAFF" | "ALL";
-  class_id?: string;
-  section_id?: string;
-  staff_role?: string;
-  recipient_ids?: string[];
-}): Promise<Recipient[]> {
+// Typed from the real schema (not a hand-written interface) so a change to
+// bulkSmsSchema — e.g. staff_role's allowed values — can't silently drift
+// out of sync with what this function actually accepts.
+async function resolveRecipients(body: z.infer<typeof bulkSmsSchema>): Promise<Recipient[]> {
   if (body.recipient_ids?.length) {
-    const [guardians, staff] = await Promise.all([
+    // recipient_ids may reference Guardian, Staff, or Student ids (a
+    // roster-search "select these students" flow resolves to Student ids,
+    // not Guardian ids) — resolve all three, not just guardian/staff, or a
+    // STUDENTS-scoped override silently returns zero recipients.
+    const [guardians, staff, students] = await Promise.all([
       prisma.guardian.findMany({ where: { id: { in: body.recipient_ids } }, select: { name_en: true, phone: true } }),
-      prisma.staff.findMany({ where: { id: { in: body.recipient_ids }, phone: { not: null } }, select: { name_en: true, phone: true } }),
+      prisma.staff.findMany({
+        where: { id: { in: body.recipient_ids }, phone: { not: null }, is_active: true, deleted_at: null },
+        select: { name_en: true, phone: true },
+      }),
+      prisma.student.findMany({
+        where: { id: { in: body.recipient_ids }, deleted_at: null, father_phone: { not: null } },
+        select: { name_en: true, father_phone: true },
+      }),
     ]);
-    const recipients = [...guardians.map((g) => ({ name: g.name_en, phone: g.phone })), ...staff.map((s) => ({ name: s.name_en, phone: s.phone! }))];
+    const recipients = [
+      ...guardians.map((g) => ({ name: g.name_en, phone: g.phone })),
+      ...staff.map((s) => ({ name: s.name_en, phone: s.phone! })),
+      ...students.map((s) => ({ name: s.name_en, phone: s.father_phone! })),
+    ];
     return dedupeByPhone(recipients);
   }
 
   const studentFilter = {
     deleted_at: null,
+    status: "ACTIVE" as const,
     ...(body.class_id && { current_class_id: body.class_id }),
     ...(body.section_id && { current_section_id: body.section_id }),
   };
@@ -67,7 +81,7 @@ async function resolveRecipients(body: {
         is_active: true,
         deleted_at: null,
         phone: { not: null },
-        ...(body.staff_role && { user: { role: body.staff_role as never } }),
+        ...(body.staff_role && { user: { role: body.staff_role } }),
       },
       select: { name_en: true, phone: true },
     });
@@ -101,13 +115,32 @@ bulkSmsRouter.post(
     const body = bulkSmsSchema.parse(req.body);
     const recipients = await resolveRecipients(body);
 
-    // Sequential, not Promise.all — each call already queues onto smsQueue
-    // (fire-and-forget from this route's perspective) so this just needs to
-    // avoid hammering the DB/Redis with hundreds of simultaneous writes.
+    // Batched, not one-recipient-at-a-time — a fully sequential loop (one
+    // awaited DB insert + one awaited Redis push per recipient) held the
+    // HTTP response open for the whole send for a large audience (a
+    // few-thousand-guardian "ALL" broadcast could take 60-100+ seconds,
+    // risking a gateway timeout). Each chunk still creates its
+    // NotificationLog rows in parallel and pushes the whole chunk to
+    // smsQueue in one addBulk call, bounded to CHUNK_SIZE so this doesn't
+    // open thousands of concurrent DB connections at once.
+    const CHUNK_SIZE = 200;
     let queued = 0;
-    for (const recipient of recipients) {
-      await sendSms(recipient.phone, body.message);
-      queued++;
+    for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
+      const chunk = recipients.slice(i, i + CHUNK_SIZE);
+      // Each recipient's own phone travels with its created log row (via
+      // .then, not a separate parallel-array index) so there's no risk of
+      // a log/phone pairing drifting apart if ordering assumptions change.
+      const created = await Promise.all(
+        chunk.map((r) =>
+          prisma.notificationLog
+            .create({ data: { channel: "SMS", recipient: r.phone, status: "QUEUED", message: body.message } })
+            .then((log) => ({ log, phone: r.phone })),
+        ),
+      );
+      await smsQueue.addBulk(
+        created.map(({ log, phone }) => ({ name: "send", data: { log_id: log.id, phone, message: body.message }, opts: DEFAULT_JOB_OPTS })),
+      );
+      queued += created.length;
     }
 
     await logAudit("BULK_SMS_SEND", {

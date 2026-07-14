@@ -32,7 +32,14 @@ function CloneExamForm() {
 
   const { data: exams } = useQuery<ExamSummary[]>({ queryKey: ["exams", "all"], queryFn: async () => (await api.get("/api/exams")).data.data });
   const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
-  const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+  // Scoped to the target year — Class rows are recreated every academic
+  // year, so an unscoped list would let an admin pick a stale prior-year
+  // Class row here while academicYearId points at the new year.
+  const { data: classes } = useQuery<Option[]>({
+    queryKey: ["settings", "classes", academicYearId],
+    queryFn: async () => (await api.get("/api/settings/classes", { params: { academic_year_id: academicYearId } })).data.data,
+    enabled: !!academicYearId,
+  });
 
   const cloneMutation = useMutation({
     mutationFn: () =>
@@ -71,7 +78,14 @@ function CloneExamForm() {
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label>New Academic Year</Label>
-            <select className="w-full rounded-md border px-3 py-2 text-sm" value={academicYearId} onChange={(e) => setAcademicYearId(e.target.value)}>
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={academicYearId}
+              onChange={(e) => {
+                setAcademicYearId(e.target.value);
+                setClassIds([]);
+              }}
+            >
               <option value="">Select...</option>
               {years?.map((y) => <option key={y.id} value={y.id}>{y.label}</option>)}
             </select>
@@ -81,6 +95,7 @@ function CloneExamForm() {
         </div>
         <div className="space-y-2">
           <Label>Classes &amp; Sections covered</Label>
+          {!academicYearId && <p className="text-xs text-muted-foreground">Select a target academic year first.</p>}
           <div className="flex flex-wrap gap-3">
             {classes?.map((c) => (
               <label key={c.id} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">

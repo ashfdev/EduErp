@@ -20,7 +20,9 @@ export type AuditAction =
   | "DISCIPLINE_RECORD_CREATE"
   | "COMPLAINT_RESOLVE"
   | "APPRAISAL_SUBMIT"
-  | "BULK_SMS_SEND";
+  | "BULK_SMS_SEND"
+  | "ROUTINE_GENERATE"
+  | "JOB_APPLICATION_STATUS_CHANGE";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

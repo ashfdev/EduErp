@@ -1,0 +1,13 @@
+-- Auto-routine generation (Phase 45) placed teacher-clash detection purely
+-- at the application level (an in-memory Set per generation run), with no
+-- database-level backstop. Two concurrent "Generate" requests (two admins,
+-- or a double-click) each ran their own read-committed teacher-occupancy
+-- check inside separate per-class transactions and could both see the same
+-- teacher/day/period as free before either committed, resulting in the same
+-- teacher double-booked across two classes with no error surfaced.
+--
+-- This mirrors assertNoTeacherClash()'s business rule (a teacher can't be
+-- in two places at once, regardless of class/section) as a real constraint,
+-- so a race between two concurrent requests fails loudly with a unique
+-- violation instead of silently committing a double-booking.
+CREATE UNIQUE INDEX "RoutineSlot_teacher_day_period_key" ON "RoutineSlot"("teacher_id", "day_of_week", "period_no") WHERE "teacher_id" IS NOT NULL;
