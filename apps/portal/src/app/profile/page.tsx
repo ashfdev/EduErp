@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
+import { LanguageToggle } from "@/components/language-toggle";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, CardContent, Button, LoadingSpinner } from "@education-erp/ui";
@@ -17,6 +19,7 @@ interface StudentDetail {
 function ProfileContent() {
   const router = useRouter();
   const { activeStudentId, logout } = useAuthStore();
+  const t = useTranslations("profile");
 
   const { data, isLoading } = useQuery<StudentDetail>({
     queryKey: ["portal", "profile", activeStudentId],
@@ -36,31 +39,35 @@ function ProfileContent() {
 
   return (
     <div className="space-y-4 p-4">
-      <h1 className="text-lg font-semibold">Profile</h1>
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
       <Card>
         <CardContent className="space-y-2 pt-6 text-sm">
-          <p><span className="text-gray-500">Name (EN):</span> {data.name_en}</p>
-          <p><span className="text-gray-500">Name (BN):</span> {data.name_bn ?? "—"}</p>
-          <p><span className="text-gray-500">Student ID:</span> {data.student_uid}</p>
-          <p><span className="text-gray-500">Class:</span> {data.current_class?.name_en} {data.current_section && `· ${data.current_section.name}`}</p>
-          <p><span className="text-gray-500">Roll:</span> {data.current_roll_no ?? "—"}</p>
-          <p><span className="text-gray-500">Registration No:</span> {data.registration_no ?? "—"}</p>
+          <p><span className="text-gray-500">{t("nameEn")}</span> {data.name_en}</p>
+          <p><span className="text-gray-500">{t("nameBn")}</span> {data.name_bn ?? "—"}</p>
+          <p><span className="text-gray-500">{t("studentId")}</span> {data.student_uid}</p>
+          <p><span className="text-gray-500">{t("class")}</span> {data.current_class?.name_en} {data.current_section && `· ${data.current_section.name}`}</p>
+          <p><span className="text-gray-500">{t("roll")}</span> {data.current_roll_no ?? "—"}</p>
+          <p><span className="text-gray-500">{t("registrationNo")}</span> {data.registration_no ?? "—"}</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="space-y-2 pt-6 text-sm">
-          <p className="font-medium">Contact</p>
-          <p><span className="text-gray-500">Phone:</span> {data.phone ?? "—"}</p>
+          <p className="font-medium">{t("contact")}</p>
+          <p><span className="text-gray-500">{t("phone")}</span> {data.phone ?? "—"}</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="space-y-2 pt-6 text-sm">
-          <p className="font-medium">Guardian</p>
-          <p><span className="text-gray-500">Father:</span> {data.father_name} ({data.father_phone})</p>
-          <p><span className="text-gray-500">Mother:</span> {data.mother_name ?? "—"} ({data.mother_phone ?? "—"})</p>
+          <p className="font-medium">{t("guardian")}</p>
+          <p><span className="text-gray-500">{t("father")}</span> {data.father_name} ({data.father_phone})</p>
+          <p><span className="text-gray-500">{t("mother")}</span> {data.mother_name ?? "—"} ({data.mother_phone ?? "—"})</p>
         </CardContent>
       </Card>
-      <Button variant="outline" className="w-full" onClick={() => logoutMutation.mutate()}>Sign Out</Button>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-500">{t("language")}</span>
+        <LanguageToggle />
+      </div>
+      <Button variant="outline" className="w-full" onClick={() => logoutMutation.mutate()}>{t("signOut")}</Button>
     </div>
   );
 }

@@ -67,3 +67,9 @@ export const COMPLAINT_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRIN
 export const PTM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER", "SUBJECT_TEACHER"];
 export const APPRAISAL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const QUIZ_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"];
+
+// Plan Three (Phases 38-54).
+// Broad-reach, gateway-cost-incurring action (can message the whole
+// student/staff body at once) — deliberately kept to leadership tier only,
+// narrower than WEBSITE_CONTENT_ROLES which IT_ADMIN also has.
+export const BULK_SMS_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];

@@ -38,6 +38,14 @@ interface Shift {
   end_time: string;
 }
 
+interface ShiftPeriodRow {
+  id: string;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+  is_break: boolean;
+}
+
 interface ClassRow {
   id: string;
   name_en: string;
@@ -92,6 +100,34 @@ export default function AcademicSettingsPage() {
       toast.success("Shift created");
       queryClient.invalidateQueries({ queryKey: ["settings", "shifts"] });
       setShiftOpen(false);
+    },
+  });
+
+  const [periodsShiftId, setPeriodsShiftId] = useState<string | null>(null);
+  const emptyPeriodForm = { period_no: 1, start_time: "", end_time: "", is_break: false };
+  const [periodForm, setPeriodForm] = useState(emptyPeriodForm);
+  const { data: periods } = useQuery<ShiftPeriodRow[]>({
+    queryKey: ["settings", "shift-periods", periodsShiftId],
+    queryFn: async () => (await api.get(`/api/settings/shifts/${periodsShiftId}/periods`)).data.data,
+    enabled: !!periodsShiftId,
+  });
+  const createPeriod = useMutation({
+    mutationFn: () => api.post(`/api/settings/shifts/${periodsShiftId}/periods`, periodForm),
+    onSuccess: () => {
+      toast.success("Period added");
+      queryClient.invalidateQueries({ queryKey: ["settings", "shift-periods", periodsShiftId] });
+      setPeriodForm({ ...emptyPeriodForm, period_no: periodForm.period_no + 1 });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to add period";
+      toast.error(message);
+    },
+  });
+  const deletePeriod = useMutation({
+    mutationFn: (periodId: string) => api.delete(`/api/settings/shifts/${periodsShiftId}/periods/${periodId}`),
+    onSuccess: () => {
+      toast.success("Period removed");
+      queryClient.invalidateQueries({ queryKey: ["settings", "shift-periods", periodsShiftId] });
     },
   });
 
@@ -155,7 +191,10 @@ export default function AcademicSettingsPage() {
           {!shifts?.length && <EmptyState title="No shifts yet" />}
           <div className="flex flex-wrap gap-2">
             {shifts?.map((s) => (
-              <Badge key={s.id} variant="outline">{s.name} ({s.start_time}–{s.end_time})</Badge>
+              <div key={s.id} className="flex items-center gap-1">
+                <Badge variant="outline">{s.name} ({s.start_time}–{s.end_time})</Badge>
+                <Button size="sm" variant="ghost" onClick={() => { setPeriodsShiftId(s.id); setPeriodForm(emptyPeriodForm); }}>Periods</Button>
+              </div>
             ))}
           </div>
         </CardContent>
@@ -238,6 +277,64 @@ export default function AcademicSettingsPage() {
           <DialogHeader><DialogTitle>Add Section</DialogTitle></DialogHeader>
           <div className="space-y-1.5"><Label>Name</Label><Input value={sectionName} onChange={(e) => setSectionName(e.target.value)} placeholder="A" /></div>
           <DialogFooter><Button onClick={() => createSection.mutate()} disabled={createSection.isPending}>Create</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!periodsShiftId} onOpenChange={(v) => !v && setPeriodsShiftId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Shift Periods</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {!periods?.length && <EmptyState title="No periods configured yet" />}
+            {!!periods?.length && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="p-1">#</th>
+                    <th className="p-1">Time</th>
+                    <th className="p-1">Break?</th>
+                    <th className="p-1" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {periods.map((p) => (
+                    <tr key={p.id} className="border-b">
+                      <td className="p-1">{p.period_no}</td>
+                      <td className="p-1">{p.start_time}–{p.end_time}</td>
+                      <td className="p-1">{p.is_break ? "Break" : ""}</td>
+                      <td className="p-1 text-right">
+                        <Button size="sm" variant="destructive" onClick={() => deletePeriod.mutate(p.id)}>Delete</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="grid grid-cols-4 gap-2 border-t pt-3">
+              <div className="space-y-1.5">
+                <Label>Period #</Label>
+                <Input type="number" min={1} value={periodForm.period_no} onChange={(e) => setPeriodForm({ ...periodForm, period_no: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Start</Label>
+                <Input type="time" value={periodForm.start_time} onChange={(e) => setPeriodForm({ ...periodForm, start_time: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End</Label>
+                <Input type="time" value={periodForm.end_time} onChange={(e) => setPeriodForm({ ...periodForm, end_time: e.target.value })} />
+              </div>
+              <div className="flex items-end gap-2">
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={periodForm.is_break} onChange={(e) => setPeriodForm({ ...periodForm, is_break: e.target.checked })} />
+                  Break
+                </label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => createPeriod.mutate()} disabled={createPeriod.isPending || !periodForm.start_time || !periodForm.end_time}>
+              {createPeriod.isPending ? "Adding..." : "Add Period"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageWrapper>

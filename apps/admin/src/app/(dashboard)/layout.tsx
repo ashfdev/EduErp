@@ -2,14 +2,43 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Button } from "@education-erp/ui";
+import { LanguageToggle } from "@/components/language-toggle";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", key: "dashboard" },
+  { href: "/students", key: "students" },
+  { href: "/alumni", key: "alumni" },
+  { href: "/complaints", key: "complaints" },
+  { href: "/attendance/mark", key: "attendance" },
+  { href: "/examination", key: "examination" },
+  { href: "/marks", key: "marks" },
+  { href: "/results", key: "results" },
+  { href: "/course-enrollment", key: "courseEnrollment" },
+  { href: "/fees", key: "fees" },
+  { href: "/accounts", key: "accounts" },
+  { href: "/inventory", key: "inventory" },
+  { href: "/admission", key: "admission" },
+  { href: "/documents/print", key: "documents" },
+  { href: "/website", key: "website" },
+  { href: "/hr", key: "hr" },
+  { href: "/library", key: "library" },
+  { href: "/transport", key: "transport" },
+  { href: "/hostel", key: "hostel" },
+  { href: "/reports", key: "reports" },
+  { href: "/notifications/bulk-sms", key: "bulkSms" },
+  { href: "/settings/institution", key: "settings" },
+] as const;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, refreshToken, logout } = useAuthStore();
+  const t = useTranslations("nav");
+  const tCommon = useTranslations("common");
 
   async function handleLogout() {
     try {
@@ -24,71 +53,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ProtectedRoute>
       <div className="flex min-h-screen">
         <aside className="w-64 shrink-0 border-r bg-card">
-          <div className="flex h-[60px] items-center border-b px-4 font-semibold">Education ERP</div>
+          <div className="flex h-[60px] items-center border-b px-4 font-semibold">{tCommon("appName")}</div>
           <nav className="flex flex-col gap-1 p-3 text-sm">
-            <Link href="/dashboard" className="rounded-md px-3 py-2 hover:bg-accent">
-              Dashboard
-            </Link>
-            <Link href="/students" className="rounded-md px-3 py-2 hover:bg-accent">
-              Students
-            </Link>
-            <Link href="/alumni" className="rounded-md px-3 py-2 hover:bg-accent">
-              Alumni
-            </Link>
-            <Link href="/complaints" className="rounded-md px-3 py-2 hover:bg-accent">
-              Complaints
-            </Link>
-            <Link href="/attendance/mark" className="rounded-md px-3 py-2 hover:bg-accent">
-              Attendance
-            </Link>
-            <Link href="/examination" className="rounded-md px-3 py-2 hover:bg-accent">
-              Examination
-            </Link>
-            <Link href="/marks" className="rounded-md px-3 py-2 hover:bg-accent">
-              Marks
-            </Link>
-            <Link href="/results" className="rounded-md px-3 py-2 hover:bg-accent">
-              Results
-            </Link>
-            <Link href="/course-enrollment" className="rounded-md px-3 py-2 hover:bg-accent">
-              Course Enrollment
-            </Link>
-            <Link href="/fees" className="rounded-md px-3 py-2 hover:bg-accent">
-              Fees
-            </Link>
-            <Link href="/accounts" className="rounded-md px-3 py-2 hover:bg-accent">
-              Accounts
-            </Link>
-            <Link href="/inventory" className="rounded-md px-3 py-2 hover:bg-accent">
-              Inventory
-            </Link>
-            <Link href="/admission" className="rounded-md px-3 py-2 hover:bg-accent">
-              Admission
-            </Link>
-            <Link href="/documents/print" className="rounded-md px-3 py-2 hover:bg-accent">
-              Documents
-            </Link>
-            <Link href="/website" className="rounded-md px-3 py-2 hover:bg-accent">
-              Website
-            </Link>
-            <Link href="/hr" className="rounded-md px-3 py-2 hover:bg-accent">
-              HR
-            </Link>
-            <Link href="/library" className="rounded-md px-3 py-2 hover:bg-accent">
-              Library
-            </Link>
-            <Link href="/transport" className="rounded-md px-3 py-2 hover:bg-accent">
-              Transport
-            </Link>
-            <Link href="/hostel" className="rounded-md px-3 py-2 hover:bg-accent">
-              Hostel
-            </Link>
-            <Link href="/reports" className="rounded-md px-3 py-2 hover:bg-accent">
-              Reports
-            </Link>
-            <Link href="/settings/institution" className="rounded-md px-3 py-2 hover:bg-accent">
-              Settings
-            </Link>
+            {NAV_ITEMS.map((item) => (
+              <Link key={item.href} href={item.href} className="rounded-md px-3 py-2 hover:bg-accent">
+                {t(item.key)}
+              </Link>
+            ))}
           </nav>
         </aside>
         <div className="flex min-h-screen flex-1 flex-col">
@@ -98,8 +69,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {user.name_en} · {user.role.replace(/_/g, " ")}
               </span>
             )}
+            <LanguageToggle />
             <Button size="sm" variant="outline" onClick={handleLogout}>
-              Sign Out
+              {tCommon("signOut")}
             </Button>
           </header>
           <main className="flex-1">{children}</main>

@@ -29,6 +29,17 @@ const INSTITUTION_TYPES = [
   { value: "MADRASAH", label: "Madrasah" },
 ] as const;
 
+// Mirrors server/api/src/modules/settings/institution.routes.ts's
+// TYPE_CASCADE exactly — kept in sync manually since this is only a
+// pre-commit preview, not the source of truth (the PUT /type call re-derives
+// the real values server-side). Update both together if the cascade changes.
+const TERMINOLOGY_PREVIEW: Record<string, { class: string; section: string; teacher: string; principal: string }> = {
+  SCHOOL: { class: "Class", section: "Section", teacher: "Teacher", principal: "Headmaster" },
+  COLLEGE: { class: "Class", section: "Section", teacher: "Teacher", principal: "Principal" },
+  UNIVERSITY: { class: "Semester", section: "Batch", teacher: "Professor", principal: "Vice Chancellor" },
+  MADRASAH: { class: "Class", section: "Section", teacher: "Ustaz", principal: "Muhtamim" },
+};
+
 export default function InstitutionSettingsPage() {
   const queryClient = useQueryClient();
   const { data } = useQuery({
@@ -152,9 +163,15 @@ export default function InstitutionSettingsPage() {
                   {pendingType && pendingType !== currentType && (
                     <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
                       <p>
-                        Changing to <strong>{pendingType}</strong> will change terminology across the system (e.g.
-                        Teacher → Professor, Class → Semester) and cannot be easily undone.
+                        Changing to <strong>{pendingType}</strong> will update terminology across the system:
                       </p>
+                      <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+                        <li>&quot;Class&quot; → &quot;{TERMINOLOGY_PREVIEW[pendingType]?.class}&quot;</li>
+                        <li>&quot;Section&quot; → &quot;{TERMINOLOGY_PREVIEW[pendingType]?.section}&quot;</li>
+                        <li>&quot;Teacher&quot; → &quot;{TERMINOLOGY_PREVIEW[pendingType]?.teacher}&quot;</li>
+                        <li>&quot;Principal&quot; → &quot;{TERMINOLOGY_PREVIEW[pendingType]?.principal}&quot;</li>
+                      </ul>
+                      <p className="mt-2">This also switches shift/semester structure and department visibility to match, and cannot be easily undone.</p>
                       <div className="mt-2 flex gap-2">
                         <Button
                           type="button"

@@ -17,6 +17,17 @@ export const examStatusSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "MARK_ENTRY", "COMPLETED", "PUBLISHED"]),
 });
 
+export const cloneExamSchema = z.object({
+  name: z.string().min(1).optional(),
+  academic_year_id: z.string().min(1),
+  start_date: z.coerce.date().optional().nullable(),
+  end_date: z.coerce.date().optional().nullable(),
+  mark_entry_opens_at: z.coerce.date().optional().nullable(),
+  mark_entry_closes_at: z.coerce.date().optional().nullable(),
+  class_ids: z.array(z.string()).min(1, "Select at least one class"),
+});
+export type CloneExamInput = z.infer<typeof cloneExamSchema>;
+
 export const subjectConfigSchema = z.array(
   z.object({
     subject_id: z.string().min(1),

@@ -192,3 +192,17 @@ authRouter.get(
     res.json({ success: true, data: { user: publicUser(user), institution } });
   }),
 );
+
+// Single source of truth for UI language across the 3 non-routed apps
+// (admin/portal/teacher) — sendNotification() already keys its bilingual
+// templates off this same field, so the toggle reads/writes it directly
+// rather than introducing a second, parallel preference.
+authRouter.put(
+  "/lang",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const body = z.object({ lang_pref: z.enum(["EN", "BN"]) }).parse(req.body);
+    const user = await prisma.user.update({ where: { id: req.user!.sub }, data: body });
+    res.json({ success: true, data: { lang_pref: user.lang_pref } });
+  }),
+);

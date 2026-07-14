@@ -16,3 +16,4 @@ export * from "./components/select";
 export * from "./components/tabs";
 export * from "./components/dialog";
 export * from "./components/confirm-dialog";
+export * from "./components/search-input";

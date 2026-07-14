@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -22,6 +23,7 @@ interface VehicleLocationResponse {
 
 function BusTrackerContent() {
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("busTracker");
   const { data, isLoading } = useQuery<VehicleLocationResponse>({
     queryKey: ["portal", "vehicle-location", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/vehicle-location`)).data.data,
@@ -37,14 +39,14 @@ function BusTrackerContent() {
 
   return (
     <div className="space-y-3 p-4">
-      <h1 className="text-lg font-semibold">Bus Tracker</h1>
-      {!data?.route_name && <EmptyState title="No transport route assigned" />}
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
+      {!data?.route_name && <EmptyState title={t("noRoute")} />}
       {!!data?.route_name && !points.length && (
-        <Card><CardContent className="pt-6"><p className="text-sm text-gray-500">Route: {data.route_name} — no location signal yet.</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><p className="text-sm text-gray-500">{t("noSignal", { name: data.route_name })}</p></CardContent></Card>
       )}
       {!!points.length && (
         <>
-          <p className="text-sm text-gray-500">Route: {data!.route_name}</p>
+          <p className="text-sm text-gray-500">{t("route", { name: data!.route_name! })}</p>
           <BusTrackerMap points={points} />
         </>
       )}

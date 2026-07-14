@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -17,6 +18,7 @@ interface QuizRow {
 
 function QuizzesContent() {
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("quizzes");
   const { data, isLoading } = useQuery<QuizRow[]>({
     queryKey: ["portal", "quizzes", activeStudentId],
     queryFn: async () => (await api.get("/api/portal/quizzes", { params: { student_id: activeStudentId } })).data.data,
@@ -27,14 +29,14 @@ function QuizzesContent() {
 
   return (
     <div className="space-y-3 p-4">
-      <h1 className="text-lg font-semibold">Quizzes</h1>
-      {!data?.length && <EmptyState title="No quizzes available" />}
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
+      {!data?.length && <EmptyState title={t("noQuizzes")} />}
       {data?.map((q) => (
         <Link key={q.id} href={`/quizzes/${q.id}`}>
           <Card className="hover:border-primary">
             <CardContent className="pt-6">
               <p className="font-medium">{q.title}</p>
-              <p className="text-xs text-gray-500">{q.subject.name_en} · {q._count.questions} questions · {q.duration_minutes} min</p>
+              <p className="text-xs text-gray-500">{q.subject.name_en} · {t("questionsCount", { count: q._count.questions })} · {t("durationMin", { minutes: q.duration_minutes })}</p>
             </CardContent>
           </Card>
         </Link>

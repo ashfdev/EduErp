@@ -153,6 +153,13 @@ model AttendanceRules {
   min_attendance_percentage   Float    @default(75)
   late_arrival_window_minutes Int      @default(15)
   working_days_per_week       Int      @default(6)
+  // working_days_per_week is only a count — the routine auto-generator
+  // (Phase 45) needs to know WHICH JS Date.getDay() values (0=Sun..6=Sat)
+  // are actually working days (Friday=5 off is standard in Bangladesh), not
+  // just how many. Json array of ints, e.g. [0,1,2,3,4,6] for a 6-day
+  // Sat-Thu week. Nullable so existing rows don't need a backfill migration
+  // — the generator falls back to the Sat-Thu default when unset.
+  working_days                Json?
   count_late_as_absent_after  Int      @default(3)
   sms_on_absent               Boolean  @default(true)
   sms_on_late                 Boolean  @default(false)
@@ -245,6 +252,23 @@ model Shift {
   created_at DateTime           @default(now())
   sections   Section[]
   attendance AttendanceRecord[]
+  periods    ShiftPeriod[]
+}
+
+// Genuinely new data, not a repurposing of anything existing — Shift itself
+// only ever carried an overall start/end time, never a period-by-period
+// breakdown. Admin configures this once per shift (Settings → Shifts);
+// the routine auto-generator (Phase 45) is the first consumer.
+model ShiftPeriod {
+  id         String  @id @default(cuid())
+  shift_id   String
+  shift      Shift   @relation(fields: [shift_id], references: [id])
+  period_no  Int
+  start_time String
+  end_time   String
+  is_break   Boolean @default(false)
+
+  @@unique([shift_id, period_no])
 }
 
 model Department {
@@ -1539,15 +1563,44 @@ model PayrollRecord {
 }
 
 model JobPosting {
-  id           String   @id @default(cuid())
+  id           String            @id @default(cuid())
   title        String
   department   String?
-  description  String   @db.Text
-  requirements String?  @db.Text
+  description  String            @db.Text
+  requirements String?           @db.Text
   deadline     DateTime?
-  is_published Boolean  @default(false)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  is_published Boolean           @default(false)
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+  applications JobApplication[]
+}
+
+enum JobApplicationStatus {
+  SUBMITTED
+  SHORTLISTED
+  REJECTED
+  HIRED
+}
+
+// Mirrors AdmissionApplication's public-apply shape — a public applicant
+// with no User account submits directly, staff review afterward. cv_blob_key
+// is never a public URL (same discipline as the Resource Library, Phase 28)
+// — a signed download URL is only generated on an already-authorized
+// staff request.
+model JobApplication {
+  id              String               @id @default(cuid())
+  job_posting_id  String
+  job_posting     JobPosting           @relation(fields: [job_posting_id], references: [id])
+  applicant_name  String
+  phone           String
+  email           String?
+  cv_blob_key     String
+  cover_note      String?              @db.Text
+  status          JobApplicationStatus @default(SUBMITTED)
+  created_at      DateTime             @default(now())
+  updated_at      DateTime             @updatedAt
+
+  @@index([job_posting_id])
 }
 
 // ─────────────────────────────────────────────
@@ -2241,7 +2294,12 @@ model RoutineSlot {
   teacher     Staff?   @relation(fields: [teacher_id], references: [id])
   start_time  String
   end_time    String
+  // Distinguishes auto-generated rows (Phase 45 routine generator) from
+  // manually entered/edited ones, so a "regenerate" can safely wipe+replace
+  // only what it created and never clobber a human's hand-fix.
+  generated   Boolean  @default(false)
 
+  @@unique([class_id, section_id, day_of_week, period_no])
   @@index([class_id])
   @@index([teacher_id])
   @@index([section_id])

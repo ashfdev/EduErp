@@ -2,23 +2,27 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/stores/auth-store";
+import { LanguageToggle } from "@/components/language-toggle";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Home" },
-  { href: "/attendance", label: "Attendance" },
-  { href: "/marks", label: "Marks" },
-  { href: "/resources", label: "Resources" },
-  { href: "/quizzes", label: "Quizzes" },
-  { href: "/ptm", label: "PTM" },
-  { href: "/leave", label: "Leave" },
-  { href: "/profile", label: "Profile" },
-];
+  { href: "/", key: "home" },
+  { href: "/attendance", key: "attendance" },
+  { href: "/marks", key: "marks" },
+  { href: "/resources", key: "resources" },
+  { href: "/quizzes", key: "quizzes" },
+  { href: "/ptm", key: "ptm" },
+  { href: "/leave", key: "leave" },
+  { href: "/profile", key: "profile" },
+] as const;
 
 export function TeacherNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const t = useTranslations("nav");
+  const tCommon = useTranslations("common");
 
   return (
     <header className="sticky top-0 z-30 border-b bg-white">
@@ -30,12 +34,13 @@ export function TeacherNav() {
               href={item.href}
               className={`text-sm font-medium ${pathname === item.href ? "text-[var(--primary,#1a3c4a)]" : "text-gray-500"}`}
             >
-              {item.label}
+              {t(item.key)}
             </Link>
           ))}
         </nav>
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-600">{user?.name_en}</span>
+          <LanguageToggle />
           <button
             onClick={() => {
               logout();
@@ -43,7 +48,7 @@ export function TeacherNav() {
             }}
             className="text-sm text-gray-500 hover:text-gray-800"
           >
-            Log out
+            {tCommon("logOut")}
           </button>
         </div>
       </div>

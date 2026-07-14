@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -22,6 +23,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 function AttendanceContent() {
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("attendance");
   const [tab, setTab] = useState<"monthly" | "yearly">("monthly");
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
@@ -60,10 +62,10 @@ function AttendanceContent() {
 
   return (
     <div className="space-y-4 p-4">
-      <h1 className="text-lg font-semibold">Attendance</h1>
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
       <div className="flex gap-2 text-sm">
-        <button onClick={() => setTab("monthly")} className={`rounded-full px-3 py-1 ${tab === "monthly" ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-gray-100"}`}>Monthly</button>
-        <button onClick={() => setTab("yearly")} className={`rounded-full px-3 py-1 ${tab === "yearly" ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-gray-100"}`}>Yearly</button>
+        <button onClick={() => setTab("monthly")} className={`rounded-full px-3 py-1 ${tab === "monthly" ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-gray-100"}`}>{t("monthly")}</button>
+        <button onClick={() => setTab("yearly")} className={`rounded-full px-3 py-1 ${tab === "yearly" ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-gray-100"}`}>{t("yearly")}</button>
       </div>
 
       {tab === "monthly" && (
@@ -85,10 +87,10 @@ function AttendanceContent() {
           </div>
           <Card>
             <CardContent className="flex justify-around pt-6 text-sm">
-              <span>P: {summary.P}</span>
-              <span>A: {summary.A}</span>
-              <span>L: {summary.L}</span>
-              <span>Total: {summary.total}</span>
+              <span>{t("present")}: {summary.P}</span>
+              <span>{t("absent")}: {summary.A}</span>
+              <span>{t("late")}: {summary.L}</span>
+              <span>{t("total")}: {summary.total}</span>
               <span>{summary.total ? Math.round((summary.P / summary.total) * 100) : 0}%</span>
             </CardContent>
           </Card>

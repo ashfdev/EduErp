@@ -19,7 +19,8 @@ export type AuditAction =
   | "HEALTH_RECORD_CREATE"
   | "DISCIPLINE_RECORD_CREATE"
   | "COMPLAINT_RESOLVE"
-  | "APPRAISAL_SUBMIT";
+  | "APPRAISAL_SUBMIT"
+  | "BULK_SMS_SEND";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

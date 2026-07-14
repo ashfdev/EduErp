@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PageWrapper, PageHeader, Card, CardContent, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -19,6 +20,7 @@ interface ClassOption {
 
 export default function MyMarkEntryPage() {
   const router = useRouter();
+  const t = useTranslations("marks");
   const [examId, setExamId] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -35,29 +37,29 @@ export default function MyMarkEntryPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="My Mark Entry" subtitle="Enter marks for exams currently open for mark entry" breadcrumbs={[{ label: "Marks" }]} />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} breadcrumbs={[{ label: "Marks" }]} />
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-3 gap-4">
             <select className="rounded-md border px-3 py-2 text-sm" value={examId} onChange={(e) => setExamId(e.target.value)}>
-              <option value="">Select Exam...</option>
+              <option value="">{t("selectExam")}</option>
               {exams?.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
             <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
-              <option value="">Select Class...</option>
+              <option value="">{t("selectClass")}</option>
               {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
             <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-              <option value="">Select Section...</option>
+              <option value="">{t("selectSection")}</option>
               {selectedClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
           <Button disabled={!examId || !classId || !sectionId} onClick={() => router.push(`/marks/${examId}/${classId}/${sectionId}`)}>
-            Open Mark Entry Grid
+            {t("openGrid")}
           </Button>
         </CardContent>
       </Card>
-      {!exams?.length && <p className="text-sm text-muted-foreground">No exams are currently open for mark entry.</p>}
+      {!exams?.length && <p className="text-sm text-muted-foreground">{t("noExamsOpen")}</p>}
     </PageWrapper>
   );
 }

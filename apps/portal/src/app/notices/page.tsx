@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -17,6 +18,7 @@ interface Notice {
 
 function NoticesContent() {
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("notices");
   const { data, isLoading } = useQuery<Notice[]>({
     queryKey: ["portal", "notices", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/notices`)).data.data,
@@ -27,8 +29,8 @@ function NoticesContent() {
 
   return (
     <div className="space-y-3 p-4">
-      <h1 className="text-lg font-semibold">Notices</h1>
-      {!data?.length && <p className="text-sm text-gray-500">No notices yet.</p>}
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
+      {!data?.length && <p className="text-sm text-gray-500">{t("noNotices")}</p>}
       {data?.map((n) => (
         <Link key={n.id} href={`/notices/${n.id}`}>
           <Card>

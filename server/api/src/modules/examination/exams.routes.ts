@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES } from "../../lib/roles";
-import { createExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema } from "@education-erp/validators";
+import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const examsRouter = Router();
@@ -82,6 +82,72 @@ examsRouter.post(
             pass_marks_theory: s.pass_marks,
             pass_marks_combined: s.pass_marks,
           })),
+        });
+      }
+
+      return created;
+    });
+
+    res.status(201).json({ success: true, data: exam });
+  }),
+);
+
+// "Clone from previous exam" — the actual gap wasn't that admins had to
+// retype an exam TYPE each time (that dropdown already existed), it was
+// that the free-text `name` and every subject's mark-rule overrides had to
+// be rebuilt from scratch every year. This copies exam_type_config_id,
+// grading_scale_id, and — per subject CODE, not subject id, since Subject
+// rows are recreated each academic year alongside Class — any customized
+// full_marks/pass_marks overrides the source exam had. A subject with no
+// code match in the source (new subject this year) just gets the plain
+// creation defaults, same as POST / already does.
+examsRouter.post(
+  "/:id/clone",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const sourceId = reqParam(req, "id");
+    const body = cloneExamSchema.parse(req.body);
+    const source = await prisma.exam.findUnique({
+      where: { id: sourceId },
+      include: { exam_type_config: true, academic_year: true, subject_configs: { include: { subject: true } } },
+    });
+    if (!source) throw notFound("Source exam not found");
+
+    const newYear = await prisma.academicYear.findUnique({ where: { id: body.academic_year_id } });
+    if (!newYear) throw notFound("Academic year not found");
+
+    const name = body.name?.trim() || `${source.exam_type_config.name} ${newYear.label}`;
+    const overridesByCode = new Map(source.subject_configs.map((c) => [c.subject.code, c]));
+
+    const exam = await prisma.$transaction(async (tx) => {
+      const created = await tx.exam.create({
+        data: {
+          name,
+          exam_type_config_id: source.exam_type_config_id,
+          academic_year_id: body.academic_year_id,
+          start_date: body.start_date,
+          end_date: body.end_date,
+          mark_entry_opens_at: body.mark_entry_opens_at,
+          mark_entry_closes_at: body.mark_entry_closes_at,
+          grading_scale_id: source.grading_scale_id,
+        },
+      });
+
+      const subjects = await tx.subject.findMany({ where: { class_id: { in: body.class_ids }, is_active: true } });
+      if (subjects.length > 0) {
+        await tx.examSubjectConfig.createMany({
+          data: subjects.map((s) => {
+            const override = overridesByCode.get(s.code);
+            return {
+              exam_id: created.id,
+              subject_id: s.id,
+              full_marks_theory: override?.full_marks_theory ?? s.full_marks,
+              full_marks_practical: override?.full_marks_practical ?? 0,
+              pass_marks_theory: override?.pass_marks_theory ?? s.pass_marks,
+              pass_marks_practical: override?.pass_marks_practical ?? 0,
+              pass_marks_combined: override?.pass_marks_combined ?? s.pass_marks,
+            };
+          }),
         });
       }
 

@@ -93,6 +93,15 @@ export interface EventItem {
   description: string | null;
 }
 
+export interface JobPosting {
+  id: string;
+  title: string;
+  department: string | null;
+  description: string;
+  requirements: string | null;
+  deadline: string | null;
+}
+
 export interface AdmissionCycleSummary {
   id: string;
   name: string;

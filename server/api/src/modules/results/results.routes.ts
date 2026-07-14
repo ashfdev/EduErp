@@ -118,6 +118,13 @@ resultsRouter.get(
         roll_no: z.string().optional(),
         registration_no: z.string().optional(),
         exam_id: z.string().optional(),
+        // For school/college/madrasah lookups where the caller knows an exam
+        // TYPE + year but not the specific per-class Exam row (the actual
+        // Exam depends on the student's class, which isn't known until the
+        // identity lookup below resolves) — resolved server-side instead of
+        // asking the frontend to guess an exam_id blind.
+        exam_type_config_id: z.string().optional(),
+        academic_year_id: z.string().optional(),
       })
       .parse(req.query);
 
@@ -125,7 +132,7 @@ resultsRouter.get(
       throw badRequest("Provide either student_uid, or both roll_no and registration_no");
     }
 
-    const cacheKey = `result-lookup:${query.student_uid ?? `${query.roll_no}:${query.registration_no}`}:${query.exam_id ?? "all"}`;
+    const cacheKey = `result-lookup:${query.student_uid ?? `${query.roll_no}:${query.registration_no}`}:${query.exam_id ?? "all"}:${query.exam_type_config_id ?? ""}:${query.academic_year_id ?? ""}`;
     const data = await cached(cacheKey, 30 * 60, async () => {
       const student = await prisma.student.findFirst({
         where: query.student_uid ? { student_uid: query.student_uid } : { current_roll_no: query.roll_no, registration_no: query.registration_no },
@@ -140,7 +147,17 @@ resultsRouter.get(
       const classForYear = new Map(histories.map((h) => [h.academic_year_id, h.class_id]));
 
       const candidatePublications = await prisma.resultPublication.findMany({
-        where: { is_published: true, is_public: true, ...(query.exam_id && { exam_id: query.exam_id }) },
+        where: {
+          is_published: true,
+          is_public: true,
+          ...(query.exam_id && { exam_id: query.exam_id }),
+          ...((query.exam_type_config_id || query.academic_year_id) && {
+            exam: {
+              ...(query.exam_type_config_id && { exam_type_config_id: query.exam_type_config_id }),
+              ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
+            },
+          }),
+        },
         include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
       });
       const publications = candidatePublications.filter((pub) => {

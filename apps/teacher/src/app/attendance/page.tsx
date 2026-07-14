@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -33,6 +34,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function TeacherAttendancePage() {
   const queryClient = useQueryClient();
+  const t = useTranslations("attendance");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [sectionId, setSectionId] = useState("");
   const [marks, setMarks] = useState<Record<string, string>>({});
@@ -68,16 +70,16 @@ export default function TeacherAttendancePage() {
     onSuccess: (res) => {
       const { saved, conflicts } = res.data.data;
       if (conflicts.length) {
-        toast.warning(`Saved ${saved}. ${conflicts.length} conflict(s) with biometric records.`);
+        toast.warning(t("savedConflicts", { saved, conflicts: conflicts.length }));
       } else {
-        toast.success(`Saved ${saved} attendance records`);
+        toast.success(t("savedOk", { count: saved }));
       }
       setMarks({});
       queryClient.invalidateQueries({ queryKey: ["attendance", sectionId, date] });
       refetch();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save attendance";
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("saveFailed");
       toast.error(message);
     },
   });
@@ -85,30 +87,30 @@ export default function TeacherAttendancePage() {
   return (
     <TeacherShell>
       <PageWrapper className="p-0">
-        <PageHeader title="Attendance" subtitle="Mark attendance for your assigned classes" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
         <div className="flex flex-wrap gap-3">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
           <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-            <option value="">Select Class/Section...</option>
+            <option value="">{t("selectClassSection")}</option>
             {mySections?.map((s) => <option key={s.section_id} value={s.section_id}>{s.class_name} — {s.section_name}</option>)}
           </select>
         </div>
 
-        {mySections && !mySections.length && <p className="text-sm text-muted-foreground">You are not assigned to any class/section yet.</p>}
+        {mySections && !mySections.length && <p className="text-sm text-muted-foreground">{t("notAssigned")}</p>}
 
         {rows && (
           <>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">Total: {rows.length}</Badge>
-              <Badge variant="outline">Unmarked: {unmarked}</Badge>
+              <Badge variant="outline">{t("total", { count: rows.length })}</Badge>
+              <Badge variant="outline">{t("unmarked", { count: unmarked })}</Badge>
             </div>
 
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
-                Mark All Present
+                {t("markAllPresent")}
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setMarks({})}>Clear</Button>
+              <Button size="sm" variant="outline" onClick={() => setMarks({})}>{t("clear")}</Button>
             </div>
 
             <Card>
@@ -116,8 +118,8 @@ export default function TeacherAttendancePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">Roll</th>
-                      <th className="p-2">Name</th>
+                      <th className="p-2">{t("colRoll")}</th>
+                      <th className="p-2">{t("colName")}</th>
                       {STATUSES.map((s) => <th key={s} className="p-2 text-center">{STATUS_LABEL[s]}</th>)}
                     </tr>
                   </thead>
@@ -145,7 +147,7 @@ export default function TeacherAttendancePage() {
             </Card>
 
             <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? "Saving..." : "Save Attendance"}
+              {saveMutation.isPending ? t("saving") : t("saveAttendance")}
             </Button>
           </>
         )}

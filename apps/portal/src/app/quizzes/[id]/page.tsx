@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -26,6 +27,7 @@ function QuizAttemptContent() {
   const { id: quizId } = useParams<{ id: string }>();
   const { activeStudentId } = useAuthStore();
   const queryClient = useQueryClient();
+  const t = useTranslations("quizzes");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
@@ -44,7 +46,7 @@ function QuizAttemptContent() {
   const submitMutation = useMutation({
     mutationFn: () => api.post(`/api/portal/quizzes/attempts/${data?.attempt.id}/submit`, { answers }),
     onSuccess: () => {
-      toast.success("Quiz submitted");
+      toast.success(t("quizSubmitted"));
       queryClient.invalidateQueries({ queryKey: ["portal", "quiz-attempt", quizId, activeStudentId] });
     },
   });
@@ -96,8 +98,8 @@ function QuizAttemptContent() {
   if (error) {
     return (
       <div className="p-4 text-center">
-        <p className="mb-3 text-sm text-gray-500">You haven&apos;t started this quiz yet.</p>
-        <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>Start Quiz</Button>
+        <p className="mb-3 text-sm text-gray-500">{t("notStarted")}</p>
+        <Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>{t("startQuiz")}</Button>
       </div>
     );
   }
@@ -109,8 +111,8 @@ function QuizAttemptContent() {
   if (finished) {
     return (
       <div className="space-y-3 p-4" onCopy={(e) => e.preventDefault()}>
-        <h1 className="text-lg font-semibold">Results</h1>
-        <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{data.attempt.score}</p><p className="text-xs text-gray-500">Total Score</p></CardContent></Card>
+        <h1 className="text-lg font-semibold">{t("results")}</h1>
+        <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{data.attempt.score}</p><p className="text-xs text-gray-500">{t("totalScore")}</p></CardContent></Card>
         {data.questions.map((q) => {
           const given = data.attempt.answers?.[q.id];
           const correct = given === q.correct_option;
@@ -119,9 +121,9 @@ function QuizAttemptContent() {
               <CardContent className="pt-6">
                 <p className="font-medium">{q.question_text}</p>
                 <p className="mt-1 text-sm">
-                  Your answer: {given ?? "—"} <Badge variant={correct ? "default" : "outline"}>{correct ? "Correct" : "Incorrect"}</Badge>
+                  {t("yourAnswer", { answer: given ?? t("noAnswer") })} <Badge variant={correct ? "default" : "outline"}>{correct ? t("correct") : t("incorrect")}</Badge>
                 </p>
-                {!correct && <p className="text-xs text-gray-500">Correct answer: {q.correct_option}</p>}
+                {!correct && <p className="text-xs text-gray-500">{t("correctAnswer", { answer: q.correct_option ?? "" })}</p>}
               </CardContent>
             </Card>
           );
@@ -141,14 +143,14 @@ function QuizAttemptContent() {
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="sticky top-0 z-10 flex items-center justify-between rounded-md bg-white p-2 shadow-sm">
-        <h1 className="text-lg font-semibold">Quiz in Progress</h1>
+        <h1 className="text-lg font-semibold">{t("inProgress")}</h1>
         <Badge variant={secondsLeft !== null && secondsLeft < 60 ? "outline" : "default"}>{minutes}:{String(seconds).padStart(2, "0")}</Badge>
       </div>
 
       {data.questions.map((q, i) => (
         <Card key={q.id}>
           <CardContent className="pt-6">
-            <p className="font-medium">{i + 1}. {q.question_text} <span className="text-xs text-gray-400">({q.marks} marks)</span></p>
+            <p className="font-medium">{i + 1}. {q.question_text} <span className="text-xs text-gray-400">{t("marksLabel", { marks: q.marks })}</span></p>
             <div className="mt-2 space-y-1">
               {q.options.map((o) => (
                 <label key={o.key} className="flex items-center gap-2 text-sm">
@@ -167,7 +169,7 @@ function QuizAttemptContent() {
       ))}
 
       <Button className="w-full" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}>
-        {submitMutation.isPending ? "Submitting..." : "Submit Quiz"}
+        {submitMutation.isPending ? t("submitting") : t("submitQuiz")}
       </Button>
     </div>
   );

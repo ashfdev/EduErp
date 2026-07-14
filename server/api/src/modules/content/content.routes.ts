@@ -136,9 +136,10 @@ contentRouter.get(
   asyncHandler(async (req, res) => {
     const upcoming = req.query.upcoming === "true";
     const limit = Number(req.query.limit ?? 10);
-    const data = await cached(contentCacheKey(`events:${upcoming}:${limit}`), CONTENT_CACHE_TTL_SECONDS, () =>
+    const type = req.query.type as string | undefined;
+    const data = await cached(contentCacheKey(`events:${upcoming}:${limit}:${type ?? "all"}`), CONTENT_CACHE_TTL_SECONDS, () =>
       prisma.event.findMany({
-        where: { is_public: true, ...(upcoming && { date_from: { gte: new Date() } }) },
+        where: { is_public: true, ...(upcoming && { date_from: { gte: new Date() } }), ...(type && { type }) },
         orderBy: { date_from: "asc" },
         take: limit,
       }),
@@ -199,9 +200,14 @@ contentRouter.get(
   "/institution",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("institution"), CONTENT_CACHE_TTL_SECONDS, async () => {
-      const profile = await prisma.institutionProfile.findUnique({ where: { id: "singleton" } });
+      const [profile, config] = await Promise.all([
+        prisma.institutionProfile.findUnique({ where: { id: "singleton" } }),
+        prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),
+      ]);
       if (!profile) return null;
       return {
+        type: profile.type,
+        has_semesters: config?.has_semesters ?? false,
         name_en: profile.name_en,
         name_bn: profile.name_bn,
         tagline_en: profile.tagline_en,
@@ -225,6 +231,31 @@ contentRouter.get(
       };
     });
     if (!data) throw notFound("Institution profile not configured");
+    res.json({ success: true, data });
+  }),
+);
+
+// Public, read-only, id+name only — ExamTypeConfig/AcademicYear are
+// otherwise only exposed via authenticated /api/settings/* routes. Needed
+// so the public result-lookup page can offer an exam-type + year selector
+// for school/college/madrasah institutions without leaking anything beyond
+// the reusable template names admins already configured.
+contentRouter.get(
+  "/exam-types",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("exam-types"), CONTENT_CACHE_TTL_SECONDS, async () =>
+      prisma.examTypeConfig.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { display_order: "asc" } }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
+contentRouter.get(
+  "/academic-years",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("academic-years"), CONTENT_CACHE_TTL_SECONDS, async () =>
+      prisma.academicYear.findMany({ select: { id: true, label: true, is_active: true }, orderBy: { start_date: "desc" } }),
+    );
     res.json({ success: true, data });
   }),
 );

@@ -1,7 +1,11 @@
-import Link from "next/link";
+"use client";
+
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import type { Institution } from "@/lib/types";
 
 export function Footer({ institution }: { institution: Institution | null }) {
+  const t = useTranslations("footer");
   return (
     <footer className="mt-12 border-t bg-gray-900 text-gray-300">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 md:grid-cols-3">
@@ -10,17 +14,18 @@ export function Footer({ institution }: { institution: Institution | null }) {
           <p className="mt-2 text-sm">{institution?.established_text ?? institution?.tagline_en ?? ""}</p>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-white">Quick Links</p>
+          <p className="mb-2 font-semibold text-white">{t("quickLinks")}</p>
           <ul className="space-y-1 text-sm">
-            <li><Link href="/about">About Us</Link></li>
-            <li><Link href="/notices">Notice Board</Link></li>
-            <li><Link href="/admission">Admission</Link></li>
-            <li><Link href="/result">Result Lookup</Link></li>
-            <li><Link href="/contact">Contact</Link></li>
+            <li><Link href="/about">{t("aboutUs")}</Link></li>
+            <li><Link href="/notices">{t("noticeBoard")}</Link></li>
+            <li><Link href="/admission">{t("admission")}</Link></li>
+            <li><Link href="/careers">{t("careers")}</Link></li>
+            <li><Link href="/result">{t("resultLookup")}</Link></li>
+            <li><Link href="/contact">{t("contact")}</Link></li>
           </ul>
         </div>
         <div>
-          <p className="mb-2 font-semibold text-white">Contact</p>
+          <p className="mb-2 font-semibold text-white">{t("contactHeading")}</p>
           <p className="text-sm">{institution?.address}</p>
           <p className="text-sm">{institution?.phone_primary}</p>
           <p className="text-sm">{institution?.email_primary}</p>
@@ -31,7 +36,7 @@ export function Footer({ institution }: { institution: Institution | null }) {
         </div>
       </div>
       <div className="border-t border-gray-800 py-4 text-center text-xs">
-        © {new Date().getFullYear()} {institution?.name_en ?? "Institution"} | Powered by AshDevs
+        © {new Date().getFullYear()} {institution?.name_en ?? "Institution"} | {t("poweredBy")}
       </div>
     </footer>
   );

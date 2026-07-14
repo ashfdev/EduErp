@@ -25,3 +25,4 @@ export * from "./ptm";
 export * from "./assignment-submissions";
 export * from "./appraisals";
 export * from "./quizzes";
+export * from "./notifications-bulk";

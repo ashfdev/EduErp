@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface MarkComponent {
@@ -39,6 +40,14 @@ export default function MarkEntryGridPage() {
   });
 
   const [edits, setEdits] = useState<Record<string, { marks_theory?: number; marks_practical?: number; is_absent?: boolean; component_marks?: Record<string, number> }>>({});
+  const [search, setSearch] = useState("");
+
+  const filteredStudents = useMemo(() => {
+    if (!data) return [];
+    if (!search.trim()) return data.students;
+    const q = search.trim().toLowerCase();
+    return data.students.filter((st) => st.name_en.toLowerCase().includes(q) || (st.current_roll_no ?? "").toLowerCase().includes(q));
+  }, [data, search]);
 
   function key(studentId: string, subjectId: string) {
     return `${studentId}:${subjectId}`;
@@ -105,6 +114,10 @@ export default function MarkEntryGridPage() {
       {!data.subjects.length && <p className="text-sm text-muted-foreground">No subjects assigned to you for this class/section.</p>}
 
       {data.subjects.length > 0 && (
+        <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+      )}
+
+      {data.subjects.length > 0 && (
         <Card>
           <CardContent className="overflow-x-auto pt-6">
             <table className="w-full text-sm">
@@ -133,10 +146,12 @@ export default function MarkEntryGridPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.students.map((st) => (
+                {filteredStudents.map((st) => (
                   <tr key={st.id} className="border-b">
                     <td className="p-2">{st.current_roll_no}</td>
-                    <td className="p-2">{st.name_en}</td>
+                    <td className="p-2">
+                      <Link href={`/students/${st.id}`} className="hover:underline" target="_blank">{st.name_en}</Link>
+                    </td>
                     {data.subjects.map((s) => {
                       const v = getValue(st.id, s.id);
                       const componentSum = s.components?.length

@@ -49,6 +49,24 @@ interface RoutineSlotRow {
 
 const emptyForm = { section_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "" };
 
+interface UnplacedItem {
+  section_id: string;
+  section_name: string;
+  subject_id: string;
+  subject_name: string;
+  reason: string;
+}
+interface GenerateResult {
+  class_id: string;
+  class_name: string;
+  placed_count: number;
+  unplaced: UnplacedItem[];
+}
+interface GenerateResponse {
+  results: GenerateResult[];
+  failures: { class_id: string; error: string }[];
+}
+
 export default function RoutineSettingsPage() {
   const queryClient = useQueryClient();
   const [classId, setClassId] = useState("");
@@ -131,9 +149,42 @@ export default function RoutineSettingsPage() {
     },
   });
 
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generateScope, setGenerateScope] = useState<"CLASS" | "CAMPUS">("CLASS");
+  const [generateClassId, setGenerateClassId] = useState("");
+  const [generateResult, setGenerateResult] = useState<GenerateResponse | null>(null);
+
+  const generateMutation = useMutation({
+    mutationFn: () =>
+      api.post("/api/settings/routine/generate", {
+        scope: generateScope,
+        class_id: generateScope === "CLASS" ? generateClassId : undefined,
+      }),
+    onSuccess: (res) => {
+      setGenerateResult(res.data.data);
+      queryClient.invalidateQueries({ queryKey: ["settings", "routine"] });
+      const total = res.data.data.results.reduce((sum: number, r: GenerateResult) => sum + r.placed_count, 0);
+      const unplacedTotal = res.data.data.results.reduce((sum: number, r: GenerateResult) => sum + r.unplaced.length, 0);
+      if (unplacedTotal > 0) {
+        toast.warning(`Generated ${total} slot(s) — ${unplacedTotal} subject/section could not be scheduled, see details below`);
+      } else {
+        toast.success(`Generated ${total} slot(s)`);
+      }
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to generate routine";
+      toast.error(message);
+    },
+  });
+
   return (
     <PageWrapper>
-      <PageHeader title="Routine / Timetable" subtitle="Weekly class schedule — period, subject, and teacher" breadcrumbs={[{ label: "Settings" }, { label: "Routine" }]} />
+      <PageHeader
+        title="Routine / Timetable"
+        subtitle="Weekly class schedule — period, subject, and teacher"
+        breadcrumbs={[{ label: "Settings" }, { label: "Routine" }]}
+        action={<Button variant="outline" onClick={() => { setGenerateResult(null); setGenerateOpen(true); }}>Auto-Generate</Button>}
+      />
 
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-3">
@@ -245,6 +296,81 @@ export default function RoutineSettingsPage() {
               {saveMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Auto-Generate Routine</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Places each compulsory subject into free periods based on each section&apos;s shift and the institution&apos;s working days. Re-running only
+              replaces slots this generator created — any slot you&apos;ve hand-edited is left untouched. Subjects that can&apos;t be scheduled without
+              double-booking a teacher are reported below, never force-placed.
+            </p>
+            {!generateResult && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Scope</Label>
+                    <select className="w-full rounded-md border px-3 py-2 text-sm" value={generateScope} onChange={(e) => setGenerateScope(e.target.value as "CLASS" | "CAMPUS")}>
+                      <option value="CLASS">One class</option>
+                      <option value="CAMPUS">Whole campus</option>
+                    </select>
+                  </div>
+                  {generateScope === "CLASS" && (
+                    <div className="space-y-1.5">
+                      <Label>Class</Label>
+                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={generateClassId} onChange={(e) => setGenerateClassId(e.target.value)}>
+                        <option value="">Select...</option>
+                        {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    onClick={() => generateMutation.mutate()}
+                    disabled={generateMutation.isPending || (generateScope === "CLASS" && !generateClassId)}
+                  >
+                    {generateMutation.isPending ? "Generating..." : "Generate"}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+            {generateResult && (
+              <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+                {generateResult.failures.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                    <p className="mb-1 font-medium text-destructive">Failed to generate for {generateResult.failures.length} class(es)</p>
+                    {generateResult.failures.map((f) => (
+                      <p key={f.class_id} className="text-muted-foreground">{f.class_id}: {f.error}</p>
+                    ))}
+                  </div>
+                )}
+                {generateResult.results.map((r) => (
+                  <div key={r.class_id} className="rounded-md border p-3">
+                    <p className="font-medium">{r.class_name}</p>
+                    <p className="text-sm text-muted-foreground">{r.placed_count} slot(s) placed</p>
+                    {r.unplaced.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm font-medium text-amber-700">Couldn&apos;t schedule — needs manual placement:</p>
+                        {r.unplaced.map((u, i) => (
+                          <p key={i} className="text-xs text-muted-foreground">
+                            {u.section_name} — {u.subject_name}: {u.reason}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setGenerateResult(null)}>Generate Again</Button>
+                  <Button onClick={() => setGenerateOpen(false)}>Done</Button>
+                </DialogFooter>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </PageWrapper>

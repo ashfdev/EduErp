@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Label } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -16,6 +17,7 @@ interface Option {
 
 export default function MarksPickerPage() {
   const router = useRouter();
+  const t = useTranslations("marksPicker");
   const [examId, setExamId] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -27,27 +29,27 @@ export default function MarksPickerPage() {
   return (
     <TeacherShell>
       <PageWrapper className="p-0">
-        <PageHeader title="Mark Entry" subtitle="Select an exam, class, and section to enter marks for your assigned subjects" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <Card>
           <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label>Exam</Label>
+              <Label>{t("exam")}</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={examId} onChange={(e) => setExamId(e.target.value)}>
-                <option value="">Select...</option>
+                <option value="">{t("select")}</option>
                 {exams?.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Class</Label>
+              <Label>{t("class")}</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
-                <option value="">Select...</option>
+                <option value="">{t("select")}</option>
                 {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label>Section</Label>
+              <Label>{t("section")}</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
-                <option value="">Select...</option>
+                <option value="">{t("select")}</option>
                 {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -58,7 +60,7 @@ export default function MarksPickerPage() {
           disabled={!examId || !classId || !sectionId}
           onClick={() => router.push(`/marks/${examId}/${classId}/${sectionId}`)}
         >
-          Open Mark Entry Grid
+          {t("openGrid")}
         </Button>
       </PageWrapper>
     </TeacherShell>

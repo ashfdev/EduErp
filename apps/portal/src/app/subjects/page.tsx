@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
@@ -16,6 +17,7 @@ interface SubjectRow {
 function SubjectsContent() {
   const { activeStudentId } = useAuthStore();
   const { terms } = useInstitution();
+  const t = useTranslations("subjects");
   const { data, isLoading } = useQuery<SubjectRow[]>({
     queryKey: ["portal", "subjects", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/subjects`)).data.data,
@@ -26,15 +28,15 @@ function SubjectsContent() {
 
   return (
     <div className="space-y-3 p-4">
-      <h1 className="text-lg font-semibold">My {terms.term_class} Subjects</h1>
-      {!data?.length && <EmptyState title="No subjects assigned yet" />}
+      <h1 className="text-lg font-semibold">{t("title", { className: terms.term_class })}</h1>
+      {!data?.length && <EmptyState title={t("noSubjects")} />}
       {data?.map((row) => (
         <Card key={row.subject.id}>
           <CardContent className="flex items-center justify-between pt-6">
             <div>
               <p className="font-medium">{row.subject.name_en}</p>
               <p className="text-xs text-gray-500">
-                {row.subject.code} {row.is_inherited ? "· Compulsory" : "· Elective"}
+                {row.subject.code} {row.is_inherited ? t("compulsory") : t("elective")}
               </p>
             </div>
             <div className="text-right text-xs text-gray-500">
@@ -44,7 +46,7 @@ function SubjectsContent() {
                   <p>{row.teacher.designation}</p>
                 </>
               ) : (
-                <p>{terms.term_teacher} not assigned</p>
+                <p>{t("teacherNotAssigned", { teacherTerm: terms.term_teacher })}</p>
               )}
             </div>
           </CardContent>

@@ -117,6 +117,10 @@ export const attendanceRulesSchema = z.object({
   min_attendance_percentage: z.number().min(0).max(100),
   late_arrival_window_minutes: z.number().int().min(0),
   working_days_per_week: z.number().int().min(1).max(7),
+  // Which JS Date.getDay() values (0=Sun..6=Sat) are actual working days —
+  // e.g. [0,1,2,3,4,6] for a Sat-Thu week with Friday off. Nullable; the
+  // routine generator falls back to the Sat-Thu default when unset.
+  working_days: z.array(z.number().int().min(0).max(6)).optional().nullable(),
   count_late_as_absent_after: z.number().int().min(1),
   sms_on_absent: z.boolean(),
   sms_on_late: z.boolean(),
@@ -163,6 +167,13 @@ export const shiftSchema = z.object({
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
 });
 
+export const shiftPeriodSchema = z.object({
+  period_no: z.number().int().min(1),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+  is_break: z.boolean().optional(),
+});
+
 export const departmentSchema = z.object({
   name_en: z.string().min(1),
   name_bn: z.string().optional().nullable(),
@@ -193,6 +204,14 @@ export const routineSlotSchema = z.object({
   teacher_id: z.string().optional().nullable(),
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+export const generateRoutineSchema = z.object({
+  scope: z.enum(["CLASS", "CAMPUS"]),
+  class_id: z.string().optional(),
+}).refine((v) => v.scope === "CAMPUS" || !!v.class_id, {
+  message: "class_id is required when scope is CLASS",
+  path: ["class_id"],
 });
 
 export const createUserSchema = z.object({

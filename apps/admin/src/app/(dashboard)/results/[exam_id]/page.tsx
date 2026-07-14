@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -42,6 +43,7 @@ interface StudentResult {
 export default function ExamResultsPage() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const [classId, setClassId] = useState("");
+  const [search, setSearch] = useState("");
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
@@ -66,6 +68,12 @@ export default function ExamResultsPage() {
     enabled: !!classId,
   });
 
+  const filteredStudents = useMemo(() => {
+    if (!search.trim()) return allStudents ?? [];
+    const q = search.trim().toLowerCase();
+    return (allStudents ?? []).filter((s) => s.name_en.toLowerCase().includes(q) || (s.roll_no ?? "").toLowerCase().includes(q));
+  }, [allStudents, search]);
+
   return (
     <PageWrapper>
       <PageHeader title="Exam Results" breadcrumbs={[{ label: "Results", href: "/results" }, { label: "Detail" }]} />
@@ -86,34 +94,39 @@ export default function ExamResultsPage() {
           <TabsContent value="all">
             {!allStudents?.length && <EmptyState title="No results yet" description="Marks may not be entered or approved for this class yet." />}
             {!!allStudents?.length && (
-              <Card>
-                <CardContent className="pt-6">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="p-2">Position</th>
-                        <th className="p-2">Roll</th>
-                        <th className="p-2">Name</th>
-                        <th className="p-2">GPA</th>
-                        <th className="p-2">Grade</th>
-                        <th className="p-2">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allStudents.map((s) => (
-                        <tr key={s.student_id} className="border-b">
-                          <td className="p-2">{s.has_failed ? "—" : s.position}</td>
-                          <td className="p-2">{s.roll_no}</td>
-                          <td className="p-2">{s.name_en}</td>
-                          <td className="p-2">{s.total_gpa}</td>
-                          <td className="p-2">{s.overall_grade}</td>
-                          <td className="p-2"><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></td>
+              <>
+                <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
+                <Card>
+                  <CardContent className="pt-6">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="p-2">Position</th>
+                          <th className="p-2">Roll</th>
+                          <th className="p-2">Name</th>
+                          <th className="p-2">GPA</th>
+                          <th className="p-2">Grade</th>
+                          <th className="p-2">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
+                      </thead>
+                      <tbody>
+                        {filteredStudents.map((s) => (
+                          <tr key={s.student_id} className="border-b">
+                            <td className="p-2">{s.has_failed ? "—" : s.position}</td>
+                            <td className="p-2">{s.roll_no}</td>
+                            <td className="p-2">
+                              <Link href={`/students/${s.student_id}`} className="hover:underline" target="_blank">{s.name_en}</Link>
+                            </td>
+                            <td className="p-2">{s.total_gpa}</td>
+                            <td className="p-2">{s.overall_grade}</td>
+                            <td className="p-2"><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              </>
             )}
           </TabsContent>
 

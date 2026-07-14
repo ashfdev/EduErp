@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Button, Input, Label, Card, CardContent } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,6 +27,7 @@ type ForgotState = "hidden" | "phone" | "otp" | "reset" | "done";
 export default function LoginPage() {
   const router = useRouter();
   const { isAuthenticated, setSession } = useAuthStore();
+  const t = useTranslations("login");
 
   useEffect(() => {
     if (isAuthenticated) router.replace("/dashboard");
@@ -53,10 +55,10 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status: number; data?: { error?: { message: string } } } };
       if (axiosErr.response?.status === 401) {
-        const msg = axiosErr.response.data?.error?.message ?? "Invalid credentials";
+        const msg = axiosErr.response.data?.error?.message ?? t("invalidCredentials");
         setError({ type: msg.includes("disabled") ? "disabled" : "invalid", message: msg });
       } else {
-        setError({ type: "network", message: "Network error — please try again" });
+        setError({ type: "network", message: t("networkError") });
       }
     } finally {
       setLoading(false);
@@ -82,11 +84,11 @@ export default function LoginPage() {
     setForgotLoading(true);
     try {
       await api.post("/api/auth/forgot-password", { phone: forgotPhone });
-      toast.success("OTP sent to your phone");
+      toast.success(t("otpSent"));
       setForgotState("otp");
       setResendTimer(120);
     } catch {
-      toast.error("Could not send OTP — check the phone number");
+      toast.error(t("otpSendFailed"));
     } finally {
       setForgotLoading(false);
     }
@@ -99,7 +101,7 @@ export default function LoginPage() {
       setResetToken(res.data.data.reset_token);
       setForgotState("reset");
     } catch {
-      toast.error("Invalid or expired OTP");
+      toast.error(t("otpInvalid"));
     } finally {
       setForgotLoading(false);
     }
@@ -107,7 +109,7 @@ export default function LoginPage() {
 
   async function submitReset() {
     if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error(t("passwordMismatch"));
       return;
     }
     setForgotLoading(true);
@@ -115,7 +117,7 @@ export default function LoginPage() {
       await api.post("/api/auth/reset-password", { reset_token: resetToken, new_password: newPassword, confirm_password: confirmPassword });
       setForgotState("done");
     } catch {
-      toast.error("Could not reset password — the link may have expired");
+      toast.error(t("resetFailed"));
     } finally {
       setForgotLoading(false);
     }
@@ -130,7 +132,7 @@ export default function LoginPage() {
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-3xl">🏫</div>
         )}
         <h1 className="text-center text-2xl font-semibold">{institution?.name_en ?? "Education ERP"}</h1>
-        <p className="mt-auto text-sm text-primary-foreground/70">Powered by AshDevs</p>
+        <p className="mt-auto text-sm text-primary-foreground/70">{t("poweredBy")}</p>
       </div>
 
       <div className="flex flex-1 items-center justify-center p-6">
@@ -139,94 +141,94 @@ export default function LoginPage() {
             {forgotState === "hidden" && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <h2 className="text-lg font-semibold">Staff Login</h2>
-                  <p className="text-sm text-muted-foreground">Admin Portal</p>
+                  <h2 className="text-lg font-semibold">{t("staffLogin")}</h2>
+                  <p className="text-sm text-muted-foreground">{t("adminPortal")}</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Phone or Email</Label>
+                  <Label>{t("phoneOrEmail")}</Label>
                   <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Password</Label>
+                  <Label>{t("password")}</Label>
                   <div className="flex gap-2">
                     <Input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
                     <Button type="button" variant="outline" size="sm" onClick={() => setShowPassword((s) => !s)}>
-                      {showPassword ? "Hide" : "Show"}
+                      {showPassword ? t("hide") : t("show")}
                     </Button>
                   </div>
                 </div>
 
                 <button type="button" className="text-sm text-primary hover:underline" onClick={() => setForgotState("phone")}>
-                  Forgot Password?
+                  {t("forgotPassword")}
                 </button>
 
                 {error && (
                   <div className={`rounded-md border p-3 text-sm ${error.type === "disabled" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-red-300 bg-red-50 text-red-700"}`}>
                     {error.message}
-                    {error.type === "disabled" && <p className="mt-1 text-xs">Contact your administrator to reactivate this account.</p>}
+                    {error.type === "disabled" && <p className="mt-1 text-xs">{t("contactAdmin")}</p>}
                   </div>
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign In"}
+                  {loading ? t("signingIn") : t("signIn")}
                 </Button>
               </form>
             )}
 
             {forgotState === "phone" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Reset Password</h2>
+                <h2 className="text-lg font-semibold">{t("resetPassword")}</h2>
                 <div className="space-y-1.5">
-                  <Label>Phone Number</Label>
+                  <Label>{t("phoneNumber")}</Label>
                   <Input value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="01XXXXXXXXX" />
                 </div>
                 <Button className="w-full" onClick={sendOtp} disabled={forgotLoading || !forgotPhone}>
-                  Send OTP
+                  {t("sendOtp")}
                 </Button>
                 <button type="button" className="text-sm text-muted-foreground hover:underline" onClick={() => setForgotState("hidden")}>
-                  Back to login
+                  {t("backToLogin")}
                 </button>
               </div>
             )}
 
             {forgotState === "otp" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Enter OTP</h2>
-                <p className="text-sm text-muted-foreground">A 6-digit code was sent to {forgotPhone}</p>
+                <h2 className="text-lg font-semibold">{t("enterOtp")}</h2>
+                <p className="text-sm text-muted-foreground">{t("otpSentTo", { phone: forgotPhone })}</p>
                 <Input value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} placeholder="000000" />
                 <Button className="w-full" onClick={verifyOtp} disabled={forgotLoading || otp.length !== 6}>
-                  Verify
+                  {t("verify")}
                 </Button>
                 <Button type="button" variant="outline" className="w-full" disabled={resendTimer > 0} onClick={sendOtp}>
-                  {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend OTP"}
+                  {resendTimer > 0 ? t("resendIn", { seconds: resendTimer }) : t("resendOtp")}
                 </Button>
               </div>
             )}
 
             {forgotState === "reset" && (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold">Set New Password</h2>
+                <h2 className="text-lg font-semibold">{t("setNewPassword")}</h2>
                 <div className="space-y-1.5">
-                  <Label>New Password</Label>
+                  <Label>{t("newPassword")}</Label>
                   <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Confirm Password</Label>
+                  <Label>{t("confirmPassword")}</Label>
                   <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                 </div>
                 <Button className="w-full" onClick={submitReset} disabled={forgotLoading || !newPassword}>
-                  Reset Password
+                  {t("resetPasswordButton")}
                 </Button>
               </div>
             )}
 
             {forgotState === "done" && (
               <div className="space-y-4 text-center">
-                <p className="text-lg font-semibold text-emerald-600">Password reset successfully</p>
+                <p className="text-lg font-semibold text-emerald-600">{t("resetSuccess")}</p>
                 <Button className="w-full" onClick={() => setForgotState("hidden")}>
-                  Back to Login
+                  {t("backToLoginButton")}
                 </Button>
               </div>
             )}

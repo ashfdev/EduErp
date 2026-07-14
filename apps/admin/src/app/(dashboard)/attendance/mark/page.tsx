@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge } from "@education-erp/ui";
+import { useTranslations } from "next-intl";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, SearchInput } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -32,10 +34,12 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function MarkAttendancePage() {
   const queryClient = useQueryClient();
+  const t = useTranslations("attendanceMark");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
@@ -61,6 +65,12 @@ export default function MarkAttendancePage() {
   );
   const unmarked = (rows?.length ?? 0) - Object.values(effectiveMarks).filter(Boolean).length;
 
+  const filteredRows = useMemo(() => {
+    if (!search.trim()) return rows ?? [];
+    const q = search.trim().toLowerCase();
+    return (rows ?? []).filter((r) => r.name_en.toLowerCase().includes(q) || (r.current_roll_no ?? "").toLowerCase().includes(q));
+  }, [rows, search]);
+
   const saveMutation = useMutation({
     mutationFn: () =>
       api.post("/api/attendance/mark", {
@@ -72,30 +82,30 @@ export default function MarkAttendancePage() {
     onSuccess: (res) => {
       const { saved, conflicts } = res.data.data;
       if (conflicts.length) {
-        toast.warning(`Saved ${saved}. ${conflicts.length} conflict(s) with biometric records — see console.`);
+        toast.warning(t("savedConflicts", { saved, conflicts: conflicts.length }));
         console.warn("Attendance conflicts:", conflicts);
       } else {
-        toast.success(`Saved ${saved} attendance records`);
+        toast.success(t("savedOk", { count: saved }));
       }
       setMarks({});
       queryClient.invalidateQueries({ queryKey: ["attendance", sectionId, date] });
       refetch();
     },
-    onError: () => toast.error("Failed to save attendance"),
+    onError: () => toast.error(t("saveFailed")),
   });
 
   return (
     <PageWrapper>
-      <PageHeader title="Mark Attendance" breadcrumbs={[{ label: "Attendance" }, { label: "Mark" }]} />
+      <PageHeader title={t("title")} breadcrumbs={[{ label: "Attendance" }, { label: "Mark" }]} />
 
       <div className="flex flex-wrap gap-3">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
         <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
-          <option value="">Select Class...</option>
+          <option value="">{t("selectClass")}</option>
           {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
         </select>
         <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
-          <option value="">Select Section...</option>
+          <option value="">{t("selectSection")}</option>
           {selectedClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
@@ -103,16 +113,22 @@ export default function MarkAttendancePage() {
       {rows && (
         <>
           <div className="flex gap-3">
-            <Badge variant="outline">Total: {rows.length}</Badge>
+            <Badge variant="outline">{t("total", { count: rows.length })}</Badge>
             {STATUSES.map((s) => <Badge key={s} variant="secondary">{STATUS_LABEL[s]}: {summary[s]}</Badge>)}
-            <Badge variant="outline">Unmarked: {unmarked}</Badge>
+            <Badge variant="outline">{t("unmarked", { count: unmarked })}</Badge>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
-              Mark All Present
+              {t("markAllPresent")}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setMarks({})}>Clear</Button>
+            <Button size="sm" variant="outline" onClick={() => setMarks({})}>{t("clear")}</Button>
+            <SearchInput
+              placeholder={t("searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="ml-auto max-w-xs"
+            />
           </div>
 
           <Card>
@@ -120,19 +136,21 @@ export default function MarkAttendancePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="p-2">Roll</th>
-                    <th className="p-2">Name</th>
-                    <th className="p-2">Source</th>
+                    <th className="p-2">{t("colRoll")}</th>
+                    <th className="p-2">{t("colName")}</th>
+                    <th className="p-2">{t("colSource")}</th>
                     {STATUSES.map((s) => <th key={s} className="p-2 text-center">{STATUS_LABEL[s]}</th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {filteredRows.map((r) => (
                     <tr key={r.id} className="border-b">
                       <td className="p-2">{r.current_roll_no ?? "—"}</td>
-                      <td className="p-2">{r.name_en}</td>
                       <td className="p-2">
-                        {r.source === "BIOMETRIC" && <Badge variant="outline">👆 Biometric</Badge>}
+                        <Link href={`/students/${r.id}`} className="hover:underline" target="_blank">{r.name_en}</Link>
+                      </td>
+                      <td className="p-2">
+                        {r.source === "BIOMETRIC" && <Badge variant="outline">{t("biometric")}</Badge>}
                       </td>
                       {STATUSES.map((s) => (
                         <td key={s} className="p-1 text-center">
@@ -153,7 +171,7 @@ export default function MarkAttendancePage() {
           </Card>
 
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? "Saving..." : "Save Attendance"}
+            {saveMutation.isPending ? t("saving") : t("saveAttendance")}
           </Button>
         </>
       )}

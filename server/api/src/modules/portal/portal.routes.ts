@@ -167,13 +167,35 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
+    const query = z.object({ exam_type_config_id: z.string().optional(), academic_year_id: z.string().optional() }).parse(req.query);
 
     const student = await prisma.student.findUnique({ where: { id } });
     if (!student) throw notFound("Student not found");
 
-    const publications = await prisma.resultPublication.findMany({
-      where: { is_published: true, class_id: student.current_class_id ?? undefined },
+    // A student's class at the time of an exam may differ from their
+    // current class if they've since been promoted — resolve per-exam via
+    // StudentAcademicHistory (same fix as the public /results/public/lookup
+    // route) instead of always trusting current_class_id, otherwise a
+    // promoted student's older published result silently disappears from
+    // their own portal.
+    const histories = await prisma.studentAcademicHistory.findMany({ where: { student_id: id } });
+    const classForYear = new Map(histories.map((h) => [h.academic_year_id, h.class_id]));
+
+    const candidatePublications = await prisma.resultPublication.findMany({
+      where: {
+        is_published: true,
+        ...((query.exam_type_config_id || query.academic_year_id) && {
+          exam: {
+            ...(query.exam_type_config_id && { exam_type_config_id: query.exam_type_config_id }),
+            ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
+          },
+        }),
+      },
       include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
+    });
+    const publications = candidatePublications.filter((pub) => {
+      const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
+      return resolvedClassId === pub.class_id;
     });
 
     const results = [];

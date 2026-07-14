@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -23,7 +24,10 @@ attendanceRulesRouter.put(
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     const body = attendanceRulesSchema.parse(req.body);
-    const rules = await prisma.attendanceRules.update({ where: { id: RULES_ID }, data: body });
+    const rules = await prisma.attendanceRules.update({
+      where: { id: RULES_ID },
+      data: { ...body, working_days: body.working_days === null ? Prisma.JsonNull : body.working_days },
+    });
     res.json({ success: true, data: rules });
   }),
 );

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -19,6 +20,7 @@ interface SlotRow {
 function PtmContent() {
   const { activeStudentId } = useAuthStore();
   const queryClient = useQueryClient();
+  const t = useTranslations("ptm");
 
   const { data, isLoading } = useQuery<SlotRow[]>({
     queryKey: ["portal", "ptm-slots"],
@@ -28,11 +30,11 @@ function PtmContent() {
   const bookMutation = useMutation({
     mutationFn: (slotId: string) => api.post(`/api/portal/ptm-slots/${slotId}/book`, { student_id: activeStudentId }),
     onSuccess: () => {
-      toast.success("Meeting booked");
+      toast.success(t("booked"));
       queryClient.invalidateQueries({ queryKey: ["portal", "ptm-slots"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to book — someone may have just taken this slot";
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("bookFailed");
       toast.error(message);
     },
   });
@@ -41,8 +43,8 @@ function PtmContent() {
 
   return (
     <div className="space-y-3 p-4">
-      <h1 className="text-lg font-semibold">Parent-Teacher Meetings</h1>
-      {!data?.length && <EmptyState title="No open slots right now" />}
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
+      {!data?.length && <EmptyState title={t("noSlots")} />}
       {data?.map((s) => (
         <Card key={s.id}>
           <CardContent className="flex items-center justify-between pt-6">
@@ -50,7 +52,7 @@ function PtmContent() {
               <p className="font-medium">{s.teacher.name_en}</p>
               <p className="text-sm text-gray-500">{new Date(s.date).toLocaleDateString()} · {s.start_time}-{s.end_time}{s.class ? ` · ${s.class.name_en}` : ""}</p>
             </div>
-            <Button size="sm" onClick={() => bookMutation.mutate(s.id)} disabled={bookMutation.isPending}>Book</Button>
+            <Button size="sm" onClick={() => bookMutation.mutate(s.id)} disabled={bookMutation.isPending}>{t("book")}</Button>
           </CardContent>
         </Card>
       ))}

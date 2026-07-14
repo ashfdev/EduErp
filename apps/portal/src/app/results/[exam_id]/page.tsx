@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -19,6 +20,8 @@ interface ResultDetail {
 function ResultDetailContent() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("resultDetail");
+  const tCommon = useTranslations("common");
 
   const { data, isLoading } = useQuery<ResultDetail[]>({
     queryKey: ["portal", "results", activeStudentId],
@@ -29,7 +32,7 @@ function ResultDetailContent() {
   const result = data?.find((r) => r.exam_id === exam_id);
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
-  if (!result) return <p className="p-4 text-sm text-gray-500">Result not found.</p>;
+  if (!result) return <p className="p-4 text-sm text-gray-500">{tCommon("resultNotFound")}</p>;
 
   async function printCard() {
     const res = await api.get(`/api/portal/student/${activeStudentId}/results/${exam_id}/marksheet`, { responseType: "blob" });
@@ -43,24 +46,24 @@ function ResultDetailContent() {
       <Card>
         <CardContent className="pt-6">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-gray-500"><th className="p-1">Subject</th><th className="p-1">Total</th><th className="p-1">Grade</th></tr></thead>
+            <thead><tr className="border-b text-left text-gray-500"><th className="p-1">{t("subject")}</th><th className="p-1">{t("total")}</th><th className="p-1">{t("grade")}</th></tr></thead>
             <tbody>
               {result.subjects.map((s, i) => (
                 <tr key={i} className="border-b">
                   <td className="p-1">{s.subject_name}</td>
-                  <td className="p-1">{s.is_absent ? "Absent" : s.marks_total}</td>
+                  <td className="p-1">{s.is_absent ? t("absent") : s.marks_total}</td>
                   <td className="p-1">{s.grade_letter}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="mt-3 text-sm">
-            <p>Total GPA: <strong>{result.total_gpa}</strong></p>
-            <p>Overall Grade: <strong>{result.overall_grade}</strong></p>
+            <p>{t("totalGpa", { gpa: result.total_gpa })}</p>
+            <p>{t("overallGrade", { grade: result.overall_grade })}</p>
           </div>
         </CardContent>
       </Card>
-      <Button className="w-full" onClick={printCard}>Print Result Card</Button>
+      <Button className="w-full" onClick={printCard}>{t("printCard")}</Button>
     </div>
   );
 }

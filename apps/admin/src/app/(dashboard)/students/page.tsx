@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -25,6 +26,7 @@ interface ClassOption {
 }
 
 export default function StudentsPage() {
+  const t = useTranslations("students");
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState<string>("");
   const [page, setPage] = useState(1);
@@ -50,40 +52,45 @@ export default function StudentsPage() {
   return (
     <PageWrapper>
       <PageHeader
-        title="Students"
-        subtitle={meta ? `Total: ${meta.total}` : undefined}
-        breadcrumbs={[{ label: "Students" }]}
+        title={t("title")}
+        subtitle={meta ? t("total", { count: meta.total }) : undefined}
+        breadcrumbs={[{ label: t("title") }]}
         action={
-          <Link href="/students/new">
-            <Button>+ Add Student</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/students/bulk-import">
+              <Button variant="outline">{t("bulkImport")}</Button>
+            </Link>
+            <Link href="/students/new">
+              <Button>{t("addStudent")}</Button>
+            </Link>
+          </div>
         }
       />
 
       <div className="flex gap-3">
-        <Input placeholder="Search name, UID, roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <Input placeholder={t("searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
         <Select value={classId || "all"} onValueChange={(v) => setClassId(v === "all" ? "" : v)}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All Classes" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder={t("allClasses")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Classes</SelectItem>
+            <SelectItem value="all">{t("allClasses")}</SelectItem>
             {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
 
-      {!students.length && <EmptyState title="No students found" description="Try adjusting filters or add a new student." />}
+      {!students.length && <EmptyState title={t("noStudentsFound")} description={t("noStudentsHint")} />}
 
       <Card>
         <CardContent className="pt-6">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Student UID</th>
-                <th className="p-2">Name</th>
-                <th className="p-2">Class / Section</th>
-                <th className="p-2">Roll</th>
-                <th className="p-2">Guardian Phone</th>
-                <th className="p-2">Status</th>
+                <th className="p-2">{t("colUid")}</th>
+                <th className="p-2">{t("colName")}</th>
+                <th className="p-2">{t("colClassSection")}</th>
+                <th className="p-2">{t("colRoll")}</th>
+                <th className="p-2">{t("colGuardianPhone")}</th>
+                <th className="p-2">{t("colStatus")}</th>
                 <th className="p-2"></th>
               </tr>
             </thead>
@@ -101,7 +108,7 @@ export default function StudentsPage() {
                   <td className="p-2"><StatusBadge status={s.status} /></td>
                   <td className="p-2">
                     <Link href={`/students/${s.id}`} className="text-primary hover:underline">
-                      View
+                      {t("view")}
                     </Link>
                   </td>
                 </tr>
@@ -111,9 +118,9 @@ export default function StudentsPage() {
 
           {meta && meta.totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
-              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
-              <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t("previous")}</Button>
+              <span className="text-sm text-muted-foreground">{t("pageOf", { page: meta.page, totalPages: meta.totalPages })}</span>
+              <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>{t("next")}</Button>
             </div>
           )}
         </CardContent>

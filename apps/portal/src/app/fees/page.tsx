@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -36,6 +37,7 @@ const GATEWAYS = [
 
 function FeesContent() {
   const { activeStudentId } = useAuthStore();
+  const t = useTranslations("fees");
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [pendingSlipPaymentId, setPendingSlipPaymentId] = useState<string | null>(null);
@@ -65,7 +67,7 @@ function FeesContent() {
       refetch();
     },
     onError: () => {
-      toast.error("Payment gateway not configured yet — merchant credentials pending");
+      toast.error(t("gatewayError"));
       setPayingInvoice(null);
     },
   });
@@ -77,12 +79,12 @@ function FeesContent() {
       return api.post(`/api/portal/fees/payments/${pendingSlipPaymentId}/slip`, formData, { headers: { "Content-Type": "multipart/form-data" } });
     },
     onSuccess: () => {
-      toast.success("Slip uploaded — staff will verify it against the bank statement");
+      toast.success(t("slipUploaded"));
       setPendingSlipPaymentId(null);
       setSlipFile(null);
       refetch();
     },
-    onError: () => toast.error("Failed to upload slip"),
+    onError: () => toast.error(t("slipUploadFailed")),
   });
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
@@ -93,12 +95,12 @@ function FeesContent() {
 
   return (
     <div className="space-y-4 p-4">
-      <h1 className="text-lg font-semibold">Fees</h1>
+      <h1 className="text-lg font-semibold">{t("title")}</h1>
 
       {totalOutstanding > 0 && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
-            <p className="text-sm text-red-700">Total Outstanding</p>
+            <p className="text-sm text-red-700">{t("totalOutstanding")}</p>
             <p className="text-2xl font-bold text-red-700">৳{totalOutstanding}</p>
           </CardContent>
         </Card>
@@ -107,16 +109,16 @@ function FeesContent() {
       {pendingSlipPaymentId && (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="space-y-2 pt-6">
-            <p className="text-sm font-medium text-amber-800">Upload your bank transfer slip</p>
+            <p className="text-sm font-medium text-amber-800">{t("uploadSlip")}</p>
             <Input type="file" onChange={(e) => setSlipFile(e.target.files?.[0] ?? null)} />
             <Button size="sm" onClick={() => slipMutation.mutate()} disabled={!slipFile || slipMutation.isPending}>
-              {slipMutation.isPending ? "Uploading..." : "Upload Slip"}
+              {slipMutation.isPending ? t("uploading") : t("uploadSlipButton")}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {!unpaid.length && <p className="text-sm text-gray-500">No outstanding invoices.</p>}
+      {!unpaid.length && <p className="text-sm text-gray-500">{t("noOutstanding")}</p>}
       {unpaid.map((inv) => (
         <Card key={inv.id}>
           <CardContent className="space-y-2 pt-6">
@@ -124,8 +126,8 @@ function FeesContent() {
               <p className="font-medium">{inv.description}</p>
               <StatusBadge status={inv.status} />
             </div>
-            <p className="text-sm text-gray-500">Due {new Date(inv.due_date).toLocaleDateString()}</p>
-            <p className="text-sm">৳{inv.amount_due} {inv.fine_amount > 0 && <span className="text-red-600">+ ৳{inv.fine_amount} fine</span>}</p>
+            <p className="text-sm text-gray-500">{t("due", { date: new Date(inv.due_date).toLocaleDateString() })}</p>
+            <p className="text-sm">৳{inv.amount_due} {inv.fine_amount > 0 && <span className="text-red-600">{t("fine", { amount: inv.fine_amount })}</span>}</p>
             {payingInvoice === inv.id ? (
               <div className="flex flex-wrap gap-2">
                 {GATEWAYS.map((g) => (
@@ -135,7 +137,7 @@ function FeesContent() {
                 ))}
               </div>
             ) : (
-              <Button size="sm" onClick={() => setPayingInvoice(inv.id)}>Pay Now</Button>
+              <Button size="sm" onClick={() => setPayingInvoice(inv.id)}>{t("payNow")}</Button>
             )}
           </CardContent>
         </Card>
@@ -143,13 +145,13 @@ function FeesContent() {
 
       {!!upcoming?.length && (
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-700">Upcoming (Projected)</p>
+          <p className="mb-2 text-sm font-medium text-gray-700">{t("upcomingProjected")}</p>
           <div className="space-y-2">
             {upcoming.map((u, i) => (
               <div key={i} className="flex items-center justify-between rounded-md border border-dashed p-3 text-sm text-gray-600">
                 <div>
                   <p>{u.name}</p>
-                  <p className="text-xs text-gray-400">{u.frequency} · not yet invoiced</p>
+                  <p className="text-xs text-gray-400">{u.frequency} · {t("notYetInvoiced")}</p>
                 </div>
                 <p className="font-medium">৳{u.amount}</p>
               </div>
@@ -159,11 +161,11 @@ function FeesContent() {
       )}
 
       <button onClick={() => setShowHistory((s) => !s)} className="text-sm font-medium text-[var(--primary,#1a3c4a)]">
-        {showHistory ? "Hide" : "Show"} Payment History
+        {showHistory ? t("hideHistory") : t("showHistory")}
       </button>
       {showHistory && (
         <div className="space-y-2">
-          {!allPayments.length && <p className="text-sm text-gray-500">No payments yet.</p>}
+          {!allPayments.length && <p className="text-sm text-gray-500">{t("noPayments")}</p>}
           {allPayments.map((p) => (
             <Card key={p.id}>
               <CardContent className="flex items-center justify-between pt-6 text-sm">

@@ -90,3 +90,15 @@ export const jobPostingSchema = z.object({
   requirements: z.string().optional(),
   deadline: z.coerce.date().optional().nullable(),
 });
+
+export const jobApplicationSchema = z.object({
+  applicant_name: z.string().min(1),
+  phone: z.string().regex(/^01\d{9}$/),
+  email: z.string().email().optional().nullable(),
+  cv_blob_key: z.string().min(1),
+  cover_note: z.string().optional().nullable(),
+});
+
+export const jobApplicationStatusSchema = z.object({
+  status: z.enum(["SUBMITTED", "SHORTLISTED", "REJECTED", "HIRED"]),
+});
