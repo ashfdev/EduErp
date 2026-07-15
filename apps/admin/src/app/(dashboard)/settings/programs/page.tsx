@@ -29,6 +29,7 @@ interface ProgramRow {
   id: string;
   name_en: string;
   code: string;
+  department_id: string | null;
   duration_semesters: number;
   total_credit_hours: number;
   department: { name_en: string } | null;
@@ -38,6 +39,7 @@ interface ProgramRow {
 export default function ProgramsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [nameEn, setNameEn] = useState("");
   const [code, setCode] = useState("");
   const [departmentId, setDepartmentId] = useState("");
@@ -56,24 +58,40 @@ export default function ProgramsPage() {
   function resetForm() {
     setNameEn(""); setCode(""); setDepartmentId(""); setDurationSemesters(8); setTotalCreditHours(140);
   }
+  function openCreate() {
+    setEditingId(null);
+    resetForm();
+    setOpen(true);
+  }
+  function openEdit(p: ProgramRow) {
+    setEditingId(p.id);
+    setNameEn(p.name_en);
+    setCode(p.code);
+    setDepartmentId(p.department_id ?? "");
+    setDurationSemesters(p.duration_semesters);
+    setTotalCreditHours(p.total_credit_hours);
+    setOpen(true);
+  }
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post("/api/settings/programs", {
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
         name_en: nameEn,
         code,
         department_id: departmentId || undefined,
         duration_semesters: durationSemesters,
         total_credit_hours: totalCreditHours,
-      }),
+      };
+      return editingId ? api.put(`/api/settings/programs/${editingId}`, payload) : api.post("/api/settings/programs", payload);
+    },
     onSuccess: () => {
-      toast.success("Program created");
+      toast.success(editingId ? "Program updated" : "Program created");
       queryClient.invalidateQueries({ queryKey: ["settings", "programs"] });
       setOpen(false);
       resetForm();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create program";
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? (editingId ? "Failed to update program" : "Failed to create program");
       toast.error(message);
     },
   });
@@ -96,7 +114,7 @@ export default function ProgramsPage() {
         title="Programs & Courses"
         subtitle="University-mode academic structure — degree programs, their courses, credit hours, and prerequisites"
         breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "Programs & Courses" }]}
-        action={<Button onClick={() => setOpen(true)}>+ Add Program</Button>}
+        action={<Button onClick={openCreate}>+ Add Program</Button>}
       />
 
       {!programs?.length && <EmptyState title="No programs yet" description="Create a program (e.g. BSc in CSE) to start adding courses." />}
@@ -111,17 +129,28 @@ export default function ProgramsPage() {
                 <p className="text-xs text-muted-foreground">
                   {p.duration_semesters} semesters · {p.total_credit_hours} credit hours · {p._count.courses} course(s)
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (confirm(`Delete program "${p.name_en}"?`)) deleteMutation.mutate(p.id);
-                  }}
-                >
-                  Delete
-                </Button>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openEdit(p);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (confirm(`Delete program "${p.name_en}"?`)) deleteMutation.mutate(p.id);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </Link>
@@ -130,7 +159,7 @@ export default function ProgramsPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Program</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? "Edit Program" : "Add Program"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Name</Label><Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. BSc in Computer Science & Engineering" /></div>
             <div className="space-y-1.5"><Label>Code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. BSC-CSE" /></div>
@@ -147,8 +176,8 @@ export default function ProgramsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !nameEn || !code}>
-              {createMutation.isPending ? "Creating..." : "Create Program"}
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !nameEn || !code}>
+              {saveMutation.isPending ? "Saving..." : editingId ? "Save Changes" : "Create Program"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -64,32 +64,86 @@ export default function ProgramDetailPage() {
     queryFn: async () => (await api.get("/api/settings/courses", { params: { program_id: id } })).data.data,
   });
 
-  // Add-course dialog
+  // Add/edit-course dialog
   const [courseOpen, setCourseOpen] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [semesterNumber, setSemesterNumber] = useState(1);
   const [code, setCode] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [creditHours, setCreditHours] = useState(3);
   const [courseType, setCourseType] = useState("THEORY");
 
-  const createCourseMutation = useMutation({
-    mutationFn: () =>
-      api.post("/api/settings/courses", {
-        program_id: id,
-        semester_number: semesterNumber,
-        code,
-        name_en: nameEn,
-        credit_hours: creditHours,
-        course_type: courseType,
-      }),
+  function openAddCourse() {
+    setEditingCourseId(null);
+    setSemesterNumber(1); setCode(""); setNameEn(""); setCreditHours(3); setCourseType("THEORY");
+    setCourseOpen(true);
+  }
+  function openEditCourse(c: CourseRow) {
+    setEditingCourseId(c.id);
+    setSemesterNumber(c.semester_number);
+    setCode(c.code);
+    setNameEn(c.name_en);
+    setCreditHours(c.credit_hours);
+    setCourseType(c.course_type);
+    setCourseOpen(true);
+  }
+
+  const saveCourseMutation = useMutation({
+    mutationFn: () => {
+      const payload = { semester_number: semesterNumber, code, name_en: nameEn, credit_hours: creditHours, course_type: courseType };
+      return editingCourseId
+        ? api.put(`/api/settings/courses/${editingCourseId}`, payload)
+        : api.post("/api/settings/courses", { ...payload, program_id: id });
+    },
     onSuccess: () => {
-      toast.success("Course added");
+      toast.success(editingCourseId ? "Course updated" : "Course added");
       queryClient.invalidateQueries({ queryKey: ["settings", "courses", id] });
       setCourseOpen(false);
       setSemesterNumber(1); setCode(""); setNameEn(""); setCreditHours(3); setCourseType("THEORY");
     },
-    onError: (err: unknown) => toast.error(errMsg(err, "Failed to add course")),
+    onError: (err: unknown) => toast.error(errMsg(err, editingCourseId ? "Failed to update course" : "Failed to add course")),
   });
+
+  // Bulk-add dialog — one dialog submission per course was too slow for
+  // real university onboarding; this sends several rows as sequential
+  // POSTs and reports per-row success/failure without discarding valid rows.
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const emptyBulkRow = () => ({ semester_number: 1, code: "", name_en: "", credit_hours: 3, course_type: "THEORY" });
+  const [bulkRows, setBulkRows] = useState([emptyBulkRow()]);
+  const [bulkResult, setBulkResult] = useState<{ created: number; failed: { row: number; reason: string }[] } | null>(null);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  function updateBulkRow(index: number, patch: Partial<ReturnType<typeof emptyBulkRow>>) {
+    setBulkRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+  function addBulkRow() {
+    setBulkRows((prev) => [...prev, emptyBulkRow()]);
+  }
+  function removeBulkRow(index: number) {
+    setBulkRows((prev) => prev.filter((_, i) => i !== index));
+  }
+  async function submitBulkRows() {
+    setBulkSubmitting(true);
+    let created = 0;
+    const failed: { row: number; reason: string }[] = [];
+    for (const [index, row] of bulkRows.entries()) {
+      try {
+        await api.post("/api/settings/courses", { ...row, program_id: id });
+        created++;
+      } catch (err) {
+        failed.push({ row: index + 1, reason: errMsg(err, "Failed") });
+      }
+    }
+    setBulkSubmitting(false);
+    setBulkResult({ created, failed });
+    queryClient.invalidateQueries({ queryKey: ["settings", "courses", id] });
+    if (!failed.length) {
+      toast.success(`${created} course(s) added`);
+      setBulkOpen(false);
+      setBulkRows([emptyBulkRow()]);
+      setBulkResult(null);
+    }
+  }
 
   const deleteCourseMutation = useMutation({
     mutationFn: (courseId: string) => api.delete(`/api/settings/courses/${courseId}`),
@@ -129,7 +183,12 @@ export default function ProgramDetailPage() {
         title={program?.name_en ?? "Program"}
         subtitle={program ? `${program.code} · ${program.department?.name_en ?? "No department"} · ${program.duration_semesters} semesters` : undefined}
         breadcrumbs={[{ label: "Settings", href: "/settings" }, { label: "Programs & Courses", href: "/settings/programs" }, { label: program?.name_en ?? "" }]}
-        action={<Button onClick={() => setCourseOpen(true)}>+ Add Course</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>+ Bulk Add Courses</Button>
+            <Button onClick={openAddCourse}>+ Add Course</Button>
+          </div>
+        }
       />
 
       {!courses?.length && <EmptyState title="No courses yet" description="Add courses semester by semester, then wire up prerequisites between them." />}
@@ -161,6 +220,7 @@ export default function ProgramDetailPage() {
                       {c.required_by.length ? c.required_by.map((r) => r.prerequisite_course.code).join(", ") : <span className="text-muted-foreground">None</span>}
                     </td>
                     <td className="p-2 flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEditCourse(c)}>Edit</Button>
                       <Button size="sm" variant="outline" onClick={() => setPrereqCourseId(c.id)}>Prerequisites</Button>
                       <Button size="sm" variant="outline" onClick={() => { if (confirm(`Delete course "${c.name_en}"?`)) deleteCourseMutation.mutate(c.id); }}>Delete</Button>
                     </td>
@@ -174,7 +234,7 @@ export default function ProgramDetailPage() {
 
       <Dialog open={courseOpen} onOpenChange={setCourseOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Course</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingCourseId ? "Edit Course" : "Add Course"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Semester Number</Label><Input type="number" min={1} value={semesterNumber} onChange={(e) => setSemesterNumber(Number(e.target.value))} /></div>
@@ -192,8 +252,49 @@ export default function ProgramDetailPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => createCourseMutation.mutate()} disabled={createCourseMutation.isPending || !code || !nameEn}>
-              {createCourseMutation.isPending ? "Adding..." : "Add Course"}
+            <Button onClick={() => saveCourseMutation.mutate()} disabled={saveCourseMutation.isPending || !code || !nameEn}>
+              {saveCourseMutation.isPending ? "Saving..." : editingCourseId ? "Save Changes" : "Add Course"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkOpen} onOpenChange={(v) => { setBulkOpen(v); if (!v) { setBulkRows([emptyBulkRow()]); setBulkResult(null); } }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader><DialogTitle>Bulk Add Courses</DialogTitle></DialogHeader>
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {bulkRows.map((row, index) => (
+              <div key={index} className="grid grid-cols-12 items-end gap-2 rounded-md border p-2">
+                <div className="col-span-1 space-y-1"><Label className="text-xs">Sem</Label><Input type="number" min={1} value={row.semester_number} onChange={(e) => updateBulkRow(index, { semester_number: Number(e.target.value) })} /></div>
+                <div className="col-span-2 space-y-1"><Label className="text-xs">Code</Label><Input value={row.code} onChange={(e) => updateBulkRow(index, { code: e.target.value })} placeholder="CSE-201" /></div>
+                <div className="col-span-4 space-y-1"><Label className="text-xs">Name</Label><Input value={row.name_en} onChange={(e) => updateBulkRow(index, { name_en: e.target.value })} placeholder="Data Structures" /></div>
+                <div className="col-span-2 space-y-1"><Label className="text-xs">Credits</Label><Input type="number" min={0} step={0.5} value={row.credit_hours} onChange={(e) => updateBulkRow(index, { credit_hours: Number(e.target.value) })} /></div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">Type</Label>
+                  <select className="w-full rounded-md border px-2 py-2 text-sm" value={row.course_type} onChange={(e) => updateBulkRow(index, { course_type: e.target.value })}>
+                    <option value="THEORY">Theory</option>
+                    <option value="PRACTICAL">Practical</option>
+                    <option value="BOTH">Both</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <Button size="sm" variant="outline" onClick={() => removeBulkRow(index)} disabled={bulkRows.length === 1}>✕</Button>
+                </div>
+              </div>
+            ))}
+            {!!bulkResult?.failed.length && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/5 p-2 text-sm text-destructive">
+                <p className="font-medium">{bulkResult.created} added, {bulkResult.failed.length} failed:</p>
+                <ul className="list-inside list-disc">
+                  {bulkResult.failed.map((f) => <li key={f.row}>Row {f.row}: {f.reason}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="justify-between sm:justify-between">
+            <Button variant="outline" onClick={addBulkRow}>+ Add Row</Button>
+            <Button onClick={submitBulkRows} disabled={bulkSubmitting || bulkRows.some((r) => !r.code || !r.name_en)}>
+              {bulkSubmitting ? "Submitting..." : `Submit ${bulkRows.length} Course(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>
