@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -118,6 +119,9 @@ export default function StudentProfilePage() {
             {academic.current.class?.name_en} {academic.current.section && `· Section ${academic.current.section.name}`} {academic.current.roll_no && `· Roll ${academic.current.roll_no}`}
           </p>
         </div>
+        <Link href={`/students/${id}/edit`}>
+          <Button variant="outline">Edit</Button>
+        </Link>
         {personal.status !== "GRADUATED" && (
           <Button variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>
         )}

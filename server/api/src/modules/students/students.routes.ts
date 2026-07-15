@@ -227,8 +227,10 @@ studentsRouter.get(
           guardian: student.guardian,
           father_name: student.father_name,
           father_phone: student.father_phone,
+          father_occupation: student.father_occupation,
           mother_name: student.mother_name,
           mother_phone: student.mother_phone,
+          mother_occupation: student.mother_occupation,
         },
         academic: {
           current: {
