@@ -3,6 +3,10 @@ import { useAuthStore } from "@/stores/auth-store";
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+  // No timeout meant a genuinely hung/slow request left the caller waiting
+  // forever with no cutoff — the portal's own loading spinner had no way
+  // to ever resolve to an error state in that case.
+  timeout: 20000,
 });
 
 api.interceptors.request.use((config) => {
