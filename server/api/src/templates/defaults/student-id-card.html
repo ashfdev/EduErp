@@ -15,6 +15,15 @@
   .info .student-name { font-weight: 700; font-size: 10px; }
   .badge { display: inline-block; background: #c0392b; color: #fff; padding: 1px 4px; border-radius: 3px; font-size: 7px; }
   .strip { height: 2mm; background: {{institution.secondary_color}}; position: absolute; bottom: 0; width: 100%; }
+  /* Compact variant of the shared signature-block markup — sized to fit
+     a credit-card-sized ID (85.6x54mm), not the full A4 layout marksheet.html
+     etc. use. Renders as a blank signature line if no signature is
+     configured/active for this doc type's slot, never breaks the layout. */
+  .signature-block { position: absolute; bottom: 2.5mm; right: 3mm; text-align: center; }
+  .sig-image { max-height: 5mm; max-width: 16mm; display: block; margin: 0 auto; }
+  .sig-line { border-top: 1px solid #333; width: 16mm; margin-top: 1px; }
+  .sig-name { font-size: 5px; font-weight: 600; margin: 1px 0 0; }
+  .sig-designation, .sig-label { font-size: 4.5px; color: #555; }
 </style>
 </head>
 <body>
@@ -33,6 +42,7 @@
         <p>Year: {{academic_year_label}}</p>
       </div>
     </div>
+    {{signatureBlock 1}}
     <div class="strip"></div>
   </div>
 </body>

@@ -23,6 +23,10 @@ interface Slot {
   authority_role: string;
   is_required: boolean;
 }
+interface Coverage {
+  doc_type: string;
+  has_signature_slot: boolean;
+}
 
 export default function SignatureMappingPage() {
   const queryClient = useQueryClient();
@@ -30,6 +34,11 @@ export default function SignatureMappingPage() {
     queryKey: ["settings", "authority-config"],
     queryFn: async () => (await api.get("/api/settings/authority-config")).data.data,
   });
+  const { data: coverage } = useQuery<Coverage[]>({
+    queryKey: ["settings", "authority-config", "coverage"],
+    queryFn: async () => (await api.get("/api/settings/authority-config/coverage")).data.data,
+  });
+  const noSlotDocTypes = new Set((coverage ?? []).filter((c) => !c.has_signature_slot).map((c) => c.doc_type));
 
   const [slots, setSlots] = useState<Record<string, Slot[]>>({});
 
@@ -69,7 +78,14 @@ export default function SignatureMappingPage() {
       <div className="space-y-3">
         {DOC_TYPES.map((docType) => (
           <Card key={docType}>
-            <CardHeader><CardTitle className="text-sm">{docType.replace(/_/g, " ")}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-sm">{docType.replace(/_/g, " ")}</CardTitle>
+              {noSlotDocTypes.has(docType) && (
+                <p className="text-xs text-amber-600">
+                  This document type has an authority mapped, but its active template has no signature slot — it will not appear on generated PDFs.
+                </p>
+              )}
+            </CardHeader>
             <CardContent className="grid grid-cols-3 gap-4">
               {slots[docType]?.map((slot) => (
                 <div key={slot.slot} className="space-y-2 rounded-md border p-3">

@@ -18,7 +18,11 @@
   .total-row { font-weight: 700; }
   .payment { margin-top: 10px; font-size: 11px; }
   .footer { display: flex; justify-content: space-between; margin-top: 30px; align-items: flex-end; }
+  .signature-block { text-align: center; }
+  .sig-image { max-height: 12mm; max-width: 40mm; display: block; margin: 0 auto; }
   .sig-line { border-top: 1px solid #333; width: 60px; margin-bottom: 2px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation, .sig-label { font-size: 9px; color: #555; }
   .note { text-align: center; font-size: 9px; color: #777; margin-top: 14px; }
   .qr { height: 24mm; width: 24mm; }
 </style>
@@ -41,7 +45,7 @@
   </table>
   <p class="payment">Payment Method: {{payment_method}} {{#if transaction_id}}| Transaction ID: {{transaction_id}}{{/if}}</p>
   <div class="footer">
-    <div><div class="sig-line"></div><p>Cashier Signature</p></div>
+    {{signatureBlock 1}}
     {{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}
   </div>
   <p class="note">This is a system-generated receipt.</p>

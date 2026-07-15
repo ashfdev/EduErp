@@ -138,11 +138,52 @@ async function getSignatureSlots(docType: DocumentType): Promise<SignatureSlot[]
   return slots;
 }
 
-async function getOrSeedActiveTemplate(docType: DocumentType): Promise<{ html_content: string; css_content: string | null; layout_json: unknown }> {
-  const existing = await prisma.documentTemplate.findFirst({ where: { doc_type: docType, is_active: true } });
-  if (existing) return existing;
+// Read-only check for the Signature Mapping admin page — never seeds a
+// DocumentTemplate row (unlike getOrSeedActiveTemplate), just reports
+// whether the doc type's active template (or its own default file, if no
+// custom one has been activated yet) actually has a {{signatureBlock}}
+// call anywhere. A custom card design's SIGNATURE-kind field box compiles
+// down to this exact string (see compileCardDesign's fieldContent()), so
+// checking for it covers both default and custom-designed templates.
+export async function hasSignatureSlot(docType: DocumentType): Promise<boolean> {
+  const existing = await prisma.documentTemplate.findFirst({ where: { doc_type: docType, is_active: true }, select: { html_content: true, is_default: true } });
+  // A custom (admin-designed) active template is checked as-is; a
+  // is_default:true row may be a stale snapshot from before a shipped
+  // template file was updated (see getOrSeedActiveTemplate's matching
+  // comment) — read the current file directly rather than report a
+  // possibly-outdated cached answer.
+  if (existing && !existing.is_default) return existing.html_content.includes("signatureBlock");
 
   const slug = DOC_TYPE_SLUG[docType];
+  if (!slug) return false;
+  try {
+    const html = readFileSync(join(DEFAULT_TEMPLATES_DIR, `${slug}.html`), "utf-8");
+    return html.includes("signatureBlock");
+  } catch {
+    return false;
+  }
+}
+
+async function getOrSeedActiveTemplate(docType: DocumentType): Promise<{ html_content: string; css_content: string | null; layout_json: unknown }> {
+  const existing = await prisma.documentTemplate.findFirst({ where: { doc_type: docType, is_active: true } });
+  const slug = DOC_TYPE_SLUG[docType];
+
+  // is_default:true means this row IS the shipped default, not an admin
+  // customization — it must track the file on disk, not freeze at
+  // whatever the file happened to contain the first time this doc type
+  // was ever generated. Without this, updating a default .html file (as
+  // this session did to add signature slots) would silently never reach
+  // any institution that had already generated that doc type even once.
+  if (existing) {
+    if (existing.is_default && slug) {
+      const currentHtml = readFileSync(join(DEFAULT_TEMPLATES_DIR, `${slug}.html`), "utf-8");
+      if (currentHtml !== existing.html_content) {
+        return prisma.documentTemplate.update({ where: { id: existing.id }, data: { html_content: currentHtml } });
+      }
+    }
+    return existing;
+  }
+
   if (!slug) throw new Error(`No default template available for document type: ${docType}`);
 
   const html_content = readFileSync(join(DEFAULT_TEMPLATES_DIR, `${slug}.html`), "utf-8");

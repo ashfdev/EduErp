@@ -15,6 +15,10 @@
   .days { display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; }
   .footer { display: flex; justify-content: space-between; margin-top: 30px; }
   .sig-line { border-top: 1px solid #333; width: 100px; margin-bottom: 2px; }
+  .signature-block { text-align: center; }
+  .sig-image { max-height: 12mm; max-width: 40mm; display: block; margin: 0 auto; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation, .sig-label { font-size: 9px; color: #555; }
 </style>
 </head>
 <body>
@@ -28,7 +32,7 @@
   <p class="net">Net Salary: ৳{{net_salary}}</p>
   <div class="days"><span>Working Days: {{working_days}}</span><span>Present Days: {{present_days}}</span></div>
   <div class="footer">
-    <div><div class="sig-line"></div><p>Accountant Signature</p></div>
+    {{signatureBlock 1}}
     <div><div class="sig-line"></div><p>Received the above amount (Staff Signature)</p></div>
   </div>
 </body>

@@ -45,13 +45,33 @@ export default function SignaturesPage() {
   });
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [role, setRole] = useState("PRINCIPAL");
   const [displayName, setDisplayName] = useState("");
   const [designation, setDesignation] = useState("");
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [sealFile, setSealFile] = useState<File | null>(null);
 
-  const createMutation = useMutation({
+  function openCreate() {
+    setEditingId(null);
+    setRole("PRINCIPAL");
+    setDisplayName("");
+    setDesignation("");
+    setSignatureFile(null);
+    setSealFile(null);
+    setOpen(true);
+  }
+  function openEdit(s: AuthoritySignature) {
+    setEditingId(s.id);
+    setRole(s.role);
+    setDisplayName(s.display_name);
+    setDesignation(s.designation);
+    setSignatureFile(null);
+    setSealFile(null);
+    setOpen(true);
+  }
+
+  const saveMutation = useMutation({
     mutationFn: () => {
       const form = new FormData();
       form.append("role", role);
@@ -59,10 +79,12 @@ export default function SignaturesPage() {
       form.append("designation", designation);
       if (signatureFile) form.append("signature", signatureFile);
       if (sealFile) form.append("seal", sealFile);
-      return api.post("/api/settings/signatures", form, { headers: { "Content-Type": "multipart/form-data" } });
+      return editingId
+        ? api.put(`/api/settings/signatures/${editingId}`, form, { headers: { "Content-Type": "multipart/form-data" } })
+        : api.post("/api/settings/signatures", form, { headers: { "Content-Type": "multipart/form-data" } });
     },
     onSuccess: () => {
-      toast.success("Signature added");
+      toast.success(editingId ? "Signature updated" : "Signature added");
       queryClient.invalidateQueries({ queryKey: ["settings", "signatures"] });
       setOpen(false);
       setDisplayName("");
@@ -70,7 +92,7 @@ export default function SignaturesPage() {
       setSignatureFile(null);
       setSealFile(null);
     },
-    onError: () => toast.error("Failed to add signature"),
+    onError: () => toast.error(editingId ? "Failed to update signature" : "Failed to add signature"),
   });
 
   const toggleMutation = useMutation({
@@ -92,7 +114,7 @@ export default function SignaturesPage() {
         title="Authority Signatures"
         subtitle="Signature images used on generated documents"
         breadcrumbs={[{ label: "Settings" }, { label: "Signatures" }]}
-        action={<Button onClick={() => setOpen(true)}>+ Add Signature</Button>}
+        action={<Button onClick={openCreate}>+ Add Signature</Button>}
       />
 
       {!signatures?.length && <EmptyState title="No signatures yet" />}
@@ -112,7 +134,10 @@ export default function SignaturesPage() {
                   <Switch checked={s.is_active} onCheckedChange={() => toggleMutation.mutate(s)} />
                   <Label className="text-xs">Active</Label>
                 </div>
-                <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>
+                  <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -121,7 +146,7 @@ export default function SignaturesPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Signature</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? "Edit Signature" : "Add Signature"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Role</Label>
@@ -131,10 +156,14 @@ export default function SignaturesPage() {
             </div>
             <div className="space-y-1.5"><Label>Display Name</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Dr. Mohammad Ali" /></div>
             <div className="space-y-1.5"><Label>Designation</Label><Input value={designation} onChange={(e) => setDesignation(e.target.value)} placeholder="Principal & Head" /></div>
-            <div className="space-y-1.5"><Label>Signature Image</Label><Input type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] ?? null)} /></div>
-            <div className="space-y-1.5"><Label>Seal Image</Label><Input type="file" accept="image/*" onChange={(e) => setSealFile(e.target.files?.[0] ?? null)} /></div>
+            <div className="space-y-1.5"><Label>Signature Image{editingId ? " (leave blank to keep current)" : ""}</Label><Input type="file" accept="image/*" onChange={(e) => setSignatureFile(e.target.files?.[0] ?? null)} /></div>
+            <div className="space-y-1.5"><Label>Seal Image{editingId ? " (leave blank to keep current)" : ""}</Label><Input type="file" accept="image/*" onChange={(e) => setSealFile(e.target.files?.[0] ?? null)} /></div>
           </div>
-          <DialogFooter><Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !displayName}>Add</Button></DialogFooter>
+          <DialogFooter>
+            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !displayName}>
+              {saveMutation.isPending ? "Saving..." : editingId ? "Save Changes" : "Add"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageWrapper>

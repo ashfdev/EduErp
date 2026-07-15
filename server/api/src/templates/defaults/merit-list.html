@@ -11,6 +11,12 @@
   th, td { border: 1px solid #999; padding: 5px; text-align: center; }
   th { background: {{institution.primary_color}}; color: #fff; }
   tr:nth-child(even) { background: #f7f7f7; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-image { max-height: 12mm; max-width: 40mm; display: block; margin: 0 auto; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation, .sig-label { font-size: 9px; color: #555; }
 </style>
 </head>
 <body>
@@ -26,5 +32,9 @@
       {{/each}}
     </tbody>
   </table>
+  <div class="signatures">
+    {{signatureBlock 1}}
+    {{signatureBlock 2}}
+  </div>
 </body>
 </html>
