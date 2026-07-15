@@ -497,6 +497,13 @@ async function main() {
       update: {},
       create: {
         id: `invoice-${student.id}-jan`,
+        // invoice_no is a required, unique business number (see
+        // generateInvoiceNo() in server/api) — seed data isn't routed
+        // through the real API, so a fixed, deterministic value derived
+        // from the same student.id used for the row's own id keeps this
+        // upsert idempotent without needing a DB round-trip to count
+        // existing rows the way the real generator does.
+        invoice_no: `INV-SEED-${student.id}`,
         student_id: student.id,
         academic_year_id: academicYear.id,
         category: "TUITION",
@@ -509,6 +516,16 @@ async function main() {
         year: 2026,
       },
     });
+  }
+
+  const defaultLeaveTypes = [
+    { id: "leave-type-casual", name: "Casual Leave", days_allowed: 10, is_paid: true },
+    { id: "leave-type-sick", name: "Sick Leave", days_allowed: 14, is_paid: true },
+    { id: "leave-type-earned", name: "Earned Leave", days_allowed: 15, is_paid: true },
+    { id: "leave-type-unpaid", name: "Unpaid Leave", days_allowed: 30, is_paid: false },
+  ];
+  for (const lt of defaultLeaveTypes) {
+    await prisma.leaveType.upsert({ where: { id: lt.id }, update: {}, create: lt });
   }
 
   console.log("Seed complete.");

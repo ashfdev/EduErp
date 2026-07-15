@@ -20,6 +20,7 @@ const GROUPS = [
       { href: "/settings/exam-types", label: "Exam Types" },
       { href: "/settings/fee-rules", label: "Fee Rules" },
       { href: "/settings/attendance-rules", label: "Attendance Rules" },
+      { href: "/settings/leave-types", label: "Leave Types" },
     ],
   },
   {
