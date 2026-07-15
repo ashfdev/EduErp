@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchContent } from "@/lib/content-api";
-import type { EventItem } from "@/lib/types";
+import type { EventItem, Institution } from "@/lib/types";
 import { MonthCalendar, eventColor, KNOWN_EVENT_TYPES } from "@/components/month-calendar";
 
 export default function EventsPage() {
@@ -11,6 +11,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [typeFilter, setTypeFilter] = useState<string>("");
+  const [workingDays, setWorkingDays] = useState<number[] | null>(null);
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -19,6 +20,10 @@ export default function EventsPage() {
   useEffect(() => {
     fetchContent<EventItem[]>("/events", { limit: "200", ...(typeFilter && { type: typeFilter }) }).then((d) => setEvents(d ?? []));
   }, [typeFilter]);
+
+  useEffect(() => {
+    fetchContent<Institution>("/institution").then((d) => setWorkingDays(d?.working_days ?? null));
+  }, []);
 
   const eventTypesPresent = useMemo(() => [...new Set(events.map((e) => e.type))].sort(), [events]);
 
@@ -74,7 +79,7 @@ export default function EventsPage() {
             <p className="font-medium">{monthLabel}</p>
             <button onClick={() => shiftMonth(1)} className="rounded-md border px-2 py-1 text-sm hover:bg-gray-50">{t("next")}</button>
           </div>
-          <MonthCalendar year={cursor.year} month={cursor.month} events={events} />
+          <MonthCalendar year={cursor.year} month={cursor.month} events={events} workingDays={workingDays ?? undefined} />
           <div className="flex flex-wrap gap-3 pt-1 text-xs text-gray-600">
             {(eventTypesPresent.length ? eventTypesPresent : KNOWN_EVENT_TYPES).map((et) => (
               <span key={et} className="flex items-center gap-1">

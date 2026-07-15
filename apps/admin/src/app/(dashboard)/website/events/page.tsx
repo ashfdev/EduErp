@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { EVENT_TYPES } from "@education-erp/types";
 import { api } from "@/lib/api";
 
 interface EventItem {
@@ -78,7 +79,15 @@ export default function EventsPage() {
               <div className="space-y-1.5"><Label>Date From</Label><Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Date To (optional)</Label><Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></div>
             </div>
-            <div className="space-y-1.5"><Label>Type</Label><Input value={type} onChange={(e) => setType(e.target.value)} /></div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EVENT_TYPES.map((et) => <SelectItem key={et} value={et}>{et}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button disabled={!name || !dateFrom || createMutation.isPending} onClick={() => createMutation.mutate()}>Add Event</Button>

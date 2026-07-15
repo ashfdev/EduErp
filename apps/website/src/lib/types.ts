@@ -18,6 +18,7 @@ export interface Institution {
   vision_text: string | null;
   principal_name: string | null;
   principal_designation: string | null;
+  working_days: number[];
 }
 
 export interface Slider {

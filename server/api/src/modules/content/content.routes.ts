@@ -200,14 +200,18 @@ contentRouter.get(
   "/institution",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("institution"), CONTENT_CACHE_TTL_SECONDS, async () => {
-      const [profile, config] = await Promise.all([
+      const [profile, config, attendanceRules] = await Promise.all([
         prisma.institutionProfile.findUnique({ where: { id: "singleton" } }),
         prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),
+        prisma.attendanceRules.findUnique({ where: { id: "singleton" } }),
       ]);
       if (!profile) return null;
       return {
         type: profile.type,
         has_semesters: config?.has_semesters ?? false,
+        // Sat-Thu default (Friday off) — matches the same fallback the
+        // routine auto-generator uses when this hasn't been explicitly set.
+        working_days: (attendanceRules?.working_days as number[] | null) ?? [0, 1, 2, 3, 4, 6],
         name_en: profile.name_en,
         name_bn: profile.name_bn,
         tagline_en: profile.tagline_en,
