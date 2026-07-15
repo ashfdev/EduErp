@@ -3,10 +3,13 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
 import { computeClassResults } from "../results/results.routes";
 import { sendNotification } from "../../services/notification.service";
+import { sendSms } from "../../services/sms.service";
 import { reqParam } from "../../lib/req-param";
-import { notFound } from "../../lib/errors";
+import { notFound, badRequest } from "../../lib/errors";
+import { ANALYTICS_MESSAGE_ROLES } from "../../lib/roles";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -217,49 +220,131 @@ analyticsRouter.get(
   }),
 );
 
+interface RiskResult {
+  student_id: string;
+  name_en: string;
+  student_uid: string;
+  father_phone: string | null;
+  class_name: string | null;
+  section_name: string | null;
+  attendance_percentage: number | null;
+  days_overdue: number;
+  total_due: number;
+  risk_score: number;
+}
+
+// Shared by the list route and the message-draft route (Phase 64) so a
+// guardian's draft message always reflects the exact same numbers the
+// admin saw in the list, computed once, not two slightly-different ways.
+async function computeStudentRisk(
+  s: { id: string; name_en: string; student_uid: string; father_phone: string | null; current_class: { name_en: string } | null; current_section: { name: string } | null },
+  minAttendance: number,
+): Promise<RiskResult | null> {
+  const now = new Date();
+  const [present, total] = await Promise.all([
+    prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT", status: "PRESENT" } }),
+    prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT" } }),
+  ]);
+  const attendancePct = total ? (present / total) * 100 : null;
+
+  const overdueInvoices = await prisma.invoice.findMany({ where: { student_id: s.id, status: { notIn: ["PAID", "WAIVED"] }, due_date: { lt: now } } });
+  const maxDaysOverdue = overdueInvoices.reduce((max, inv) => Math.max(max, Math.floor((now.getTime() - inv.due_date.getTime()) / (1000 * 60 * 60 * 24))), 0);
+  const totalDue = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+
+  const lowAttendance = attendancePct !== null && attendancePct < minAttendance;
+  const longOverdue = maxDaysOverdue > 30;
+  if (!lowAttendance && !longOverdue) return null;
+
+  const attendanceRisk = attendancePct !== null ? Math.max(0, minAttendance - attendancePct) : 0;
+  const dueRisk = Math.min(50, maxDaysOverdue / 2);
+  const riskScore = Math.round(attendanceRisk + dueRisk);
+
+  return {
+    student_id: s.id,
+    name_en: s.name_en,
+    student_uid: s.student_uid,
+    father_phone: s.father_phone,
+    class_name: s.current_class?.name_en ?? null,
+    section_name: s.current_section?.name ?? null,
+    attendance_percentage: attendancePct !== null ? Math.round(attendancePct * 10) / 10 : null,
+    days_overdue: maxDaysOverdue,
+    total_due: Math.round(totalDue * 100) / 100,
+    risk_score: riskScore,
+  };
+}
+
 analyticsRouter.get(
   "/defaulters-risk",
-  asyncHandler(async (_req, res) => {
-    const students = await prisma.student.findMany({ where: { deleted_at: null, status: "ACTIVE" }, include: { current_class: true } });
+  authorize(ANALYTICS_MESSAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional() }).parse(req.query);
+    const students = await prisma.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        ...(query.class_id && { current_class_id: query.class_id }),
+        ...(query.section_id && { current_section_id: query.section_id }),
+      },
+      include: { current_class: true, current_section: true },
+    });
     const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     const minAttendance = rules?.min_attendance_percentage ?? 75;
-    const now = new Date();
 
-    const results: { student_id: string; name_en: string; student_uid: string; class_name: string | null; attendance_percentage: number | null; days_overdue: number; total_due: number; risk_score: number }[] = [];
-
+    const results: RiskResult[] = [];
     for (const s of students) {
-      const [present, total] = await Promise.all([
-        prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT", status: "PRESENT" } }),
-        prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT" } }),
-      ]);
-      const attendancePct = total ? (present / total) * 100 : null;
-
-      const overdueInvoices = await prisma.invoice.findMany({ where: { student_id: s.id, status: { notIn: ["PAID", "WAIVED"] }, due_date: { lt: now } } });
-      const maxDaysOverdue = overdueInvoices.reduce((max, inv) => Math.max(max, Math.floor((now.getTime() - inv.due_date.getTime()) / (1000 * 60 * 60 * 24))), 0);
-      const totalDue = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
-
-      const lowAttendance = attendancePct !== null && attendancePct < minAttendance;
-      const longOverdue = maxDaysOverdue > 30;
-      if (!lowAttendance && !longOverdue) continue;
-
-      const attendanceRisk = attendancePct !== null ? Math.max(0, minAttendance - attendancePct) : 0;
-      const dueRisk = Math.min(50, maxDaysOverdue / 2);
-      const riskScore = Math.round(attendanceRisk + dueRisk);
-
-      results.push({
-        student_id: s.id,
-        name_en: s.name_en,
-        student_uid: s.student_uid,
-        class_name: s.current_class?.name_en ?? null,
-        attendance_percentage: attendancePct !== null ? Math.round(attendancePct * 10) / 10 : null,
-        days_overdue: maxDaysOverdue,
-        total_due: Math.round(totalDue * 100) / 100,
-        risk_score: riskScore,
-      });
+      const risk = await computeStudentRisk(s, minAttendance);
+      if (risk) results.push(risk);
     }
 
     results.sort((a, b) => b.risk_score - a.risk_score);
     res.json({ success: true, data: results });
+  }),
+);
+
+analyticsRouter.get(
+  "/defaulters-risk/:student_id/message-draft",
+  authorize(ANALYTICS_MESSAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "student_id");
+    const student = await prisma.student.findFirst({
+      where: { id: studentId, deleted_at: null },
+      include: { current_class: true, current_section: true },
+    });
+    if (!student) throw notFound("Student not found");
+
+    const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    const minAttendance = rules?.min_attendance_percentage ?? 75;
+    const risk = await computeStudentRisk(student, minAttendance);
+    if (!risk) throw badRequest("This student is not currently flagged as at-risk");
+
+    const reasons: string[] = [];
+    if (risk.attendance_percentage !== null && risk.attendance_percentage < minAttendance) {
+      reasons.push(`attendance is ${risk.attendance_percentage}%`);
+    }
+    if (risk.days_overdue > 30) {
+      reasons.push(`fees are ${risk.days_overdue} days overdue (৳${risk.total_due} due)`);
+    }
+
+    const message = `Dear Guardian, we'd like to inform you that ${student.name_en}'s ${reasons.join(" and ")}. Please contact the school office at your earliest convenience.`;
+    res.json({ success: true, data: { message, father_phone: student.father_phone } });
+  }),
+);
+
+analyticsRouter.post(
+  "/defaulters-risk/:student_id/send-message",
+  authorize(ANALYTICS_MESSAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "student_id");
+    const body = z.object({ message: z.string().min(1).max(640) }).parse(req.body);
+    const student = await prisma.student.findFirst({ where: { id: studentId, deleted_at: null }, select: { father_phone: true } });
+    if (!student) throw notFound("Student not found");
+    if (!student.father_phone) throw notFound("This student has no guardian phone on file");
+
+    // Plain sendSms — not the templated sendNotification() path — since
+    // this is an ad-hoc, admin-edited message, not one of the fixed
+    // NotificationTrigger templates.
+    await sendSms(student.father_phone, body.message);
+    res.json({ success: true, data: { sent: true } });
   }),
 );
 
@@ -414,6 +499,7 @@ analyticsRouter.get(
 
 analyticsRouter.post(
   "/defaulters-risk/:student_id/remind",
+  authorize(ANALYTICS_MESSAGE_ROLES),
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
     const student = await prisma.student.findFirst({

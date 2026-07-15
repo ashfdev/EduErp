@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
   LineChart, Line, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -37,32 +35,15 @@ interface Notice {
   audience: string;
   created_at: string;
 }
-interface RiskStudent {
-  student_id: string;
-  name_en: string;
-  student_uid: string;
-  class_name: string | null;
-  attendance_percentage: number | null;
-  days_overdue: number;
-  total_due: number;
-  risk_score: number;
-}
 interface EventItem {
   id: string;
   name: string;
   date_from: string;
 }
 
-function riskColor(score: number) {
-  if (score >= 40) return "text-red-600";
-  if (score >= 20) return "text-orange-600";
-  return "text-yellow-600";
-}
-
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const t = useTranslations("dashboard");
-  const [smsSentIds, setSmsSentIds] = useState<string[]>([]);
 
   const { data: overview } = useQuery<Overview>({ queryKey: ["analytics", "overview"], queryFn: async () => (await api.get("/api/analytics/overview")).data.data });
   const { data: trend } = useQuery<AttendanceTrend>({ queryKey: ["analytics", "attendance-trend"], queryFn: async () => (await api.get("/api/analytics/attendance-trend")).data.data });
@@ -84,22 +65,7 @@ export default function DashboardPage() {
     enabled: !!activeYearId,
   });
 
-  const { data: riskStudents } = useQuery<RiskStudent[]>({ queryKey: ["analytics", "defaulters-risk"], queryFn: async () => (await api.get("/api/analytics/defaulters-risk")).data.data });
   const { data: events } = useQuery<EventItem[]>({ queryKey: ["website", "events", "upcoming"], queryFn: async () => (await api.get("/api/website/events")).data.data });
-
-  const smsMutation = useMutation({
-    mutationFn: (studentId: string) => api.post(`/api/analytics/defaulters-risk/${studentId}/remind`),
-    onSuccess: () => toast.success(t("reminderSent")),
-    onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("reminderFailed");
-      toast.error(message);
-    },
-  });
-
-  function sendReminder(studentId: string) {
-    setSmsSentIds((prev) => [...prev, studentId]);
-    smsMutation.mutate(studentId);
-  }
 
   const trendData = trend?.labels.map((label, i) => ({ label, present: trend.present_percentage[i] })) ?? [];
   const feeData = feeCollection?.daily.map((d) => ({ date: d.date.slice(5), amount: d.amount })) ?? [];
@@ -214,36 +180,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Row 4 — At-Risk Students */}
-      <Card>
-        <CardContent className="pt-6">
-          <p className="mb-2 font-medium">{t("atRiskStudents")}</p>
-          {!riskStudents?.length && <EmptyState title={t("noAtRiskStudents")} />}
-          {!!riskStudents?.length && (
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">{t("colStudent")}</th><th className="p-2">{t("colClass")}</th><th className="p-2">{t("colAttendance")}</th><th className="p-2">{t("colDaysOverdue")}</th><th className="p-2">{t("colDue")}</th><th className="p-2">{t("colRisk")}</th><th className="p-2">{t("colActions")}</th></tr></thead>
-              <tbody>
-                {riskStudents.slice(0, 10).map((r) => (
-                  <tr key={r.student_id} className="border-b">
-                    <td className="p-2">{r.name_en} <span className="font-mono text-xs text-muted-foreground">{r.student_uid}</span></td>
-                    <td className="p-2">{r.class_name ?? "-"}</td>
-                    <td className="p-2">{r.attendance_percentage ?? "-"}%</td>
-                    <td className="p-2">{r.days_overdue}</td>
-                    <td className="p-2">৳{r.total_due}</td>
-                    <td className={`p-2 font-semibold ${riskColor(r.risk_score)}`}>{r.risk_score}</td>
-                    <td className="p-2">
-                      <Button size="sm" variant="outline" disabled={smsSentIds.includes(r.student_id)} onClick={() => sendReminder(r.student_id)}>
-                        {smsSentIds.includes(r.student_id) ? t("sent") : t("smsGuardian")}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Row 5 — Events + Quick Actions + System Status */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
@@ -266,6 +202,7 @@ export default function DashboardPage() {
             <Link href="/attendance/mark"><Button variant="outline" className="w-full justify-start">{t("markAttendance")}</Button></Link>
             <Link href="/fees/collect"><Button variant="outline" className="w-full justify-start">{t("collectFee")}</Button></Link>
             <Link href="/website/notices"><Button variant="outline" className="w-full justify-start">{t("postNotice")}</Button></Link>
+            <Link href="/students/at-risk"><Button variant="outline" className="w-full justify-start">{t("viewAtRiskStudents")}</Button></Link>
           </CardContent>
         </Card>
         <Card>

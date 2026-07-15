@@ -35,6 +35,13 @@ export const PAYROLL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUN
 export const LIBRARY_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "LIBRARIAN"];
 export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "TRANSPORT_MANAGER"];
 export const HOSTEL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "HOSTEL_MANAGER"];
+// Gates the at-risk-students list and guardian-messaging routes — mixes
+// financial due data (accounts' domain) with a dropout-risk judgment
+// (leadership's domain), confirmed with the product owner as leadership +
+// accounts only, not opened to every staff role the way analytics.routes.ts's
+// other routes currently are (a known, separately-flagged gap — see the
+// module's own comment).
+export const ANALYTICS_MESSAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"];
 export const PORTAL_ROLES: UserRole[] = ["STUDENT", "GUARDIAN"];
 
 // Every staff-facing role — i.e. every role except the two portal-only ones.
