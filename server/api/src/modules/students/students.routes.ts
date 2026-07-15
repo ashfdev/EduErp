@@ -51,6 +51,12 @@ studentsRouter.get(
         section_id: z.string().optional(),
         status: z.string().optional(),
         gender: z.string().optional(),
+        // Student has no direct FK to Program/Department — resolved via its
+        // current Class's own program_id / program.department_id relation
+        // (university-mode filtering; Section stays a first-class filter
+        // for university too, layered alongside these, not replaced).
+        program_id: z.string().optional(),
+        department_id: z.string().optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(20),
       })
@@ -62,6 +68,8 @@ studentsRouter.get(
       ...(query.section_id && { current_section_id: query.section_id }),
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
+      ...(query.program_id && { current_class: { program_id: query.program_id } }),
+      ...(query.department_id && { current_class: { program: { department_id: query.department_id } } }),
       ...(query.search && {
         OR: [
           { name_en: { contains: query.search, mode: "insensitive" as const } },

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useInstitution } from "@/hooks/use-institution";
 
 interface StudentRow {
   id: string;
@@ -23,37 +24,68 @@ interface StudentRow {
 interface ClassOption {
   id: string;
   name_en: string;
+  sections?: { id: string; name: string }[];
+}
+interface ProgramOption {
+  id: string;
+  name_en: string;
+}
+interface DepartmentOption {
+  id: string;
+  name_en: string;
 }
 
 export default function StudentsPage() {
   const t = useTranslations("students");
+  const { type, terms } = useInstitution();
+  const isUniversity = type === "UNIVERSITY";
+
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState<string>("");
+  const [sectionId, setSectionId] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+  const [gender, setGender] = useState<string>("");
+  const [programId, setProgramId] = useState<string>("");
+  const [departmentId, setDepartmentId] = useState<string>("");
   const [page, setPage] = useState(1);
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
+  const { data: programs } = useQuery<ProgramOption[]>({
+    queryKey: ["settings", "programs"],
+    queryFn: async () => (await api.get("/api/settings/programs")).data.data,
+    enabled: isUniversity,
+  });
+  const { data: departments } = useQuery<DepartmentOption[]>({
+    queryKey: ["settings", "departments"],
+    queryFn: async () => (await api.get("/api/settings/departments")).data.data,
+    enabled: isUniversity,
+  });
+
+  const selectedClass = classes?.find((c) => c.id === classId);
+
+  const filterParams = {
+    search: search || undefined,
+    class_id: classId || undefined,
+    section_id: sectionId || undefined,
+    status: status || undefined,
+    gender: gender || undefined,
+    program_id: isUniversity ? programId || undefined : undefined,
+    department_id: isUniversity ? departmentId || undefined : undefined,
+  };
 
   const { data } = useQuery({
-    queryKey: ["students", { search, classId, page }],
-    queryFn: async () =>
-      (
-        await api.get("/api/students", {
-          params: { search: search || undefined, class_id: classId || undefined, page, limit: 20 },
-        })
-      ).data,
+    queryKey: ["students", { ...filterParams, page }],
+    queryFn: async () => (await api.get("/api/students", { params: { ...filterParams, page, limit: 20 } })).data,
   });
 
   const students: StudentRow[] = data?.data ?? [];
   const meta = data?.meta;
 
   async function downloadExcel() {
-    const res = await api.get("/api/students/export", {
-      params: { search: search || undefined, class_id: classId || undefined },
-      responseType: "blob",
-    });
+    const res = await api.get("/api/students/export", { params: filterParams, responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;
@@ -81,13 +113,63 @@ export default function StudentsPage() {
         }
       />
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Input placeholder={t("searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-        <Select value={classId || "all"} onValueChange={(v) => setClassId(v === "all" ? "" : v)}>
+
+        {isUniversity && (
+          <>
+            <Select value={departmentId || "all"} onValueChange={(v) => setDepartmentId(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-48"><SelectValue placeholder={t("allDepartments")} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allDepartments")}</SelectItem>
+                {departments?.map((d) => <SelectItem key={d.id} value={d.id}>{d.name_en}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={programId || "all"} onValueChange={(v) => setProgramId(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-48"><SelectValue placeholder={t("allPrograms")} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("allPrograms")}</SelectItem>
+                {programs?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name_en}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setSectionId(""); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder={t("allClasses")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("allClasses")}</SelectItem>
             {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={sectionId || "all"} onValueChange={(v) => setSectionId(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-40"><SelectValue placeholder={t("allSections")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allSections")}</SelectItem>
+            {selectedClass?.sections?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-36"><SelectValue placeholder={t("allStatus")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allStatus")}</SelectItem>
+            <SelectItem value="ACTIVE">{t("statusActive")}</SelectItem>
+            <SelectItem value="INACTIVE">{t("statusInactive")}</SelectItem>
+            <SelectItem value="TRANSFERRED">{t("statusTransferred")}</SelectItem>
+            <SelectItem value="GRADUATED">{t("statusGraduated")}</SelectItem>
+            <SelectItem value="EXPELLED">{t("statusExpelled")}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={gender || "all"} onValueChange={(v) => setGender(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-32"><SelectValue placeholder={t("allGender")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allGender")}</SelectItem>
+            <SelectItem value="MALE">{t("genderMale")}</SelectItem>
+            <SelectItem value="FEMALE">{t("genderFemale")}</SelectItem>
+            <SelectItem value="OTHER">{t("genderOther")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -101,7 +183,7 @@ export default function StudentsPage() {
               <tr className="border-b text-left text-muted-foreground">
                 <th className="p-2">{t("colUid")}</th>
                 <th className="p-2">{t("colName")}</th>
-                <th className="p-2">{t("colClassSection")}</th>
+                <th className="p-2">{terms.term_class} / {terms.term_section}</th>
                 <th className="p-2">{t("colRoll")}</th>
                 <th className="p-2">{t("colGuardianPhone")}</th>
                 <th className="p-2">{t("colStatus")}</th>
