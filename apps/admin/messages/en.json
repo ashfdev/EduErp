@@ -110,6 +110,7 @@
     "systemStatus": "System Status",
     "activeExams": "Active Exams: {count}",
     "publishedResults": "Published Results: {count}",
+    "latestPublishedExam": "Latest: {name} ({date})",
     "overdueInvoices": "Overdue Invoices: {count}",
     "overdueLibraryBooks": "Overdue Library Books: {count}",
     "myTeachingOverview": "My Teaching Overview",

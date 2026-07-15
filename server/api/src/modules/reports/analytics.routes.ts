@@ -48,6 +48,7 @@ analyticsRouter.get(
       overdueInvoicesCount,
       activeExams, publishedResults, upcomingEvents,
       booksIssued, overdueIssues,
+      latestPublishedExam,
     ] = await Promise.all([
       prisma.student.count({ where: { deleted_at: null } }),
       prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
@@ -67,6 +68,11 @@ analyticsRouter.get(
       prisma.event.count({ where: { date_from: { gte: now } } }),
       prisma.bookIssue.count({ where: { status: "ISSUED" } }),
       prisma.bookIssue.count({ where: { status: "ISSUED", due_date: { lt: now } } }),
+      prisma.resultPublication.findFirst({
+        where: { is_published: true },
+        orderBy: { published_at: "desc" },
+        select: { published_at: true, exam: { select: { name: true } } },
+      }),
     ]);
 
     const totalMarked = studentsPresentToday + studentsAbsentToday;
@@ -90,7 +96,12 @@ analyticsRouter.get(
           total_outstanding: Math.round(totalOutstanding * 100) / 100,
           overdue_invoices: overdueInvoicesCount,
         },
-        academic: { active_exams: activeExams, published_results: publishedResults, upcoming_events: upcomingEvents },
+        academic: {
+          active_exams: activeExams,
+          published_results: publishedResults,
+          upcoming_events: upcomingEvents,
+          latest_published_exam: latestPublishedExam ? { name: latestPublishedExam.exam.name, published_at: latestPublishedExam.published_at } : null,
+        },
         library: { books_issued: booksIssued, overdue_issues: overdueIssues },
       },
     });

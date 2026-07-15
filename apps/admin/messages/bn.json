@@ -110,6 +110,7 @@
     "systemStatus": "সিস্টেমের অবস্থা",
     "activeExams": "চলমান পরীক্ষা: {count}",
     "publishedResults": "প্রকাশিত ফলাফল: {count}",
+    "latestPublishedExam": "সর্বশেষ: {name} ({date})",
     "overdueInvoices": "বকেয়া চালান: {count}",
     "overdueLibraryBooks": "বকেয়া লাইব্রেরি বই: {count}",
     "myTeachingOverview": "আমার শিক্ষকতার সারসংক্ষেপ",

@@ -51,7 +51,20 @@ interface StudentProfile {
   subjects: { subject_id: string; subject_name_en: string; subject_code: string; is_compulsory: boolean; is_inherited: boolean; assigned_teacher: { name_en: string } | null }[];
   attendance: { current_year_summary: { total_days: number; present: number; absent: number; late: number; percentage: number | null } };
   results: { id: string; exam: { name: string }; subject: { name_en: string }; marks_total?: number | null; grade_letter?: string | null }[];
-  fees: { invoices: { id: string; description: string; amount_due: number; amount_paid: number; fine_amount: number; status: string; due_date: string }[]; outstanding_total: number; paid_total: number };
+  fees: {
+    invoices: {
+      id: string;
+      description: string;
+      amount_due: number;
+      amount_paid: number;
+      fine_amount: number;
+      status: string;
+      due_date: string;
+      payments?: { id: string; receipt_no: string | null; gateway: string; amount: number; paid_at: string | null; notes: string | null }[];
+    }[];
+    outstanding_total: number;
+    paid_total: number;
+  };
 }
 
 export default function StudentProfilePage() {
@@ -242,13 +255,43 @@ export default function StudentProfilePage() {
               <table className="w-full text-sm">
                 <tbody>
                   {fees.invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b">
-                      <td className="p-2">{inv.description}</td>
-                      <td className="p-2">৳{inv.amount_due}</td>
-                      <td className="p-2">৳{inv.amount_paid}</td>
-                      <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
-                      <td className="p-2"><StatusBadge status={inv.status} /></td>
-                    </tr>
+                    <>
+                      <tr key={inv.id} className="border-b">
+                        <td className="p-2">{inv.description}</td>
+                        <td className="p-2">৳{inv.amount_due}</td>
+                        <td className="p-2">৳{inv.amount_paid}</td>
+                        <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
+                        <td className="p-2"><StatusBadge status={inv.status} /></td>
+                      </tr>
+                      {!!inv.payments?.length && (
+                        <tr key={`${inv.id}-payments`} className="border-b bg-muted/30">
+                          <td colSpan={5} className="px-2 pb-2">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-left text-muted-foreground">
+                                  <th className="py-1 pl-4">Receipt No</th>
+                                  <th className="py-1">Method</th>
+                                  <th className="py-1">Amount</th>
+                                  <th className="py-1">Date</th>
+                                  <th className="py-1">Notes</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {inv.payments.map((p) => (
+                                  <tr key={p.id}>
+                                    <td className="py-1 pl-4 font-mono">{p.receipt_no ?? "—"}</td>
+                                    <td className="py-1">{p.gateway.replace(/_/g, " ")}</td>
+                                    <td className="py-1">৳{p.amount}</td>
+                                    <td className="py-1">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
+                                    <td className="py-1">{p.notes ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>

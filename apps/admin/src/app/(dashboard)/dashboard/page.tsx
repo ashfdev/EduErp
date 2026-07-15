@@ -17,7 +17,7 @@ interface Overview {
   students: { total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null };
   staff: { total: number; active: number; on_leave_today: number; present_today: number };
   finance: { today_collection: number; this_month_collection: number; total_outstanding: number; overdue_invoices: number };
-  academic: { active_exams: number; published_results: number; upcoming_events: number };
+  academic: { active_exams: number; published_results: number; upcoming_events: number; latest_published_exam: { name: string; published_at: string | null } | null };
   library: { books_issued: number; overdue_issues: number };
 }
 interface AttendanceTrend {
@@ -274,6 +274,14 @@ export default function DashboardPage() {
             <div className="space-y-1 text-sm text-muted-foreground">
               <p>{t("activeExams", { count: overview?.academic.active_exams ?? 0 })}</p>
               <p>{t("publishedResults", { count: overview?.academic.published_results ?? 0 })}</p>
+              {overview?.academic.latest_published_exam && (
+                <p className="text-xs">
+                  {t("latestPublishedExam", {
+                    name: overview.academic.latest_published_exam.name,
+                    date: overview.academic.latest_published_exam.published_at ? new Date(overview.academic.latest_published_exam.published_at).toLocaleDateString() : "",
+                  })}
+                </p>
+              )}
               <p>{t("overdueInvoices", { count: overview?.finance.overdue_invoices ?? 0 })}</p>
               <p>{t("overdueLibraryBooks", { count: overview?.library.overdue_issues ?? 0 })}</p>
             </div>
