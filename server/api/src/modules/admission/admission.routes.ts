@@ -31,6 +31,7 @@ import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { assertSectionCapacity } from "../../lib/section-capacity";
 import { env } from "../../lib/env";
 import { getPaymentAdapter } from "../../services/payment";
 import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
@@ -743,6 +744,7 @@ admissionRouter.post(
       where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] }, id: { not: application.id } },
     });
     if (takenSeats >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
+    if (body.section_id) await assertSectionCapacity(body.section_id, req.body.override === true);
 
     const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
     const personalInfo = application.personal_info as Record<string, unknown>;

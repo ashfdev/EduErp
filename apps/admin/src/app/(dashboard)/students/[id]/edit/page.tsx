@@ -134,9 +134,10 @@ export default function EditStudentPage() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (override?: boolean) =>
       api.put(`/api/students/${id}`, {
         ...form,
+        override,
         name_bn: form.name_bn || undefined,
         date_of_birth: form.date_of_birth || undefined,
         religion: form.religion || undefined,
@@ -159,8 +160,12 @@ export default function EditStudentPage() {
       router.push(`/students/${id}`);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update student";
-      toast.error(message);
+      const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
+      if (error?.code === "SECTION_AT_CAPACITY" && confirm(error.message)) {
+        saveMutation.mutate(true);
+        return;
+      }
+      toast.error(error?.message ?? "Failed to update student");
     },
   });
 
@@ -254,7 +259,7 @@ export default function EditStudentPage() {
             <Button
               type="button"
               disabled={saveMutation.isPending || !form.name_en || !form.father_phone || !form.current_class_id}
-              onClick={() => saveMutation.mutate()}
+              onClick={() => saveMutation.mutate(undefined)}
             >
               {saveMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>

@@ -15,6 +15,7 @@ import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { assertSectionCapacity } from "../../lib/section-capacity";
 import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
@@ -273,6 +274,7 @@ studentsRouter.post(
   authorize(STUDENT_CRUD_ROLES),
   asyncHandler(async (req, res) => {
     const body = createStudentSchema.parse(req.body);
+    await assertSectionCapacity(body.current_section_id, req.body.override === true);
 
     const { student, studentLogin, guardianLogin, student_uid } = await prisma.$transaction(async (tx) => {
       let guardianId = body.guardian_id ?? null;
@@ -385,6 +387,8 @@ studentsRouter.put(
     if (!existing) throw notFound("Student not found");
 
     const classChanged = fields.current_class_id && fields.current_class_id !== existing.current_class_id;
+    const sectionChanged = fields.current_section_id && fields.current_section_id !== existing.current_section_id;
+    if (sectionChanged) await assertSectionCapacity(fields.current_section_id, req.body.override === true);
 
     const updated = await prisma.$transaction(async (tx) => {
       if (classChanged && existing.current_class_id) {
@@ -443,6 +447,9 @@ studentsRouter.post(
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
+    if (body.new_section_id && body.new_section_id !== existing.current_section_id) {
+      await assertSectionCapacity(body.new_section_id, req.body.override === true);
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.studentAcademicHistory.create({
@@ -542,6 +549,18 @@ studentsRouter.post(
         const percentage = totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 100;
         if (percentage < attendanceRules.min_attendance_percentage) {
           skipped.push({ id: studentId, reason: `Attendance below ${attendanceRules.min_attendance_percentage}%` });
+          continue;
+        }
+      }
+
+      // Re-checked per student, not once for the whole batch — each commit
+      // below changes the target section's count, so a capacity breach can
+      // start partway through a large batch, not just at the very first row.
+      if (body.new_section_id && body.new_section_id !== student.current_section_id) {
+        try {
+          await assertSectionCapacity(body.new_section_id, req.body.override === true);
+        } catch {
+          skipped.push({ id: studentId, reason: "Target section is at or over capacity" });
           continue;
         }
       }

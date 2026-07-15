@@ -95,17 +95,25 @@ export default function NewStudentPage() {
   const optional = subjects?.filter((s) => s.is_optional) ?? [];
 
   const createMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (override?: boolean) =>
       api.post("/api/students", {
         ...form,
         date_of_birth: form.date_of_birth || undefined,
         selected_optional_subject_ids: selectedOptional,
+        override,
       }),
     onSuccess: (res) => {
       toast.success(`Student created — ID: ${res.data.data.student_uid}`);
       router.push(`/students/${res.data.data.id}`);
     },
-    onError: () => toast.error("Failed to create student — check required fields"),
+    onError: (err: unknown) => {
+      const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
+      if (error?.code === "SECTION_AT_CAPACITY" && confirm(error.message)) {
+        createMutation.mutate(true);
+        return;
+      }
+      toast.error(error?.message ?? "Failed to create student — check required fields");
+    },
   });
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
@@ -260,7 +268,7 @@ export default function NewStudentPage() {
             {step < STEPS.length - 1 ? (
               <Button type="button" disabled={!canProceed} onClick={() => setStep((s) => s + 1)}>Next</Button>
             ) : (
-              <Button type="button" disabled={createMutation.isPending} onClick={() => createMutation.mutate()}>
+              <Button type="button" disabled={createMutation.isPending} onClick={() => createMutation.mutate(undefined)}>
                 {createMutation.isPending ? "Creating..." : "Create Student"}
               </Button>
             )}
