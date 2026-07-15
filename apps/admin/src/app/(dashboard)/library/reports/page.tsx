@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface OverdueIssue {
@@ -22,9 +22,23 @@ export default function LibraryReportsPage() {
   const { data: overdue } = useQuery<OverdueIssue[]>({ queryKey: ["library", "reports", "overdue"], queryFn: async () => (await api.get("/api/library/reports/overdue")).data.data });
   const { data: fineReport } = useQuery<FineReport>({ queryKey: ["library", "reports", "fine"], queryFn: async () => (await api.get("/api/library/reports/fine-report")).data.data });
 
+  async function downloadOverdueExcel() {
+    const res = await api.get("/api/library/issues/export", { params: { overdue: "true" }, responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Overdue_Books.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageWrapper>
-      <PageHeader title="Library Reports" breadcrumbs={[{ label: "Library", href: "/library" }, { label: "Reports" }]} />
+      <PageHeader
+        title="Library Reports"
+        breadcrumbs={[{ label: "Library", href: "/library" }, { label: "Reports" }]}
+        action={<Button variant="outline" onClick={downloadOverdueExcel}>Export Overdue (Excel)</Button>}
+      />
       <Tabs defaultValue="overdue">
         <TabsList>
           <TabsTrigger value="overdue">Overdue Books</TabsTrigger>

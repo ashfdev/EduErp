@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../../lib/prisma";
@@ -75,6 +76,70 @@ hrStaffRouter.get(
     ]);
 
     res.json({ success: true, data: items, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
+  }),
+);
+
+// Registered before "/:id" — otherwise Express would match "export" as an id.
+hrStaffRouter.get(
+  "/export",
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        search: z.string().optional(),
+        department_id: z.string().optional(),
+        employment_type: z.string().optional(),
+        is_active: z.string().optional(),
+      })
+      .parse(req.query);
+
+    const where = {
+      deleted_at: null,
+      ...(query.department_id && { department_id: query.department_id }),
+      ...(query.employment_type && { employment_type: query.employment_type as never }),
+      ...(query.is_active !== undefined && { is_active: query.is_active === "true" }),
+      ...(query.search && {
+        OR: [
+          { name_en: { contains: query.search, mode: "insensitive" as const } },
+          { staff_uid: { contains: query.search, mode: "insensitive" as const } },
+        ],
+      }),
+    };
+
+    const staff = await prisma.staff.findMany({
+      where,
+      include: { department: { select: { name_en: true } }, user: { select: { role: true, phone: true, is_active: true } } },
+      orderBy: { created_at: "desc" },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Staff");
+    sheet.columns = [
+      { header: "Staff ID", key: "staff_uid", width: 16 },
+      { header: "Name", key: "name_en", width: 24 },
+      { header: "Designation", key: "designation", width: 20 },
+      { header: "Department", key: "department", width: 18 },
+      { header: "Role", key: "role", width: 16 },
+      { header: "Phone", key: "phone", width: 16 },
+      { header: "Employment Type", key: "employment_type", width: 16 },
+      { header: "Active", key: "is_active", width: 10 },
+    ];
+    for (const s of staff) {
+      sheet.addRow({
+        staff_uid: s.staff_uid,
+        name_en: s.name_en,
+        designation: s.designation,
+        department: s.department?.name_en ?? "",
+        role: s.user?.role ?? "",
+        phone: s.user?.phone ?? "",
+        employment_type: s.employment_type,
+        is_active: s.is_active ? "Yes" : "No",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="Staff.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   }),
 );
 

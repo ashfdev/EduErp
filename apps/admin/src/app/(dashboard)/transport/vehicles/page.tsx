@@ -35,6 +35,16 @@ export default function VehiclesPage() {
   const { data: vehicles } = useQuery<Vehicle[]>({ queryKey: ["transport", "vehicles"], queryFn: async () => (await api.get("/api/transport/vehicles")).data.data });
   const { data: routes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
 
+  async function downloadExcel() {
+    const res = await api.get("/api/transport/vehicles/export", { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Vehicles.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const createMutation = useMutation({
     mutationFn: () =>
       api.post("/api/transport/vehicles", {
@@ -73,7 +83,11 @@ export default function VehiclesPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Vehicles & Live Tracking" breadcrumbs={[{ label: "Transport", href: "/transport" }, { label: "Vehicles" }]} />
+      <PageHeader
+        title="Vehicles & Live Tracking"
+        breadcrumbs={[{ label: "Transport", href: "/transport" }, { label: "Vehicles" }]}
+        action={<Button variant="outline" onClick={downloadExcel}>Export Excel</Button>}
+      />
 
       <Card>
         <CardContent className="space-y-4 pt-6">

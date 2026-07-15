@@ -25,9 +25,28 @@ export default function HrStaffListPage() {
     queryFn: async () => (await api.get("/api/hr/staff", { params: { search: search || undefined, limit: 100 } })).data.data,
   });
 
+  async function downloadExcel() {
+    const res = await api.get("/api/hr/staff/export", { params: { search: search || undefined }, responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Staff.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageWrapper>
-      <PageHeader title="Staff" breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Staff" }]} action={<Link href="/hr/staff/new"><Button>+ Add Staff</Button></Link>} />
+      <PageHeader
+        title="Staff"
+        breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Staff" }]}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
+            <Link href="/hr/staff/new"><Button>+ Add Staff</Button></Link>
+          </div>
+        }
+      />
 
       <Input placeholder="Search by name or staff ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
 

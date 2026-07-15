@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -217,6 +218,49 @@ resultsRouter.get(
 );
 
 resultsRouter.get(
+  "/tabulation/:exam_id/:class_id/export",
+  authenticate,
+  authorize(MARK_VIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const classId = reqParam(req, "class_id");
+    const [subjects, klass, results] = await Promise.all([
+      prisma.subject.findMany({ where: { class_id: classId } }),
+      prisma.class.findUnique({ where: { id: classId } }),
+      computeClassResults(examId, classId),
+    ]);
+    const sorted = results.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Tabulation");
+    sheet.columns = [
+      { header: "Roll No", key: "roll_no", width: 10 },
+      { header: "Name", key: "name_en", width: 24 },
+      ...subjects.map((s) => ({ header: s.name_en, key: s.id, width: 14 })),
+      { header: "Total GPA", key: "total_gpa", width: 12 },
+      { header: "Grade", key: "overall_grade", width: 10 },
+      { header: "Position", key: "position", width: 10 },
+    ];
+    for (const r of sorted) {
+      const marksBySubject = Object.fromEntries(r.result.subjects.map((s) => [s.subject_id, s.marks_total]));
+      sheet.addRow({
+        roll_no: r.student.current_roll_no,
+        name_en: r.student.name_en,
+        ...marksBySubject,
+        total_gpa: r.result.total_gpa,
+        overall_grade: r.result.overall_grade_letter,
+        position: r.position,
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="Tabulation_${klass?.name_en ?? classId}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  }),
+);
+
+resultsRouter.get(
   "/reports/merit-list/:exam_id/:class_id",
   authenticate,
   authorize(MARK_VIEW_ROLES),
@@ -231,6 +275,38 @@ resultsRouter.get(
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
         .map((r) => ({ rank: r.position, roll_no: r.student.current_roll_no, name_en: r.student.name_en, student_uid: r.student.student_uid, total_gpa: r.result.total_gpa })),
     });
+  }),
+);
+
+resultsRouter.get(
+  "/reports/merit-list/:exam_id/:class_id/export",
+  authenticate,
+  authorize(MARK_VIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const classId = reqParam(req, "class_id");
+    const [klass, results] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId)]);
+    const merit = results
+      .filter((r) => !r.result.has_failed)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Merit List");
+    sheet.columns = [
+      { header: "Rank", key: "rank", width: 8 },
+      { header: "Roll No", key: "roll_no", width: 10 },
+      { header: "Name", key: "name_en", width: 24 },
+      { header: "Student ID", key: "student_uid", width: 18 },
+      { header: "Total GPA", key: "total_gpa", width: 12 },
+    ];
+    for (const r of merit) {
+      sheet.addRow({ rank: r.position, roll_no: r.student.current_roll_no, name_en: r.student.name_en, student_uid: r.student.student_uid, total_gpa: r.result.total_gpa });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="Merit_List_${klass?.name_en ?? classId}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
   }),
 );
 

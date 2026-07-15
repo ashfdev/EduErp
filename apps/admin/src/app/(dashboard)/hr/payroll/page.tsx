@@ -68,9 +68,23 @@ export default function PayrollPage() {
     a.click();
   }
 
+  async function downloadExcel() {
+    const res = await api.get("/api/hr/payroll/export", { params: { month, year }, responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Payroll_${month}_${year}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageWrapper>
-      <PageHeader title="Payroll" breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Payroll" }]} />
+      <PageHeader
+        title="Payroll"
+        breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Payroll" }]}
+        action={<Button variant="outline" onClick={downloadExcel}>Export Excel</Button>}
+      />
 
       <div className="flex items-end gap-3">
         <div><label className="text-sm">Month</label><Input type="number" min={1} max={12} value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-24" /></div>

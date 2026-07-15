@@ -49,6 +49,19 @@ export default function StudentsPage() {
   const students: StudentRow[] = data?.data ?? [];
   const meta = data?.meta;
 
+  async function downloadExcel() {
+    const res = await api.get("/api/students/export", {
+      params: { search: search || undefined, class_id: classId || undefined },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Students.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageWrapper>
       <PageHeader
@@ -57,6 +70,7 @@ export default function StudentsPage() {
         breadcrumbs={[{ label: t("title") }]}
         action={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={downloadExcel}>{t("exportExcel")}</Button>
             <Link href="/students/bulk-import">
               <Button variant="outline">{t("bulkImport")}</Button>
             </Link>

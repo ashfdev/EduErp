@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -74,9 +74,31 @@ export default function ExamResultsPage() {
     return (allStudents ?? []).filter((s) => s.name_en.toLowerCase().includes(q) || (s.roll_no ?? "").toLowerCase().includes(q));
   }, [allStudents, search]);
 
+  async function downloadExcel(kind: "tabulation" | "merit") {
+    const path = kind === "tabulation" ? `/api/results/tabulation/${exam_id}/${classId}/export` : `/api/results/reports/merit-list/${exam_id}/${classId}/export`;
+    const res = await api.get(path, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = kind === "tabulation" ? "Tabulation.xlsx" : "Merit_List.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <PageWrapper>
-      <PageHeader title="Exam Results" breadcrumbs={[{ label: "Results", href: "/results" }, { label: "Detail" }]} />
+      <PageHeader
+        title="Exam Results"
+        breadcrumbs={[{ label: "Results", href: "/results" }, { label: "Detail" }]}
+        action={
+          classId ? (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => downloadExcel("tabulation")}>Tabulation (Excel)</Button>
+              <Button variant="outline" onClick={() => downloadExcel("merit")}>Merit List (Excel)</Button>
+            </div>
+          ) : undefined
+        }
+      />
 
       <select className="w-64 rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => setClassId(e.target.value)}>
         <option value="">Select Class...</option>

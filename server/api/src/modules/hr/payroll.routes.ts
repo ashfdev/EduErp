@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -105,6 +106,60 @@ payrollRouter.get(
       orderBy: [{ year: "desc" }, { month: "desc" }],
     });
     res.json({ success: true, data: records });
+  }),
+);
+
+payrollRouter.get(
+  "/export",
+  authorize(PAYROLL_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ month: z.coerce.number().int().optional(), year: z.coerce.number().int().optional(), department_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
+    const records = await prisma.payrollRecord.findMany({
+      where: {
+        ...(query.month && { month: query.month }),
+        ...(query.year && { year: query.year }),
+        ...(query.status && { status: query.status as never }),
+        ...(query.department_id && { staff: { department_id: query.department_id } }),
+      },
+      include: { staff: { select: { name_en: true, staff_uid: true, department: { select: { name_en: true } } } } },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Payroll");
+    sheet.columns = [
+      { header: "Staff ID", key: "staff_uid", width: 16 },
+      { header: "Name", key: "name_en", width: 24 },
+      { header: "Department", key: "department", width: 18 },
+      { header: "Month", key: "month", width: 8 },
+      { header: "Year", key: "year", width: 8 },
+      { header: "Working Days", key: "working_days", width: 12 },
+      { header: "Present Days", key: "present_days", width: 12 },
+      { header: "Gross Salary", key: "gross_salary", width: 14 },
+      { header: "Deductions", key: "deductions", width: 12 },
+      { header: "Net Salary", key: "net_salary", width: 14 },
+      { header: "Status", key: "status", width: 12 },
+    ];
+    for (const r of records) {
+      sheet.addRow({
+        staff_uid: r.staff.staff_uid,
+        name_en: r.staff.name_en,
+        department: r.staff.department?.name_en ?? "",
+        month: r.month,
+        year: r.year,
+        working_days: r.working_days,
+        present_days: r.present_days,
+        gross_salary: r.gross_salary,
+        deductions: r.deductions,
+        net_salary: r.net_salary,
+        status: r.status,
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="Payroll.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   }),
 );
 

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import ExcelJS from "exceljs";
 import { parse } from "csv-parse/sync";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
@@ -86,6 +87,68 @@ studentsRouter.get(
       data: items,
       meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
     });
+  }),
+);
+
+// Registered before "/:id" — otherwise Express would match "export" as an id.
+studentsRouter.get(
+  "/export",
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        search: z.string().optional(),
+        class_id: z.string().optional(),
+        section_id: z.string().optional(),
+        status: z.string().optional(),
+        gender: z.string().optional(),
+      })
+      .parse(req.query);
+
+    const where = {
+      deleted_at: null,
+      ...(query.class_id && { current_class_id: query.class_id }),
+      ...(query.section_id && { current_section_id: query.section_id }),
+      ...(query.status && { status: query.status as never }),
+      ...(query.gender && { gender: query.gender as never }),
+      ...(query.search && {
+        OR: [
+          { name_en: { contains: query.search, mode: "insensitive" as const } },
+          { student_uid: { contains: query.search, mode: "insensitive" as const } },
+          { current_roll_no: { contains: query.search, mode: "insensitive" as const } },
+          { registration_no: { contains: query.search, mode: "insensitive" as const } },
+        ],
+      }),
+    };
+
+    const students = await prisma.student.findMany({ where, select: STUDENT_LIST_SELECT, orderBy: { created_at: "desc" } });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Students");
+    sheet.columns = [
+      { header: "Student ID", key: "student_uid", width: 18 },
+      { header: "Name", key: "name_en", width: 24 },
+      { header: "Roll No", key: "roll_no", width: 12 },
+      { header: "Class", key: "class_name", width: 16 },
+      { header: "Section", key: "section_name", width: 12 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Guardian Phone", key: "guardian_phone", width: 16 },
+    ];
+    for (const s of students) {
+      sheet.addRow({
+        student_uid: s.student_uid,
+        name_en: s.name_en,
+        roll_no: s.current_roll_no ?? "",
+        class_name: s.current_class?.name_en ?? "",
+        section_name: s.current_section?.name ?? "",
+        status: s.status,
+        guardian_phone: s.guardian?.phone ?? s.father_phone ?? "",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="Students.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   }),
 );
 

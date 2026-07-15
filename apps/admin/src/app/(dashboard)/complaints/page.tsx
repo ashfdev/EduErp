@@ -44,6 +44,16 @@ export default function ComplaintsPage() {
     queryFn: async () => (await api.get("/api/complaints")).data.data,
   });
 
+  async function downloadExcel() {
+    const res = await api.get("/api/complaints/export", { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Complaints.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/complaints", draft),
     onSuccess: () => {
@@ -73,7 +83,12 @@ export default function ComplaintsPage() {
         title="Complaints"
         subtitle="Raise or manage complaints and grievances"
         breadcrumbs={[{ label: "Complaints" }]}
-        action={<Button onClick={() => setOpen(true)}>+ Raise Complaint</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
+            <Button onClick={() => setOpen(true)}>+ Raise Complaint</Button>
+          </div>
+        }
       />
 
       {!complaints?.length && <EmptyState title="No complaints" />}

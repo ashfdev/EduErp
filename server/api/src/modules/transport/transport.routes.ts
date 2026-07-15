@@ -1,4 +1,5 @@
 import { Router } from "express";
+import ExcelJS from "exceljs";
 import { randomBytes } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
@@ -122,6 +123,51 @@ transportRouter.get(
       success: true,
       data: vehicles.map(({ device_api_key, ...v }) => ({ ...v, has_device_key: !!device_api_key })),
     });
+  }),
+);
+
+transportRouter.get(
+  "/vehicles/export",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (_req, res) => {
+    const vehicles = await prisma.vehicle.findMany({
+      select: {
+        vehicle_no: true, type: true, capacity: true,
+        driver_name: true, driver_phone: true, insurance_exp: true, is_active: true,
+        route: { select: { name: true } },
+      },
+      orderBy: { vehicle_no: "asc" },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Vehicles");
+    sheet.columns = [
+      { header: "Vehicle No", key: "vehicle_no", width: 16 },
+      { header: "Type", key: "type", width: 12 },
+      { header: "Capacity", key: "capacity", width: 10 },
+      { header: "Route", key: "route", width: 18 },
+      { header: "Driver", key: "driver_name", width: 20 },
+      { header: "Driver Phone", key: "driver_phone", width: 16 },
+      { header: "Insurance Expires", key: "insurance_exp", width: 16 },
+      { header: "Active", key: "is_active", width: 10 },
+    ];
+    for (const v of vehicles) {
+      sheet.addRow({
+        vehicle_no: v.vehicle_no,
+        type: v.type,
+        capacity: v.capacity,
+        route: v.route?.name ?? "",
+        driver_name: v.driver_name ?? "",
+        driver_phone: v.driver_phone ?? "",
+        insurance_exp: v.insurance_exp ? v.insurance_exp.toISOString().slice(0, 10) : "",
+        is_active: v.is_active ? "Yes" : "No",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", 'attachment; filename="Vehicles.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
   }),
 );
 

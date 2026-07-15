@@ -54,6 +54,16 @@ export default function AppraisalsPage() {
     queryFn: async () => (await api.get("/api/hr/staff", { params: { limit: 100 } })).data.data,
   });
 
+  async function downloadExcel() {
+    const res = await api.get("/api/appraisals/reviews/export", { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Performance_Reviews.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Template creation
   const [templateOpen, setTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -111,6 +121,7 @@ export default function AppraisalsPage() {
         breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Appraisals" }]}
         action={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
             <Button variant="outline" onClick={() => setTemplateOpen(true)}>+ New Template</Button>
             <Button onClick={() => setReviewOpen(true)} disabled={!templates?.length}>+ New Review</Button>
           </div>
