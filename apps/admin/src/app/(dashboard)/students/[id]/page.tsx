@@ -251,9 +251,14 @@ export default function StudentProfilePage() {
         <TabsContent value="fees">
           <Card>
             <CardContent className="space-y-4 pt-6">
-              <div className="flex gap-6 text-sm">
-                <p><span className="text-muted-foreground">Outstanding:</span> <span className="font-semibold text-red-600">৳{fees.outstanding_total}</span></p>
-                <p><span className="text-muted-foreground">Paid:</span> ৳{fees.paid_total}</p>
+              <div className="flex items-center justify-between">
+                <div className="flex gap-6 text-sm">
+                  <p><span className="text-muted-foreground">Outstanding:</span> <span className="font-semibold text-red-600">৳{fees.outstanding_total}</span></p>
+                  <p><span className="text-muted-foreground">Paid:</span> ৳{fees.paid_total}</p>
+                </div>
+                <Link href={`/fees/collect?student_id=${id}`}>
+                  <Button size="sm">Collect Fee</Button>
+                </Link>
               </div>
               {!fees.invoices.length && <EmptyState title="No invoices yet" />}
               <table className="w-full text-sm">

@@ -200,6 +200,65 @@ feesRouter.put(
   }),
 );
 
+// ── Roster (collection entry point) ───────────────────────────────
+// The class/section(/group)-filtered browse view backing the redesigned
+// Collect Fee flow — a full roster (including students with zero dues),
+// not just the ones with outstanding invoices (that's /reports/dues).
+
+feesRouter.get(
+  "/roster",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional(), group_id: z.string().optional() }).parse(req.query);
+    const students = await prisma.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        current_class_id: query.class_id,
+        ...(query.section_id && { current_section_id: query.section_id }),
+        ...(query.group_id && { group_id: query.group_id }),
+      },
+      select: {
+        id: true,
+        name_en: true,
+        student_uid: true,
+        current_roll_no: true,
+        invoices: { where: { status: { not: "WAIVED" } }, select: { amount_due: true, amount_paid: true, fine_amount: true } },
+      },
+      orderBy: [{ current_roll_no: "asc" }, { name_en: "asc" }],
+    });
+
+    const rows = students.map((s) => {
+      const totalDue = s.invoices.reduce((sum, i) => sum + i.amount_due + i.fine_amount, 0);
+      const totalPaid = s.invoices.reduce((sum, i) => sum + i.amount_paid, 0);
+      const outstanding = Math.max(0, totalDue - totalPaid);
+      const status = s.invoices.length === 0 ? "NO_INVOICE" : outstanding <= 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "DUE";
+      return {
+        id: s.id,
+        name_en: s.name_en,
+        student_uid: s.student_uid,
+        current_roll_no: s.current_roll_no,
+        total_due: totalDue,
+        total_paid: totalPaid,
+        outstanding,
+        status,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        students: rows,
+        summary: {
+          total_students: rows.length,
+          with_dues: rows.filter((r) => r.outstanding > 0).length,
+          fully_paid: rows.filter((r) => r.status === "PAID").length,
+        },
+      },
+    });
+  }),
+);
+
 // ── Collection (manual) ─────────────────────────────────────────
 
 // This route is exclusively for staff recording money they've already
