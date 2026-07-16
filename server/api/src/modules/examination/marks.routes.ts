@@ -223,14 +223,31 @@ marksRouter.post(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
 
-    const subjects = await prisma.subject.findMany({ where: { class_id: classId } });
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw notFound("Exam not found");
+
+    const subjects = await prisma.subject.findMany({ where: { class_id: classId, is_active: true } });
     const students = await prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null } });
 
     const entries = await prisma.markEntry.findMany({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) } },
     });
 
-    const expectedCount = subjects.length * students.length;
+    // A flat subjects.length * students.length assumes every student takes
+    // every subject in the class — true before Groups/optional-subjects
+    // existed, but a group-scoped subject is structurally never taken by
+    // students outside that group, which made this count permanently
+    // unreachable for any class using Groups. StudentSubject is the ground
+    // truth for which subjects a given student actually has (populated by
+    // inheritSubjectsForClass at enrollment/promotion time), so sum each
+    // student's real enrollment count instead of assuming a uniform grid.
+    const expectedCount = await prisma.studentSubject.count({
+      where: {
+        student_id: { in: students.map((s) => s.id) },
+        subject_id: { in: subjects.map((s) => s.id) },
+        academic_year_id: exam.academic_year_id,
+      },
+    });
     if (entries.length < expectedCount) {
       throw badRequest(`Not all marks submitted (${entries.length}/${expectedCount}). Cannot approve yet.`);
     }
