@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface MarkComponent {
   key: string;
@@ -26,18 +27,41 @@ interface MarkEntryData {
     id: string;
     name_en: string;
     current_roll_no: string | null;
-    marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null } | null>;
+    marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null; status: string } | null>;
   }[];
+}
+interface ExamInfo {
+  id: string;
+  name: string;
+  status: string;
+}
+interface ClassOption {
+  id: string;
+  name_en: string;
+  sections: { id: string; name: string }[];
 }
 
 export default function MarkEntryGridPage() {
   const { exam_id, class_id, section_id } = useParams<{ exam_id: string; class_id: string; section_id: string }>();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const readOnly = user?.role === "CLASS_TEACHER";
 
   const { data } = useQuery<MarkEntryData>({
     queryKey: ["marks", exam_id, class_id, section_id],
     queryFn: async () => (await api.get(`/api/marks/${exam_id}/${class_id}/${section_id}`)).data.data,
   });
+
+  const { data: exam } = useQuery<ExamInfo>({
+    queryKey: ["exams", exam_id],
+    queryFn: async () => (await api.get(`/api/exams/${exam_id}`)).data.data,
+  });
+  const { data: classes } = useQuery<ClassOption[]>({
+    queryKey: ["settings", "classes"],
+    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const klass = classes?.find((c) => c.id === class_id);
+  const section = klass?.sections.find((s) => s.id === section_id);
 
   const [edits, setEdits] = useState<Record<string, { marks_theory?: number; marks_practical?: number; is_absent?: boolean; component_marks?: Record<string, number> }>>({});
   const [search, setSearch] = useState("");
@@ -63,6 +87,10 @@ export default function MarkEntryGridPage() {
       is_absent: existing?.is_absent ?? false,
       component_marks: existing?.component_marks ?? undefined,
     };
+  }
+
+  function entryStatus(studentId: string, subjectId: string): string | undefined {
+    return data?.students.find((s) => s.id === studentId)?.marks[subjectId]?.status;
   }
 
   // An empty box must stay empty, not snap to 0 — Number("") === 0, so it's
@@ -101,17 +129,35 @@ export default function MarkEntryGridPage() {
     },
   });
 
+  function handleSubmit() {
+    const approvedTouched = Object.keys(edits).filter((k) => {
+      const [studentId, subjectId] = k.split(":") as [string, string];
+      return entryStatus(studentId, subjectId) === "APPROVED";
+    }).length;
+    if (approvedTouched > 0) {
+      const ok = window.confirm(
+        `${approvedTouched} of your pending change(s) touch mark(s) that were already approved. Saving will revert ${approvedTouched === 1 ? "it" : "them"} back to Submitted, and ${approvedTouched === 1 ? "it" : "they"} will need to be re-approved before results can be published. Continue?`,
+      );
+      if (!ok) return;
+    }
+    submitMutation.mutate();
+  }
+
   if (!data) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   return (
     <PageWrapper>
       <PageHeader
-        title="Mark Entry"
-        subtitle={data.entry_deadline_info.is_open ? "Entry window is open" : "Entry window is closed"}
-        breadcrumbs={[{ label: "Marks", href: "/marks" }, { label: "Grid" }]}
+        title={exam?.name ?? "Mark Entry"}
+        subtitle={`${klass?.name_en ?? "…"} · ${section?.name ?? "…"} — ${data.entry_deadline_info.is_open ? "Entry window is open" : "Entry window is closed"}`}
+        breadcrumbs={[{ label: "Marks", href: "/marks" }, ...(exam ? [{ label: exam.name }] : []), ...(klass && section ? [{ label: `${klass.name_en} · ${section.name}` }] : [])]}
       />
 
       {!data.subjects.length && <p className="text-sm text-muted-foreground">No subjects assigned to you for this class/section.</p>}
+
+      {readOnly && data.subjects.length > 0 && (
+        <p className="text-sm text-muted-foreground">You can view marks for your class, but only Subject Teachers, Exam Controllers, and Admins can enter or edit them.</p>
+      )}
 
       {data.subjects.length > 0 && (
         <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
@@ -154,12 +200,16 @@ export default function MarkEntryGridPage() {
                     </td>
                     {data.subjects.map((s) => {
                       const v = getValue(st.id, s.id);
+                      const status = entryStatus(st.id, s.id);
                       const componentSum = s.components?.length
                         ? Object.values(v.component_marks ?? {}).reduce((sum, n) => sum + (n || 0), 0)
                         : undefined;
                       return (
                         <td key={s.id} className="p-1">
                           <div className="flex items-center gap-1">
+                            {status === "APPROVED" && (
+                              <Badge variant="success" title="Already approved — editing will require re-approval">✓</Badge>
+                            )}
                             {s.components && s.components.length > 0 ? (
                               <>
                                 {s.components.map((comp) => (
@@ -171,7 +221,7 @@ export default function MarkEntryGridPage() {
                                     title={`${comp.label}, out of ${comp.max_marks}`}
                                     placeholder={comp.label}
                                     className="h-8 w-14 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                    disabled={v.is_absent}
+                                    disabled={readOnly || v.is_absent}
                                     value={v.component_marks?.[comp.key] ?? ""}
                                     onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
                                   />
@@ -185,7 +235,7 @@ export default function MarkEntryGridPage() {
                                 max={s.config?.full_marks_theory}
                                 title={s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
                                 className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                disabled={v.is_absent}
+                                disabled={readOnly || v.is_absent}
                                 value={v.marks_theory ?? ""}
                                 onChange={(e) =>
                                   setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
@@ -199,7 +249,7 @@ export default function MarkEntryGridPage() {
                                 max={s.config.full_marks_practical}
                                 title={`Practical, out of ${s.config.full_marks_practical}`}
                                 className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                disabled={v.is_absent}
+                                disabled={readOnly || v.is_absent}
                                 value={v.marks_practical ?? ""}
                                 onChange={(e) =>
                                   setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
@@ -209,6 +259,7 @@ export default function MarkEntryGridPage() {
                             <label className="flex items-center gap-1 text-xs">
                               <Checkbox
                                 checked={v.is_absent ?? false}
+                                disabled={readOnly}
                                 onCheckedChange={(checked) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, is_absent: checked === true } }))}
                               />
                               Ab
@@ -225,9 +276,9 @@ export default function MarkEntryGridPage() {
         </Card>
       )}
 
-      {data.subjects.length > 0 && (
+      {data.subjects.length > 0 && !readOnly && (
         <div className="flex items-center gap-3">
-          <Button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !Object.keys(edits).length}>
+          <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length}>
             {submitMutation.isPending ? "Submitting..." : "Submit Marks"}
           </Button>
           <Badge variant="outline">{Object.keys(edits).length} pending change(s)</Badge>

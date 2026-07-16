@@ -28,8 +28,18 @@ interface MarkEntryData {
     id: string;
     name_en: string;
     current_roll_no: string | null;
-    marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null } | null>;
+    marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null; status: string } | null>;
   }[];
+}
+interface ExamInfo {
+  id: string;
+  name: string;
+  status: string;
+}
+interface ClassOption {
+  id: string;
+  name_en: string;
+  sections: { id: string; name: string }[];
 }
 
 export default function TeacherMarkEntryGridPage() {
@@ -46,6 +56,17 @@ export default function TeacherMarkEntryGridPage() {
     queryKey: ["marks", exam_id, class_id, section_id],
     queryFn: async () => (await api.get(`/api/marks/${exam_id}/${class_id}/${section_id}`)).data.data,
   });
+
+  const { data: exam } = useQuery<ExamInfo>({
+    queryKey: ["exams", exam_id],
+    queryFn: async () => (await api.get(`/api/exams/${exam_id}`)).data.data,
+  });
+  const { data: classes } = useQuery<ClassOption[]>({
+    queryKey: ["settings", "classes"],
+    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const klass = classes?.find((c) => c.id === class_id);
+  const section = klass?.sections.find((s) => s.id === section_id);
 
   const [edits, setEdits] = useState<Record<string, { marks_theory?: number; marks_practical?: number; is_absent?: boolean; component_marks?: Record<string, number> }>>({});
 
@@ -82,6 +103,10 @@ export default function TeacherMarkEntryGridPage() {
     setEdits((prev) => ({ ...prev, [key(studentId, subjectId)]: { ...v, component_marks: next } }));
   }
 
+  function entryStatus(studentId: string, subjectId: string): string | undefined {
+    return data?.students.find((s) => s.id === studentId)?.marks[subjectId]?.status;
+  }
+
   const submitMutation = useMutation({
     mutationFn: () => {
       const entries = Object.entries(edits).map(([k, v]) => {
@@ -101,13 +126,25 @@ export default function TeacherMarkEntryGridPage() {
     },
   });
 
+  function handleSubmit() {
+    const approvedTouched = Object.keys(edits).filter((k) => {
+      const [studentId, subjectId] = k.split(":") as [string, string];
+      return entryStatus(studentId, subjectId) === "APPROVED";
+    }).length;
+    if (approvedTouched > 0) {
+      const ok = window.confirm(t("confirmRevertApproved", { count: approvedTouched }));
+      if (!ok) return;
+    }
+    submitMutation.mutate();
+  }
+
   return (
     <TeacherShell>
       <PageWrapper className="p-0">
         <PageHeader
-          title={t("title")}
-          subtitle={data ? (data.entry_deadline_info.is_open ? t("entryOpen") : t("entryClosed")) : t("loading")}
-          breadcrumbs={[{ label: "Marks", href: "/marks" }, { label: "Grid" }]}
+          title={exam?.name ?? t("title")}
+          subtitle={`${klass?.name_en ?? "…"} · ${section?.name ?? "…"} — ${data ? (data.entry_deadline_info.is_open ? t("entryOpen") : t("entryClosed")) : t("loading")}`}
+          breadcrumbs={[{ label: "Marks", href: "/marks" }, ...(exam ? [{ label: exam.name }] : []), ...(klass && section ? [{ label: `${klass.name_en} · ${section.name}` }] : [])]}
         />
 
         {data && !data.subjects.length && <p className="text-sm text-muted-foreground">{t("noSubjects")}</p>}
@@ -147,12 +184,14 @@ export default function TeacherMarkEntryGridPage() {
                       <td className="p-2">{st.name_en}</td>
                       {data.subjects.map((s) => {
                         const v = getValue(st.id, s.id);
+                        const status = entryStatus(st.id, s.id);
                         const componentSum = s.components?.length
                           ? Object.values(v.component_marks ?? {}).reduce((sum, n) => sum + (n || 0), 0)
                           : undefined;
                         return (
                           <td key={s.id} className="p-1">
                             <div className="flex items-center gap-1">
+                              {status === "APPROVED" && <Badge variant="success" title={t("approvedBadgeTitle")}>✓</Badge>}
                               {s.components && s.components.length > 0 ? (
                                 <>
                                   {s.components.map((comp) => (
@@ -225,7 +264,7 @@ export default function TeacherMarkEntryGridPage() {
 
         {data && data.subjects.length > 0 && !readOnly && (
           <div className="flex items-center gap-3">
-            <Button onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || !Object.keys(edits).length}>
+            <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length}>
               {submitMutation.isPending ? t("submitting") : t("submitMarks")}
             </Button>
             <Badge variant="outline">{t("pendingChanges", { count: Object.keys(edits).length })}</Badge>

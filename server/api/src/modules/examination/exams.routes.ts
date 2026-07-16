@@ -8,6 +8,7 @@ import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES } from "../../lib/roles";
 import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
 
 export const examsRouter = Router();
 examsRouter.use(authenticate);
@@ -43,11 +44,24 @@ examsRouter.get(
         exam_type_config: true,
         academic_year: true,
         grading_scale: true,
-        subject_configs: { include: { subject: { include: { class: true } } } },
+        subject_configs: { include: { subject: { include: { class: true } } }, orderBy: { subject: { created_at: "asc" } } },
         component_configs: { orderBy: { display_order: "asc" } },
       },
     });
     if (!exam) throw notFound("Exam not found");
+
+    // Same legacy-duplicate-subject defensive filter as marks.routes.ts /
+    // subjects.routes.ts — a duplicate-named Subject row would otherwise
+    // surface here as two independently-editable full-marks/pass-marks
+    // configs under what looks like one subject.
+    const seenSubjectNames = new Set<string>();
+    exam.subject_configs = exam.subject_configs.filter((c) => {
+      const k = `${c.subject.class_id}:${c.subject.name_en.trim().toLowerCase()}`;
+      if (seenSubjectNames.has(k)) return false;
+      seenSubjectNames.add(k);
+      return true;
+    });
+
     res.json({ success: true, data: exam });
   }),
 );
@@ -214,6 +228,29 @@ examsRouter.put(
     }
 
     const exam = await prisma.exam.update({ where: { id }, data: { status: body.status } });
+    res.json({ success: true, data: exam });
+  }),
+);
+
+// Deliberately narrower than the forward-only VALID_TRANSITIONS map above:
+// this is the only reverse transition allowed anywhere in the exam
+// lifecycle, and only COMPLETED -> MARK_ENTRY. Never reachable from
+// PUBLISHED — a published, public-facing result needing correction is a
+// materially bigger concern than an internal, not-yet-visible one, and is
+// explicitly out of scope here (see Phase 73 plan notes).
+examsRouter.post(
+  "/:id/reopen",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.exam.findUnique({ where: { id } });
+    if (!existing) throw notFound("Exam not found");
+    if (existing.status !== "COMPLETED") {
+      throw badRequest(`Only a COMPLETED exam can be reopened for correction (current status: ${existing.status})`);
+    }
+
+    const exam = await prisma.exam.update({ where: { id }, data: { status: "MARK_ENTRY" } });
+    await logAudit("EXAM_REOPENED", { userId: req.user!.sub, targetType: "Exam", targetId: id, req });
     res.json({ success: true, data: exam });
   }),
 );

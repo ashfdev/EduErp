@@ -49,10 +49,13 @@ marksRouter.get(
 
     const rawSubjects = await prisma.subject.findMany({
       where: { class_id: classId, is_active: true, ...(subjectIds && { id: { in: subjectIds } }) },
+      orderBy: { created_at: "asc" },
     });
     // Defensive: two active subject rows can share a display name (only
     // (class_id, code) is unique), which would otherwise render as two
-    // visually-identical columns in the grid below.
+    // visually-identical columns in the grid below. orderBy above makes the
+    // "which one wins" choice deterministic — the oldest row, most likely to
+    // already have real MarkEntry history attached.
     const seenNames = new Set<string>();
     const subjects = rawSubjects.filter((s) => {
       const k = s.name_en.trim().toLowerCase();
@@ -136,6 +139,16 @@ marksRouter.post(
       componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
     }
 
+    // Needed so a resubmit that touches an already-APPROVED entry can clear
+    // its now-stale approved_by_id/approved_at — otherwise a changed mark
+    // would misleadingly keep showing as "approved by X at Y" after edit.
+    const studentIds = [...new Set(body.entries.map((e) => e.student_id))];
+    const existingEntries = await prisma.markEntry.findMany({
+      where: { exam_id: body.exam_id, subject_id: { in: subjectIds }, student_id: { in: studentIds } },
+      select: { student_id: true, subject_id: true, status: true },
+    });
+    const priorStatusByKey = new Map(existingEntries.map((e) => [`${e.student_id}:${e.subject_id}`, e.status]));
+
     for (const entry of body.entries) {
       const config = configBySubject.get(entry.subject_id);
       const components = componentsBySubject.get(entry.subject_id);
@@ -190,6 +203,10 @@ marksRouter.post(
           grade_point: grade.grade_point,
           status: "SUBMITTED",
           entered_by_id: req.user!.sub,
+          ...(priorStatusByKey.get(`${entry.student_id}:${entry.subject_id}`) === "APPROVED" && {
+            approved_by_id: null,
+            approved_at: null,
+          }),
         },
       });
     }

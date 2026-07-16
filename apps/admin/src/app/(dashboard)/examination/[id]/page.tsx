@@ -89,6 +89,18 @@ export default function ExamDetailPage() {
     onError: () => toast.error("Invalid status transition"),
   });
 
+  const reopenMutation = useMutation({
+    mutationFn: () => api.post(`/api/exams/${id}/reopen`),
+    onSuccess: () => {
+      toast.success("Exam reopened for mark correction");
+      queryClient.invalidateQueries({ queryKey: ["exams", id] });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to reopen exam";
+      toast.error(message);
+    },
+  });
+
   const saveConfigMutation = useMutation({
     mutationFn: () =>
       api.put(`/api/exams/${id}/subject-config`, Object.values(effectiveConfigs).map((c) => ({
@@ -152,6 +164,19 @@ export default function ExamDetailPage() {
         action={
           <div className="flex gap-2">
             <Link href={`/examination/${id}/seat-plan`}><Button variant="outline">Seat Plan</Button></Link>
+            {exam.status === "COMPLETED" && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm("Reopen this exam for mark correction? It will move back to Mark Entry status until marked Completed again.")) {
+                    reopenMutation.mutate();
+                  }
+                }}
+                disabled={reopenMutation.isPending}
+              >
+                Reopen for Correction
+              </Button>
+            )}
             {next && <Button onClick={() => statusMutation.mutate(next)}>Move to {next.replace(/_/g, " ")}</Button>}
           </div>
         }

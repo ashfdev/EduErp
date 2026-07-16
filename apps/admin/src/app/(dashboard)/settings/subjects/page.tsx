@@ -54,6 +54,13 @@ interface Teacher {
   designation: string;
 }
 
+interface DuplicateSubjectRow {
+  id: string;
+  name_en: string;
+  code: string;
+  class: { name_en: string };
+}
+
 export default function SubjectsSettingsPage() {
   const queryClient = useQueryClient();
   const { data: classes } = useQuery<ClassOption[]>({
@@ -63,6 +70,10 @@ export default function SubjectsSettingsPage() {
   const { data: teachers } = useQuery<Teacher[]>({
     queryKey: ["staff", "teachers"],
     queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
+  });
+  const { data: duplicateGroups } = useQuery<DuplicateSubjectRow[][]>({
+    queryKey: ["subjects", "duplicates"],
+    queryFn: async () => (await api.get("/api/subjects/duplicates")).data.data,
   });
 
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -159,6 +170,27 @@ export default function SubjectsSettingsPage() {
   return (
     <PageWrapper>
       <PageHeader title="Subjects" subtitle="Subjects per class + teacher assignment" breadcrumbs={[{ label: "Settings" }, { label: "Subjects" }]} />
+
+      {!!duplicateGroups?.length && (
+        <Card className="border-amber-400/60 bg-amber-50">
+          <CardContent className="space-y-2 pt-4">
+            <p className="text-sm font-medium text-amber-800">Possible duplicate subjects — review manually, not auto-merged</p>
+            <p className="text-xs text-amber-700">
+              These subjects share the same name within the same class. Each is a separate database record with its own marks/teacher-assignment
+              history — deactivate the wrong one manually after moving anything that needs to be kept.
+            </p>
+            <div className="space-y-1">
+              {duplicateGroups.map((group) => (
+                <div key={group.map((s) => s.id).join(",")} className="rounded-md border border-amber-300 bg-white p-2 text-xs">
+                  <span className="font-medium">{group[0]!.class.name_en} — &quot;{group[0]!.name_en}&quot;</span>
+                  {": "}
+                  {group.map((s) => `${s.code} (${s.id.slice(-6)})`).join(", ")}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-4 gap-6">
         <div className="col-span-1 space-y-1">

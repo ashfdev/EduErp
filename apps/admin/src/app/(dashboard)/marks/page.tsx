@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { PageWrapper, PageHeader, Card, CardContent, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useInstitution } from "@/hooks/use-institution";
 
 interface Exam {
   id: string;
@@ -15,13 +16,29 @@ interface Exam {
 interface ClassOption {
   id: string;
   name_en: string;
+  department_id: string | null;
+  program_id: string | null;
   sections: { id: string; name: string }[];
+}
+interface DepartmentOption {
+  id: string;
+  name_en: string;
+}
+interface ProgramOption {
+  id: string;
+  name_en: string;
+  department_id: string | null;
 }
 
 export default function MyMarkEntryPage() {
   const router = useRouter();
   const t = useTranslations("marks");
+  const { type } = useInstitution();
+  const isUniversity = type === "UNIVERSITY";
+
   const [examId, setExamId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [programId, setProgramId] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
 
@@ -33,6 +50,23 @@ export default function MyMarkEntryPage() {
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
+  const { data: departments } = useQuery<DepartmentOption[]>({
+    queryKey: ["settings", "departments"],
+    queryFn: async () => (await api.get("/api/settings/departments")).data.data,
+    enabled: isUniversity,
+  });
+  const { data: programs } = useQuery<ProgramOption[]>({
+    queryKey: ["settings", "programs"],
+    queryFn: async () => (await api.get("/api/settings/programs")).data.data,
+    enabled: isUniversity,
+  });
+
+  const programsInDept = programs?.filter((p) => !departmentId || p.department_id === departmentId);
+  const visibleClasses = classes?.filter((c) => {
+    if (isUniversity && departmentId && c.department_id !== departmentId) return false;
+    if (isUniversity && programId && c.program_id !== programId) return false;
+    return true;
+  });
   const selectedClass = classes?.find((c) => c.id === classId);
 
   return (
@@ -40,14 +74,34 @@ export default function MyMarkEntryPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} breadcrumbs={[{ label: "Marks" }]} />
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className={`grid gap-4 ${isUniversity ? "grid-cols-5" : "grid-cols-3"}`}>
             <select className="rounded-md border px-3 py-2 text-sm" value={examId} onChange={(e) => setExamId(e.target.value)}>
               <option value="">{t("selectExam")}</option>
               {exams?.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
+            {isUniversity && (
+              <>
+                <select
+                  className="rounded-md border px-3 py-2 text-sm"
+                  value={departmentId}
+                  onChange={(e) => { setDepartmentId(e.target.value); setProgramId(""); setClassId(""); setSectionId(""); }}
+                >
+                  <option value="">All Departments</option>
+                  {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
+                </select>
+                <select
+                  className="rounded-md border px-3 py-2 text-sm"
+                  value={programId}
+                  onChange={(e) => { setProgramId(e.target.value); setClassId(""); setSectionId(""); }}
+                >
+                  <option value="">All Programs</option>
+                  {programsInDept?.map((p) => <option key={p.id} value={p.id}>{p.name_en}</option>)}
+                </select>
+              </>
+            )}
             <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
               <option value="">{t("selectClass")}</option>
-              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+              {visibleClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
             <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
               <option value="">{t("selectSection")}</option>

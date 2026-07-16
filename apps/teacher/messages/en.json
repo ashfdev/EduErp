@@ -127,7 +127,9 @@
     "submitMarks": "Submit Marks",
     "pendingChanges": "{count} pending change(s)",
     "marksSubmitted": "Marks submitted for approval",
-    "submitFailed": "Failed to submit marks"
+    "submitFailed": "Failed to submit marks",
+    "approvedBadgeTitle": "Already approved — editing will require re-approval",
+    "confirmRevertApproved": "{count} of your pending change(s) touch mark(s) that were already approved. Saving will revert them back to Submitted, and they will need to be re-approved before results can be published. Continue?"
   },
   "ptm": {
     "title": "Parent-Teacher Meetings",
