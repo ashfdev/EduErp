@@ -12,7 +12,7 @@ import { createUserSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
 import { logAudit } from "../../lib/audit-log";
-import { conflict } from "../../lib/errors";
+import { badRequest, conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
 import { env } from "../../lib/env";
 
@@ -100,6 +100,18 @@ usersRouter.put(
   asyncHandler(async (req, res) => {
     const targetId = reqParam(req, "id");
     const body = z.object({ role: z.nativeEnum(UserRole).optional(), is_active: z.boolean().optional() }).parse(req.body);
+
+    if (body.role && targetId === req.user!.sub) {
+      throw badRequest("You cannot change your own role — ask another admin to do this");
+    }
+    if (body.role && body.role !== "SUPER_ADMIN") {
+      const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { role: true } });
+      if (target.role === "SUPER_ADMIN") {
+        const otherActiveSuperAdmins = await prisma.user.count({ where: { role: "SUPER_ADMIN", is_active: true, id: { not: targetId } } });
+        if (otherActiveSuperAdmins === 0) throw badRequest("Cannot change the last active SUPER_ADMIN's role — promote another user first");
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: targetId },
       data: { role: body.role, is_active: body.is_active },

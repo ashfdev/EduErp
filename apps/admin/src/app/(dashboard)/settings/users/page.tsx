@@ -20,6 +20,7 @@ import {
   DialogFooter,
   EmptyState,
 } from "@education-erp/ui";
+import Link from "next/link";
 import { api } from "@/lib/api";
 
 const ROLES = [
@@ -74,7 +75,12 @@ export default function UsersPage() {
         title="User Accounts"
         subtitle="Staff accounts and role assignment"
         breadcrumbs={[{ label: "Settings" }, { label: "Users" }]}
-        action={<Button onClick={() => setOpen(true)}>+ Add User</Button>}
+        action={
+          <div className="flex gap-2">
+            <Link href="/settings/permissions"><Button variant="outline">Roles & Permissions</Button></Link>
+            <Button onClick={() => setOpen(true)}>+ Add User</Button>
+          </div>
+        }
       />
 
       {!users?.length && <EmptyState title="No users yet" />}
