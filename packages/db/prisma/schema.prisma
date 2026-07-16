@@ -352,6 +352,7 @@ model Subject {
   subject_type     SubjectType                @default(THEORY)
   is_compulsory    Boolean                    @default(true)
   is_optional      Boolean                    @default(false)
+  weekly_periods   Int?
   full_marks       Float                      @default(100)
   pass_marks       Float                      @default(33)
   display_order    Int                        @default(0)
@@ -705,6 +706,8 @@ model Staff {
   biometric_id        String?
   employment_type     EmploymentType             @default(PERMANENT)
   joining_date        DateTime?
+  max_periods_per_day  Int?
+  max_periods_per_week Int?
   salary_structure_id String?
   salary_structure    SalaryStructure?           @relation(fields: [salary_structure_id], references: [id])
   show_on_website     Boolean                    @default(false)

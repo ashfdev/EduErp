@@ -11,6 +11,7 @@ export const subjectSchema = z.object({
   full_marks: z.number().min(0),
   pass_marks: z.number().min(0),
   display_order: z.number().int().optional(),
+  weekly_periods: z.number().int().min(1).optional().nullable(),
 });
 export type SubjectInput = z.infer<typeof subjectSchema>;
 

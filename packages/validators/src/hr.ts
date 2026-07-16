@@ -17,6 +17,8 @@ export const createStaffSchema = z.object({
   employment_type: z.enum(["PERMANENT", "CONTRACT", "PART_TIME"]).default("PERMANENT"),
   joining_date: z.coerce.date().optional(),
   biometric_id: z.string().optional(),
+  max_periods_per_day: z.number().int().min(1).optional().nullable(),
+  max_periods_per_week: z.number().int().min(1).optional().nullable(),
   role: z.string().min(1).default("SUBJECT_TEACHER"),
   show_on_website: z.boolean().default(false),
   create_login: z.boolean().default(false),

@@ -520,17 +520,70 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
       teacherOccupied.get(p.teacher_id)!.add(`${p.day_of_week}-${p.period_no}`);
     }
 
-    const totalSlots = days.length * periods.length;
-    const baseCount = Math.floor(totalSlots / subjectsWithTeacher.length);
-    const remainder = totalSlots % subjectsWithTeacher.length;
+    // Optional per-teacher load caps (Staff.max_periods_per_day/week) — a
+    // teacher without either set is treated exactly as before this feature
+    // existed (no cap enforced). Daily counts are seeded from both already-
+    // committed rows and this-run placements, same sources as teacherOccupied.
+    const teacherCaps = new Map<string, { maxPerDay: number | null; maxPerWeek: number | null }>();
+    if (teacherIds.length > 0) {
+      const staffRows = await tx.staff.findMany({
+        where: { id: { in: teacherIds } },
+        select: { id: true, max_periods_per_day: true, max_periods_per_week: true },
+      });
+      for (const s of staffRows) teacherCaps.set(s.id, { maxPerDay: s.max_periods_per_day, maxPerWeek: s.max_periods_per_week });
+    }
+    const teacherDayCounts = new Map<string, Map<number, number>>();
+    for (const t of teacherIds) teacherDayCounts.set(t, new Map());
+    for (const s of existingTeacherSlots) {
+      const dayMap = teacherDayCounts.get(s.teacher_id!);
+      if (dayMap) dayMap.set(s.day_of_week, (dayMap.get(s.day_of_week) ?? 0) + 1);
+    }
+    for (const p of placements) {
+      if (!teacherDayCounts.has(p.teacher_id)) teacherDayCounts.set(p.teacher_id, new Map());
+      const dayMap = teacherDayCounts.get(p.teacher_id)!;
+      dayMap.set(p.day_of_week, (dayMap.get(p.day_of_week) ?? 0) + 1);
+    }
 
-    const queue = subjectsWithTeacher.map((subject, i) => ({
-      subject,
-      teacherId: assignmentBySubject.get(subject.id)!,
-      remaining: baseCount + (i < remainder ? 1 : 0),
-      usedDays: new Set<number>(),
-      dayOffset: i % days.length,
-    }));
+    // Explicit per-subject weekly period counts (Subject.weekly_periods) take
+    // priority; subjects with no explicit count fall back to an even split of
+    // whatever's left, matching this generator's original behavior exactly
+    // when no subject in the class has weekly_periods set.
+    const totalSlots = days.length * periods.length;
+    const explicitTotal = subjectsWithTeacher.reduce((sum, s) => sum + (s.weekly_periods ?? 0), 0);
+    if (explicitTotal > totalSlots) {
+      for (const subject of subjectsWithTeacher) {
+        unplaced.push({
+          section_id: section.id,
+          section_name: section.name,
+          subject_id: subject.id,
+          subject_name: subject.name_en,
+          reason: `Subjects with an explicit weekly period count need ${explicitTotal} periods/week, but this section only has ${totalSlots} available`,
+        });
+      }
+      continue;
+    }
+    const unsetSubjects = subjectsWithTeacher.filter((s) => !s.weekly_periods);
+    const remainingSlots = totalSlots - explicitTotal;
+    const baseCount = unsetSubjects.length > 0 ? Math.floor(remainingSlots / unsetSubjects.length) : 0;
+    const remainder = unsetSubjects.length > 0 ? remainingSlots % unsetSubjects.length : 0;
+
+    let unsetIndex = 0;
+    const queue = subjectsWithTeacher.map((subject, i) => {
+      let count: number;
+      if (subject.weekly_periods) {
+        count = subject.weekly_periods;
+      } else {
+        count = baseCount + (unsetIndex < remainder ? 1 : 0);
+        unsetIndex++;
+      }
+      return {
+        subject,
+        teacherId: assignmentBySubject.get(subject.id)!,
+        remaining: count,
+        usedDays: new Set<number>(),
+        dayOffset: i % days.length,
+      };
+    });
 
     let progressed = true;
     while (progressed) {
@@ -539,16 +592,21 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
         if (item.remaining <= 0) continue;
         progressed = true;
         const teacherSet = teacherOccupied.get(item.teacherId)!;
+        const dayCounts = teacherDayCounts.get(item.teacherId)!;
+        const cap = teacherCaps.get(item.teacherId);
         const dayCandidatesFresh = rotate(days, item.dayOffset).filter((d) => !item.usedDays.has(d));
         const dayCandidatesAll = rotate(days, item.dayOffset);
         let placedHere = false;
         for (const dayList of [dayCandidatesFresh, dayCandidatesAll]) {
           for (const day of dayList) {
+            if (cap?.maxPerDay && (dayCounts.get(day) ?? 0) >= cap.maxPerDay) continue;
+            if (cap?.maxPerWeek && teacherSet.size >= cap.maxPerWeek) continue;
             for (const period of periods) {
               const slotKey = `${day}-${period.period_no}`;
               if (occupied.has(slotKey) || teacherSet.has(slotKey)) continue;
               occupied.add(slotKey);
               teacherSet.add(slotKey);
+              dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
               item.usedDays.add(day);
               placements.push({
                 section_id: section.id,
@@ -573,7 +631,7 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
             section_name: section.name,
             subject_id: item.subject.id,
             subject_name: item.subject.name_en,
-            reason: "Could not schedule without double-booking the assigned teacher",
+            reason: "Could not schedule without double-booking the assigned teacher or exceeding their period-load cap",
           });
           item.remaining = 0;
         }

@@ -28,6 +28,8 @@ interface StaffDetail {
   address: string | null;
   joining_date: string | null;
   employment_type: string;
+  max_periods_per_day: number | null;
+  max_periods_per_week: number | null;
   department: { name_en: string } | null;
   user: { role: string; phone: string; email: string | null };
   salary_structure: { id: string; name: string } | null;
@@ -81,6 +83,15 @@ export default function StaffDetailPage() {
       const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
       toast.error(message ?? "Failed to apply leave");
     },
+  });
+
+  const updateLoadCapsMutation = useMutation({
+    mutationFn: (data: { max_periods_per_day: number | null; max_periods_per_week: number | null }) => api.put(`/api/hr/staff/${id}`, data),
+    onSuccess: () => {
+      toast.success("Routine load caps updated");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
+    },
+    onError: () => toast.error("Failed to update routine load caps"),
   });
 
   const { data: documents } = useQuery<StaffDocumentRow[]>({
@@ -190,6 +201,40 @@ export default function StaffDetailPage() {
                   ))}
                 </tbody>
               </table>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="space-y-3 pt-6">
+              <p className="font-medium">Routine Load Caps <span className="font-normal text-xs text-muted-foreground">(optional — used by auto-routine generation to avoid over-booking this teacher)</span></p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Max periods/day</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    defaultValue={staff.max_periods_per_day ?? ""}
+                    placeholder="No cap"
+                    onBlur={(e) => {
+                      const v = e.target.value ? Number(e.target.value) : null;
+                      if (v !== staff.max_periods_per_day) updateLoadCapsMutation.mutate({ max_periods_per_day: v, max_periods_per_week: staff.max_periods_per_week });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Max periods/week</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    defaultValue={staff.max_periods_per_week ?? ""}
+                    placeholder="No cap"
+                    onBlur={(e) => {
+                      const v = e.target.value ? Number(e.target.value) : null;
+                      if (v !== staff.max_periods_per_week) updateLoadCapsMutation.mutate({ max_periods_per_day: staff.max_periods_per_day, max_periods_per_week: v });
+                    }}
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

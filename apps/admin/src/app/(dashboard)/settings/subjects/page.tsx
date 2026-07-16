@@ -39,6 +39,7 @@ interface Subject {
   full_marks: number;
   pass_marks: number;
   display_order: number;
+  weekly_periods: number | null;
 }
 
 interface Assignment {
@@ -74,17 +75,29 @@ export default function SubjectsSettingsPage() {
   });
 
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33 });
+  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "" });
 
   const createMutation = useMutation({
-    mutationFn: () => api.post("/api/subjects", { ...form, class_id: selectedClassId, display_order: (subjects?.length ?? 0) + 1 }),
+    mutationFn: () =>
+      api.post("/api/subjects", {
+        ...form,
+        weekly_periods: form.weekly_periods ? Number(form.weekly_periods) : undefined,
+        class_id: selectedClassId,
+        display_order: (subjects?.length ?? 0) + 1,
+      }),
     onSuccess: () => {
       toast.success("Subject added");
       queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] });
       setAddOpen(false);
-      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33 });
+      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "" });
     },
     onError: () => toast.error("Failed to add subject — code may already exist in this class"),
+  });
+
+  const updateWeeklyPeriodsMutation = useMutation({
+    mutationFn: ({ id, weekly_periods }: { id: string; weekly_periods: number | null }) => api.put(`/api/subjects/${id}`, { weekly_periods }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
+    onError: () => toast.error("Failed to update weekly periods"),
   });
 
   const deleteMutation = useMutation({
@@ -184,10 +197,24 @@ export default function SubjectsSettingsPage() {
                           </div>
                           <div>
                             <p className="font-medium">{s.name_en} <span className="font-mono text-xs text-muted-foreground">{s.code}</span></p>
-                            <div className="mt-1 flex gap-1">
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
                               <Badge variant={s.is_compulsory ? "default" : "outline"}>{s.is_compulsory ? "Compulsory" : "Optional"}</Badge>
                               <Badge variant="secondary">{s.subject_type}</Badge>
                               <Badge variant="outline">FM {s.full_marks} / PM {s.pass_marks}</Badge>
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                                Periods/week:
+                                <input
+                                  type="number"
+                                  min={1}
+                                  className="h-6 w-14 rounded border px-1"
+                                  defaultValue={s.weekly_periods ?? ""}
+                                  placeholder="auto"
+                                  onBlur={(e) => {
+                                    const v = e.target.value ? Number(e.target.value) : null;
+                                    if (v !== s.weekly_periods) updateWeeklyPeriodsMutation.mutate({ id: s.id, weekly_periods: v });
+                                  }}
+                                />
+                              </label>
                             </div>
                           </div>
                         </div>
@@ -243,6 +270,10 @@ export default function SubjectsSettingsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Full Marks</Label><Input type="number" value={form.full_marks} onChange={(e) => setForm({ ...form, full_marks: Number(e.target.value) })} /></div>
               <div className="space-y-1.5"><Label>Pass Marks</Label><Input type="number" value={form.pass_marks} onChange={(e) => setForm({ ...form, pass_marks: Number(e.target.value) })} /></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Periods/week (optional — leave blank to auto-split remaining periods)</Label>
+              <Input type="number" min={1} value={form.weekly_periods} onChange={(e) => setForm({ ...form, weekly_periods: e.target.value })} placeholder="auto" />
             </div>
             <div className="flex items-center justify-between"><Label>Compulsory</Label><Switch checked={form.is_compulsory} onCheckedChange={(v) => setForm({ ...form, is_compulsory: v, is_optional: v ? false : form.is_optional })} /></div>
             <div className="flex items-center justify-between"><Label>Optional</Label><Switch checked={form.is_optional} onCheckedChange={(v) => setForm({ ...form, is_optional: v, is_compulsory: v ? false : form.is_compulsory })} /></div>
