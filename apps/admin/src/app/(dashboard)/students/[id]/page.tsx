@@ -83,6 +83,16 @@ interface StudentProfile {
   };
 }
 
+async function downloadPdf(url: string, filename: string) {
+  const res = await api.get(url, { responseType: "blob" });
+  const objectUrl = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
 export default function StudentProfilePage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -297,10 +307,15 @@ export default function StudentProfilePage() {
                         <td className="p-2">৳{inv.amount_paid}</td>
                         <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
                         <td className="p-2"><StatusBadge status={inv.status} /></td>
+                        <td className="p-2 text-right">
+                          <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/fee/invoice/${inv.id}`, `Invoice_${inv.id}.pdf`)}>
+                            Invoice
+                          </Button>
+                        </td>
                       </tr>
                       {!!inv.payments?.length && (
                         <tr key={`${inv.id}-payments`} className="border-b bg-muted/30">
-                          <td colSpan={5} className="px-2 pb-2">
+                          <td colSpan={6} className="px-2 pb-2">
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-left text-muted-foreground">
@@ -309,6 +324,7 @@ export default function StudentProfilePage() {
                                   <th className="py-1">Amount</th>
                                   <th className="py-1">Date</th>
                                   <th className="py-1">Notes</th>
+                                  <th className="py-1" />
                                 </tr>
                               </thead>
                               <tbody>
@@ -319,6 +335,15 @@ export default function StudentProfilePage() {
                                     <td className="py-1">৳{p.amount}</td>
                                     <td className="py-1">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
                                     <td className="py-1">{p.notes ?? "—"}</td>
+                                    <td className="py-1 text-right">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => downloadPdf(`/api/documents/fee/receipt/${p.id}`, `Receipt_${p.receipt_no ?? p.id}.pdf`)}
+                                      >
+                                        Receipt
+                                      </Button>
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>

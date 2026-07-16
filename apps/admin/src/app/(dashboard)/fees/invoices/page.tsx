@@ -18,6 +18,16 @@ interface Invoice {
 }
 interface YearOption { id: string; is_active: boolean }
 
+async function downloadInvoicePdf(invoiceId: string) {
+  const res = await api.get(`/api/documents/fee/invoice/${invoiceId}`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Invoice_${invoiceId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
@@ -61,7 +71,7 @@ export default function InvoicesPage() {
       <Card>
         <CardContent className="pt-6">
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Student</th><th className="p-2">Description</th><th className="p-2">Due</th><th className="p-2">Paid</th><th className="p-2">Fine</th><th className="p-2">Due Date</th><th className="p-2">Status</th></tr></thead>
+            <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Student</th><th className="p-2">Description</th><th className="p-2">Due</th><th className="p-2">Paid</th><th className="p-2">Fine</th><th className="p-2">Due Date</th><th className="p-2">Status</th><th className="p-2" /></tr></thead>
             <tbody>
               {invoices?.map((inv) => (
                 <tr key={inv.id} className="border-b">
@@ -72,6 +82,9 @@ export default function InvoicesPage() {
                   <td className="p-2">৳{inv.fine_amount}</td>
                   <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
                   <td className="p-2"><StatusBadge status={inv.status} /></td>
+                  <td className="p-2 text-right">
+                    <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

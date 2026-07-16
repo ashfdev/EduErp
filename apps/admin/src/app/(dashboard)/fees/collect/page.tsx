@@ -195,10 +195,21 @@ export default function CollectFeePage() {
   );
 }
 
+async function downloadReceiptPdf(paymentId: string, receiptNo: string) {
+  const res = await api.get(`/api/documents/fee/receipt/${paymentId}`, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Receipt_${receiptNo}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function CollectDialog({ student, onClose }: { student: StudentBasic | null; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [gateways, setGateways] = useState<Record<string, string>>({});
+  const [lastPayment, setLastPayment] = useState<{ id: string; receipt_no: string } | null>(null);
 
   const { data: invoices } = useQuery<Invoice[]>({
     queryKey: ["fees", "invoices", "student", student?.id],
@@ -209,9 +220,10 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
   const collectMutation = useMutation({
     mutationFn: ({ invoiceId, amount, gateway }: { invoiceId: string; amount: number; gateway: string }) =>
       api.post("/api/fees/collect", { invoice_id: invoiceId, amount, gateway }),
-    onSuccess: (_res, { invoiceId }) => {
+    onSuccess: (res, { invoiceId }) => {
       toast.success("Payment collected");
       setAmounts((prev) => ({ ...prev, [invoiceId]: 0 }));
+      setLastPayment({ id: res.data.data.payment.id, receipt_no: res.data.data.payment.receipt_no });
       queryClient.invalidateQueries({ queryKey: ["fees", "invoices", "student", student?.id] });
       queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
     },
@@ -229,6 +241,14 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
         <DialogHeader>
           <DialogTitle>Collect Fee — {student?.name_en} <span className="font-mono text-xs text-muted-foreground">{student?.student_uid}</span></DialogTitle>
         </DialogHeader>
+        {lastPayment && (
+          <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+            <span>Payment recorded — receipt <span className="font-mono">{lastPayment.receipt_no}</span></span>
+            <Button size="sm" variant="outline" onClick={() => downloadReceiptPdf(lastPayment.id, lastPayment.receipt_no)}>
+              Download Receipt
+            </Button>
+          </div>
+        )}
         <div className="max-h-[60vh] space-y-3 overflow-y-auto">
           {!unpaid.length && <EmptyState title="No outstanding invoices" />}
           {unpaid.map((inv) => (
