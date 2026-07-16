@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, Badge, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SeatPlanRow {
@@ -13,6 +13,7 @@ interface SeatPlanRow {
   seat_number: string;
   student_id: string;
   exam_office_cleared: boolean;
+  outstanding_due: number;
   student: { name_en: string; student_uid: string; current_class: { name_en: string } };
 }
 
@@ -38,7 +39,7 @@ export default function SeatPlanPage() {
   const clearMutation = useMutation({
     mutationFn: () => api.post(`/api/exams/${id}/seat-plan/clear`, { student_ids: [...selected] }),
     onSuccess: (res) => {
-      toast.success(`Cleared ${res.data.data.cleared} student(s) for admit card`);
+      toast.success(`Approved ${res.data.data.cleared} student(s) — admit card unlocked`);
       setSelected(new Set());
       queryClient.invalidateQueries({ queryKey: ["exams", id, "seat-plan"] });
     },
@@ -76,13 +77,14 @@ export default function SeatPlanPage() {
       {plans && plans.length > 0 && (
         <Card>
           <CardContent className="pt-6">
-            <div className="mb-3 flex justify-end">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Bulk-select students, then approve them all at once for admit card release.</p>
               <Button size="sm" onClick={() => clearMutation.mutate()} disabled={!selected.size || clearMutation.isPending}>
-                Clear Selected for Admit Card ({selected.size})
+                Approve Selected ({selected.size})
               </Button>
             </div>
             <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2" /><th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Student</th><th className="p-2">Class</th><th className="p-2">Exam Office</th></tr></thead>
+              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2" /><th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Student</th><th className="p-2">Class</th><th className="p-2">Due</th><th className="p-2">Exam Office Approval</th></tr></thead>
               <tbody>
                 {plans.map((p) => (
                   <tr key={p.id} className="border-b">
@@ -91,6 +93,7 @@ export default function SeatPlanPage() {
                     <td className="p-2">{p.seat_number}</td>
                     <td className="p-2">{p.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.student.student_uid}</span></td>
                     <td className="p-2">{p.student.current_class.name_en}</td>
+                    <td className="p-2">{p.outstanding_due > 0 ? <Badge variant="destructive">৳{p.outstanding_due} due</Badge> : <span className="text-muted-foreground">—</span>}</td>
                     <td className="p-2">{p.exam_office_cleared ? <StatusBadge status="APPROVED" /> : <StatusBadge status="PENDING" />}</td>
                   </tr>
                 ))}

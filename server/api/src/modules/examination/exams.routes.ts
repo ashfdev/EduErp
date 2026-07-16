@@ -360,10 +360,29 @@ examsRouter.get(
     const id = reqParam(req, "id");
     const plans = await prisma.examSeatPlan.findMany({
       where: { exam_id: id },
-      include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } } },
+      include: {
+        student: {
+          select: {
+            name_en: true,
+            student_uid: true,
+            current_class: { select: { name_en: true } },
+            // Same amount_due+fine_amount minus amount_paid aggregation
+            // fees/roster already uses — gives the exam-office approver a
+            // due-amount flag without needing to cross-reference Fees.
+            invoices: { where: { status: { not: "WAIVED" } }, select: { amount_due: true, amount_paid: true, fine_amount: true } },
+          },
+        },
+      },
       orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
     });
-    res.json({ success: true, data: plans });
+    const data = plans.map((p) => {
+      const { invoices, ...studentRest } = p.student;
+      const totalDue = invoices.reduce((sum, i) => sum + i.amount_due + i.fine_amount, 0);
+      const totalPaid = invoices.reduce((sum, i) => sum + i.amount_paid, 0);
+      const outstanding = Math.max(0, totalDue - totalPaid);
+      return { ...p, student: studentRest, outstanding_due: outstanding };
+    });
+    res.json({ success: true, data });
   }),
 );
 
