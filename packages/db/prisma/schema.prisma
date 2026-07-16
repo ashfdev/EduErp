@@ -317,6 +317,7 @@ model Class {
   teaching_resources TeachingResource[]
   course_enrollments CourseEnrollment[]
   ptm_slots        PTMSlot[]
+  academic_histories StudentAcademicHistory[]
 
   @@index([academic_year_id])
   @@index([program_id])
@@ -339,6 +340,7 @@ model Section {
   homework         Homework[]
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
+  academic_histories StudentAcademicHistory[]
 
   @@index([class_id])
 }
@@ -563,7 +565,9 @@ model StudentAcademicHistory {
   academic_year_id String
   academic_year    AcademicYear  @relation(fields: [academic_year_id], references: [id])
   class_id         String
+  class            Class         @relation(fields: [class_id], references: [id])
   section_id       String?
+  section          Section?      @relation(fields: [section_id], references: [id])
   roll_no          String?
   final_gpa        Float?
   final_grade      String?

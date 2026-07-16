@@ -46,8 +46,23 @@ interface StudentProfile {
     mother_phone?: string | null;
   };
   academic: {
-    current: { class?: { name_en: string } | null; section?: { name: string } | null; roll_no?: string | null; registration_no?: string | null; admission_date?: string | null };
-    history: { academic_year: { label: string }; class_id: string; final_gpa?: number | null; final_grade?: string | null; status: string }[];
+    current: {
+      class?: { name_en: string } | null;
+      section?: { name: string } | null;
+      group?: { id: string; name_en: string } | null;
+      roll_no?: string | null;
+      registration_no?: string | null;
+      admission_date?: string | null;
+    };
+    history: {
+      academic_year: { label: string };
+      class_id: string;
+      class?: { name_en: string } | null;
+      section?: { name: string } | null;
+      final_gpa?: number | null;
+      final_grade?: string | null;
+      status: string;
+    }[];
   };
   subjects: { subject_id: string; subject_name_en: string; subject_code: string; is_compulsory: boolean; is_inherited: boolean; assigned_teacher: { name_en: string } | null }[];
   attendance: { current_year_summary: { total_days: number; present: number; absent: number; late: number; percentage: number | null } };
@@ -116,7 +131,8 @@ export default function StudentProfilePage() {
           {personal.name_bn && <p className="text-muted-foreground">{personal.name_bn}</p>}
           <p className="mt-1 font-mono text-sm text-muted-foreground">{personal.student_uid}</p>
           <p className="text-sm text-muted-foreground">
-            {academic.current.class?.name_en} {academic.current.section && `· Section ${academic.current.section.name}`} {academic.current.roll_no && `· Roll ${academic.current.roll_no}`}
+            {academic.current.class?.name_en} {academic.current.section && `· Section ${academic.current.section.name}`}{" "}
+            {academic.current.group && `· ${academic.current.group.name_en}`} {academic.current.roll_no && `· Roll ${academic.current.roll_no}`}
           </p>
         </div>
         <Link href={`/students/${id}/edit`}>
@@ -179,11 +195,21 @@ export default function StudentProfilePage() {
               <div>
                 <p className="mb-2 text-sm font-medium">Academic History</p>
                 {!academic.history.length && <p className="text-sm text-muted-foreground">No promotion history yet.</p>}
-                {academic.history.map((h, i) => (
-                  <div key={i} className="border-b py-2 text-sm">
-                    {h.academic_year.label} — GPA {h.final_gpa ?? "—"} · {h.final_grade ?? "—"} · <StatusBadge status={h.status} />
-                  </div>
-                ))}
+                {academic.history.map((h, i) => {
+                  const fromClass = h.class?.name_en ? `${h.class.name_en}${h.section ? ` · ${h.section.name}` : ""}` : null;
+                  const statusPhrase: Record<string, string> = {
+                    PROMOTED: "Promoted from",
+                    FAILED: "Did not pass",
+                    TRANSFERRED: "Transferred from",
+                    GRADUATED: "Graduated from",
+                  };
+                  return (
+                    <div key={i} className="border-b py-2 text-sm">
+                      {h.academic_year.label} — GPA {h.final_gpa ?? "—"} · {h.final_grade ?? "—"} ·{" "}
+                      {fromClass ? `${statusPhrase[h.status] ?? h.status} ${fromClass}` : <StatusBadge status={h.status} />}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

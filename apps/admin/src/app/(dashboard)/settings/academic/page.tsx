@@ -252,7 +252,11 @@ export default function AcademicSettingsPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Academic Structure" subtitle="Academic years, shifts, classes, and sections" breadcrumbs={[{ label: "Settings" }, { label: "Academic" }]} />
+      <PageHeader
+        title="Academic Structure"
+        subtitle="Academic years, shifts, classes, sections, and groups/streams (Science/Commerce/Arts) — add a class's groups from its card below"
+        breadcrumbs={[{ label: "Settings" }, { label: "Academic" }]}
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

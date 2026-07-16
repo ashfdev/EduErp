@@ -177,7 +177,7 @@ studentsRouter.get(
         current_class: true,
         current_section: true,
         group: true,
-        academic_history: { include: { academic_year: true }, orderBy: { created_at: "desc" } },
+        academic_history: { include: { academic_year: true, class: true, section: true }, orderBy: { created_at: "desc" } },
         student_subjects: { include: { subject: true } },
         attendance: { orderBy: { date: "desc" }, take: 60 },
         mark_entries: { include: { exam: true, subject: true } },
