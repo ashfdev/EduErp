@@ -12,6 +12,7 @@ import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
+import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -163,6 +164,36 @@ studentsRouter.get(
     res.setHeader("Content-Disposition", 'attachment; filename="Students.xlsx"');
     await workbook.xlsx.write(res);
     res.end();
+  }),
+);
+
+// Feeds the Class-Wide Promotion admin screen (Phase 82) — the real roster
+// for a class/section, each student annotated with the same eligibility
+// check bulk-promote itself enforces, so the UI can pre-exclude a failed or
+// low-attendance student with its reason before anything is submitted, not
+// just discover it after a rejected bulk-promote call. Registered before
+// GET /:id so "promotion-roster" isn't swallowed as an :id value.
+studentsRouter.get(
+  "/promotion-roster",
+  authorize(STUDENT_PROMOTE_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
+    const students = await prisma.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        current_class_id: query.class_id,
+        ...(query.section_id && { current_section_id: query.section_id }),
+      },
+      select: STUDENT_LIST_SELECT,
+      orderBy: { current_roll_no: "asc" },
+    });
+
+    const roster = await Promise.all(
+      students.map(async (s) => ({ ...s, eligibility: await checkPromotionEligibility(prisma, s.id) })),
+    );
+
+    res.json({ success: true, data: roster });
   }),
 );
 
@@ -471,6 +502,14 @@ studentsRouter.post(
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
+    // Same failed-subject/attendance safety net bulk-promote already has —
+    // a single-student promote must not be a way to bypass it. An explicit
+    // override intentionally isn't offered here (unlike section capacity,
+    // which is a soft, sometimes-legitimate-to-exceed target) — promoting a
+    // student who failed should go through the bulk-promotion screen's
+    // deliberate deselect-and-confirm flow, not a silent one-off bypass.
+    const eligibility = await checkPromotionEligibility(prisma, id);
+    if (!eligibility.eligible) throw badRequest(`Cannot promote: ${eligibility.reason}`);
     if (body.new_section_id && body.new_section_id !== existing.current_section_id) {
       await assertSectionCapacity(body.new_section_id, req.body.override === true);
     }
@@ -549,7 +588,6 @@ studentsRouter.post(
     const promoted: string[] = [];
     const skipped: { id: string; reason: string }[] = [];
 
-    const attendanceRules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     // Checked once for the whole batch (not per-student) — this only tells
     // us whether new_class_id requires a group at all; which specific group
     // each student needs is still resolved per-student below via
@@ -564,24 +602,10 @@ studentsRouter.post(
         continue;
       }
 
-      const failedExam = await prisma.markEntry.findFirst({
-        where: { student_id: studentId, grade_letter: "F" },
-      });
-      if (failedExam) {
-        skipped.push({ id: studentId, reason: "Failed a subject in the latest exam" });
+      const eligibility = await checkPromotionEligibility(prisma, studentId);
+      if (!eligibility.eligible) {
+        skipped.push({ id: studentId, reason: eligibility.reason! });
         continue;
-      }
-
-      if (attendanceRules) {
-        const totalAttendance = await prisma.attendanceRecord.count({ where: { person_id: studentId, person_type: "STUDENT" } });
-        const presentCount = await prisma.attendanceRecord.count({
-          where: { person_id: studentId, person_type: "STUDENT", status: "PRESENT" },
-        });
-        const percentage = totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 100;
-        if (percentage < attendanceRules.min_attendance_percentage) {
-          skipped.push({ id: studentId, reason: `Attendance below ${attendanceRules.min_attendance_percentage}%` });
-          continue;
-        }
       }
 
       // Re-checked per student, not once for the whole batch — each commit

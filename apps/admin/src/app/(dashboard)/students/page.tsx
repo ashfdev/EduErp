@@ -110,6 +110,9 @@ export default function StudentsPage() {
             <Link href="/students/bulk-import">
               <Button variant="outline">{t("bulkImport")}</Button>
             </Link>
+            <Link href="/students/promote">
+              <Button variant="outline">Promote Students</Button>
+            </Link>
             <Link href="/students/new">
               <Button>{t("addStudent")}</Button>
             </Link>
