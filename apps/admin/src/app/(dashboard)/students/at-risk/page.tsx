@@ -41,6 +41,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections?: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 
 function riskColor(score: number) {
@@ -52,6 +53,7 @@ function riskColor(score: number) {
 export default function AtRiskStudentsPage() {
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [messageStudentId, setMessageStudentId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
 
@@ -62,9 +64,9 @@ export default function AtRiskStudentsPage() {
   const selectedClass = classes?.find((c) => c.id === classId);
 
   const { data: students, refetch } = useQuery<RiskStudent[]>({
-    queryKey: ["analytics", "defaulters-risk", classId, sectionId],
+    queryKey: ["analytics", "defaulters-risk", classId, sectionId, groupId],
     queryFn: async () =>
-      (await api.get("/api/analytics/defaulters-risk", { params: { class_id: classId || undefined, section_id: sectionId || undefined } })).data.data,
+      (await api.get("/api/analytics/defaulters-risk", { params: { class_id: classId || undefined, section_id: sectionId || undefined, group_id: groupId || undefined } })).data.data,
   });
 
   const draftMutation = useMutation({
@@ -97,7 +99,7 @@ export default function AtRiskStudentsPage() {
       />
 
       <div className="flex gap-3">
-        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setSectionId(""); }}>
+        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setSectionId(""); setGroupId(""); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder="All Classes" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Classes</SelectItem>
@@ -111,6 +113,15 @@ export default function AtRiskStudentsPage() {
             {selectedClass?.sections?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {!!selectedClass?.groups?.length && (
+          <Select value={groupId || "all"} onValueChange={(v) => setGroupId(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="All Groups" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Groups</SelectItem>
+              {selectedClass.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_en}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
       </div>
 

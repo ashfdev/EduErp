@@ -38,6 +38,7 @@ const STUDENT_LIST_SELECT = {
   father_phone: true,
   current_class: { select: { id: true, name_en: true } },
   current_section: { select: { id: true, name: true } },
+  group: { select: { id: true, name_en: true } },
   guardian: { select: { phone: true } },
 } as const;
 
@@ -49,6 +50,7 @@ studentsRouter.get(
         search: z.string().optional(),
         class_id: z.string().optional(),
         section_id: z.string().optional(),
+        group_id: z.string().optional(),
         status: z.string().optional(),
         gender: z.string().optional(),
         // Student has no direct FK to Program/Department — resolved via its
@@ -66,6 +68,7 @@ studentsRouter.get(
       deleted_at: null,
       ...(query.class_id && { current_class_id: query.class_id }),
       ...(query.section_id && { current_section_id: query.section_id }),
+      ...(query.group_id && { group_id: query.group_id }),
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
       ...(query.program_id && { current_class: { program_id: query.program_id } }),
@@ -108,6 +111,7 @@ studentsRouter.get(
         search: z.string().optional(),
         class_id: z.string().optional(),
         section_id: z.string().optional(),
+        group_id: z.string().optional(),
         status: z.string().optional(),
         gender: z.string().optional(),
       })
@@ -117,6 +121,7 @@ studentsRouter.get(
       deleted_at: null,
       ...(query.class_id && { current_class_id: query.class_id }),
       ...(query.section_id && { current_section_id: query.section_id }),
+      ...(query.group_id && { group_id: query.group_id }),
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
       ...(query.search && {

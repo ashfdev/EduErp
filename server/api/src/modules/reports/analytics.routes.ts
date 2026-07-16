@@ -277,13 +277,14 @@ analyticsRouter.get(
   "/defaulters-risk",
   authorize(ANALYTICS_MESSAGE_ROLES),
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional() }).parse(req.query);
+    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), group_id: z.string().optional() }).parse(req.query);
     const students = await prisma.student.findMany({
       where: {
         deleted_at: null,
         status: "ACTIVE",
         ...(query.class_id && { current_class_id: query.class_id }),
         ...(query.section_id && { current_section_id: query.section_id }),
+        ...(query.group_id && { group_id: query.group_id }),
       },
       include: { current_class: true, current_section: true },
     });

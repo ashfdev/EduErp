@@ -18,6 +18,7 @@ interface StudentRow {
   status: string;
   current_class?: { name_en: string } | null;
   current_section?: { name: string } | null;
+  group?: { name_en: string } | null;
   guardian?: { phone: string } | null;
 }
 
@@ -25,6 +26,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections?: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 interface ProgramOption {
   id: string;
@@ -43,6 +45,7 @@ export default function StudentsPage() {
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState<string>("");
   const [sectionId, setSectionId] = useState<string>("");
+  const [groupId, setGroupId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [gender, setGender] = useState<string>("");
   const [programId, setProgramId] = useState<string>("");
@@ -70,6 +73,7 @@ export default function StudentsPage() {
     search: search || undefined,
     class_id: classId || undefined,
     section_id: sectionId || undefined,
+    group_id: groupId || undefined,
     status: status || undefined,
     gender: gender || undefined,
     program_id: isUniversity ? programId || undefined : undefined,
@@ -135,7 +139,7 @@ export default function StudentsPage() {
           </>
         )}
 
-        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setSectionId(""); }}>
+        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setSectionId(""); setGroupId(""); }}>
           <SelectTrigger className="w-48"><SelectValue placeholder={t("allClasses")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("allClasses")}</SelectItem>
@@ -150,6 +154,16 @@ export default function StudentsPage() {
             {selectedClass?.sections?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
+
+        {!!selectedClass?.groups?.length && (
+          <Select value={groupId || "all"} onValueChange={(v) => setGroupId(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-40"><SelectValue placeholder={t("allGroups")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allGroups")}</SelectItem>
+              {selectedClass.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_en}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
 
         <Select value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? "" : v)}>
           <SelectTrigger className="w-36"><SelectValue placeholder={t("allStatus")} /></SelectTrigger>
@@ -198,7 +212,7 @@ export default function StudentsPage() {
                     <div className="font-medium">{s.name_en}</div>
                     {s.name_bn && <div className="text-xs text-muted-foreground">{s.name_bn}</div>}
                   </td>
-                  <td className="p-2">{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`}</td>
+                  <td className="p-2">{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</td>
                   <td className="p-2">{s.current_roll_no ?? "—"}</td>
                   <td className="p-2">{s.guardian?.phone ?? "—"}</td>
                   <td className="p-2"><StatusBadge status={s.status} /></td>
