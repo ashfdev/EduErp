@@ -234,7 +234,7 @@ classesRouter.get(
     const classes = await prisma.class.findMany({
       where: academic_year_id ? { academic_year_id } : undefined,
       include: {
-        sections: { include: { _count: { select: { students: true } } } },
+        sections: { include: { shift: { select: { id: true, name: true, start_time: true, end_time: true } }, _count: { select: { students: true } } } },
         _count: { select: { students: true } },
       },
       orderBy: { numeric_level: "asc" },

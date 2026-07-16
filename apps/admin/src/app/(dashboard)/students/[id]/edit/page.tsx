@@ -20,11 +20,12 @@ import {
   SelectItem,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useInstitution } from "@/hooks/use-institution";
 
 interface ClassOption {
   id: string;
   name_en: string;
-  sections: { id: string; name: string }[];
+  sections: { id: string; name: string; shift: { id: string; name: string } | null }[];
 }
 
 interface StudentProfile {
@@ -85,6 +86,7 @@ const emptyForm = {
 export default function EditStudentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { terms } = useInstitution();
   const [form, setForm] = useState(emptyForm);
   const [loaded, setLoaded] = useState(false);
 
@@ -245,7 +247,11 @@ export default function EditStudentPage() {
                 <Select value={form.current_section_id} onValueChange={(v) => set("current_section_id", v)}>
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
-                    {selectedClass?.sections.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    {selectedClass?.sections.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}{terms.has_shifts ? ` — ${s.shift ? s.shift.name : "no shift set"}` : ""}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

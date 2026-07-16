@@ -9,6 +9,7 @@ interface InstitutionProfile {
 interface InstitutionConfig {
   has_departments: boolean;
   has_semesters: boolean;
+  has_shifts: boolean;
   show_hijri_calendar: boolean;
   term_class: string;
   term_section: string;
@@ -20,6 +21,7 @@ interface InstitutionConfig {
 const DEFAULT_TERMS: InstitutionConfig = {
   has_departments: false,
   has_semesters: false,
+  has_shifts: true,
   show_hijri_calendar: false,
   term_class: "Class",
   term_section: "Section",

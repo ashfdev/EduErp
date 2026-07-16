@@ -46,11 +46,20 @@ interface ShiftPeriodRow {
   is_break: boolean;
 }
 
+interface SectionRow {
+  id: string;
+  name: string;
+  capacity: number;
+  shift_id: string | null;
+  shift: { id: string; name: string; start_time: string; end_time: string } | null;
+  _count: { students: number };
+}
+
 interface ClassRow {
   id: string;
   name_en: string;
   numeric_level: number;
-  sections: { id: string; name: string; _count: { students: number } }[];
+  sections: SectionRow[];
   _count: { students: number };
 }
 
@@ -142,15 +151,45 @@ export default function AcademicSettingsPage() {
     },
   });
 
+  const emptySectionForm = { name: "", shift_id: "", capacity: 50 };
   const [sectionClassId, setSectionClassId] = useState<string | null>(null);
-  const [sectionName, setSectionName] = useState("");
+  const [sectionForm, setSectionForm] = useState(emptySectionForm);
   const createSection = useMutation({
-    mutationFn: () => api.post(`/api/settings/classes/${sectionClassId}/sections`, { name: sectionName }),
+    mutationFn: () =>
+      api.post(`/api/settings/classes/${sectionClassId}/sections`, {
+        name: sectionForm.name,
+        shift_id: sectionForm.shift_id || null,
+        capacity: sectionForm.capacity,
+      }),
     onSuccess: () => {
       toast.success("Section added");
       queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
       setSectionClassId(null);
-      setSectionName("");
+      setSectionForm(emptySectionForm);
+    },
+  });
+
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editSectionForm, setEditSectionForm] = useState(emptySectionForm);
+  function openEditSection(s: SectionRow) {
+    setEditingSectionId(s.id);
+    setEditSectionForm({ name: s.name, shift_id: s.shift_id ?? "", capacity: s.capacity });
+  }
+  const updateSection = useMutation({
+    mutationFn: () =>
+      api.put(`/api/settings/sections/${editingSectionId}`, {
+        name: editSectionForm.name,
+        shift_id: editSectionForm.shift_id || null,
+        capacity: editSectionForm.capacity,
+      }),
+    onSuccess: () => {
+      toast.success("Section updated");
+      queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
+      setEditingSectionId(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update section";
+      toast.error(message);
     },
   });
 
@@ -215,7 +254,11 @@ export default function AcademicSettingsPage() {
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {c.sections.map((s) => (
-                  <Badge key={s.id} variant="secondary">{s.name} ({s._count.students})</Badge>
+                  <button key={s.id} type="button" onClick={() => openEditSection(s)} className="cursor-pointer">
+                    <Badge variant="secondary">
+                      {s.name} ({s._count.students}/{s.capacity}){s.shift ? ` — ${s.shift.name}` : " — no shift"}
+                    </Badge>
+                  </button>
                 ))}
               </div>
             </div>
@@ -275,8 +318,42 @@ export default function AcademicSettingsPage() {
       <Dialog open={!!sectionClassId} onOpenChange={(v) => !v && setSectionClassId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add Section</DialogTitle></DialogHeader>
-          <div className="space-y-1.5"><Label>Name</Label><Input value={sectionName} onChange={(e) => setSectionName(e.target.value)} placeholder="A" /></div>
-          <DialogFooter><Button onClick={() => createSection.mutate()} disabled={createSection.isPending}>Create</Button></DialogFooter>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={sectionForm.name} onChange={(e) => setSectionForm({ ...sectionForm, name: e.target.value })} placeholder="A" /></div>
+            <div className="space-y-1.5">
+              <Label>Shift (optional)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={sectionForm.shift_id} onChange={(e) => setSectionForm({ ...sectionForm, shift_id: e.target.value })}>
+                <option value="">None</option>
+                {shifts?.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Capacity</Label>
+              <Input type="number" min={1} value={sectionForm.capacity} onChange={(e) => setSectionForm({ ...sectionForm, capacity: Number(e.target.value) })} />
+            </div>
+          </div>
+          <DialogFooter><Button onClick={() => createSection.mutate()} disabled={createSection.isPending || !sectionForm.name}>Create</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingSectionId} onOpenChange={(v) => !v && setEditingSectionId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Section</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={editSectionForm.name} onChange={(e) => setEditSectionForm({ ...editSectionForm, name: e.target.value })} /></div>
+            <div className="space-y-1.5">
+              <Label>Shift (optional)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={editSectionForm.shift_id} onChange={(e) => setEditSectionForm({ ...editSectionForm, shift_id: e.target.value })}>
+                <option value="">None</option>
+                {shifts?.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Capacity</Label>
+              <Input type="number" min={1} value={editSectionForm.capacity} onChange={(e) => setEditSectionForm({ ...editSectionForm, capacity: Number(e.target.value) })} />
+            </div>
+          </div>
+          <DialogFooter><Button onClick={() => updateSection.mutate()} disabled={updateSection.isPending || !editSectionForm.name}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
