@@ -137,18 +137,40 @@ documentsRouter.get(
   "/exam/:exam_id/seat-plan",
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
-    const query = z.object({ class_id: z.string().min(1) }).parse(req.query);
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw notFound("Exam not found");
+
     const plans = await prisma.examSeatPlan.findMany({
-      where: { exam_id: examId, student: { current_class_id: query.class_id } },
-      include: { student: { select: { name_en: true, current_roll_no: true, student_uid: true } } },
-      orderBy: { hall_name: "asc" },
+      where: { exam_id: examId },
+      include: { student: { select: { name_en: true, current_roll_no: true, student_uid: true, current_class: { select: { name_en: true } } } } },
+      orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
     });
-    const rows = plans
-      .map((p) => `<tr><td>${p.hall_name ?? ""}</td><td>${p.seat_number ?? ""}</td><td>${p.student.current_roll_no ?? ""}</td><td>${p.student.name_en}</td></tr>`)
-      .join("");
-    const html = `<table><thead><tr><th>Hall</th><th>Seat</th><th>Roll</th><th>Name</th></tr></thead><tbody>${rows}</tbody></table>`;
-    const pdf = await renderSimpleReport("Seat Plan", html);
-    sendPdf(res, pdf, "seat-plan.pdf", req.query.download === "true");
+    if (!plans.length) throw badRequest("No seat plan generated for this exam yet");
+
+    const academicYearLabel = await getAcademicYearLabel(exam.academic_year_id);
+    interface SeatRow {
+      seat_number: string | null;
+      roll_no: string;
+      name_en: string;
+      student_uid: string;
+      class_name: string;
+    }
+    const hallsMap = new Map<string, { hall_name: string; seats: SeatRow[] }>();
+    for (const p of plans) {
+      const hallName = p.hall_name ?? "Unassigned";
+      const hall = hallsMap.get(hallName) ?? { hall_name: hallName, seats: [] };
+      hall.seats.push({
+        seat_number: p.seat_number,
+        roll_no: p.student.current_roll_no ?? "",
+        name_en: p.student.name_en,
+        student_uid: p.student.student_uid,
+        class_name: p.student.current_class?.name_en ?? "",
+      });
+      hallsMap.set(hallName, hall);
+    }
+
+    const pdf = await renderDocument("SEAT_PLAN", { exam_name: exam.name, academic_year_label: academicYearLabel, halls: [...hallsMap.values()] });
+    sendPdf(res, pdf, `seat-plan-${examId}.pdf`, req.query.download === "true");
   }),
 );
 

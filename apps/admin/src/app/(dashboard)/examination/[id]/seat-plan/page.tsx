@@ -17,6 +17,16 @@ interface SeatPlanRow {
   student: { name_en: string; student_uid: string; current_class: { name_en: string } };
 }
 
+async function printSeatPlan(examId: string) {
+  const res = await api.get(`/api/documents/exam/${examId}/seat-plan`, { params: { download: "true" }, responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Seat_Plan_${examId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function SeatPlanPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -56,7 +66,11 @@ export default function SeatPlanPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Seat Plan" breadcrumbs={[{ label: "Examination", href: "/examination" }, { label: "Seat Plan" }]} />
+      <PageHeader
+        title="Seat Plan"
+        breadcrumbs={[{ label: "Examination", href: "/examination" }, { label: "Seat Plan" }]}
+        action={!!plans?.length && <Button variant="outline" onClick={() => printSeatPlan(id)}>Print Seat Plan</Button>}
+      />
 
       <Card>
         <CardContent className="space-y-3 pt-6">
