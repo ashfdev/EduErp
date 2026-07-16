@@ -29,7 +29,14 @@ export async function computeClassResults(examId: string, classId: string) {
 
   const perStudent = students.map((student) => {
     const studentEntries = entries.filter((e) => e.student_id === student.id);
-    const subjectInputs = subjects.map((s) => {
+    // A subject scoped to a Group other than the student's own must never
+    // count toward their result — otherwise every student in a grouped
+    // class would be evaluated against every other group's subjects too,
+    // showing as "absent" (and therefore failed) in every one of them.
+    // Mirrors inheritSubjectsForClass's exact eligibility rule: shared
+    // (group_id null) or the student's own group.
+    const eligibleSubjects = subjects.filter((s) => s.group_id === null || s.group_id === student.group_id);
+    const subjectInputs = eligibleSubjects.map((s) => {
       const entry = studentEntries.find((e) => e.subject_id === s.id);
       return { subject_id: s.id, subject_name: s.name_en, is_optional: s.is_optional, marks_total: entry?.marks_total ?? null, is_absent: entry?.is_absent ?? true };
     });
@@ -68,6 +75,13 @@ resultsRouter.get(
     const results = [];
     for (const pub of publications) {
       if (pub.class_id !== student.current_class_id) continue;
+      // A grouped class's groups publish independently (Phase 75) — a
+      // null-group publication only matches an ungrouped student, and a
+      // specific group's publication only matches a student currently in
+      // that same group. Uses the student's CURRENT group_id (Groups are
+      // per-class-scoped and already go stale on class change elsewhere in
+      // this feature; no historical per-year group record exists).
+      if (pub.group_id !== (student.group_id ?? null)) continue;
       const entries = await prisma.markEntry.findMany({ where: { exam_id: pub.exam_id, student_id: id }, include: { subject: true } });
       if (!entries.length) continue;
       const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
@@ -163,7 +177,10 @@ resultsRouter.get(
       });
       const publications = candidatePublications.filter((pub) => {
         const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
-        return resolvedClassId === pub.class_id;
+        if (resolvedClassId !== pub.class_id) return false;
+        // See the identical group-matching note in /student/:id above —
+        // same current-group-id comparison, same known limitation.
+        return pub.group_id === (student.group_id ?? null);
       });
 
       const results = [];
@@ -349,12 +366,22 @@ resultsRouter.get(
 
     const summary = [];
     for (const pub of publications) {
-      const klass = await prisma.class.findUnique({ where: { id: pub.class_id } });
-      const results = await computeClassResults(examId, pub.class_id);
+      const [klass, group] = await Promise.all([
+        prisma.class.findUnique({ where: { id: pub.class_id } }),
+        pub.group_id ? prisma.group.findUnique({ where: { id: pub.group_id } }) : Promise.resolve(null),
+      ]);
+      // A grouped class has one publication row per group — computeClassResults
+      // returns every student in the class, so narrow to just this
+      // publication's own group to avoid double-counting a class with
+      // multiple groups (once per group's row).
+      const classResults = await computeClassResults(examId, pub.class_id);
+      const results = pub.group_id ? classResults.filter((r) => r.student.group_id === pub.group_id) : classResults;
       const passed = results.filter((r) => !r.result.has_failed).length;
       summary.push({
         class_id: pub.class_id,
         class_name: klass?.name_en,
+        group_id: pub.group_id,
+        group_name: group?.name_en ?? null,
         total_students: results.length,
         passed,
         pass_rate: results.length ? Math.round((passed / results.length) * 1000) / 10 : null,

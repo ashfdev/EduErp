@@ -954,12 +954,23 @@ model ResultPublication {
   exam_id         String
   exam            Exam      @relation(fields: [exam_id], references: [id])
   class_id        String
+  // null means "this class has no Groups defined" — the unchanged, existing
+  // behavior for every non-grouped class. A grouped class always has a real
+  // (non-null) group_id here, letting one group publish independently of
+  // another in the same class (Phase 75).
+  group_id        String?
   is_published    Boolean   @default(false)
   published_at    DateTime?
   published_by_id String?
   is_public       Boolean   @default(false)
 
-  @@unique([exam_id, class_id])
+  // NOTE: this constraint alone does not stop two rows from colliding when
+  // group_id is NULL (Postgres treats each NULL as distinct in a unique
+  // index) — a partial unique index on (exam_id, class_id) WHERE group_id
+  // IS NULL closes that gap, mirroring RoutineSlot's identical nullable-
+  // section_id trap. Prisma's schema language can't express a partial
+  // index, so it only exists in the migration, not here.
+  @@unique([exam_id, class_id, group_id])
 }
 
 // ─────────────────────────────────────────────

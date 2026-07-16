@@ -13,9 +13,83 @@ import { computeClassResults } from "../results/results.routes";
 import { sendNotification } from "../../services/notification.service";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
+import { invalidateCacheNamespace } from "../../lib/cache";
 
 export const marksRouter = Router();
 marksRouter.use(authenticate);
+
+// A class with Groups defined has no meaningful "whole class" publish unit —
+// group_id: null would create a ResultPublication row no student's own
+// group-scoped result lookup could ever match (a silent no-op publish).
+// Require an explicit, valid group_id whenever the class actually has
+// Groups; omitted group_id is only valid for a class with none.
+async function assertGroupIdForApproveOrPublish(classId: string, groupId?: string) {
+  if (groupId) {
+    const group = await prisma.group.findFirst({ where: { id: groupId, class_id: classId, is_active: true } });
+    if (!group) throw badRequest("The selected group does not belong to this class");
+    return;
+  }
+  const hasGroups = await prisma.group.findFirst({ where: { class_id: classId, is_active: true } });
+  if (hasGroups) {
+    throw badRequest("This class has Groups/Streams — select a group to approve/publish, or use Publish Whole Campus once every group is ready");
+  }
+}
+
+export interface ExamUnit {
+  class_id: string;
+  group_id: string | null;
+}
+
+// The set of independently-completable/publishable (class, group) units tied
+// to an exam — a class with no Groups is one unit (group_id: null); a class
+// with N active Groups contributes N units, one per group. Shared by the
+// publish handler's completion auto-flip, the approve/publish dashboard, and
+// "Publish Whole Campus".
+export async function getExamUnits(examId: string): Promise<ExamUnit[]> {
+  const classIds = await prisma.subject
+    .findMany({ where: { exam_subject_configs: { some: { exam_id: examId } } }, select: { class_id: true }, distinct: ["class_id"] })
+    .then((rows) => [...new Set(rows.map((r) => r.class_id))]);
+  const groups = await prisma.group.findMany({ where: { class_id: { in: classIds }, is_active: true } });
+  const groupsByClass = new Map<string, string[]>();
+  for (const g of groups) {
+    groupsByClass.set(g.class_id, [...(groupsByClass.get(g.class_id) ?? []), g.id]);
+  }
+  const units: ExamUnit[] = [];
+  for (const classId of classIds) {
+    const classGroups = groupsByClass.get(classId);
+    if (classGroups && classGroups.length > 0) {
+      for (const groupId of classGroups) units.push({ class_id: classId, group_id: groupId });
+    } else {
+      units.push({ class_id: classId, group_id: null });
+    }
+  }
+  return units;
+}
+
+// Eligible-subjects filter shared by approve/publish/dashboard completeness
+// checks — mirrors inheritSubjectsForClass's exact rule: a subject with no
+// group applies to everyone in the class; a group-scoped subject only to
+// students in that same group.
+function filterEligibleSubjects<T extends { group_id: string | null }>(subjects: T[], groupId: string | null): T[] {
+  return subjects.filter((s) => s.group_id === null || s.group_id === groupId);
+}
+
+// Prisma's compound-unique shorthand (exam_id_class_id_group_id) requires a
+// non-null group_id even though the column itself is nullable — it can't
+// express "match group_id IS NULL" through that path. Upsert manually via a
+// plain findFirst (which does support a null filter) instead.
+async function upsertResultPublication(
+  examId: string,
+  classId: string,
+  groupId: string | null,
+  data: { is_published: boolean; published_at: Date; published_by_id: string; is_public: boolean },
+) {
+  const existing = await prisma.resultPublication.findFirst({ where: { exam_id: examId, class_id: classId, group_id: groupId } });
+  if (existing) {
+    return prisma.resultPublication.update({ where: { id: existing.id }, data });
+  }
+  return prisma.resultPublication.create({ data: { exam_id: examId, class_id: classId, group_id: groupId, ...data } });
+}
 
 marksRouter.get(
   "/:exam_id/:class_id/:section_id",
@@ -222,12 +296,16 @@ marksRouter.post(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    const query = z.object({ group_id: z.string().optional() }).parse(req.query);
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
+    await assertGroupIdForApproveOrPublish(classId, query.group_id);
 
     const subjects = await prisma.subject.findMany({ where: { class_id: classId, is_active: true } });
-    const students = await prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null } });
+    const students = await prisma.student.findMany({
+      where: { current_class_id: classId, deleted_at: null, ...(query.group_id && { group_id: query.group_id }) },
+    });
 
     const entries = await prisma.markEntry.findMany({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) } },
@@ -241,6 +319,8 @@ marksRouter.post(
     // truth for which subjects a given student actually has (populated by
     // inheritSubjectsForClass at enrollment/promotion time), so sum each
     // student's real enrollment count instead of assuming a uniform grid.
+    // When group_id is supplied, students is already narrowed to that
+    // group, so this naturally only counts that group's expected entries.
     const expectedCount = await prisma.studentSubject.count({
       where: {
         student_id: { in: students.map((s) => s.id) },
@@ -256,7 +336,7 @@ marksRouter.post(
       where: { id: { in: entries.map((e) => e.id) } },
       data: { status: "APPROVED", approved_by_id: req.user!.sub, approved_at: new Date() },
     });
-    await logAudit("RESULT_APPROVE", { userId: req.user!.sub, targetType: "Exam", targetId: examId, metadata: { approved: entries.length }, req });
+    await logAudit("RESULT_APPROVE", { userId: req.user!.sub, targetType: "Exam", targetId: examId, metadata: { approved: entries.length, group_id: query.group_id ?? null }, req });
 
     res.json({ success: true, data: { approved: entries.length } });
   }),
@@ -267,11 +347,64 @@ marksRouter.get(
   authorize(RESULT_PUBLISH_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
-    const publications = await prisma.resultPublication.findMany({ where: { exam_id: examId } });
-    res.json({
-      success: true,
-      data: publications.map((p) => ({ class_id: p.class_id, is_published: p.is_published, is_public: p.is_public, published_at: p.published_at })),
-    });
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw notFound("Exam not found");
+
+    const units = await getExamUnits(examId);
+    const classIds = [...new Set(units.map((u) => u.class_id))];
+    const groupIds = units.map((u) => u.group_id).filter((id): id is string => !!id);
+
+    const [classes, groups, publications] = await Promise.all([
+      prisma.class.findMany({ where: { id: { in: classIds } } }),
+      prisma.group.findMany({ where: { id: { in: groupIds } } }),
+      prisma.resultPublication.findMany({ where: { exam_id: examId } }),
+    ]);
+    const classById = new Map(classes.map((c) => [c.id, c]));
+    const groupById = new Map(groups.map((g) => [g.id, g]));
+    const pubByKey = new Map(publications.map((p) => [`${p.class_id}:${p.group_id ?? ""}`, p]));
+
+    // One dashboard row per (class, group) unit — a class with no Groups is
+    // a single row; a class with N groups is N independent rows, each with
+    // its own completion/approval/publish state.
+    const data = await Promise.all(
+      units.map(async (u) => {
+        const subjects = filterEligibleSubjects(
+          await prisma.subject.findMany({ where: { class_id: u.class_id, is_active: true } }),
+          u.group_id,
+        );
+        const students = await prisma.student.findMany({
+          where: { current_class_id: u.class_id, deleted_at: null, ...(u.group_id && { group_id: u.group_id }) },
+        });
+        const [expectedCount, entries] = await Promise.all([
+          prisma.studentSubject.count({
+            where: { student_id: { in: students.map((s) => s.id) }, subject_id: { in: subjects.map((s) => s.id) }, academic_year_id: exam.academic_year_id },
+          }),
+          prisma.markEntry.findMany({
+            where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) } },
+            select: { status: true },
+          }),
+        ]);
+        const approvedCount = entries.filter((e) => e.status === "APPROVED").length;
+        const pub = pubByKey.get(`${u.class_id}:${u.group_id ?? ""}`);
+        return {
+          class_id: u.class_id,
+          class_name: classById.get(u.class_id)?.name_en ?? "",
+          group_id: u.group_id,
+          group_name: u.group_id ? (groupById.get(u.group_id)?.name_en ?? "") : null,
+          student_count: students.length,
+          expected_count: expectedCount,
+          submitted_count: entries.length,
+          approved_count: approvedCount,
+          is_complete: entries.length >= expectedCount,
+          is_approved: expectedCount > 0 && approvedCount >= expectedCount,
+          is_published: pub?.is_published ?? false,
+          is_public: pub?.is_public ?? true,
+          published_at: pub?.published_at ?? null,
+        };
+      }),
+    );
+
+    res.json({ success: true, data });
   }),
 );
 
@@ -281,40 +414,48 @@ marksRouter.post(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const body = z.object({ is_public: z.boolean().optional() }).parse(req.body);
+    const body = z.object({ is_public: z.boolean().optional(), group_id: z.string().optional() }).parse(req.body);
     // "Public on website" defaults ON — staff can already see the result
     // regardless of this flag, so the more common mistake is publishing and
     // assuming the public site updated too, not accidentally exposing it.
     const isPublic = body.is_public ?? true;
+    await assertGroupIdForApproveOrPublish(classId, body.group_id);
+    const groupId = body.group_id ?? null;
 
-    const subjects = await prisma.subject.findMany({ where: { class_id: classId } });
+    const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: classId, is_active: true } }), groupId);
+    const students = await prisma.student.findMany({
+      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+    });
     const unapproved = await prisma.markEntry.findFirst({
-      where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, status: { not: "APPROVED" } },
+      where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
     });
     if (unapproved) throw badRequest("All marks must be approved before publishing");
 
-    const publication = await prisma.resultPublication.upsert({
-      where: { exam_id_class_id: { exam_id: examId, class_id: classId } },
-      create: { exam_id: examId, class_id: classId, is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: isPublic },
-      update: { is_published: true, published_at: new Date(), published_by_id: req.user!.sub, is_public: isPublic },
+    const publication = await upsertResultPublication(examId, classId, groupId, {
+      is_published: true,
+      published_at: new Date(),
+      published_by_id: req.user!.sub,
+      is_public: isPublic,
     });
-    await logAudit("RESULT_PUBLISH", { userId: req.user!.sub, targetType: "ResultPublication", targetId: publication.id, metadata: { exam_id: examId, class_id: classId, is_public: isPublic }, req });
+    await logAudit("RESULT_PUBLISH", { userId: req.user!.sub, targetType: "ResultPublication", targetId: publication.id, metadata: { exam_id: examId, class_id: classId, group_id: groupId, is_public: isPublic }, req });
 
-    // An exam can span multiple classes (via ExamSubjectConfig) — only flip
-    // Exam.status to PUBLISHED once every one of those classes has actually
-    // been published, so it isn't misleadingly marked done after just one.
-    const examClassIds = await prisma.subject
-      .findMany({ where: { exam_subject_configs: { some: { exam_id: examId } } }, select: { class_id: true }, distinct: ["class_id"] })
-      .then((rows) => [...new Set(rows.map((r) => r.class_id))]);
-    const publishedClassIds = await prisma.resultPublication
-      .findMany({ where: { exam_id: examId, is_published: true, class_id: { in: examClassIds } }, select: { class_id: true } })
-      .then((rows) => new Set(rows.map((r) => r.class_id)));
-    if (examClassIds.length > 0 && examClassIds.every((id) => publishedClassIds.has(id))) {
+    // An exam can span multiple (class, group) units — only flip Exam.status
+    // to PUBLISHED once every one of them has actually been published, so
+    // it isn't misleadingly marked done after just one group/class.
+    const units = await getExamUnits(examId);
+    const publishedUnitKeys = await prisma.resultPublication
+      .findMany({ where: { exam_id: examId, is_published: true }, select: { class_id: true, group_id: true } })
+      .then((rows) => new Set(rows.map((r) => `${r.class_id}:${r.group_id ?? ""}`)));
+    if (units.length > 0 && units.every((u) => publishedUnitKeys.has(`${u.class_id}:${u.group_id ?? ""}`))) {
       await prisma.exam.update({ where: { id: examId }, data: { status: "PUBLISHED" } });
     }
+    // The public/portal lookup caches "not found" responses for 30 minutes —
+    // without this, a guardian who checked before publish would keep seeing
+    // a stale "not found" long after the result actually went live.
+    await invalidateCacheNamespace("result-lookup");
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
-    const perStudent = await computeClassResults(examId, classId);
+    const perStudent = (await computeClassResults(examId, classId)).filter((p) => (groupId ? p.student.group_id === groupId : true));
     const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
     const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
     const guardianById = new Map(guardians.map((g) => [g.id, g]));
@@ -329,5 +470,81 @@ marksRouter.post(
     }
 
     res.json({ success: true, data: publication });
+  }),
+);
+
+marksRouter.post(
+  "/publish-whole-campus/:exam_id",
+  authorize(RESULT_PUBLISH_ROLES),
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw notFound("Exam not found");
+
+    const units = await getExamUnits(examId);
+    const alreadyPublished = await prisma.resultPublication
+      .findMany({ where: { exam_id: examId, is_published: true }, select: { class_id: true, group_id: true } })
+      .then((rows) => new Set(rows.map((r) => `${r.class_id}:${r.group_id ?? ""}`)));
+    const pending = units.filter((u) => !alreadyPublished.has(`${u.class_id}:${u.group_id ?? ""}`));
+
+    const published: ExamUnit[] = [];
+    const failed: (ExamUnit & { reason: string })[] = [];
+    for (const unit of pending) {
+      try {
+        const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: unit.class_id, is_active: true } }), unit.group_id);
+        const students = await prisma.student.findMany({
+          where: { current_class_id: unit.class_id, deleted_at: null, ...(unit.group_id && { group_id: unit.group_id }) },
+        });
+        const unapproved = await prisma.markEntry.findFirst({
+          where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
+        });
+        if (unapproved) throw new Error("Not all marks are approved yet");
+
+        const publication = await upsertResultPublication(examId, unit.class_id, unit.group_id, {
+          is_published: true,
+          published_at: new Date(),
+          published_by_id: req.user!.sub,
+          is_public: true,
+        });
+        await logAudit("RESULT_PUBLISH", {
+          userId: req.user!.sub,
+          targetType: "ResultPublication",
+          targetId: publication.id,
+          metadata: { exam_id: examId, class_id: unit.class_id, group_id: unit.group_id, is_public: true, via: "publish_whole_campus" },
+          req,
+        });
+
+        const perStudent = (await computeClassResults(examId, unit.class_id)).filter((p) => (unit.group_id ? p.student.group_id === unit.group_id : true));
+        const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
+        const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
+        const guardianById = new Map(guardians.map((g) => [g.id, g]));
+        for (const p of perStudent) {
+          const guardian = p.student.guardian_id ? guardianById.get(p.student.guardian_id) : undefined;
+          await sendNotification({
+            trigger: "RESULT_PUBLISHED",
+            recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
+            template_data: { student_name: p.student.name_en, exam_name: exam.name, gpa: p.result.total_gpa.toFixed(2) },
+          });
+        }
+        published.push(unit);
+      } catch (err) {
+        // One unit's failure (e.g. still has unapproved marks) must not
+        // block the others — report it and keep going, matching this
+        // project's established per-unit-isolation discipline.
+        failed.push({ ...unit, reason: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+
+    if (published.length > 0) {
+      const nowPublished = await prisma.resultPublication
+        .findMany({ where: { exam_id: examId, is_published: true }, select: { class_id: true, group_id: true } })
+        .then((rows) => new Set(rows.map((r) => `${r.class_id}:${r.group_id ?? ""}`)));
+      if (units.length > 0 && units.every((u) => nowPublished.has(`${u.class_id}:${u.group_id ?? ""}`))) {
+        await prisma.exam.update({ where: { id: examId }, data: { status: "PUBLISHED" } });
+      }
+      await invalidateCacheNamespace("result-lookup");
+    }
+
+    res.json({ success: true, data: { published, failed, already_published: units.length - pending.length } });
   }),
 );

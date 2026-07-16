@@ -122,7 +122,10 @@ async function buildStudentDashboard(id: string) {
 
     let recentResults: unknown[] = [];
     const latestPublication = await prisma.resultPublication.findFirst({
-      where: { is_published: true, class_id: student.current_class_id ?? undefined },
+      // A grouped class publishes independently per group — without this,
+      // "most recently published" could resolve to a different group's
+      // publication row than the one this student's own group actually has.
+      where: { is_published: true, class_id: student.current_class_id ?? undefined, group_id: student.group_id ?? null },
       orderBy: { published_at: "desc" },
       include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
     });
@@ -195,7 +198,11 @@ portalRouter.get(
     });
     const publications = candidatePublications.filter((pub) => {
       const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
-      return resolvedClassId === pub.class_id;
+      if (resolvedClassId !== pub.class_id) return false;
+      // See the identical group-matching note in results.routes.ts's
+      // /public/lookup — same current-group-id comparison, same known
+      // limitation (no historical per-year group record exists yet).
+      return pub.group_id === (student.group_id ?? null);
     });
 
     const results = [];
