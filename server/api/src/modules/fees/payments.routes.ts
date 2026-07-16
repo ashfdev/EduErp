@@ -41,11 +41,13 @@ paymentsRouter.post(
   }),
 );
 
-// Shared by the gateway webhook callbacks (below) and the manual
-// bank-transfer verify endpoint — one place for "what happens when a
-// payment is confirmed," so a staff-verified bank transfer updates the
-// invoice/journal/SMS exactly the same way an automated gateway does.
-async function completePayment(payment: Payment) {
+// Shared by the gateway webhook callbacks (below), the manual bank-transfer
+// verify endpoint, and fees.routes.ts's manual /collect — one place for
+// "what happens when a payment is confirmed," so any staff-confirmed
+// payment (counter cash, verified bank transfer, or a manually-recorded
+// wallet payment) updates the invoice/journal/SMS exactly the same way an
+// automated gateway does.
+export async function completePayment(payment: Payment) {
   await prisma.payment.update({
     where: { id: payment.id },
     data: { status: "COMPLETED", paid_at: new Date(), receipt_no: await generateReceiptNo(prisma) },

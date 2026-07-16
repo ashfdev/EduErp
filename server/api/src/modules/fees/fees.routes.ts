@@ -9,7 +9,7 @@ import { reqParam } from "../../lib/req-param";
 import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema } from "@education-erp/validators";
 import { calculateLateFee } from "../../utils/late-fee";
-import { getPaymentAdapter } from "../../services/payment";
+import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createMonthlyInvoiceIfMissing } from "./invoice-helpers";
@@ -202,6 +202,17 @@ feesRouter.put(
 
 // ── Collection (manual) ─────────────────────────────────────────
 
+// This route is exclusively for staff recording money they've already
+// physically/directly confirmed receiving (counter cash, a verified bank
+// transfer, a wallet payment confirmed some other way) — `gateway` here is
+// a descriptive/reporting field, never a dispatch key into
+// getPaymentAdapter(). Routing this through the adapter registry (as this
+// route used to) would either trivially complete (CASH) or — for
+// BKASH/NAGAD/ROCKET/BANK_TRANSFER, whose adapters return INITIATED or
+// FAILED when the real gateway isn't configured — silently create a
+// payment that never actually completes despite staff being told they'd
+// recorded it. See completePayment() (payments.routes.ts) for the
+// self-service flow this deliberately does not touch.
 feesRouter.post(
   "/collect",
   authorize(FEE_COLLECTION_ROLES),
@@ -214,23 +225,20 @@ feesRouter.post(
     const rules = await getFeeRules();
     const fine = calculateLateFee(invoice.amount_due, invoice.due_date, rules);
 
-    const adapter = getPaymentAdapter(body.gateway);
-    const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: body.amount, transaction_id: `CASH-${Date.now()}` });
-
     const payment = await prisma.payment.create({
       data: {
-        receipt_no: result.status === "COMPLETED" ? await generateReceiptNo(prisma) : undefined,
+        receipt_no: await generateReceiptNo(prisma),
         invoice_id: invoice.id,
         gateway: body.gateway,
         amount: body.amount,
-        status: result.status === "COMPLETED" ? "COMPLETED" : "INITIATED",
-        paid_at: result.status === "COMPLETED" ? new Date() : undefined,
+        status: "COMPLETED",
+        paid_at: new Date(),
         notes: body.notes,
         collected_by_id: req.user!.sub,
       },
     });
 
-    const newAmountPaid = invoice.amount_paid + (result.status === "COMPLETED" ? body.amount : 0);
+    const newAmountPaid = invoice.amount_paid + body.amount;
     const newStatus = newAmountPaid >= invoice.amount_due + fine ? "PAID" : newAmountPaid > 0 ? "PARTIAL" : invoice.status;
 
     const updated = await prisma.invoice.update({
@@ -238,7 +246,12 @@ feesRouter.post(
       data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
     });
 
-    if (result.status === "COMPLETED") await createFeeReceiptJournal(payment, updated);
+    await createFeeReceiptJournal(payment, updated);
+
+    const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
+    if (student?.father_phone) {
+      await sendSms(student.father_phone, `Payment of ৳${body.amount} received for ${student.name_en}. Thank you.`);
+    }
 
     res.json({ success: true, data: { payment, invoice: updated } });
   }),
@@ -287,11 +300,16 @@ feesRouter.get(
   "/reports/dues",
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().optional(), days_overdue: z.coerce.number().optional() }).parse(req.query);
+    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), days_overdue: z.coerce.number().optional() }).parse(req.query);
     const invoices = await prisma.invoice.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
-        ...(query.class_id && { student: { current_class_id: query.class_id } }),
+        ...((query.class_id || query.section_id) && {
+          student: {
+            ...(query.class_id && { current_class_id: query.class_id }),
+            ...(query.section_id && { current_section_id: query.section_id }),
+          },
+        }),
       },
       include: { student: { select: { name_en: true, student_uid: true, father_phone: true } } },
     });

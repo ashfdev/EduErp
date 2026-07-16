@@ -29,10 +29,13 @@ export const generateBulkMonthlySchema = z.object({
   year: z.number().int(),
 });
 
+// Manual/counter collection — staff is recording money already confirmed
+// received, so this excludes SSLCOMMERZ/AAMARPAY (online-redirect-only
+// aggregators with no real-world "staff manually confirms" scenario).
 export const collectPaymentSchema = z.object({
   invoice_id: z.string().min(1),
   amount: z.number().min(0.01),
-  gateway: z.enum(["CASH", "BANK_TRANSFER"]),
+  gateway: z.enum(["CASH", "BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET"]),
   notes: z.string().optional(),
 });
 export type CollectPaymentInput = z.infer<typeof collectPaymentSchema>;
