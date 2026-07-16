@@ -35,11 +35,8 @@ const DEFAULT_TERMS: InstitutionConfig = {
   term_registration: "Registration No",
 };
 
-// Straight port of apps/portal's identical hook — same two staff-
-// authenticated endpoints, same shape. The admin app had zero
-// institution-type awareness anywhere until this (confirmed via grep);
-// every page still hardcoded "Class"/"Section" regardless of the
-// configured institution type.
+// Mirrors apps/admin's and apps/portal's identical hook — same two
+// already-public/staff-safe endpoints, same shape.
 export function useInstitution() {
   const { data: profile } = useQuery<InstitutionProfile>({
     queryKey: ["institution", "profile"],

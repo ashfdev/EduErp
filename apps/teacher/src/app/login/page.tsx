@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
@@ -11,6 +12,12 @@ export default function TeacherLoginPage() {
   const router = useRouter();
   const { setSession } = useAuthStore();
   const t = useTranslations("login");
+
+  const { data: institution } = useQuery<{ logo_url: string | null; name_en: string }>({
+    queryKey: ["public", "institution"],
+    queryFn: async () => (await api.get("/api/settings/institution")).data.data,
+  });
+
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,6 +41,14 @@ export default function TeacherLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm rounded-lg border bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-3">
+          {institution?.logo_url ? (
+            <img src={institution.logo_url} alt="Logo" className="h-10 w-10 rounded object-contain" />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-lg">🏫</div>
+          )}
+          <p className="font-medium text-gray-700">{institution?.name_en ?? "Education ERP"}</p>
+        </div>
         <h1 className="mb-1 text-xl font-semibold" style={{ color: "var(--primary, #1a3c4a)" }}>{t("title")}</h1>
         <p className="mb-6 text-sm text-gray-500">{t("subtitle")}</p>
         <form onSubmit={submit} className="space-y-4">

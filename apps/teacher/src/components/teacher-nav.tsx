@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/stores/auth-store";
 import { LanguageToggle } from "@/components/language-toggle";
+import { useInstitution } from "@/hooks/use-institution";
 
 const NAV_ITEMS = [
   { href: "/", key: "home" },
@@ -21,13 +22,18 @@ export function TeacherNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { institutionName, logoUrl } = useInstitution();
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
 
   return (
     <header className="sticky top-0 z-30 border-b bg-white">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <nav className="flex gap-4">
+      <div className="mx-auto flex max-w-3xl items-center gap-6 px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2">
+          {logoUrl ? <img src={logoUrl} alt="Logo" className="h-7 w-7 rounded object-contain" /> : null}
+          <span className="truncate text-sm font-medium text-gray-700">{institutionName ?? "Education ERP"}</span>
+        </div>
+        <nav className="flex flex-1 flex-wrap gap-4">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}

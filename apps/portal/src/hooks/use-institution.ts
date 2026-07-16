@@ -4,11 +4,17 @@ import { api } from "@/lib/api";
 interface InstitutionProfile {
   type: "SCHOOL" | "COLLEGE" | "UNIVERSITY" | "MADRASAH";
   name_en: string;
+  name_bn: string | null;
+  tagline_en: string | null;
+  logo_url: string | null;
+  primary_color: string;
+  secondary_color: string;
 }
 
 interface InstitutionConfig {
   has_departments: boolean;
   has_semesters: boolean;
+  has_shifts: boolean;
   show_hijri_calendar: boolean;
   term_class: string;
   term_section: string;
@@ -20,6 +26,7 @@ interface InstitutionConfig {
 const DEFAULT_TERMS: InstitutionConfig = {
   has_departments: false,
   has_semesters: false,
+  has_shifts: true,
   show_hijri_calendar: false,
   term_class: "Class",
   term_section: "Section",
@@ -47,6 +54,11 @@ export function useInstitution() {
   return {
     type: profile?.type ?? "SCHOOL",
     institutionName: profile?.name_en,
+    logoUrl: profile?.logo_url ?? null,
+    nameBn: profile?.name_bn ?? null,
+    taglineEn: profile?.tagline_en ?? null,
+    primaryColor: profile?.primary_color,
+    secondaryColor: profile?.secondary_color,
     terms: config ?? DEFAULT_TERMS,
   };
 }

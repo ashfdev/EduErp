@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Button } from "@education-erp/ui";
 import { LanguageToggle } from "@/components/language-toggle";
+import { useInstitution } from "@/hooks/use-institution";
 
 const NAV_ITEMS = [
   { href: "/dashboard", key: "dashboard" },
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, refreshToken, logout } = useAuthStore();
+  const { institutionName, logoUrl } = useInstitution();
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
 
@@ -53,7 +55,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ProtectedRoute>
       <div className="flex min-h-screen">
         <aside className="w-64 shrink-0 border-r bg-card">
-          <div className="flex h-[60px] items-center border-b px-4 font-semibold">{tCommon("appName")}</div>
+          <div className="flex h-[60px] items-center gap-2 border-b px-4 font-semibold">
+            {logoUrl ? <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded object-contain" /> : null}
+            <span className="truncate">{institutionName ?? tCommon("appName")}</span>
+          </div>
           <nav className="flex flex-col gap-1 p-3 text-sm">
             {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href} className="rounded-md px-3 py-2 hover:bg-accent">
