@@ -83,6 +83,7 @@ export const admissionBulkActionSchema = z.object({
 export const admissionEnrollSchema = z.object({
   section_id: z.string().optional(),
   roll_no: z.string().optional(),
+  group_id: z.string().optional(),
 });
 
 export const admissionPaymentInitiateSchema = z.object({

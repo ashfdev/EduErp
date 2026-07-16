@@ -55,11 +55,20 @@ interface SectionRow {
   _count: { students: number };
 }
 
+interface GroupRow {
+  id: string;
+  name_en: string;
+  code: string;
+  display_order: number;
+  _count: { students: number };
+}
+
 interface ClassRow {
   id: string;
   name_en: string;
   numeric_level: number;
   sections: SectionRow[];
+  groups: GroupRow[];
   _count: { students: number };
 }
 
@@ -193,6 +202,54 @@ export default function AcademicSettingsPage() {
     },
   });
 
+  const emptyGroupForm = { name_en: "", code: "" };
+  const [groupClassId, setGroupClassId] = useState<string | null>(null);
+  const [groupForm, setGroupForm] = useState(emptyGroupForm);
+  const createGroup = useMutation({
+    mutationFn: () => api.post(`/api/settings/classes/${groupClassId}/groups`, groupForm),
+    onSuccess: () => {
+      toast.success("Group added");
+      queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
+      setGroupClassId(null);
+      setGroupForm(emptyGroupForm);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to add group";
+      toast.error(message);
+    },
+  });
+
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editGroupForm, setEditGroupForm] = useState(emptyGroupForm);
+  function openEditGroup(g: GroupRow) {
+    setEditingGroupId(g.id);
+    setEditGroupForm({ name_en: g.name_en, code: g.code });
+  }
+  const updateGroup = useMutation({
+    mutationFn: () => api.put(`/api/settings/groups/${editingGroupId}`, editGroupForm),
+    onSuccess: () => {
+      toast.success("Group updated");
+      queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
+      setEditingGroupId(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update group";
+      toast.error(message);
+    },
+  });
+  const deleteGroup = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/settings/groups/${id}`),
+    onSuccess: () => {
+      toast.success("Group removed");
+      queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
+      setEditingGroupId(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to remove group";
+      toast.error(message);
+    },
+  });
+
   return (
     <PageWrapper>
       <PageHeader title="Academic Structure" subtitle="Academic years, shifts, classes, and sections" breadcrumbs={[{ label: "Settings" }, { label: "Academic" }]} />
@@ -250,7 +307,10 @@ export default function AcademicSettingsPage() {
             <div key={c.id} className="rounded-md border p-3">
               <div className="flex items-center justify-between">
                 <p className="font-medium">{c.name_en} <span className="text-sm text-muted-foreground">({c._count.students} students)</span></p>
-                <Button size="sm" variant="outline" onClick={() => setSectionClassId(c.id)}>+ Add Section</Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setSectionClassId(c.id)}>+ Add Section</Button>
+                  <Button size="sm" variant="outline" onClick={() => setGroupClassId(c.id)}>+ Add Group</Button>
+                </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {c.sections.map((s) => (
@@ -261,6 +321,16 @@ export default function AcademicSettingsPage() {
                   </button>
                 ))}
               </div>
+              {!!c.groups.length && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                  <span className="text-xs text-muted-foreground">Groups/Streams:</span>
+                  {c.groups.map((g) => (
+                    <button key={g.id} type="button" onClick={() => openEditGroup(g)} className="cursor-pointer">
+                      <Badge variant="outline">{g.name_en} ({g._count.students})</Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </CardContent>
@@ -354,6 +424,31 @@ export default function AcademicSettingsPage() {
             </div>
           </div>
           <DialogFooter><Button onClick={() => updateSection.mutate()} disabled={updateSection.isPending || !editSectionForm.name}>Save</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!groupClassId} onOpenChange={(v) => !v && setGroupClassId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Group / Stream</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={groupForm.name_en} onChange={(e) => setGroupForm({ ...groupForm, name_en: e.target.value })} placeholder="Science" /></div>
+            <div className="space-y-1.5"><Label>Code</Label><Input value={groupForm.code} onChange={(e) => setGroupForm({ ...groupForm, code: e.target.value })} placeholder="SCI" /></div>
+          </div>
+          <DialogFooter><Button onClick={() => createGroup.mutate()} disabled={createGroup.isPending || !groupForm.name_en || !groupForm.code}>Create</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingGroupId} onOpenChange={(v) => !v && setEditingGroupId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Group / Stream</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={editGroupForm.name_en} onChange={(e) => setEditGroupForm({ ...editGroupForm, name_en: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Code</Label><Input value={editGroupForm.code} onChange={(e) => setEditGroupForm({ ...editGroupForm, code: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => editingGroupId && deleteGroup.mutate(editingGroupId)} disabled={deleteGroup.isPending}>Delete</Button>
+            <Button onClick={() => updateGroup.mutate()} disabled={updateGroup.isPending || !editGroupForm.name_en || !editGroupForm.code}>Save</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

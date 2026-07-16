@@ -14,6 +14,7 @@ import {
   departmentSchema,
   classSchema,
   sectionSchema,
+  groupSchema,
   routineSlotSchema,
   generateRoutineSchema,
 } from "@education-erp/validators";
@@ -25,9 +26,10 @@ export const shiftsRouter = Router();
 export const departmentsRouter = Router();
 export const classesRouter = Router();
 export const sectionsRouter = Router();
+export const groupsRouter = Router();
 export const routineRouter = Router();
 
-for (const r of [academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter, routineRouter]) {
+for (const r of [academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter, groupsRouter, routineRouter]) {
   r.use(authenticate);
 }
 
@@ -235,6 +237,7 @@ classesRouter.get(
       where: academic_year_id ? { academic_year_id } : undefined,
       include: {
         sections: { include: { shift: { select: { id: true, name: true, start_time: true, end_time: true } }, _count: { select: { students: true } } } },
+        groups: { where: { is_active: true }, orderBy: { display_order: "asc" }, include: { _count: { select: { students: true } } } },
         _count: { select: { students: true } },
       },
       orderBy: { numeric_level: "asc" },
@@ -314,6 +317,57 @@ sectionsRouter.put(
     const body = z.object({ class_teacher_id: z.string().nullable() }).parse(req.body);
     const section = await prisma.section.update({ where: { id: reqParam(req, "id") }, data: body });
     res.json({ success: true, data: section });
+  }),
+);
+
+// ── Groups / Streams (Science/Commerce/Arts) ──────────────────────
+// Per-class-scoped — see the Group model's own schema comment for why.
+
+classesRouter.post(
+  "/:class_id/groups",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = groupSchema.parse(req.body);
+    const existing = await prisma.group.findUnique({
+      where: { class_id_code: { class_id: reqParam(req, "class_id"), code: body.code } },
+    });
+    if (existing) throw conflict("A group with this code already exists in this class");
+    const group = await prisma.group.create({ data: { ...body, class_id: reqParam(req, "class_id") } });
+    res.status(201).json({ success: true, data: group });
+  }),
+);
+
+groupsRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().optional() }).parse(req.query);
+    const groups = await prisma.group.findMany({
+      where: { is_active: true, ...(query.class_id && { class_id: query.class_id }) },
+      orderBy: { display_order: "asc" },
+    });
+    res.json({ success: true, data: groups });
+  }),
+);
+
+groupsRouter.put(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = groupSchema.partial().parse(req.body);
+    const group = await prisma.group.update({ where: { id: reqParam(req, "id") }, data: body });
+    res.json({ success: true, data: group });
+  }),
+);
+
+groupsRouter.delete(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const hasStudents = await prisma.student.findFirst({ where: { group_id: id } });
+    if (hasStudents) throw conflict("This group has students assigned and cannot be deleted");
+    await prisma.group.update({ where: { id }, data: { is_active: false } });
+    res.status(204).send();
   }),
 );
 

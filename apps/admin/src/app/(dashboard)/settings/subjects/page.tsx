@@ -27,6 +27,7 @@ interface ClassOption {
   name_en: string;
   academic_year_id: string;
   sections: { id: string; name: string }[];
+  groups: { id: string; name_en: string }[];
 }
 
 interface Subject {
@@ -40,6 +41,7 @@ interface Subject {
   pass_marks: number;
   display_order: number;
   weekly_periods: number | null;
+  group_id: string | null;
 }
 
 interface Assignment {
@@ -86,13 +88,14 @@ export default function SubjectsSettingsPage() {
   });
 
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "" });
+  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "" });
 
   const createMutation = useMutation({
     mutationFn: () =>
       api.post("/api/subjects", {
         ...form,
         weekly_periods: form.weekly_periods ? Number(form.weekly_periods) : undefined,
+        group_id: form.group_id || undefined,
         class_id: selectedClassId,
         display_order: (subjects?.length ?? 0) + 1,
       }),
@@ -100,7 +103,7 @@ export default function SubjectsSettingsPage() {
       toast.success("Subject added");
       queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] });
       setAddOpen(false);
-      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "" });
+      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "" });
     },
     onError: () => toast.error("Failed to add subject — code may already exist in this class"),
   });
@@ -109,6 +112,12 @@ export default function SubjectsSettingsPage() {
     mutationFn: ({ id, weekly_periods }: { id: string; weekly_periods: number | null }) => api.put(`/api/subjects/${id}`, { weekly_periods }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
     onError: () => toast.error("Failed to update weekly periods"),
+  });
+
+  const updateGroupMutation = useMutation({
+    mutationFn: ({ id, group_id }: { id: string; group_id: string | null }) => api.put(`/api/subjects/${id}`, { group_id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
+    onError: () => toast.error("Failed to update group"),
   });
 
   const deleteMutation = useMutation({
@@ -247,6 +256,19 @@ export default function SubjectsSettingsPage() {
                                   }}
                                 />
                               </label>
+                              {!!selectedClass?.groups.length && (
+                                <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  Group:
+                                  <select
+                                    className="h-6 rounded border px-1"
+                                    value={s.group_id ?? ""}
+                                    onChange={(e) => updateGroupMutation.mutate({ id: s.id, group_id: e.target.value || null })}
+                                  >
+                                    <option value="">All groups</option>
+                                    {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+                                  </select>
+                                </label>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -307,6 +329,15 @@ export default function SubjectsSettingsPage() {
               <Label>Periods/week (optional — leave blank to auto-split remaining periods)</Label>
               <Input type="number" min={1} value={form.weekly_periods} onChange={(e) => setForm({ ...form, weekly_periods: e.target.value })} placeholder="auto" />
             </div>
+            {!!selectedClass?.groups.length && (
+              <div className="space-y-1.5">
+                <Label>Group / Stream (optional — leave unset to apply to every group)</Label>
+                <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.group_id} onChange={(e) => setForm({ ...form, group_id: e.target.value })}>
+                  <option value="">All groups</option>
+                  {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex items-center justify-between"><Label>Compulsory</Label><Switch checked={form.is_compulsory} onCheckedChange={(v) => setForm({ ...form, is_compulsory: v, is_optional: v ? false : form.is_optional })} /></div>
             <div className="flex items-center justify-between"><Label>Optional</Label><Switch checked={form.is_optional} onCheckedChange={(v) => setForm({ ...form, is_optional: v, is_compulsory: v ? false : form.is_compulsory })} /></div>
           </div>

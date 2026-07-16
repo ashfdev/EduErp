@@ -12,6 +12,9 @@ export const subjectSchema = z.object({
   pass_marks: z.number().min(0),
   display_order: z.number().int().optional(),
   weekly_periods: z.number().int().min(1).optional().nullable(),
+  // null = applies to every group in this class (unchanged existing
+  // behavior). Set only to restrict this subject to one Group/Stream.
+  group_id: z.string().optional().nullable(),
 });
 export type SubjectInput = z.infer<typeof subjectSchema>;
 

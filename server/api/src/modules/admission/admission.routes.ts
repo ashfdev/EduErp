@@ -27,7 +27,7 @@ import {
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { createMonthlyInvoiceIfMissing } from "../fees/invoice-helpers";
-import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
+import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -745,6 +745,7 @@ admissionRouter.post(
     });
     if (takenSeats >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
     if (body.section_id) await assertSectionCapacity(body.section_id, req.body.override === true);
+    await assertGroupSelectedIfRequired(prisma, application.cycle.class_id, body.group_id);
 
     const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
     const personalInfo = application.personal_info as Record<string, unknown>;
@@ -798,6 +799,7 @@ admissionRouter.post(
           address_permanent: guardianInfo.address,
           current_class_id: application.cycle.class_id,
           current_section_id: body.section_id,
+          group_id: body.group_id,
           current_roll_no: body.roll_no,
           admission_date: new Date(),
         },
@@ -809,6 +811,7 @@ admissionRouter.post(
         application.cycle.class_id,
         application.cycle.academic_year_id,
         (application.selected_subjects as string[] | null) ?? [],
+        body.group_id,
       );
 
       if (application.cycle.app_fee > 0) {

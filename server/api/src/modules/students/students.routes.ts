@@ -11,7 +11,7 @@ import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
-import { inheritSubjectsForClass } from "../../utils/subject-inheritance";
+import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -171,6 +171,7 @@ studentsRouter.get(
         guardian: true,
         current_class: true,
         current_section: true,
+        group: true,
         academic_history: { include: { academic_year: true }, orderBy: { created_at: "desc" } },
         student_subjects: { include: { subject: true } },
         attendance: { orderBy: { date: "desc" }, take: 60 },
@@ -245,6 +246,7 @@ studentsRouter.get(
           current: {
             class: student.current_class,
             section: student.current_section,
+            group: student.group,
             roll_no: student.current_roll_no,
             registration_no: student.registration_no,
             board_roll: student.board_roll,
@@ -283,6 +285,7 @@ studentsRouter.post(
   asyncHandler(async (req, res) => {
     const body = createStudentSchema.parse(req.body);
     await assertSectionCapacity(body.current_section_id, req.body.override === true);
+    await assertGroupSelectedIfRequired(prisma, body.current_class_id, body.group_id);
 
     const { student, studentLogin, guardianLogin, student_uid } = await prisma.$transaction(async (tx) => {
       let guardianId = body.guardian_id ?? null;
@@ -335,6 +338,7 @@ studentsRouter.post(
           district: body.district,
           current_class_id: body.current_class_id,
           current_section_id: body.current_section_id,
+          group_id: body.group_id,
           current_roll_no: body.current_roll_no,
           registration_no: body.registration_no,
           board_roll: body.board_roll,
@@ -348,7 +352,7 @@ studentsRouter.post(
         },
       });
 
-      await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids);
+      await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids, body.group_id);
 
       return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid };
     });
@@ -397,6 +401,12 @@ studentsRouter.put(
     const classChanged = fields.current_class_id && fields.current_class_id !== existing.current_class_id;
     const sectionChanged = fields.current_section_id && fields.current_section_id !== existing.current_section_id;
     if (sectionChanged) await assertSectionCapacity(fields.current_section_id, req.body.override === true);
+    // Only run the group check when this request actually touches class or
+    // group — an unrelated field edit (e.g. phone number) must never fail
+    // because of a pre-existing, unrelated group gap on the student's record.
+    if (classChanged || fields.group_id !== undefined) {
+      await assertGroupSelectedIfRequired(prisma, fields.current_class_id ?? existing.current_class_id!, fields.group_id);
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       if (classChanged && existing.current_class_id) {
@@ -419,7 +429,7 @@ studentsRouter.put(
 
       if (classChanged && fields.current_class_id) {
         const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
-        await inheritSubjectsForClass(tx, id, fields.current_class_id, activeYear?.id ?? "", selected_optional_subject_ids);
+        await inheritSubjectsForClass(tx, id, fields.current_class_id, activeYear?.id ?? "", selected_optional_subject_ids, fields.group_id);
       }
 
       return result;
@@ -458,6 +468,7 @@ studentsRouter.post(
     if (body.new_section_id && body.new_section_id !== existing.current_section_id) {
       await assertSectionCapacity(body.new_section_id, req.body.override === true);
     }
+    await assertGroupSelectedIfRequired(prisma, body.new_class_id, body.new_group_id);
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.studentAcademicHistory.create({
@@ -475,10 +486,10 @@ studentsRouter.post(
 
       const result = await tx.student.update({
         where: { id },
-        data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, current_roll_no: body.new_roll_no },
+        data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, current_roll_no: body.new_roll_no, group_id: body.new_group_id ?? null },
       });
 
-      await inheritSubjectsForClass(tx, id, body.new_class_id, body.new_academic_year_id);
+      await inheritSubjectsForClass(tx, id, body.new_class_id, body.new_academic_year_id, [], body.new_group_id);
       return result;
     });
 
@@ -533,6 +544,12 @@ studentsRouter.post(
     const skipped: { id: string; reason: string }[] = [];
 
     const attendanceRules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    // Checked once for the whole batch (not per-student) — this only tells
+    // us whether new_class_id requires a group at all; which specific group
+    // each student needs is still resolved per-student below via
+    // student_group_ids, since one destination class can receive students
+    // headed into different groups.
+    const destinationHasGroups = !!(await prisma.group.findFirst({ where: { class_id: body.new_class_id, is_active: true } }));
 
     for (const studentId of body.student_ids) {
       const student = await prisma.student.findUnique({ where: { id: studentId } });
@@ -573,6 +590,19 @@ studentsRouter.post(
         }
       }
 
+      const groupId = body.student_group_ids?.[studentId];
+      if (destinationHasGroups && !groupId) {
+        skipped.push({ id: studentId, reason: "Destination class has Groups/Streams defined — no group selected for this student" });
+        continue;
+      }
+      if (groupId) {
+        const validGroup = await prisma.group.findFirst({ where: { id: groupId, class_id: body.new_class_id, is_active: true } });
+        if (!validGroup) {
+          skipped.push({ id: studentId, reason: "Selected group does not belong to the destination class" });
+          continue;
+        }
+      }
+
       await prisma.$transaction(async (tx) => {
         await tx.studentAcademicHistory.create({
           data: {
@@ -586,9 +616,9 @@ studentsRouter.post(
         });
         await tx.student.update({
           where: { id: studentId },
-          data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id },
+          data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, group_id: groupId ?? null },
         });
-        await inheritSubjectsForClass(tx, studentId, body.new_class_id, body.new_academic_year_id);
+        await inheritSubjectsForClass(tx, studentId, body.new_class_id, body.new_academic_year_id, [], groupId);
       });
       promoted.push(studentId);
     }
@@ -653,12 +683,23 @@ studentsRouter.post(
       trim: true,
     });
 
+    // Batched once for the whole file rather than per-row — every group in
+    // every class referenced by the CSV, looked up by (class_id, code).
+    const classIds = [...new Set(records.map((r) => r.current_class_id).filter((id): id is string => !!id))];
+    const groupsByClass = await prisma.group.findMany({ where: { class_id: { in: classIds }, is_active: true } });
+    const groupLookup = new Map(groupsByClass.map((g) => [`${g.class_id}:${g.code}`, g]));
+    const classesWithGroups = new Set(groupsByClass.map((g) => g.class_id));
+
     const preview = records.map((row, index) => {
       const errors: string[] = [];
       if (!row.name_en) errors.push("name_en is required");
       if (!row.gender || !["MALE", "FEMALE", "OTHER"].includes(row.gender)) errors.push("gender must be MALE/FEMALE/OTHER");
       if (!row.father_phone || !/^01\d{9}$/.test(row.father_phone)) errors.push("father_phone must be 11 digits starting with 01");
       if (!row.current_class_id) errors.push("current_class_id is required");
+      else if (classesWithGroups.has(row.current_class_id)) {
+        if (!row.group_code) errors.push("this class has Groups/Streams defined — group_code is required");
+        else if (!groupLookup.has(`${row.current_class_id}:${row.group_code}`)) errors.push(`group_code "${row.group_code}" not found for this class`);
+      }
       return { row: index + 1, data: row, valid: errors.length === 0, errors };
     });
 
@@ -685,6 +726,7 @@ studentsRouter.post(
             father_phone: z.string().regex(/^01\d{9}$/),
             current_class_id: z.string().min(1),
             current_section_id: z.string().optional(),
+            group_code: z.string().optional(),
           }),
         ),
       })
@@ -700,6 +742,16 @@ studentsRouter.post(
     // as a known limit rather than building an async bulk-job system here.
     for (const [index, row] of body.rows.entries()) {
       try {
+        let groupId: string | null = null;
+        if (row.group_code) {
+          const group = await prisma.group.findFirst({ where: { class_id: row.current_class_id, code: row.group_code, is_active: true } });
+          if (!group) throw new Error(`group_code "${row.group_code}" not found for this class`);
+          groupId = group.id;
+        } else {
+          const hasGroups = await prisma.group.findFirst({ where: { class_id: row.current_class_id, is_active: true } });
+          if (hasGroups) throw new Error("this class has Groups/Streams defined — group_code is required");
+        }
+
         const student_uid = await generateStudentUID(row.current_class_id);
         const { student, guardianLogin } = await prisma.$transaction(async (tx) => {
           // Same guardian-dedup shape as the manual single-add path: reuse
@@ -729,10 +781,11 @@ studentsRouter.post(
               father_phone: row.father_phone,
               current_class_id: row.current_class_id,
               current_section_id: row.current_section_id,
+              group_id: groupId,
               admission_date: new Date(),
             },
           });
-          await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id);
+          await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id, [], groupId);
           return { student: s, guardianLogin: guardianLoginResult };
         });
 

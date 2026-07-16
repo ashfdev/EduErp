@@ -26,6 +26,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections: { id: string; name: string; shift: { id: string; name: string } | null }[];
+  groups: { id: string; name_en: string }[];
 }
 
 interface StudentProfile {
@@ -53,6 +54,7 @@ interface StudentProfile {
     current: {
       class: { id: string; name_en: string } | null;
       section: { id: string; name: string } | null;
+      group: { id: string; name_en: string } | null;
       roll_no: string | null;
       registration_no: string | null;
     };
@@ -79,6 +81,7 @@ const emptyForm = {
   mother_occupation: "",
   current_class_id: "",
   current_section_id: "",
+  group_id: "",
   current_roll_no: "",
   registration_no: "",
 };
@@ -123,6 +126,7 @@ export default function EditStudentPage() {
       mother_occupation: p.mother_occupation ?? "",
       current_class_id: a.class?.id ?? "",
       current_section_id: a.section?.id ?? "",
+      group_id: a.group?.id ?? "",
       current_roll_no: a.roll_no ?? "",
       registration_no: a.registration_no ?? "",
     });
@@ -130,6 +134,9 @@ export default function EditStudentPage() {
   }, [profile, loaded]);
 
   const selectedClass = classes?.find((c) => c.id === form.current_class_id);
+  const originalClassId = profile?.academic.current.class?.id ?? "";
+  const classChanged = form.current_class_id !== originalClassId;
+  const groupRequiredButMissing = !!selectedClass?.groups.length && !form.group_id;
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -154,6 +161,7 @@ export default function EditStudentPage() {
         mother_phone: form.mother_phone || undefined,
         mother_occupation: form.mother_occupation || undefined,
         current_section_id: form.current_section_id || undefined,
+        group_id: form.group_id || undefined,
         current_roll_no: form.current_roll_no || undefined,
         registration_no: form.registration_no || undefined,
       }),
@@ -235,7 +243,10 @@ export default function EditStudentPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Class *</Label>
-                <Select value={form.current_class_id} onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); }}>
+                <Select
+                  value={form.current_class_id}
+                  onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); if (v !== originalClassId) set("group_id", ""); }}
+                >
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
@@ -255,6 +266,17 @@ export default function EditStudentPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {!!selectedClass?.groups.length && (
+                <div className="space-y-1.5">
+                  <Label>Group / Stream *{classChanged && <span className="ml-1 text-xs text-amber-600">(re-select — class changed)</span>}</Label>
+                  <Select value={form.group_id} onValueChange={(v) => set("group_id", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      {selectedClass.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_en}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5"><Label>Roll No</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Registration No</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
             </div>
@@ -264,7 +286,7 @@ export default function EditStudentPage() {
             <Button type="button" variant="outline" onClick={() => router.push(`/students/${id}`)}>Cancel</Button>
             <Button
               type="button"
-              disabled={saveMutation.isPending || !form.name_en || !form.father_phone || !form.current_class_id}
+              disabled={saveMutation.isPending || !form.name_en || !form.father_phone || !form.current_class_id || groupRequiredButMissing}
               onClick={() => saveMutation.mutate(undefined)}
             >
               {saveMutation.isPending ? "Saving..." : "Save Changes"}

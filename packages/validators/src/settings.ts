@@ -195,6 +195,13 @@ export const sectionSchema = z.object({
   capacity: z.number().int().min(1).optional(),
 });
 
+export const groupSchema = z.object({
+  name_en: z.string().min(1),
+  name_bn: z.string().optional().nullable(),
+  code: z.string().min(1),
+  display_order: z.number().int().optional(),
+});
+
 export const routineSlotSchema = z.object({
   class_id: z.string().min(1),
   section_id: z.string().optional().nullable(),

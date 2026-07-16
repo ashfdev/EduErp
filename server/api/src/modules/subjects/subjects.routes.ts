@@ -7,7 +7,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { subjectSchema, subjectAssignmentSchema } from "@education-erp/validators";
-import { conflict, notFound } from "../../lib/errors";
+import { badRequest, conflict, notFound } from "../../lib/errors";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(authenticate);
@@ -88,6 +88,10 @@ subjectsRouter.post(
     const existing = await prisma.subject.findUnique({ where: { class_id_code: { class_id: body.class_id, code: body.code } } });
     if (existing) throw conflict("A subject with this code already exists in this class");
     await assertNoDuplicateName(body.class_id, body.name_en);
+    if (body.group_id) {
+      const group = await prisma.group.findFirst({ where: { id: body.group_id, class_id: body.class_id } });
+      if (!group) throw badRequest("The selected group does not belong to this class");
+    }
 
     const subject = await prisma.subject.create({ data: body });
     res.status(201).json({ success: true, data: subject });
@@ -116,6 +120,11 @@ subjectsRouter.put(
       body.name_en = body.name_en.trim();
       const existing = await prisma.subject.findUniqueOrThrow({ where: { id } });
       await assertNoDuplicateName(body.class_id ?? existing.class_id, body.name_en, id);
+    }
+    if (body.group_id) {
+      const existing = await prisma.subject.findUniqueOrThrow({ where: { id } });
+      const group = await prisma.group.findFirst({ where: { id: body.group_id, class_id: body.class_id ?? existing.class_id } });
+      if (!group) throw badRequest("The selected group does not belong to this class");
     }
     const subject = await prisma.subject.update({ where: { id }, data: body });
     res.json({ success: true, data: subject });

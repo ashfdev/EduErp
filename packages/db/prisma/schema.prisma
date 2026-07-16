@@ -309,6 +309,7 @@ model Class {
   updated_at       DateTime     @updatedAt
   sections         Section[]
   subjects         Subject[]
+  groups           Group[]
   students         Student[]    @relation("CurrentClass")
   admission_cycles AdmissionCycle[]
   homework         Homework[]
@@ -353,6 +354,11 @@ model Subject {
   is_compulsory    Boolean                    @default(true)
   is_optional      Boolean                    @default(false)
   weekly_periods   Int?
+  // null = applies to every group in this class (the unchanged existing
+  // behavior for every current row). Set only to restrict a subject to one
+  // Group/Stream (Science/Commerce/Arts) within the same class.
+  group_id         String?
+  group            Group?                     @relation(fields: [group_id], references: [id])
   full_marks       Float                      @default(100)
   pass_marks       Float                      @default(33)
   display_order    Int                        @default(0)
@@ -369,6 +375,31 @@ model Subject {
   teaching_resources TeachingResource[]
   questions        Question[]
   quizzes          Quiz[]
+
+  @@unique([class_id, code])
+  @@index([class_id])
+  @@index([group_id])
+}
+
+// Academic Group/Stream (Science/Commerce/Arts, NCTB-style) — deliberately
+// per-class-scoped, mirroring Subject's own scoping shape: a Class 9
+// "Science" and a Class 11 "Science" are different rows. This means a
+// student's group_id goes stale on every class change and must be
+// explicitly re-selected whenever the destination class defines groups —
+// see Student.group_id and Subject.group_id.
+model Group {
+  id            String    @id @default(cuid())
+  class_id      String
+  class         Class     @relation(fields: [class_id], references: [id])
+  name_en       String
+  name_bn       String?
+  code          String
+  display_order Int       @default(0)
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  subjects      Subject[]
+  students      Student[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -472,6 +503,13 @@ model Student {
   current_class         Class?      @relation("CurrentClass", fields: [current_class_id], references: [id])
   current_section_id    String?
   current_section       Section?    @relation("CurrentSection", fields: [current_section_id], references: [id])
+  // Independent of current_section_id — a student's Group/Stream (Science/
+  // Commerce/Arts) and Section are two separate axes. Per-class-scoped
+  // (Group.class_id), so this goes stale on every class change and must be
+  // explicitly re-selected whenever the destination class defines groups —
+  // never silently carried over from the old class's group row.
+  group_id              String?
+  group                 Group?      @relation(fields: [group_id], references: [id])
   current_roll_no       String?
   registration_no       String?
   board_roll            String?

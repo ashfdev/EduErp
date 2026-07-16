@@ -29,6 +29,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections: { id: string; name: string; shift: { id: string; name: string } | null }[];
+  groups: { id: string; name_en: string }[];
 }
 
 interface SubjectOption {
@@ -59,6 +60,7 @@ const emptyForm = {
   academic_year_id: "",
   current_class_id: "",
   current_section_id: "",
+  group_id: "",
   current_roll_no: "",
   registration_no: "",
   board_roll: "",
@@ -101,6 +103,7 @@ export default function NewStudentPage() {
       api.post("/api/students", {
         ...form,
         date_of_birth: form.date_of_birth || undefined,
+        group_id: form.group_id || undefined,
         selected_optional_subject_ids: selectedOptional,
         override,
       }),
@@ -125,7 +128,7 @@ export default function NewStudentPage() {
   const canProceed =
     (step === 0 && form.name_en && form.gender) ||
     (step === 1 && form.father_phone) ||
-    (step === 2 && form.academic_year_id && form.current_class_id) ||
+    (step === 2 && form.academic_year_id && form.current_class_id && (!selectedClass?.groups.length || form.group_id)) ||
     step === 3 ||
     step === 4;
 
@@ -199,7 +202,7 @@ export default function NewStudentPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Class *</Label>
-                <Select value={form.current_class_id} onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); }}>
+                <Select value={form.current_class_id} onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); set("group_id", ""); }}>
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
@@ -219,6 +222,17 @@ export default function NewStudentPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {!!selectedClass?.groups.length && (
+                <div className="space-y-1.5">
+                  <Label>Group / Stream *</Label>
+                  <Select value={form.group_id} onValueChange={(v) => set("group_id", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      {selectedClass.groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name_en}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5"><Label>Roll No</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Registration No</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => set("admission_date", e.target.value)} /></div>

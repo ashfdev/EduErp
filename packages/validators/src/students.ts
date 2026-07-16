@@ -27,6 +27,7 @@ export const createStudentSchema = z.object({
 
   current_class_id: z.string().min(1, "Class is required"),
   current_section_id: z.string().optional().nullable(),
+  group_id: z.string().optional().nullable(),
   current_roll_no: z.string().optional().nullable(),
   registration_no: z.string().optional().nullable(),
   board_roll: z.string().optional().nullable(),
@@ -48,6 +49,7 @@ export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export const promoteStudentSchema = z.object({
   new_class_id: z.string().min(1),
   new_section_id: z.string().optional().nullable(),
+  new_group_id: z.string().optional().nullable(),
   new_academic_year_id: z.string().min(1),
   new_roll_no: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -67,5 +69,9 @@ export const bulkPromoteSchema = z.object({
   new_section_id: z.string().optional().nullable(),
   new_academic_year_id: z.string().min(1),
   student_ids: z.array(z.string()).min(1),
+  // Only required when new_class_id defines Groups — one destination class,
+  // but each student may need a different group, so this is a per-student
+  // map rather than one group_id for the whole batch.
+  student_group_ids: z.record(z.string(), z.string()).optional(),
 });
 export type BulkPromoteInput = z.infer<typeof bulkPromoteSchema>;
