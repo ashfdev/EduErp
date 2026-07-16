@@ -142,8 +142,11 @@ documentsRouter.get(
 
     const plans = await prisma.examSeatPlan.findMany({
       where: { exam_id: examId },
-      include: { student: { select: { name_en: true, current_roll_no: true, student_uid: true, current_class: { select: { name_en: true } } } } },
-      orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
+      include: {
+        session: { select: { label: true } },
+        student: { select: { name_en: true, current_roll_no: true, student_uid: true, current_class: { select: { name_en: true } } } },
+      },
+      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { seat_number: "asc" }],
     });
     if (!plans.length) throw badRequest("No seat plan generated for this exam yet");
 
@@ -155,10 +158,16 @@ documentsRouter.get(
       student_uid: string;
       class_name: string;
     }
-    const hallsMap = new Map<string, { hall_name: string; seats: SeatRow[] }>();
+    // Grouped by (session, hall), not hall alone — two different sessions
+    // can legitimately reuse the same hall name (their students are never
+    // in the room at the same time), so hall name alone would silently mix
+    // two sessions' rosters under one heading.
+    const hallsMap = new Map<string, { hall_name: string; session_label: string | null; seats: SeatRow[] }>();
     for (const p of plans) {
       const hallName = p.hall_name ?? "Unassigned";
-      const hall = hallsMap.get(hallName) ?? { hall_name: hallName, seats: [] };
+      const sessionLabel = p.session?.label ?? null;
+      const key = `${sessionLabel ?? ""}::${hallName}`;
+      const hall = hallsMap.get(key) ?? { hall_name: hallName, session_label: sessionLabel, seats: [] };
       hall.seats.push({
         seat_number: p.seat_number,
         roll_no: p.student.current_roll_no ?? "",
@@ -166,7 +175,7 @@ documentsRouter.get(
         student_uid: p.student.student_uid,
         class_name: p.student.current_class?.name_en ?? "",
       });
-      hallsMap.set(hallName, hall);
+      hallsMap.set(key, hall);
     }
 
     const pdf = await renderDocument("SEAT_PLAN", { exam_name: exam.name, academic_year_label: academicYearLabel, halls: [...hallsMap.values()] });

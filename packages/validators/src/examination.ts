@@ -43,6 +43,15 @@ export const seatPlanGenerateSchema = z.object({
   halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).min(1),
 });
 
+export const examSessionSchema = z.object({
+  label: z.string().min(1),
+  date: z.coerce.date(),
+  start_time: z.string().min(1),
+  end_time: z.string().min(1),
+  class_ids: z.array(z.string().min(1)).min(1, "Select at least one class"),
+});
+export type ExamSessionInput = z.infer<typeof examSessionSchema>;
+
 export const markComponentConfigSchema = z.object({
   components: z
     .array(

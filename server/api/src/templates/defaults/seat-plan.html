@@ -34,7 +34,7 @@
   <p class="meta">Exam: {{exam_name}} &nbsp;|&nbsp; Academic Year: {{academic_year_label}}</p>
 
   {{#each halls}}
-  <div class="hall-name">Hall: {{this.hall_name}}</div>
+  <div class="hall-name">{{#if this.session_label}}{{this.session_label}} — {{/if}}Hall: {{this.hall_name}}</div>
   <table class="seats">
     <thead><tr><th>Seat No</th><th>Roll</th><th>Name</th><th>Student ID</th><th>Class</th></tr></thead>
     <tbody>

@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES } from "../../lib/roles";
-import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema } from "@education-erp/validators";
+import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema, examSessionSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
 
@@ -315,21 +315,79 @@ examsRouter.put(
   }),
 );
 
+// Sessions (Phase 83) — a real exam often runs across 2-3 separate time
+// sessions with a different set of classes sitting in each. Defined before
+// seat-plan generation so generation can seat one session's students at a
+// time instead of mixing every class tied to the exam into one pass.
+examsRouter.get(
+  "/:id/sessions",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const sessions = await prisma.examSession.findMany({
+      where: { exam_id: id },
+      include: { classes: { include: { class: { select: { id: true, name_en: true } } } } },
+      orderBy: { date: "asc" },
+    });
+    res.json({ success: true, data: sessions });
+  }),
+);
+
 examsRouter.post(
-  "/:id/seat-plan/generate",
+  "/:id/sessions",
   authorize(EXAM_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const body = examSessionSchema.parse(req.body);
+    const session = await prisma.examSession.create({
+      data: {
+        exam_id: id,
+        label: body.label,
+        date: body.date,
+        start_time: body.start_time,
+        end_time: body.end_time,
+        classes: { createMany: { data: body.class_ids.map((class_id) => ({ class_id })) } },
+      },
+      include: { classes: { include: { class: { select: { id: true, name_en: true } } } } },
+    });
+    res.status(201).json({ success: true, data: session });
+  }),
+);
+
+examsRouter.delete(
+  "/:id/sessions/:session_id",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const sessionId = reqParam(req, "session_id");
+    await prisma.examSessionClass.deleteMany({ where: { session_id: sessionId } });
+    await prisma.examSession.delete({ where: { id: sessionId } });
+    res.status(204).send();
+  }),
+);
+
+// Per-session generation — only seats students from classes assigned to
+// this specific session, and only clears/replaces this session's own
+// existing seat plans, so a hall name can be safely reused across two
+// different sessions (their students are never in the room at the same
+// time) without one session's regenerate touching another's assignments.
+examsRouter.post(
+  "/:id/sessions/:session_id/seat-plan/generate",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const sessionId = reqParam(req, "session_id");
     const body = seatPlanGenerateSchema.parse(req.body);
 
-    const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: id }, include: { subject: true } });
-    const classIds = [...new Set(configs.map((c) => c.subject.class_id))];
+    const session = await prisma.examSession.findFirst({ where: { id: sessionId, exam_id: id } });
+    if (!session) throw notFound("Exam session not found");
+
+    const sessionClasses = await prisma.examSessionClass.findMany({ where: { session_id: sessionId } });
+    const classIds = sessionClasses.map((sc) => sc.class_id);
     const students = await prisma.student.findMany({
       where: { current_class_id: { in: classIds }, deleted_at: null, status: "ACTIVE" },
       orderBy: [{ current_class_id: "asc" }, { name_en: "asc" }],
     });
 
-    await prisma.examSeatPlan.deleteMany({ where: { exam_id: id } });
+    await prisma.examSeatPlan.deleteMany({ where: { exam_id: id, session_id: sessionId } });
 
     let hallIndex = 0;
     let seatInHall = 0;
@@ -346,7 +404,7 @@ examsRouter.post(
         hall = body.halls[hallIndex]!;
       }
       seatInHall++;
-      return { exam_id: id, student_id: s.id, hall_name: hall.name, seat_number: String(seatInHall) };
+      return { exam_id: id, session_id: sessionId, student_id: s.id, hall_name: hall.name, seat_number: String(seatInHall) };
     });
 
     if (plans.length > 0) await prisma.examSeatPlan.createMany({ data: plans });
@@ -361,6 +419,7 @@ examsRouter.get(
     const plans = await prisma.examSeatPlan.findMany({
       where: { exam_id: id },
       include: {
+        session: { select: { id: true, label: true } },
         student: {
           select: {
             name_en: true,
@@ -373,7 +432,7 @@ examsRouter.get(
           },
         },
       },
-      orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
+      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { seat_number: "asc" }],
     });
     const data = plans.map((p) => {
       const { invoices, ...studentRest } = p.student;

@@ -318,6 +318,7 @@ model Class {
   course_enrollments CourseEnrollment[]
   ptm_slots        PTMSlot[]
   academic_histories StudentAcademicHistory[]
+  exam_session_classes ExamSessionClass[]
 
   @@index([academic_year_id])
   @@index([program_id])
@@ -867,8 +868,39 @@ model Exam {
   seat_plans           ExamSeatPlan[]
   result_publications  ResultPublication[]
   quizzes              Quiz[]
+  sessions             ExamSession[]
 
   @@index([academic_year_id])
+}
+
+// A real exam often runs across 2-3 separate time sessions (e.g. Morning /
+// Afternoon), with a different set of classes sitting in each — seat-plan
+// generation must never mix students from different sessions into the same
+// undifferentiated pass (Phase 83). One exam has many sessions; one session
+// covers one or more classes via ExamSessionClass.
+model ExamSession {
+  id         String             @id @default(cuid())
+  exam_id    String
+  exam       Exam               @relation(fields: [exam_id], references: [id])
+  label      String
+  date       DateTime
+  start_time String
+  end_time   String
+  created_at DateTime           @default(now())
+  classes    ExamSessionClass[]
+  seat_plans ExamSeatPlan[]
+
+  @@index([exam_id])
+}
+
+model ExamSessionClass {
+  id         String      @id @default(cuid())
+  session_id String
+  session    ExamSession @relation(fields: [session_id], references: [id])
+  class_id   String
+  class      Class       @relation(fields: [class_id], references: [id])
+
+  @@unique([session_id, class_id])
 }
 
 model ExamSubjectConfig {
@@ -944,6 +976,13 @@ model ExamSeatPlan {
   exam           Exam      @relation(fields: [exam_id], references: [id])
   student_id     String
   student        Student   @relation(fields: [student_id], references: [id])
+  // Nullable for plans generated before session-aware generation existed
+  // (Phase 83) — every new generation run always sets this, scoping the
+  // seat/hall assignment to one session so two sessions can safely reuse
+  // the same hall name without colliding (their students never sit at the
+  // same time).
+  session_id     String?
+  session        ExamSession? @relation(fields: [session_id], references: [id])
   hall_name      String?
   seat_number    String?
   invigilator_id String?
