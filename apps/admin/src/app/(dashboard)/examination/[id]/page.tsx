@@ -30,7 +30,7 @@ interface SubjectConfig {
   pass_marks_theory: number;
   pass_marks_practical: number;
   pass_marks_combined: number;
-  subject: { name_en: string; class: { name_en: string } };
+  subject: { name_en: string; class: { name_en: string }; group: { name_en: string } | null };
 }
 
 interface ComponentConfig {
@@ -189,6 +189,8 @@ export default function ExamDetailPage() {
             <thead>
               <tr className="border-b text-left text-muted-foreground">
                 <th className="p-2">Subject</th>
+                <th className="p-2">Class</th>
+                <th className="p-2">Group</th>
                 <th className="p-2">Full (Theory)</th>
                 <th className="p-2">Full (Practical)</th>
                 <th className="p-2">Pass (Theory)</th>
@@ -203,6 +205,8 @@ export default function ExamDetailPage() {
                 return (
                   <tr key={c.subject_id} className="border-b">
                     <td className="p-2">{c.subject.name_en}</td>
+                    <td className="p-2 text-muted-foreground">{c.subject.class.name_en}</td>
+                    <td className="p-2 text-muted-foreground">{c.subject.group?.name_en ?? "—"}</td>
                     <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></td>
                     <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></td>
                     <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></td>

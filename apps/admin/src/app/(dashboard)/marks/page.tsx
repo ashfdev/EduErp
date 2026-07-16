@@ -19,6 +19,7 @@ interface ClassOption {
   department_id: string | null;
   program_id: string | null;
   sections: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 interface DepartmentOption {
   id: string;
@@ -41,6 +42,7 @@ export default function MyMarkEntryPage() {
   const [programId, setProgramId] = useState("");
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
+  const [groupId, setGroupId] = useState("");
 
   const { data: exams } = useQuery<Exam[]>({
     queryKey: ["exams", "mark-entry-open"],
@@ -84,7 +86,7 @@ export default function MyMarkEntryPage() {
                 <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={departmentId}
-                  onChange={(e) => { setDepartmentId(e.target.value); setProgramId(""); setClassId(""); setSectionId(""); }}
+                  onChange={(e) => { setDepartmentId(e.target.value); setProgramId(""); setClassId(""); setSectionId(""); setGroupId(""); }}
                 >
                   <option value="">All Departments</option>
                   {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
@@ -92,14 +94,14 @@ export default function MyMarkEntryPage() {
                 <select
                   className="rounded-md border px-3 py-2 text-sm"
                   value={programId}
-                  onChange={(e) => { setProgramId(e.target.value); setClassId(""); setSectionId(""); }}
+                  onChange={(e) => { setProgramId(e.target.value); setClassId(""); setSectionId(""); setGroupId(""); }}
                 >
                   <option value="">All Programs</option>
                   {programsInDept?.map((p) => <option key={p.id} value={p.id}>{p.name_en}</option>)}
                 </select>
               </>
             )}
-            <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
+            <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setGroupId(""); }}>
               <option value="">{t("selectClass")}</option>
               {visibleClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
@@ -107,8 +109,17 @@ export default function MyMarkEntryPage() {
               <option value="">{t("selectSection")}</option>
               {selectedClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {!!selectedClass?.groups?.length && (
+              <select className="rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                <option value="">All Groups</option>
+                {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            )}
           </div>
-          <Button disabled={!examId || !classId || !sectionId} onClick={() => router.push(`/marks/${examId}/${classId}/${sectionId}`)}>
+          <Button
+            disabled={!examId || !classId || !sectionId}
+            onClick={() => router.push(`/marks/${examId}/${classId}/${sectionId}${groupId ? `?group_id=${groupId}` : ""}`)}
+          >
             {t("openGrid")}
           </Button>
         </CardContent>

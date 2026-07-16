@@ -148,6 +148,22 @@ marksRouter.get(
     });
     const byKey = new Map(entries.map((e) => [`${e.student_id}:${e.subject_id}`, e]));
 
+    // Ground truth for which subjects a student actually has (populated by
+    // inheritSubjectsForClass at enrollment/promotion time) — lets the grid
+    // disable cells for a subject a student isn't enrolled in (a group-scoped
+    // subject outside their group, or an optional subject they never took)
+    // instead of allowing a mark to be entered for it at all.
+    const studentSubjectRows = await prisma.studentSubject.findMany({
+      where: { student_id: { in: students.map((s) => s.id) }, subject_id: { in: subjects.map((s) => s.id) }, academic_year_id: exam.academic_year_id },
+      select: { student_id: true, subject_id: true },
+    });
+    const enrolledByStudent = new Map<string, Set<string>>();
+    for (const row of studentSubjectRows) {
+      const set = enrolledByStudent.get(row.student_id) ?? new Set<string>();
+      set.add(row.subject_id);
+      enrolledByStudent.set(row.student_id, set);
+    }
+
     const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } } });
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
 
@@ -174,7 +190,9 @@ marksRouter.get(
           name_en: s.name_en,
           current_roll_no: s.current_roll_no,
           photo_url: s.photo_url,
+          group_id: s.group_id,
           marks: Object.fromEntries(subjects.map((sub) => [sub.id, byKey.get(`${s.id}:${sub.id}`) ?? null])),
+          enrolled_subject_ids: [...(enrolledByStudent.get(s.id) ?? [])],
         })),
       },
     });
@@ -222,6 +240,21 @@ marksRouter.post(
       select: { student_id: true, subject_id: true, status: true },
     });
     const priorStatusByKey = new Map(existingEntries.map((e) => [`${e.student_id}:${e.subject_id}`, e.status]));
+
+    // Structural enforcement, not just a UI restriction: a mark can only be
+    // entered for a subject the student actually has (a group-scoped
+    // subject outside their group, or an optional subject they never took,
+    // must never be submittable even via a direct API call bypassing the
+    // grid's disabled cells).
+    const enrollments = await prisma.studentSubject.findMany({
+      where: { student_id: { in: studentIds }, subject_id: { in: subjectIds }, academic_year_id: exam.academic_year_id },
+      select: { student_id: true, subject_id: true },
+    });
+    const enrolledKeys = new Set(enrollments.map((e) => `${e.student_id}:${e.subject_id}`));
+    const notEnrolled = body.entries.find((e) => !enrolledKeys.has(`${e.student_id}:${e.subject_id}`));
+    if (notEnrolled) {
+      throw badRequest("One or more students are not enrolled in the subject being submitted");
+    }
 
     for (const entry of body.entries) {
       const config = configBySubject.get(entry.subject_id);

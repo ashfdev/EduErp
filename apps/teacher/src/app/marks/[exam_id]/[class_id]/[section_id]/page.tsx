@@ -29,6 +29,7 @@ interface MarkEntryData {
     name_en: string;
     current_roll_no: string | null;
     marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null; status: string } | null>;
+    enrolled_subject_ids: string[];
   }[];
 }
 interface ExamInfo {
@@ -107,6 +108,10 @@ export default function TeacherMarkEntryGridPage() {
     return data?.students.find((s) => s.id === studentId)?.marks[subjectId]?.status;
   }
 
+  function isEnrolled(studentId: string, subjectId: string): boolean {
+    return !!data?.students.find((s) => s.id === studentId)?.enrolled_subject_ids.includes(subjectId);
+  }
+
   const submitMutation = useMutation({
     mutationFn: () => {
       const entries = Object.entries(edits).map(([k, v]) => {
@@ -183,6 +188,14 @@ export default function TeacherMarkEntryGridPage() {
                       <td className="p-2">{st.current_roll_no}</td>
                       <td className="p-2">{st.name_en}</td>
                       {data.subjects.map((s) => {
+                        const enrolled = isEnrolled(st.id, s.id);
+                        if (!enrolled) {
+                          return (
+                            <td key={s.id} className="p-1 text-center">
+                              <span className="text-muted-foreground" title="Not enrolled in this subject">—</span>
+                            </td>
+                          );
+                        }
                         const v = getValue(st.id, s.id);
                         const status = entryStatus(st.id, s.id);
                         const componentSum = s.components?.length

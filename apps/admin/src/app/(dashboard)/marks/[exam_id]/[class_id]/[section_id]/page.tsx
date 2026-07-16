@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput } from "@education-erp/ui";
@@ -27,7 +27,9 @@ interface MarkEntryData {
     id: string;
     name_en: string;
     current_roll_no: string | null;
+    group_id: string | null;
     marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null; status: string } | null>;
+    enrolled_subject_ids: string[];
   }[];
 }
 interface ExamInfo {
@@ -39,13 +41,16 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 
 export default function MarkEntryGridPage() {
   const { exam_id, class_id, section_id } = useParams<{ exam_id: string; class_id: string; section_id: string }>();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const readOnly = user?.role === "CLASS_TEACHER";
+  const [groupFilter, setGroupFilter] = useState(searchParams.get("group_id") ?? "");
 
   const { data } = useQuery<MarkEntryData>({
     queryKey: ["marks", exam_id, class_id, section_id],
@@ -68,10 +73,12 @@ export default function MarkEntryGridPage() {
 
   const filteredStudents = useMemo(() => {
     if (!data) return [];
-    if (!search.trim()) return data.students;
+    let rows = data.students;
+    if (groupFilter) rows = rows.filter((st) => st.group_id === groupFilter);
+    if (!search.trim()) return rows;
     const q = search.trim().toLowerCase();
-    return data.students.filter((st) => st.name_en.toLowerCase().includes(q) || (st.current_roll_no ?? "").toLowerCase().includes(q));
-  }, [data, search]);
+    return rows.filter((st) => st.name_en.toLowerCase().includes(q) || (st.current_roll_no ?? "").toLowerCase().includes(q));
+  }, [data, search, groupFilter]);
 
   function key(studentId: string, subjectId: string) {
     return `${studentId}:${subjectId}`;
@@ -91,6 +98,10 @@ export default function MarkEntryGridPage() {
 
   function entryStatus(studentId: string, subjectId: string): string | undefined {
     return data?.students.find((s) => s.id === studentId)?.marks[subjectId]?.status;
+  }
+
+  function isEnrolled(studentId: string, subjectId: string): boolean {
+    return !!data?.students.find((s) => s.id === studentId)?.enrolled_subject_ids.includes(subjectId);
   }
 
   // An empty box must stay empty, not snap to 0 — Number("") === 0, so it's
@@ -160,7 +171,15 @@ export default function MarkEntryGridPage() {
       )}
 
       {data.subjects.length > 0 && (
-        <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+        <div className="flex gap-3">
+          <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+          {!!klass?.groups?.length && (
+            <select className="rounded-md border px-3 py-2 text-sm" value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              <option value="">All Groups</option>
+              {klass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+            </select>
+          )}
+        </div>
       )}
 
       {data.subjects.length > 0 && (
@@ -199,6 +218,14 @@ export default function MarkEntryGridPage() {
                       <Link href={`/students/${st.id}`} className="hover:underline" target="_blank">{st.name_en}</Link>
                     </td>
                     {data.subjects.map((s) => {
+                      const enrolled = isEnrolled(st.id, s.id);
+                      if (!enrolled) {
+                        return (
+                          <td key={s.id} className="p-1 text-center">
+                            <span className="text-muted-foreground" title="Not enrolled in this subject">—</span>
+                          </td>
+                        );
+                      }
                       const v = getValue(st.id, s.id);
                       const status = entryStatus(st.id, s.id);
                       const componentSum = s.components?.length

@@ -44,7 +44,7 @@ examsRouter.get(
         exam_type_config: true,
         academic_year: true,
         grading_scale: true,
-        subject_configs: { include: { subject: { include: { class: true } } }, orderBy: { subject: { created_at: "asc" } } },
+        subject_configs: { include: { subject: { include: { class: true, group: true } } }, orderBy: { subject: { created_at: "asc" } } },
         component_configs: { orderBy: { display_order: "asc" } },
       },
     });
