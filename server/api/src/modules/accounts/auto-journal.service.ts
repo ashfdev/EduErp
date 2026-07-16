@@ -15,16 +15,29 @@ async function getAccountId(code: string): Promise<string> {
   return account.id;
 }
 
-export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice): Promise<void> {
+// appliedToInvoice defaults to the full payment amount (every existing
+// caller's behavior, unchanged). Pass a smaller value when an advance-
+// payment overpayment (Phase 81) has capped what actually applies to this
+// invoice — the remainder is credited to the "Advance Fees Received" (2005)
+// liability instead of the invoice's income account, since it hasn't been
+// earned against any real invoice yet.
+export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice, appliedToInvoice?: number): Promise<void> {
   try {
+    const applied = appliedToInvoice ?? payment.amount;
+    const overflow = payment.amount - applied;
+
     const mapping = await prisma.feeAccountMapping.findUnique({ where: { category: invoice.category } });
     const incomeAccountId = mapping?.account_id ?? (await getAccountId("4011")); // Other Income fallback
     const cashOrBankAccountId = await getAccountId(payment.gateway === "CASH" ? "1001" : "1002");
 
     const entries: JournalEntryInput[] = [
       { debit_account_id: cashOrBankAccountId, amount: payment.amount, narration: `Fee receipt — ${invoice.description}` },
-      { credit_account_id: incomeAccountId, amount: payment.amount, narration: `Fee receipt — ${invoice.description}` },
+      { credit_account_id: incomeAccountId, amount: applied, narration: `Fee receipt — ${invoice.description}` },
     ];
+    if (overflow > 0) {
+      const advanceAccountId = await getAccountId("2005");
+      entries.push({ credit_account_id: advanceAccountId, amount: overflow, narration: `Advance payment credited — ${invoice.description}` });
+    }
 
     await createVoucher(prisma, {
       voucher_type: "RECEIPT",
@@ -38,6 +51,36 @@ export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice
     });
   } catch (err) {
     logger.error({ err, paymentId: payment.id }, "auto-journal: failed to create fee receipt journal");
+  }
+}
+
+// Reclassifies previously-banked advance credit into real income once it's
+// actually applied against a specific new invoice (createMonthlyInvoiceIfMissing,
+// Phase 81) — no new cash changes hands here, so this debits the liability
+// (2005) it was originally credited to instead of Cash/Bank.
+export async function createAdvanceCreditConsumptionJournal(payment: Payment, invoice: Invoice): Promise<void> {
+  try {
+    const mapping = await prisma.feeAccountMapping.findUnique({ where: { category: invoice.category } });
+    const incomeAccountId = mapping?.account_id ?? (await getAccountId("4011"));
+    const advanceAccountId = await getAccountId("2005");
+
+    const entries: JournalEntryInput[] = [
+      { debit_account_id: advanceAccountId, amount: payment.amount, narration: `Advance credit applied — ${invoice.description}` },
+      { credit_account_id: incomeAccountId, amount: payment.amount, narration: `Advance credit applied — ${invoice.description}` },
+    ];
+
+    await createVoucher(prisma, {
+      voucher_type: "RECEIPT",
+      date: payment.paid_at ?? new Date(),
+      narration: `Advance credit applied to invoice ${invoice.id} (${invoice.category})`,
+      reference_type: "FEE_PAYMENT",
+      reference_id: payment.id,
+      entries,
+      is_auto: true,
+      auto_post: true,
+    });
+  } catch (err) {
+    logger.error({ err, paymentId: payment.id }, "auto-journal: failed to create advance credit consumption journal");
   }
 }
 

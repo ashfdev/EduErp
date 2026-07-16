@@ -284,6 +284,19 @@ feesRouter.post(
     const rules = await getFeeRules();
     const fine = calculateLateFee(invoice.amount_due, invoice.due_date, rules);
 
+    // An amount beyond what's actually owed on this invoice is an
+    // overpayment, not a bigger payment against it — Invoice.amount_paid
+    // must never exceed amount_due + fine (that's what silently produced a
+    // confusing >100%-paid invoice before this check existed). Without
+    // advance_payment_allowed, reject outright; with it, cap what applies
+    // here and bank the rest as the student's credit_balance.
+    const outstanding = Math.max(0, invoice.amount_due + fine - invoice.amount_paid);
+    if (body.amount > outstanding && !rules.advance_payment_allowed) {
+      throw badRequest(`Amount exceeds the outstanding balance (৳${outstanding}). Enable advance payments in Fee Rules to accept overpayment as credit.`);
+    }
+    const appliedToInvoice = Math.min(body.amount, outstanding);
+    const overflow = body.amount - appliedToInvoice;
+
     const payment = await prisma.payment.create({
       data: {
         receipt_no: await generateReceiptNo(prisma),
@@ -297,7 +310,7 @@ feesRouter.post(
       },
     });
 
-    const newAmountPaid = invoice.amount_paid + body.amount;
+    const newAmountPaid = invoice.amount_paid + appliedToInvoice;
     const newStatus = newAmountPaid >= invoice.amount_due + fine ? "PAID" : newAmountPaid > 0 ? "PARTIAL" : invoice.status;
 
     const updated = await prisma.invoice.update({
@@ -305,14 +318,23 @@ feesRouter.post(
       data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
     });
 
-    await createFeeReceiptJournal(payment, updated);
+    if (overflow > 0) {
+      await prisma.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
+    }
+
+    await createFeeReceiptJournal(payment, updated, appliedToInvoice);
 
     const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
     if (student?.father_phone) {
-      await sendSms(student.father_phone, `Payment of ৳${body.amount} received for ${student.name_en}. Thank you.`);
+      await sendSms(
+        student.father_phone,
+        overflow > 0
+          ? `Payment of ৳${body.amount} received for ${student.name_en}. ৳${overflow} credited as advance balance. Thank you.`
+          : `Payment of ৳${body.amount} received for ${student.name_en}. Thank you.`,
+      );
     }
 
-    res.json({ success: true, data: { payment, invoice: updated } });
+    res.json({ success: true, data: { payment, invoice: updated, credit_applied: overflow } });
   }),
 );
 

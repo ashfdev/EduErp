@@ -80,6 +80,7 @@ interface StudentProfile {
     }[];
     outstanding_total: number;
     paid_total: number;
+    credit_balance: number;
   };
 }
 
@@ -291,6 +292,9 @@ export default function StudentProfilePage() {
                 <div className="flex gap-6 text-sm">
                   <p><span className="text-muted-foreground">Outstanding:</span> <span className="font-semibold text-red-600">৳{fees.outstanding_total}</span></p>
                   <p><span className="text-muted-foreground">Paid:</span> ৳{fees.paid_total}</p>
+                  {fees.credit_balance > 0 && (
+                    <p><span className="text-muted-foreground">Credit Balance:</span> <span className="font-semibold text-emerald-600">৳{fees.credit_balance}</span></p>
+                  )}
                 </div>
                 <Link href={`/fees/collect?student_id=${id}`}>
                   <Button size="sm">Collect Fee</Button>

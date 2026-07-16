@@ -274,6 +274,7 @@ studentsRouter.get(
           invoices: student.invoices,
           outstanding_total: outstandingTotal,
           paid_total: paidTotal,
+          credit_balance: student.credit_balance,
         },
         library: libraryFines,
         transport: transport ? { route_name: transport.route.name, fare: transport.route.fare, pickup_stop: transport.pickup_stop } : null,

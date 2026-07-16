@@ -533,6 +533,11 @@ model Student {
   // whenever a course grade is finalized.
   cgpa                  Float?
   current_semester      Int?
+  // Overpayment collected while FeeRules.advance_payment_allowed is true —
+  // never applied automatically at collection time to an existing invoice;
+  // only auto-consumed by createMonthlyInvoiceIfMissing when a new invoice
+  // is generated for this student (Phase 81).
+  credit_balance        Float       @default(0)
   deleted_at            DateTime?
   created_at            DateTime    @default(now())
   updated_at            DateTime    @updatedAt
@@ -2611,6 +2616,9 @@ enum PaymentGateway {
   AAMARPAY
   CASH
   BANK_TRANSFER
+  // Auto-applied from Student.credit_balance when a new invoice is
+  // generated (Phase 81) — never a caller-supplied value on /collect.
+  CREDIT_BALANCE
 }
 
 enum PaymentStatus {
