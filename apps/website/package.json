@@ -12,6 +12,7 @@
   "dependencies": {
     "@education-erp/types": "workspace:*",
     "@education-erp/ui": "workspace:*",
+    "lucide-react": "^0.469.0",
     "next": "^14.2.21",
     "next-intl": "^3",
     "react": "^18.3.1",

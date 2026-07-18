@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import type { Institution } from "@/lib/types";
+import { Menu, X, ChevronDown, UserCircle2, Search, Languages } from "lucide-react";
+import { Button } from "@education-erp/ui";
 
 interface NavLink {
   href: string;
@@ -16,9 +18,6 @@ interface NavGroup {
   children: NavLink[];
 }
 
-// About's sub-page keys are the same ones about/page.tsx and
-// about/[slug]/page.tsx already use (t("about")) — reused here rather than
-// duplicated, so the nav dropdown and the About index page can never drift.
 const ABOUT_CHILDREN: NavLink[] = [
   { href: "/about", key: "navAbout", labelFrom: "about" },
   { href: "/about/history", key: "navHistory", labelFrom: "about" },
@@ -31,13 +30,6 @@ const ABOUT_CHILDREN: NavLink[] = [
   { href: "/governing-body", key: "title", labelFrom: "governingBody" },
 ];
 
-// Faculty, Departments/Programs (university-only — Undergraduate/Graduate/
-// PhD programs are shown as sections within that one page rather than as
-// three separate nav links), Academic Calendar (reuses the already-built
-// /events page instead of a duplicate static page), Course Curriculum,
-// Grading System, Academic Regulations, Policies (all served via the
-// StaticPage CMS, mirroring About's own pattern), and the public Class
-// Schedule/Routine viewer.
 const ACADEMIC_CHILDREN: NavLink[] = [
   { href: "/faculty", key: "title", labelFrom: "faculty" },
   { href: "/events", key: "academicCalendar" },
@@ -68,6 +60,7 @@ const MEDIA_CHILDREN: NavLink[] = [
 
 export function Navbar({ institution }: { institution: Institution | null }) {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   const locale = useLocale();
@@ -79,6 +72,14 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const tAcademic = useTranslations("academic");
   const tGoverningBody = useTranslations("governingBody");
   const tFaculty = useTranslations("faculty");
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   function label(link: NavLink): string {
     if (link.labelFrom === "about") return tAbout(link.key);
@@ -100,90 +101,153 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   ];
 
   return (
-    <header className="border-b bg-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          {institution?.logo_url && (
-            <Image src={institution.logo_url} alt="logo" width={40} height={40} className="h-10 w-10 rounded object-contain" priority />
+    <header 
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+        scrolled ? "bg-blue-50/95 backdrop-blur-md shadow-md border-b border-blue-200" : "bg-blue-100 border-b border-blue-200"
+      }`}
+    >
+      {/* Top Bar - Solid Dark Blue */}
+      <div className="bg-blue-600 text-white py-1.5 text-xs font-medium tracking-wide">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex gap-4">
+            <span className="hidden sm:flex items-center gap-1 opacity-90 hover:opacity-100">{institution?.phone_primary && <>📞 {institution.phone_primary}</>}</span>
+            <span className="hidden sm:flex items-center gap-1 opacity-90 hover:opacity-100">{institution?.email_primary && <>✉️ {institution.email_primary}</>}</span>
+          </div>
+          <div className="flex items-center gap-4 ml-auto">
+            <Link href="/result" className="hover:text-yellow-200 transition-colors">{t("resultLookup")}</Link>
+            <button
+              onClick={() => router.replace(pathname, { locale: otherLocale })}
+              className="flex items-center gap-1 hover:text-yellow-200 transition-colors bg-white/20 px-2 py-0.5 rounded-full"
+              aria-label="Switch language"
+            >
+              <Languages className="h-3.5 w-3.5" />
+              {otherLocale === "bn" ? "বাংলা" : "English"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Navbar */}
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 py-2 lg:py-3">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-3 group">
+          {institution?.logo_url ? (
+            <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 group-hover:ring-primary/20 transition-all">
+              <Image src={institution.logo_url} alt="logo" fill sizes="56px" className="object-contain p-1" priority />
+            </div>
+          ) : (
+            <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-2xl">
+              🏫
+            </div>
           )}
-          <div>
-            <p className="font-semibold" style={{ color: "var(--primary)" }}>{institution?.name_en ?? "Institution"}</p>
-            {institution?.tagline_en && <p className="text-xs text-gray-500">{institution.tagline_en}</p>}
+          <div className="flex flex-col">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800 group-hover:text-primary transition-colors">
+              {institution?.name_en ?? "Education ERP"}
+            </h1>
+            {institution?.tagline_en && (
+              <p className="text-xs font-medium text-slate-500 line-clamp-1">{institution.tagline_en}</p>
+            )}
           </div>
         </Link>
 
-        <nav className="hidden gap-1 text-sm font-medium md:flex">
-          <Link href="/" className="rounded-md px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-[var(--primary)]">
+        {/* Desktop Navigation */}
+        <nav className="hidden lg:flex items-center gap-1">
+          <Link href="/" className="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
             {t("home")}
           </Link>
           {groups.map((g) => (
-            <div key={g.key} className="group relative">
-              <button className="flex items-center gap-1 rounded-md px-3 py-2 text-gray-700 hover:bg-gray-50 hover:text-[var(--primary)]">
+            <div key={g.key} className="group/dropdown relative">
+              <button className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
                 {t(g.key)}
-                <span className="text-xs">▾</span>
+                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180" />
               </button>
-              <div className="invisible absolute left-0 top-full z-40 min-w-[220px] rounded-md border bg-white py-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-                {g.children.map((c) => (
-                  <Link key={c.href} href={c.href} className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-[var(--primary)]">
-                    {label(c)}
-                  </Link>
-                ))}
+              
+              {/* Dropdown Menu */}
+              <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
+                <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
+                  {g.children.map((c) => (
+                    <Link 
+                      key={c.href} 
+                      href={c.href} 
+                      className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
+                    >
+                      {label(c)}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
-          <Link href="/result" className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50">{t("resultLookup")}</Link>
-          <button
-            onClick={() => router.replace(pathname, { locale: otherLocale })}
-            className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
-            aria-label="Switch language"
-          >
-            {otherLocale === "bn" ? "বাংলা" : "English"}
-          </button>
-          <a href={portalUrl} target="_blank" rel="noreferrer" className="rounded-md px-3 py-1.5 text-sm text-white" style={{ background: "var(--primary)" }}>
-            {t("portalLogin")}
-          </a>
+        {/* Actions */}
+        <div className="hidden lg:flex items-center gap-3">
+          <Button variant="outline" size="icon" className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300">
+            <Search className="h-4 w-4" />
+          </Button>
+          <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0">
+            <a href={portalUrl} target="_blank" rel="noreferrer">
+              <UserCircle2 className="mr-2 h-4 w-4" />
+              {t("portalLogin")}
+            </a>
+          </Button>
         </div>
 
-        <button className="md:hidden" onClick={() => setOpen((o) => !o)} aria-label="Toggle menu">
-          ☰
+        {/* Mobile Toggle */}
+        <button 
+          className="lg:hidden p-2 -mr-2 text-slate-600 hover:bg-slate-50 rounded-md" 
+          onClick={() => setOpen(!open)} 
+          aria-label="Toggle menu"
+        >
+          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
       </div>
 
+      {/* Mobile Navigation Menu */}
       {open && (
-        <nav className="flex flex-col gap-1 border-t bg-white p-4 md:hidden">
-          <Link href="/" className="rounded-md px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setOpen(false)}>{t("home")}</Link>
-          {groups.map((g) => (
-            <div key={g.key}>
-              <button
-                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium hover:bg-gray-50"
-                onClick={() => setMobileGroupOpen((k) => (k === g.key ? null : g.key))}
-              >
-                {t(g.key)}
-                <span className="text-xs">{mobileGroupOpen === g.key ? "▴" : "▾"}</span>
-              </button>
-              {mobileGroupOpen === g.key && (
-                <div className="ml-3 flex flex-col gap-1 border-l pl-3">
-                  {g.children.map((c) => (
-                    <Link key={c.href} href={c.href} className="rounded-md px-3 py-2 text-sm text-gray-600 hover:bg-gray-50" onClick={() => setOpen(false)}>
-                      {label(c)}
-                    </Link>
-                  ))}
-                </div>
-              )}
+        <div className="lg:hidden border-t bg-white h-[calc(100vh-80px)] overflow-y-auto">
+          <nav className="flex flex-col p-4 pb-20 space-y-1">
+            <Link href="/" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+              {t("home")}
+            </Link>
+            
+            {groups.map((g) => (
+              <div key={g.key} className="border-b border-slate-50 last:border-0">
+                <button
+                  className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={() => setMobileGroupOpen((k) => (k === g.key ? null : g.key))}
+                >
+                  {t(g.key)}
+                  <ChevronDown className={`h-4 w-4 transition-transform ${mobileGroupOpen === g.key ? "rotate-180 text-primary" : "text-slate-400"}`} />
+                </button>
+                
+                {mobileGroupOpen === g.key && (
+                  <div className="mb-2 ml-4 flex flex-col space-y-1 border-l-2 border-slate-100 pl-4 py-1">
+                    {g.children.map((c) => (
+                      <Link 
+                        key={c.href} 
+                        href={c.href} 
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-primary" 
+                        onClick={() => setOpen(false)}
+                      >
+                        {label(c)}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            <div className="mt-6 pt-6 border-t flex flex-col gap-3">
+              <Button asChild className="w-full rounded-xl justify-center h-12 text-base">
+                <a href={portalUrl} target="_blank" rel="noreferrer">
+                  <UserCircle2 className="mr-2 h-5 w-5" />
+                  {t("portalLogin")}
+                </a>
+              </Button>
             </div>
-          ))}
-          <Link href="/result" className="rounded-md px-3 py-2 text-sm hover:bg-gray-50" onClick={() => setOpen(false)}>{t("resultLookup")}</Link>
-          <button
-            onClick={() => { router.replace(pathname, { locale: otherLocale }); setOpen(false); }}
-            className="rounded-md px-3 py-2 text-left text-sm hover:bg-gray-50"
-          >
-            {otherLocale === "bn" ? "বাংলা" : "English"}
-          </button>
-          <a href={portalUrl} target="_blank" rel="noreferrer" className="rounded-md px-3 py-2 text-sm hover:bg-gray-50">{t("portalLogin")}</a>
-        </nav>
+          </nav>
+        </div>
       )}
     </header>
   );
