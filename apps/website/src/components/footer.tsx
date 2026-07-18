@@ -23,7 +23,7 @@ export function Footer({ institution }: { institution: Institution | null }) {
   }, []);
 
   return (
-    <footer className="mt-16 border-t border-blue-700 bg-blue-600 text-white">
+    <footer className="mt-16 border-t border-slate-800 bg-slate-900 text-slate-100">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-12 px-4 py-16 sm:grid-cols-2 lg:grid-cols-4 sm:px-6 lg:px-8">
         
         {/* Brand Column */}
@@ -39,17 +39,17 @@ export function Footer({ institution }: { institution: Institution | null }) {
               </div>
             )}
             <p className="text-xl font-bold text-white mb-1">{institution?.name_en ?? "Institution"}</p>
-            {institution?.tagline_en && <p className="text-sm text-blue-100 font-medium">{institution.tagline_en}</p>}
-            {institution?.established_text && <p className="text-sm font-medium text-blue-100 mt-2">{institution.established_text}</p>}
+            {institution?.tagline_en && <p className="text-sm text-slate-400 font-medium">{institution.tagline_en}</p>}
+            {institution?.established_text && <p className="text-sm font-medium text-slate-400 mt-2">{institution.established_text}</p>}
           </div>
           <div className="flex gap-3 justify-center">
             {institution?.facebook_url && (
-              <a href={institution.facebook_url} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-700 shadow-sm border border-blue-500 text-white hover:bg-blue-800 transition-all">
+              <a href={institution.facebook_url} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 shadow-sm border border-slate-700 text-white hover:bg-primary hover:border-primary transition-all">
                 <Facebook className="h-5 w-5" />
               </a>
             )}
             {institution?.youtube_url && (
-              <a href={institution.youtube_url} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-700 shadow-sm border border-blue-500 text-white hover:bg-red-600 transition-all">
+              <a href={institution.youtube_url} target="_blank" rel="noreferrer" className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 shadow-sm border border-slate-700 text-white hover:bg-red-600 hover:border-red-600 transition-all">
                 <Youtube className="h-5 w-5" />
               </a>
             )}
@@ -60,7 +60,7 @@ export function Footer({ institution }: { institution: Institution | null }) {
         <div>
           <p className="mb-6 text-lg font-bold text-white relative inline-block">
             {t("quickLinks")}
-            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-blue-300 rounded-full"></span>
+            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-primary rounded-full"></span>
           </p>
           <ul className="space-y-3 text-sm">
             {[
@@ -72,8 +72,8 @@ export function Footer({ institution }: { institution: Institution | null }) {
               { href: "/contact", label: t("contact") },
             ].map((link) => (
               <li key={link.href}>
-                <Link href={link.href} className="group flex items-center text-blue-100 hover:text-white transition-colors font-medium">
-                  <ChevronRight className="mr-2 h-3.5 w-3.5 text-blue-300 group-hover:text-white transition-colors" />
+                <Link href={link.href} className="group flex items-center text-slate-400 hover:text-primary transition-colors font-medium">
+                  <ChevronRight className="mr-2 h-3.5 w-3.5 text-slate-600 group-hover:text-primary transition-colors" />
                   {link.label}
                 </Link>
               </li>
@@ -85,20 +85,20 @@ export function Footer({ institution }: { institution: Institution | null }) {
         <div>
           <p className="mb-6 text-lg font-bold text-white relative inline-block">
             {t("importantLinks")}
-            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-blue-300 rounded-full"></span>
+            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-primary rounded-full"></span>
           </p>
           <ul className="space-y-3 text-sm">
             {links.length > 0 ? (
               links.map((l) => (
                 <li key={l.id}>
-                  <a href={l.url} target="_blank" rel="noreferrer" className="group flex items-center text-blue-100 hover:text-white transition-colors font-medium">
-                    <ExternalLink className="mr-2 h-3.5 w-3.5 text-blue-300 group-hover:text-white transition-colors" />
+                  <a href={l.url} target="_blank" rel="noreferrer" className="group flex items-center text-slate-400 hover:text-primary transition-colors font-medium">
+                    <ExternalLink className="mr-2 h-3.5 w-3.5 text-slate-600 group-hover:text-primary transition-colors" />
                     {l.title}
                   </a>
                 </li>
               ))
             ) : (
-              <li className="text-blue-200 italic">No links available</li>
+              <li className="text-slate-600 italic">No links available</li>
             )}
           </ul>
         </div>
@@ -107,31 +107,31 @@ export function Footer({ institution }: { institution: Institution | null }) {
         <div>
           <p className="mb-6 text-lg font-bold text-white relative inline-block">
             {t("contactHeading")}
-            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-blue-300 rounded-full"></span>
+            <span className="absolute -bottom-2 left-0 h-1 w-1/2 bg-primary rounded-full"></span>
           </p>
           <ul className="space-y-4 text-sm">
             {institution?.address && (
               <li className="flex items-start">
-                <div className="mt-0.5 rounded-full bg-blue-500 p-1.5 text-white mr-3 shrink-0">
+                <div className="mt-0.5 rounded-full bg-slate-800 p-1.5 text-slate-400 mr-3 shrink-0">
                   <MapPin className="h-4 w-4" />
                 </div>
-                <span className="font-medium text-blue-50">{institution.address}</span>
+                <span className="font-medium text-slate-300">{institution.address}</span>
               </li>
             )}
             {institution?.phone_primary && (
               <li className="flex items-center">
-                <div className="rounded-full bg-blue-500 p-1.5 text-white mr-3 shrink-0">
+                <div className="rounded-full bg-slate-800 p-1.5 text-slate-400 mr-3 shrink-0">
                   <Phone className="h-4 w-4" />
                 </div>
-                <span className="font-medium text-blue-50">{institution.phone_primary}</span>
+                <span className="font-medium text-slate-300">{institution.phone_primary}</span>
               </li>
             )}
             {institution?.email_primary && (
               <li className="flex items-center">
-                <div className="rounded-full bg-blue-500 p-1.5 text-white mr-3 shrink-0">
+                <div className="rounded-full bg-slate-800 p-1.5 text-slate-400 mr-3 shrink-0">
                   <Mail className="h-4 w-4" />
                 </div>
-                <span className="font-medium text-blue-50">{institution.email_primary}</span>
+                <span className="font-medium text-slate-300">{institution.email_primary}</span>
               </li>
             )}
           </ul>
@@ -140,12 +140,12 @@ export function Footer({ institution }: { institution: Institution | null }) {
       </div>
       
       {/* Bottom Bar */}
-      <div className="border-t border-blue-700 bg-blue-800 py-6">
+      <div className="border-t border-slate-800 bg-slate-950 py-6">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between px-4 sm:px-6 lg:flex-row lg:px-8 text-sm">
-          <p className="text-blue-200 mb-2 lg:mb-0 font-medium">
+          <p className="text-slate-400 mb-2 lg:mb-0 font-medium">
             © {new Date().getFullYear()} {institution?.name_en ?? "Institution"}. All rights reserved.
           </p>
-          <p className="text-blue-200 flex items-center font-medium">
+          <p className="text-slate-400 flex items-center font-medium">
             {t("poweredBy")} <span className="ml-1 font-bold text-white">Education ERP</span>
           </p>
         </div>

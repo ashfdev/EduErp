@@ -15,6 +15,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <div
+      className="flex min-h-screen flex-col"
       style={
         {
           "--primary": institution?.primary_color ?? "#1a3c4a",
@@ -23,7 +24,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
       }
     >
       <Navbar institution={institution} />
-      {children}
+      <main className="flex-1">{children}</main>
       <Footer institution={institution} />
     </div>
   );

@@ -106,26 +106,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
         scrolled ? "bg-blue-50/95 backdrop-blur-md shadow-md border-b border-blue-200" : "bg-blue-100 border-b border-blue-200"
       }`}
     >
-      {/* Top Bar - Solid Dark Blue */}
-      <div className="bg-blue-600 text-white py-1.5 text-xs font-medium tracking-wide">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-4">
-            <span className="hidden sm:flex items-center gap-1 opacity-90 hover:opacity-100">{institution?.phone_primary && <>📞 {institution.phone_primary}</>}</span>
-            <span className="hidden sm:flex items-center gap-1 opacity-90 hover:opacity-100">{institution?.email_primary && <>✉️ {institution.email_primary}</>}</span>
-          </div>
-          <div className="flex items-center gap-4 ml-auto">
-            <Link href="/result" className="hover:text-yellow-200 transition-colors">{t("resultLookup")}</Link>
-            <button
-              onClick={() => router.replace(pathname, { locale: otherLocale })}
-              className="flex items-center gap-1 hover:text-yellow-200 transition-colors bg-white/20 px-2 py-0.5 rounded-full"
-              aria-label="Switch language"
-            >
-              <Languages className="h-3.5 w-3.5" />
-              {otherLocale === "bn" ? "বাংলা" : "English"}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Top Bar removed as per user request */}
 
       {/* Main Navbar */}
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 py-2 lg:py-3">
@@ -182,7 +163,18 @@ export function Navbar({ institution }: { institution: Institution | null }) {
 
         {/* Actions */}
         <div className="hidden lg:flex items-center gap-3">
-          <Button variant="outline" size="icon" className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300">
+          <Link href="/result" className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors hidden xl:block">
+            {t("resultLookup")}
+          </Link>
+          <button
+            onClick={() => router.replace(pathname, { locale: otherLocale })}
+            className="flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-primary transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full"
+            aria-label="Switch language"
+          >
+            <Languages className="h-4 w-4" />
+            {otherLocale === "bn" ? "বাংলা" : "En"}
+          </button>
+          <Button variant="outline" size="icon" onClick={() => alert("Search functionality is coming soon!")} className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300">
             <Search className="h-4 w-4" />
           </Button>
           <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0">
