@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Home, ClipboardList, CalendarDays, CreditCard, Bell } from "lucide-react";
 
 const ITEMS = [
-  { href: "/", icon: "🏠", key: "home" },
-  { href: "/results", icon: "📋", key: "results" },
-  { href: "/attendance", icon: "📅", key: "attendance" },
-  { href: "/fees", icon: "💳", key: "fees" },
-  { href: "/notices", icon: "🔔", key: "notices" },
+  { href: "/", icon: Home, key: "home" },
+  { href: "/results", icon: ClipboardList, key: "results" },
+  { href: "/attendance", icon: CalendarDays, key: "attendance" },
+  { href: "/fees", icon: CreditCard, key: "fees" },
+  { href: "/notices", icon: Bell, key: "notices" },
 ] as const;
 
 export function BottomNav() {
@@ -17,16 +18,19 @@ export function BottomNav() {
   const t = useTranslations("nav");
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t bg-white">
+    <nav className="flex w-full bg-white border-t pb-safe">
       {ITEMS.map((item) => {
         const active = pathname === item.href;
+        const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs ${active ? "text-[var(--primary)] font-medium" : "text-gray-500"}`}
+            className={`flex flex-1 flex-col items-center justify-center gap-1 py-3 text-[10px] transition-colors ${
+              active ? "text-primary font-medium" : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <span className="text-lg">{item.icon}</span>
+            <Icon className={`h-5 w-5 ${active ? "fill-primary/10" : ""}`} strokeWidth={active ? 2.5 : 2} />
             {t(item.key)}
           </Link>
         );

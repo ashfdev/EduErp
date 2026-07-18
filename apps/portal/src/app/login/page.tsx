@@ -40,15 +40,19 @@ export default function PortalLoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-lg border bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-3">
-          {institution?.logo_url ? (
-            <img src={institution.logo_url} alt="Logo" className="h-10 w-10 rounded object-contain" />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-lg">🏫</div>
-          )}
-          <p className="font-medium text-gray-700">{institution?.name_en ?? "Education ERP"}</p>
+      <div className="w-full max-w-sm flex flex-col items-center">
+        <div className="mb-8 flex flex-col items-center justify-center text-center">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white shadow-sm ring-4 ring-primary/5">
+            {institution?.logo_url ? (
+              <img src={institution.logo_url} alt="Logo" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-4xl">🏫</span>
+            )}
+          </div>
+          <p className="text-xl font-bold tracking-tight text-slate-800">{institution?.name_en ?? "Education ERP"}</p>
         </div>
+        
+        <div className="w-full rounded-lg border bg-white p-6 shadow-sm">
         <h1 className="mb-1 text-xl font-semibold" style={{ color: "var(--primary, #1a3c4a)" }}>{t("title")}</h1>
         <p className="mb-6 text-sm text-gray-500">{t("subtitle")}</p>
         <form onSubmit={submit} className="space-y-4">
@@ -63,6 +67,7 @@ export default function PortalLoginPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>{loading ? t("signingIn") : t("signIn")}</Button>
         </form>
+        </div>
       </div>
     </main>
   );
