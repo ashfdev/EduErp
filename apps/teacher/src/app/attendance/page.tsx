@@ -86,72 +86,91 @@ export default function TeacherAttendancePage() {
 
   return (
     <TeacherShell>
-      <PageWrapper className="p-0">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
+        
+        <div className="relative z-10 flex flex-col">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            {t("title")}
+          </h1>
+          <p className="mt-1 text-indigo-100 font-medium opacity-90">
+            {t("subtitle")}
+          </p>
+        </div>
+      </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
-          <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
-            <option value="">{t("selectClassSection")}</option>
-            {mySections?.map((s) => <option key={s.section_id} value={s.section_id}>{s.class_name} — {s.section_name}</option>)}
-          </select>
+      <div className="space-y-6">
+        <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap gap-4 items-center">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40 rounded-xl border-slate-200 bg-slate-50 font-medium" />
+            <select className="flex-1 min-w-[200px] max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+              <option value="">{t("selectClassSection")}</option>
+              {mySections?.map((s) => <option key={s.section_id} value={s.section_id}>{s.class_name} — {s.section_name}</option>)}
+            </select>
+          </div>
         </div>
 
-        {mySections && !mySections.length && <p className="text-sm text-muted-foreground">{t("notAssigned")}</p>}
+        {mySections && !mySections.length && (
+          <div className="rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm">
+            <p className="text-sm font-medium text-slate-500">{t("notAssigned")}</p>
+          </div>
+        )}
 
         {rows && (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">{t("total", { count: rows.length })}</Badge>
-              <Badge variant="outline">{t("unmarked", { count: unmarked })}</Badge>
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex gap-2">
+                <Badge variant="outline" className="bg-white px-3 py-1.5 rounded-lg border-slate-200 shadow-sm font-bold">{t("total", { count: rows.length })}</Badge>
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border-amber-200 shadow-sm font-bold">{t("unmarked", { count: unmarked })}</Badge>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="rounded-xl font-bold bg-white" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
+                  {t("markAllPresent")}
+                </Button>
+                <Button size="sm" variant="outline" className="rounded-xl font-bold bg-white text-slate-500" onClick={() => setMarks({})}>{t("clear")}</Button>
+              </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
-                {t("markAllPresent")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setMarks({})}>{t("clear")}</Button>
-            </div>
-
-            <Card>
-              <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">{t("colRoll")}</th>
-                      <th className="p-2">{t("colName")}</th>
-                      {STATUSES.map((s) => <th key={s} className="p-2 text-center">{STATUS_LABEL[s]}</th>)}
+            <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    <th className="px-6 py-4">{t("colRoll")}</th>
+                    <th className="px-6 py-4">{t("colName")}</th>
+                    {STATUSES.map((s) => <th key={s} className="px-3 py-4 text-center">{STATUS_LABEL[s]}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-3 font-bold text-slate-700">{r.current_roll_no ?? "—"}</td>
+                      <td className="px-6 py-3 font-medium text-slate-800">{r.name_en}</td>
+                      {STATUSES.map((s) => (
+                        <td key={s} className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setMarks((prev) => ({ ...prev, [r.id]: s }))}
+                            className={`h-8 w-8 rounded-full border-2 text-xs font-bold shadow-sm transition-all hover:scale-110 active:scale-95 ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"}`}
+                          >
+                            {STATUS_LABEL[s]}
+                          </button>
+                        </td>
+                      ))}
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.id} className="border-b">
-                        <td className="p-2">{r.current_roll_no ?? "—"}</td>
-                        <td className="p-2">{r.name_en}</td>
-                        {STATUSES.map((s) => (
-                          <td key={s} className="p-1 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setMarks((prev) => ({ ...prev, [r.id]: s }))}
-                              className={`h-7 w-7 rounded-full border text-xs ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-muted"}`}
-                            >
-                              {STATUS_LABEL[s]}
-                            </button>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-            <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-              {saveMutation.isPending ? t("saving") : t("saveAttendance")}
-            </Button>
-          </>
+            <div className="flex justify-end pt-2">
+              <Button className="rounded-xl px-8 py-6 text-base font-bold shadow-md" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? t("saving") : t("saveAttendance")}
+              </Button>
+            </div>
+          </div>
         )}
-      </PageWrapper>
+      </div>
     </TeacherShell>
   );
 }

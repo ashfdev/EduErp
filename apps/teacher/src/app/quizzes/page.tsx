@@ -129,64 +129,118 @@ export default function TeacherQuizzesPage() {
 
   return (
     <TeacherShell>
-      <PageWrapper className="p-0">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
+        
+        <div className="relative z-10 flex flex-col">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            {t("title")}
+          </h1>
+          <p className="mt-1 text-indigo-100 font-medium opacity-90">
+            {t("subtitle")}
+          </p>
+        </div>
+      </div>
 
-        <div className="space-y-1.5">
-          <Label>{t("subject")}</Label>
-          <select className="w-full max-w-xs rounded-md border px-3 py-2 text-sm" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            <option value="">{t("selectSubject")}</option>
-            {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
-          </select>
+      <div className="space-y-6">
+        <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <Label className="text-sm font-bold text-slate-500 uppercase">{t("subject")}</Label>
+            <select className="flex-1 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+              <option value="">{t("selectSubject")}</option>
+              {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
+            </select>
+          </div>
         </div>
 
         {subjectId && (
-          <>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{t("questionBank", { count: questions?.length ?? 0 })}</p>
-              <Button size="sm" variant="outline" onClick={() => setQOpen(true)}>{t("addQuestion")}</Button>
-            </div>
-            <Card>
-              <CardContent className="pt-6">
-                {!questions?.length && <EmptyState title={t("noQuestions")} />}
-                <div className="space-y-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Questions Bank */}
+            <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+                <h2 className="text-base font-bold text-slate-800">
+                  {t("questionBank", { count: questions?.length ?? 0 })}
+                </h2>
+                <button 
+                  onClick={() => setQOpen(true)}
+                  className="text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                >
+                  + {t("addQuestion")}
+                </button>
+              </div>
+              <div className="p-4 flex-1 overflow-y-auto max-h-[600px]">
+                {!questions?.length && (
+                  <div className="py-8"><EmptyState title={t("noQuestions")} /></div>
+                )}
+                <div className="space-y-3">
                   {questions?.map((q) => (
-                    <div key={q.id} className="rounded-md border p-3 text-sm">
-                      <p className="font-medium">{q.question_text} <span className="text-xs text-muted-foreground">({q.marks} marks)</span></p>
-                      <p className="text-xs text-muted-foreground">{q.options.map((o) => `${o.key}) ${o.text}`).join(" · ")} — {t("correctLabel", { option: q.correct_option })}</p>
+                    <div key={q.id} className="rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
+                      <p className="font-bold text-slate-800 text-sm">
+                        {q.question_text} <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md ml-1">{q.marks} marks</span>
+                      </p>
+                      <p className="text-xs font-medium text-slate-500 mt-2">
+                        {q.options.map((o) => `${o.key}) ${o.text}`).join(" • ")}
+                      </p>
+                      <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md inline-block mt-2">
+                        {t("correctLabel", { option: q.correct_option })}
+                      </p>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{t("quizzesLabel")}</p>
-              <Button size="sm" onClick={() => setQuizOpen(true)} disabled={!questions?.length}>{t("createQuiz")}</Button>
+              </div>
             </div>
-            <Card>
-              <CardContent className="pt-6">
-                {!quizzes?.length && <EmptyState title={t("noQuizzes")} />}
-                <div className="space-y-2">
+
+            {/* Quizzes */}
+            <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+                <h2 className="text-base font-bold text-slate-800">
+                  {t("quizzesLabel")}
+                </h2>
+                <button 
+                  onClick={() => setQuizOpen(true)}
+                  disabled={!questions?.length}
+                  className="text-xs font-bold bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  + {t("createQuiz")}
+                </button>
+              </div>
+              <div className="p-4 flex-1 overflow-y-auto max-h-[600px]">
+                {!quizzes?.length && (
+                  <div className="py-8"><EmptyState title={t("noQuizzes")} /></div>
+                )}
+                <div className="space-y-3">
                   {quizzes?.map((q) => (
-                    <div key={q.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                    <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
                       <div>
-                        <p className="font-medium">{q.title}</p>
-                        <p className="text-xs text-muted-foreground">{t("questionsMinAttempts", { questions: q._count.questions, minutes: q.duration_minutes, attempts: q._count.attempts })}</p>
+                        <p className="font-bold text-slate-800 text-sm">{q.title}</p>
+                        <p className="text-xs font-medium text-slate-500 mt-1">
+                          {t("questionsMinAttempts", { questions: q._count.questions, minutes: q.duration_minutes, attempts: q._count.attempts })}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={q.is_published ? "default" : "outline"}>{q.is_published ? t("published") : t("draft")}</Badge>
-                        {!q.is_published && <Button size="sm" variant="outline" onClick={() => publishMutation.mutate(q.id)}>{t("publish")}</Button>}
-                        <Button size="sm" variant="outline" onClick={() => setResultsQuizId(q.id)}>{t("results")}</Button>
+                      <div className="flex items-center gap-2 mt-3 sm:mt-0">
+                        <Badge variant={q.is_published ? "default" : "outline"} className={q.is_published ? "bg-emerald-500" : "bg-slate-100 text-slate-500"}>
+                          {q.is_published ? t("published") : t("draft")}
+                        </Badge>
+                        {!q.is_published && (
+                          <button onClick={() => publishMutation.mutate(q.id)} className="text-xs font-bold text-primary hover:underline px-2 py-1">
+                            {t("publish")}
+                          </button>
+                        )}
+                        <button onClick={() => setResultsQuizId(q.id)} className="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+                          {t("results")}
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </>
+              </div>
+            </div>
+
+          </div>
         )}
-      </PageWrapper>
+      </div>
 
       <Dialog open={qOpen} onOpenChange={setQOpen}>
         <DialogContent className="max-w-lg">

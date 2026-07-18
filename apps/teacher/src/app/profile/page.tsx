@@ -88,81 +88,130 @@ export default function TeacherProfilePage() {
 
   return (
     <TeacherShell>
-      <PageWrapper className="p-0">
-        <PageHeader title={t("title")} subtitle={user?.name_en} />
-
-        <Card>
-          <CardContent className="grid grid-cols-2 gap-3 pt-6 text-sm">
-            <div><span className="text-muted-foreground">{t("name")}</span> {user?.name_en}</div>
-            <div><span className="text-muted-foreground">{t("phone")}</span> {user?.phone}</div>
-            <div><span className="text-muted-foreground">{t("role")}</span> {user?.role?.replace(/_/g, " ")}</div>
-          </CardContent>
-        </Card>
-
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium">{t("myDocuments")}</p>
-            <Button size="sm" onClick={() => setUploadOpen(true)}>{t("uploadDocument")}</Button>
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
+        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
+        
+        <div className="relative z-10 flex items-center gap-5">
+          <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-bold text-white border border-white/10 shadow-sm">
+            {user?.name_en?.charAt(0) ?? "U"}
           </div>
-          <Card>
-            <CardContent className="pt-6">
-              {!documents?.length && <EmptyState title={t("noDocuments")} />}
-              <div className="space-y-2">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {t("title")}
+            </h1>
+            <p className="mt-1 text-indigo-100 font-medium opacity-90">
+              {user?.name_en}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="md:col-span-4 space-y-6">
+          <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-sm font-bold text-slate-800 uppercase tracking-wider">
+              Profile Details
+            </h3>
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-400 uppercase">{t("name")}</span>
+                <span className="text-sm font-medium text-slate-800 mt-0.5">{user?.name_en}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-400 uppercase">{t("phone")}</span>
+                <span className="text-sm font-medium text-slate-800 mt-0.5">{user?.phone}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-400 uppercase">{t("role")}</span>
+                <span className="inline-flex mt-1 items-center rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 w-fit capitalize">
+                  {user?.role?.replace(/_/g, " ").toLowerCase()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="md:col-span-8 space-y-6">
+          <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+              <h2 className="text-base font-bold text-slate-800">
+                {t("myDocuments")}
+              </h2>
+              <button 
+                onClick={() => setUploadOpen(true)}
+                className="text-xs font-bold bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+              >
+                {t("uploadDocument")}
+              </button>
+            </div>
+            <div className="p-4">
+              {!documents?.length && (
+                <div className="py-8"><EmptyState title={t("noDocuments")} /></div>
+              )}
+              <div className="space-y-3">
                 {documents?.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
                     <div>
-                      <p className="font-medium">{d.title} <span className="text-xs text-muted-foreground">({d.doc_type})</span></p>
-                      <p className="text-xs text-muted-foreground">{d.original_filename} · {new Date(d.uploaded_at).toLocaleDateString()}</p>
+                      <p className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        {d.title}
+                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{d.doc_type}</span>
+                      </p>
+                      <p className="text-xs font-medium text-slate-500 mt-1">{d.original_filename} • {new Date(d.uploaded_at).toLocaleDateString()}</p>
                     </div>
-                    <div className="flex gap-3">
-                      <button onClick={() => download(d.id)} className="text-primary hover:underline">{t("download")}</button>
-                      <button onClick={() => deleteMutation.mutate(d.id)} className="text-destructive hover:underline">{t("delete")}</button>
+                    <div className="flex gap-4 mt-3 sm:mt-0">
+                      <button onClick={() => download(d.id)} className="text-xs font-bold text-primary hover:underline">{t("download")}</button>
+                      <button onClick={() => deleteMutation.mutate(d.id)} className="text-xs font-bold text-red-500 hover:underline">{t("delete")}</button>
                     </div>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
 
-        <div>
-          <p className="mb-3 text-sm font-medium">{t("myReviews")}</p>
-          <Card>
-            <CardContent className="pt-6">
-              {!reviews?.length && <EmptyState title={t("noReviews")} />}
-              <div className="space-y-2">
+          <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+              <h2 className="text-base font-bold text-slate-800">{t("myReviews")}</h2>
+            </div>
+            <div className="p-4">
+              {!reviews?.length && (
+                <div className="py-8"><EmptyState title={t("noReviews")} /></div>
+              )}
+              <div className="space-y-3">
                 {reviews?.map((r) => (
-                  <div key={r.id} className="rounded-md border p-3 text-sm">
+                  <div key={r.id} className="rounded-2xl border border-slate-100 p-4 hover:border-primary/20 hover:bg-slate-50 transition-all">
                     <div className="flex items-center justify-between">
-                      <p className="font-medium">{r.template.name} · {r.review_period}</p>
-                      <Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge>
+                      <p className="font-bold text-slate-800 text-sm">{r.template.name} <span className="text-slate-400 font-medium mx-1">•</span> {r.review_period}</p>
+                      <Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"} className={r.status === "ACKNOWLEDGED" ? "bg-emerald-500" : ""}>{r.status}</Badge>
                     </div>
                     {r.status !== "DRAFT" && (
-                      <>
-                        <p className="mt-1 text-xs text-muted-foreground">{t("overallScore", { score: r.overall_score ?? 0 })}</p>
-                        {r.overall_comments && <p className="text-xs text-muted-foreground">{r.overall_comments}</p>}
+                      <div className="mt-3">
+                        <p className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg inline-block mb-2">
+                          {t("overallScore", { score: r.overall_score ?? 0 })}
+                        </p>
+                        {r.overall_comments && <p className="text-sm text-slate-600 mt-1 italic">"{r.overall_comments}"</p>}
                         {r.status === "SUBMITTED" && (
-                          <Button size="sm" className="mt-2" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
+                          <Button size="sm" className="mt-4 rounded-xl font-bold" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
                             {t("acknowledge")}
                           </Button>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
-      </PageWrapper>
+      </div>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t("uploadDocumentTitle")}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+        <DialogContent className="sm:max-w-md rounded-3xl p-6">
+          <DialogHeader><DialogTitle className="text-xl font-bold text-slate-800">{t("uploadDocumentTitle")}</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-4">
             <div className="space-y-1.5">
-              <Label>{t("documentType")}</Label>
-              <select className="w-full rounded-md border px-3 py-2 text-sm" value={docType} onChange={(e) => setDocType(e.target.value)}>
+              <Label className="text-xs font-bold text-slate-500 uppercase">{t("documentType")}</Label>
+              <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={docType} onChange={(e) => setDocType(e.target.value)}>
                 <option value="CERTIFICATE">{t("docCertificate")}</option>
                 <option value="NID">{t("docNid")}</option>
                 <option value="TIN">{t("docTin")}</option>
@@ -170,11 +219,17 @@ export default function TeacherProfilePage() {
                 <option value="OTHER">{t("docOther")}</option>
               </select>
             </div>
-            <div className="space-y-1.5"><Label>{t("titleLabel")}</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("titlePlaceholder")} /></div>
-            <div className="space-y-1.5"><Label>{t("file")}</Label><Input type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-500 uppercase">{t("titleLabel")}</Label>
+              <Input className="rounded-xl border-slate-200 bg-slate-50 font-medium px-4 py-2.5" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("titlePlaceholder")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-500 uppercase">{t("file")}</Label>
+              <Input className="rounded-xl border-slate-200 bg-slate-50 cursor-pointer file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-bold file:text-white" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            </div>
           </div>
-          <DialogFooter>
-            <Button onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !title || !file}>
+          <DialogFooter className="mt-6">
+            <Button className="w-full rounded-xl font-bold py-6 text-base" onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !title || !file}>
               {uploadMutation.isPending ? t("uploading") : t("upload")}
             </Button>
           </DialogFooter>

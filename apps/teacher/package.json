@@ -15,6 +15,7 @@
     "@education-erp/validators": "workspace:*",
     "@tanstack/react-query": "^5.62.11",
     "axios": "^1.7.9",
+    "lucide-react": "^0.469.0",
     "next": "^14.2.21",
     "next-intl": "^3",
     "react": "^18.3.1",
