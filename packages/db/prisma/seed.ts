@@ -528,6 +528,68 @@ async function main() {
     await prisma.leaveType.upsert({ where: { id: lt.id }, update: {}, create: lt });
   }
 
+  // Editable Role & Permission matrix (Phase 84). Exact, verified mirror of
+  // server/api/src/lib/roles.ts's hardcoded arrays as of the Phase 84
+  // cutover — copied field-for-field, not retyped from memory. STAFF_READ_ROLES
+  // is deliberately excluded: exported from roles.ts but confirmed unused by
+  // any authorize() call anywhere in the API, so it gates nothing and would
+  // only confuse an admin editing a permission with no visible effect.
+  const PERMISSION_CATALOG: { key: string; label: string; category: string; roles: string[] }[] = [
+    { key: "SETTINGS_INSTITUTION_ROLES", label: "Institution Settings", category: "Settings", roles: ["SUPER_ADMIN", "ADMIN", "IT_ADMIN"] },
+    { key: "SETTINGS_ACADEMIC_ROLES", label: "Academic Settings", category: "Settings", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "SETTINGS_USERS_ROLES", label: "User Accounts", category: "Settings", roles: ["SUPER_ADMIN", "ADMIN", "IT_ADMIN"] },
+    { key: "DEVICE_MANAGE_ROLES", label: "Biometric Device Management", category: "Settings", roles: ["SUPER_ADMIN", "ADMIN", "IT_ADMIN"] },
+    { key: "STUDENT_CRUD_ROLES", label: "Student CRUD", category: "Students", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "REGISTRAR"] },
+    { key: "STUDENT_PROMOTE_ROLES", label: "Student Promotion", category: "Students", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "ATTENDANCE_MARK_ROLES", label: "Attendance Marking", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"] },
+    { key: "EXAM_MANAGE_ROLES", label: "Exam Management", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "MARK_ENTRY_ROLES", label: "Mark Entry", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"] },
+    { key: "MARK_VIEW_ROLES", label: "Mark View (read-only)", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"] },
+    { key: "MARK_APPROVAL_ROLES", label: "Mark Approval", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "RESULT_PUBLISH_ROLES", label: "Result Publish", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "QUIZ_MANAGE_ROLES", label: "Quiz Management", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"] },
+    { key: "FEE_COLLECTION_ROLES", label: "Fee Collection", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"] },
+    { key: "ACCOUNTS_MANAGE_ROLES", label: "Accounts Management", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"] },
+    { key: "VOUCHER_APPROVE_ROLES", label: "Voucher Approval", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT", "PRINCIPAL"] },
+    { key: "VOUCHER_POST_ROLES", label: "Voucher Posting", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"] },
+    { key: "INVENTORY_MANAGE_ROLES", label: "Inventory Management", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"] },
+    { key: "REQUISITION_APPROVE_ROLES", label: "Requisition Approval", category: "Fees & Accounts", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "HEAD_OF_DEPT"] },
+    { key: "ADMISSION_MANAGE_ROLES", label: "Admission Management", category: "Admission", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
+    { key: "ADMISSION_ENROLL_ROLES", label: "Admission Enrollment", category: "Admission", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "WEBSITE_CONTENT_ROLES", label: "Website Content", category: "Website", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "IT_ADMIN"] },
+    { key: "HR_MANAGE_ROLES", label: "HR Management", category: "HR & Payroll", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "LEAVE_APPROVE_ROLES", label: "Leave Approval", category: "HR & Payroll", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "PAYROLL_MANAGE_ROLES", label: "Payroll Management", category: "HR & Payroll", roles: ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"] },
+    { key: "APPRAISAL_MANAGE_ROLES", label: "Staff Appraisals", category: "HR & Payroll", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "LIBRARY_MANAGE_ROLES", label: "Library Management", category: "Facilities", roles: ["SUPER_ADMIN", "ADMIN", "LIBRARIAN"] },
+    { key: "TRANSPORT_MANAGE_ROLES", label: "Transport Management", category: "Facilities", roles: ["SUPER_ADMIN", "ADMIN", "TRANSPORT_MANAGER"] },
+    { key: "HOSTEL_MANAGE_ROLES", label: "Hostel Management", category: "Facilities", roles: ["SUPER_ADMIN", "ADMIN", "HOSTEL_MANAGER"] },
+    { key: "HEALTH_MANAGE_ROLES", label: "Health Records", category: "Student Welfare", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER"] },
+    { key: "DISCIPLINE_MANAGE_ROLES", label: "Discipline Records", category: "Student Welfare", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER"] },
+    { key: "COMPLAINT_MANAGE_ROLES", label: "Complaint Management", category: "Student Welfare", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "ANALYTICS_MESSAGE_ROLES", label: "At-Risk Analytics & Messaging", category: "Communications", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"] },
+    { key: "BULK_SMS_ROLES", label: "Bulk SMS", category: "Communications", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"] },
+    { key: "PTM_MANAGE_ROLES", label: "Parent-Teacher Meeting Scheduling", category: "Communications", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "CLASS_TEACHER", "SUBJECT_TEACHER"] },
+    { key: "PORTAL_ROLES", label: "Portal Access (Student/Guardian)", category: "System Access", roles: ["STUDENT", "GUARDIAN"] },
+    { key: "STAFF_ONLY_ROLES", label: "Staff-Only Access Gate", category: "System Access", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT", "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER", "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN"] },
+    { key: "TEACHER_APP_ROLES", label: "Teacher App Access", category: "System Access", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT"] },
+  ];
+
+  for (const perm of PERMISSION_CATALOG) {
+    const permission = await prisma.permission.upsert({
+      where: { key: perm.key },
+      update: {},
+      create: { key: perm.key, label: perm.label, category: perm.category },
+    });
+    for (const role of perm.roles) {
+      await prisma.rolePermission.upsert({
+        where: { role_permission_id: { role: role as never, permission_id: permission.id } },
+        update: {},
+        create: { role: role as never, permission_id: permission.id },
+      });
+    }
+  }
+
   console.log("Seed complete.");
 }
 

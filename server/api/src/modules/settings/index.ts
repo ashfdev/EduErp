@@ -12,6 +12,7 @@ import { academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, se
 import { programsRouter, coursesRouter } from "./university.routes";
 import { usersRouter } from "./users.routes";
 import { auditLogRouter } from "./audit-log.routes";
+import { permissionsRouter } from "./permissions.routes";
 
 export const settingsRouter = Router();
 
@@ -37,3 +38,4 @@ settingsRouter.use("/programs", programsRouter);
 settingsRouter.use("/courses", coursesRouter);
 settingsRouter.use("/users", usersRouter);
 settingsRouter.use("/audit-log", auditLogRouter);
+settingsRouter.use("/permissions", permissionsRouter);

@@ -1,9 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app";
 import { signAccessToken } from "./jwt";
 import { prisma } from "./prisma";
+import * as roles from "./roles";
+import { refreshPermissions } from "./permissions";
+
+// Phase 84 migration-correctness gate: this file's entire suite (not just
+// the table-driven block below) is run twice — once against roles.ts's
+// hardcoded array defaults (comment this call out / it's a no-op before
+// the Permission table is seeded), and once after calling
+// refreshPermissions() here, which overwrites every constant's contents
+// from the DB. The seed is an exact mirror of the hardcoded arrays, so an
+// identical pass/fail result both times is the actual proof the migration
+// didn't change any real authorization behavior.
+beforeAll(async () => {
+  await refreshPermissions();
+});
 
 // Regression coverage for the access-control gaps fixed in the "full-repo
 // audit" pass (commit 70ce780) — health, discipline, and transport are
@@ -184,4 +198,117 @@ describe("quiz authoring — subject-teacher ownership", () => {
     expect(res.status).toBe(201);
     if (res.status === 201) cleanup.push(() => prisma.question.delete({ where: { id: res.body.data.id } }));
   });
+});
+
+// Table-driven smoke test for the editable Role & Permission matrix (Phase
+// 84) — for every one of roles.ts's 38 permission-key constants, hit one
+// representative route with a token for a role the LIVE array currently
+// allows (expect non-403) and one it currently disallows (expect exactly
+// 403). Deliberately reads the arrays via the `roles` namespace import
+// (not destructured constants) so the same test, run unmodified, reflects
+// whatever the array's CURRENT contents are — hardcoded defaults before the
+// Phase 84 migration, DB-loaded values after. Run before AND after the
+// seed/loader swap and diff the two result sets for exact parity; that
+// parity check (not this file) is the actual migration-correctness gate.
+//
+// "Non-403" rather than "200" for the allowed case: authorize() runs before
+// any body/param validation, so a 400/404 from the handler afterward is a
+// perfectly valid "the permission check passed" signal — asserting a real
+// 200 would require realistic fixtures for all 38 routes, which is what
+// this smoke test is deliberately avoiding.
+const ALL_USER_ROLES = [
+  "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
+  "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
+  "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN", "STUDENT", "GUARDIAN",
+] as const;
+
+const PERMISSION_ROUTE_TABLE: {
+  key: keyof typeof roles;
+  method: "get" | "post" | "put" | "delete";
+  path: string;
+  // Some routes layer a self-service ownership resolution (e.g.
+  // resolveOwnStaffId) on top of the base authorize() gate — a role can be
+  // correctly listed in the permission array and still 403 with a synthetic
+  // token that has no real Staff row behind it. Force a specific "allowed"
+  // role for those and let the test build a real Staff fixture instead of
+  // treating that 403 as a false permission-check failure.
+  forceAllowedRole?: string;
+  needsStaffFixture?: boolean;
+}[] = [
+  { key: "SETTINGS_INSTITUTION_ROLES", method: "put", path: "/api/settings/institution" },
+  { key: "SETTINGS_ACADEMIC_ROLES", method: "post", path: "/api/settings/academic-years" },
+  { key: "SETTINGS_USERS_ROLES", method: "get", path: "/api/settings/users" },
+  { key: "DEVICE_MANAGE_ROLES", method: "get", path: "/api/devices" },
+  { key: "STUDENT_CRUD_ROLES", method: "post", path: "/api/students" },
+  { key: "STUDENT_PROMOTE_ROLES", method: "get", path: "/api/students/promotion-roster?class_id=x" },
+  { key: "ATTENDANCE_MARK_ROLES", method: "post", path: "/api/attendance/mark" },
+  { key: "EXAM_MANAGE_ROLES", method: "post", path: "/api/exams" },
+  { key: "MARK_ENTRY_ROLES", method: "post", path: "/api/marks/submit" },
+  { key: "MARK_VIEW_ROLES", method: "get", path: "/api/marks/x/x/x" },
+  { key: "MARK_APPROVAL_ROLES", method: "post", path: "/api/marks/approve/x/x" },
+  { key: "RESULT_PUBLISH_ROLES", method: "get", path: "/api/marks/publish-status/x" },
+  { key: "QUIZ_MANAGE_ROLES", method: "get", path: "/api/quizzes/questions" },
+  { key: "FEE_COLLECTION_ROLES", method: "post", path: "/api/fees/structures" },
+  { key: "ADMISSION_MANAGE_ROLES", method: "post", path: "/api/admission/cycles" },
+  { key: "ADMISSION_ENROLL_ROLES", method: "post", path: "/api/admission/applications/x/enroll" },
+  { key: "WEBSITE_CONTENT_ROLES", method: "post", path: "/api/website/notices" },
+  { key: "HR_MANAGE_ROLES", method: "post", path: "/api/hr/jobs" },
+  { key: "LEAVE_APPROVE_ROLES", method: "put", path: "/api/hr/leaves/x/approve" },
+  { key: "PAYROLL_MANAGE_ROLES", method: "post", path: "/api/hr/payroll/calculate" },
+  { key: "LIBRARY_MANAGE_ROLES", method: "post", path: "/api/library/books" },
+  { key: "TRANSPORT_MANAGE_ROLES", method: "get", path: "/api/transport/vehicles" },
+  { key: "HOSTEL_MANAGE_ROLES", method: "post", path: "/api/hostel/blocks" },
+  { key: "ANALYTICS_MESSAGE_ROLES", method: "get", path: "/api/analytics/defaulters-risk" },
+  { key: "PORTAL_ROLES", method: "get", path: "/api/portal/me" },
+  { key: "STAFF_ONLY_ROLES", method: "get", path: "/api/documents/student/x/id-card" },
+  { key: "TEACHER_APP_ROLES", method: "get", path: "/api/teacher/schedule/today" },
+  { key: "ACCOUNTS_MANAGE_ROLES", method: "post", path: "/api/accounts/chart/bulk-import" },
+  { key: "VOUCHER_APPROVE_ROLES", method: "post", path: "/api/accounts/vouchers/x/approve" },
+  { key: "VOUCHER_POST_ROLES", method: "post", path: "/api/accounts/vouchers/x/post" },
+  { key: "INVENTORY_MANAGE_ROLES", method: "post", path: "/api/inventory/asset-categories" },
+  { key: "REQUISITION_APPROVE_ROLES", method: "put", path: "/api/inventory/requisitions/x/approve" },
+  { key: "HEALTH_MANAGE_ROLES", method: "get", path: "/api/student-health/student/x" },
+  { key: "DISCIPLINE_MANAGE_ROLES", method: "get", path: "/api/discipline/student/x" },
+  { key: "COMPLAINT_MANAGE_ROLES", method: "put", path: "/api/complaints/x" },
+  { key: "PTM_MANAGE_ROLES", method: "get", path: "/api/ptm/slots", forceAllowedRole: "CLASS_TEACHER", needsStaffFixture: true },
+  { key: "APPRAISAL_MANAGE_ROLES", method: "post", path: "/api/appraisals/templates" },
+  { key: "BULK_SMS_ROLES", method: "post", path: "/api/notifications/bulk-sms/preview" },
+];
+
+describe("Phase 84 — permission matrix table-driven smoke test", () => {
+  for (const entry of PERMISSION_ROUTE_TABLE) {
+    const currentRoles = roles[entry.key] as readonly string[];
+    const allowedRole = entry.forceAllowedRole ?? (currentRoles.includes("ADMIN") ? "ADMIN" : currentRoles[currentRoles.length - 1]!);
+    const disallowedRole = ALL_USER_ROLES.find((r) => !currentRoles.includes(r));
+
+    it(`${entry.key}: ${allowedRole} gets non-403 on ${entry.method.toUpperCase()} ${entry.path}`, async () => {
+      let sub: string = randomUUID();
+      let cleanup: (() => Promise<unknown>) | undefined;
+      if (entry.needsStaffFixture) {
+        const suffix = randomUUID().replace(/-/g, "").slice(0, 8);
+        const user = await prisma.user.create({ data: { name_en: "Smoke Test Staff", role: allowedRole as never, phone: `0199${suffix}`, password_hash: "x" } });
+        const staff = await prisma.staff.create({ data: { user_id: user.id, staff_uid: `SMOKE-${suffix}`, name_en: "Smoke Test Staff", designation: allowedRole } });
+        sub = user.id;
+        cleanup = async () => {
+          await prisma.staff.delete({ where: { id: staff.id } });
+          await prisma.user.delete({ where: { id: user.id } });
+        };
+      }
+      try {
+        const token = signAccessToken({ sub, role: allowedRole, portal: "admin" });
+        const res = await (request(app)[entry.method](entry.path) as request.Test).set("Authorization", `Bearer ${token}`).send({});
+        expect(res.status).not.toBe(403);
+      } finally {
+        if (cleanup) await cleanup();
+      }
+    });
+
+    if (disallowedRole) {
+      it(`${entry.key}: ${disallowedRole} gets exactly 403 on ${entry.method.toUpperCase()} ${entry.path}`, async () => {
+        const token = signAccessToken({ sub: randomUUID(), role: disallowedRole, portal: "admin" });
+        const res = await (request(app)[entry.method](entry.path) as request.Test).set("Authorization", `Bearer ${token}`).send({});
+        expect(res.status).toBe(403);
+      });
+    }
+  }
 });

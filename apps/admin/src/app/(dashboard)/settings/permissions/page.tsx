@@ -15,6 +15,7 @@ import {
   Badge,
   StatusBadge,
   Label,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -23,13 +24,18 @@ import {
   EmptyState,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
-import { PERMISSION_CATALOG } from "@/lib/permission-catalog";
 
 const ROLES = [
   "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
   "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
   "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
 ];
+
+// ADMIN and SUPER_ADMIN can never be unchecked here — the checkboxes are
+// disabled and forced-on client-side, and the API rejects any submission
+// missing either one regardless (the real, structural guarantee; this is
+// just the UI reflecting it rather than relying on it).
+const ALWAYS_GRANTED = ["SUPER_ADMIN", "ADMIN"];
 
 interface UserRow {
   id: string;
@@ -40,11 +46,23 @@ interface UserRow {
   staff?: { staff_uid: string } | null;
 }
 
+interface PermissionRow {
+  id: string;
+  key: string;
+  label: string;
+  category: string | null;
+  roles: string[];
+}
+
 export default function PermissionsPage() {
   const queryClient = useQueryClient();
   const { data: users } = useQuery<UserRow[]>({
     queryKey: ["settings", "users"],
     queryFn: async () => (await api.get("/api/settings/users")).data.data,
+  });
+  const { data: permissions } = useQuery<PermissionRow[]>({
+    queryKey: ["settings", "permissions"],
+    queryFn: async () => (await api.get("/api/settings/permissions")).data.data,
   });
 
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
@@ -67,6 +85,43 @@ export default function PermissionsPage() {
       toast.error(message);
     },
   });
+
+  const [editingPermission, setEditingPermission] = useState<PermissionRow | null>(null);
+  const [editRoles, setEditRoles] = useState<Set<string>>(new Set());
+
+  function openEditPermission(p: PermissionRow) {
+    setEditingPermission(p);
+    setEditRoles(new Set(p.roles));
+  }
+
+  function toggleRole(role: string) {
+    if (ALWAYS_GRANTED.includes(role)) return;
+    setEditRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }
+
+  const updatePermissionMutation = useMutation({
+    mutationFn: () => api.put(`/api/settings/permissions/${editingPermission!.key}`, { roles: [...editRoles] }),
+    onSuccess: () => {
+      toast.success(`Updated who can access "${editingPermission?.label}"`);
+      queryClient.invalidateQueries({ queryKey: ["settings", "permissions"] });
+      setEditingPermission(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update permission";
+      toast.error(message);
+    },
+  });
+
+  const permissionsByCategory = new Map<string, PermissionRow[]>();
+  for (const p of permissions ?? []) {
+    const cat = p.category ?? "Other";
+    permissionsByCategory.set(cat, [...(permissionsByCategory.get(cat) ?? []), p]);
+  }
 
   return (
     <PageWrapper>
@@ -110,35 +165,41 @@ export default function PermissionsPage() {
 
       <Card>
         <CardHeader><CardTitle>What Each Role Can Access</CardTitle></CardHeader>
-        <CardContent className="pt-2">
-          <p className="mb-3 text-sm text-muted-foreground">
-            Reference only — roles have a fixed set of permissions built into the system; this table can&apos;t be edited here.
-            SUPER_ADMIN and ADMIN always have full access to every feature below, in addition to the roles listed.
+        <CardContent className="space-y-4 pt-2">
+          <p className="text-sm text-muted-foreground">
+            SUPER_ADMIN and ADMIN always have full access to every feature below, in addition to the roles listed — that can never be changed here.
+            Click a feature to change which other roles can access it; the change applies immediately, no restart needed.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Feature</th>
-                  <th className="p-2">Roles with access</th>
-                </tr>
-              </thead>
-              <tbody>
-                {PERMISSION_CATALOG.map((entry) => (
-                  <tr key={entry.feature} className="border-b align-top">
-                    <td className="p-2 font-medium">{entry.feature}</td>
-                    <td className="p-2">
-                      <div className="flex flex-wrap gap-1">
-                        {entry.roles.filter((r) => r !== "SUPER_ADMIN" && r !== "ADMIN").map((r) => (
-                          <Badge key={r} variant="secondary">{r.replace(/_/g, " ")}</Badge>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {!permissions?.length && <EmptyState title="No permissions found" />}
+          {[...permissionsByCategory.entries()].map(([category, rows]) => (
+            <div key={category}>
+              <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{category}</p>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {rows.map((p) => (
+                      <tr key={p.id} className="border-b align-top last:border-b-0">
+                        <td className="w-56 p-2 font-medium">{p.label}</td>
+                        <td className="p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {p.roles.filter((r) => !ALWAYS_GRANTED.includes(r)).map((r) => (
+                              <Badge key={r} variant="secondary">{r.replace(/_/g, " ")}</Badge>
+                            ))}
+                            {p.roles.filter((r) => !ALWAYS_GRANTED.includes(r)).length === 0 && (
+                              <span className="text-xs text-muted-foreground">SUPER_ADMIN / ADMIN only</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="w-28 p-2 text-right">
+                          <Button size="sm" variant="outline" onClick={() => openEditPermission(p)}>Edit</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -154,6 +215,25 @@ export default function PermissionsPage() {
           <DialogFooter>
             <Button onClick={() => changeRoleMutation.mutate()} disabled={changeRoleMutation.isPending || newRole === editingUser?.role}>
               {changeRoleMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingPermission} onOpenChange={(v) => !v && setEditingPermission(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Who can access &quot;{editingPermission?.label}&quot;?</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {ROLES.map((r) => (
+              <label key={r} className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm ${ALWAYS_GRANTED.includes(r) ? "opacity-60" : ""}`}>
+                <Checkbox checked={ALWAYS_GRANTED.includes(r) || editRoles.has(r)} disabled={ALWAYS_GRANTED.includes(r)} onCheckedChange={() => toggleRole(r)} />
+                {r.replace(/_/g, " ")}
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => updatePermissionMutation.mutate()} disabled={updatePermissionMutation.isPending}>
+              {updatePermissionMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

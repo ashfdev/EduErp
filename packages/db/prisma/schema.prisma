@@ -2430,6 +2430,33 @@ model PushSubscription {
   @@index([user_id])
 }
 
+// Editable Role & Permission matrix (Phase 84). One row per role-array
+// constant in server/api/src/lib/roles.ts (key = the constant's exact
+// name, e.g. "FEE_COLLECTION_ROLES") — the seed is an exact mirror of that
+// file's hardcoded arrays at cutover time. loadPermissionsFromDb() mutates
+// each constant's array CONTENTS in place at startup and on every edit, so
+// none of the 300+ authorize(SOME_ROLES) call sites across the API ever
+// need to change — they keep holding a reference to the same array object,
+// whose contents now update live.
+model Permission {
+  id               String           @id @default(cuid())
+  key              String           @unique
+  label            String
+  category         String?
+  created_at       DateTime         @default(now())
+  role_permissions RolePermission[]
+}
+
+model RolePermission {
+  id            String     @id @default(cuid())
+  role          UserRole
+  permission_id String
+  permission    Permission @relation(fields: [permission_id], references: [id])
+
+  @@unique([role, permission_id])
+  @@index([permission_id])
+}
+
 // Append-only record of sensitive actions (login/logout, mark entry, result
 // publish, fee waiver, student deletion, role change, template activation).
 // Never updated or deleted — user_id is nullable since a failed login
