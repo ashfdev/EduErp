@@ -15,6 +15,7 @@ interface ScheduleSlot {
   class: { name_en: string };
   section: { name: string } | null;
   subject: { name_en: string } | null;
+  group: { name_en: string } | null;
 }
 
 export default function TeacherHomePage() {
@@ -42,7 +43,7 @@ export default function TeacherHomePage() {
               {schedule?.map((s) => (
                 <div key={s.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
                   <div>
-                    <p className="font-medium">{s.subject?.name_en ?? t("classFallback")} — {s.class.name_en}{s.section ? ` (${s.section.name})` : ""}</p>
+                    <p className="font-medium">{s.subject?.name_en ?? t("classFallback")} — {s.class.name_en}{s.section ? ` (${s.section.name})` : ""}{s.group ? ` · ${s.group.name_en}` : ""}</p>
                     <p className="text-xs text-gray-500">{t("period", { no: s.period_no })}</p>
                   </div>
                   <p className="text-xs text-gray-500">{s.start_time}–{s.end_time}</p>

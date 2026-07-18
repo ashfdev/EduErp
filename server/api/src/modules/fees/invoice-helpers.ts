@@ -62,3 +62,43 @@ export async function createMonthlyInvoiceIfMissing(
 
   return { created: true };
 }
+
+// Promotion-triggered readmission fee — invoiced only if the destination
+// class actually has an active READMISSION FeeStructure defined for the
+// target academic year (mirrors the admission-enroll ADMISSION/FORM invoice
+// pattern exactly). Naturally optional per-class through the same
+// Settings-driven mechanism every other fee uses: a class with no
+// READMISSION structure promotes fee-neutral, exactly as before this
+// existed — no separate "does promotion charge a fee" toggle needed.
+// Idempotent on (student_id, fee_structure_id, academic_year_id) so calling
+// this twice for the same promotion never double-invoices.
+export async function invoiceReadmissionFeeIfConfigured(
+  tx: Tx,
+  studentId: string,
+  destinationClassId: string,
+  destinationAcademicYearId: string,
+): Promise<{ created: boolean }> {
+  const structure = await tx.feeStructure.findFirst({
+    where: { class_id: destinationClassId, academic_year_id: destinationAcademicYearId, category: "READMISSION", is_active: true },
+  });
+  if (!structure) return { created: false };
+
+  const existing = await tx.invoice.findFirst({
+    where: { student_id: studentId, fee_structure_id: structure.id, academic_year_id: destinationAcademicYearId },
+  });
+  if (existing) return { created: false };
+
+  await tx.invoice.create({
+    data: {
+      invoice_no: await generateInvoiceNo(tx),
+      student_id: studentId,
+      fee_structure_id: structure.id,
+      academic_year_id: destinationAcademicYearId,
+      category: "READMISSION",
+      description: structure.name,
+      amount_due: structure.amount,
+      due_date: new Date(),
+    },
+  });
+  return { created: true };
+}

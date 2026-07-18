@@ -19,6 +19,7 @@ export const noticeSchema = z.object({
   body: z.string().min(1),
   attachment_url: z.string().optional().nullable(),
   audience: noticeAudienceSchema.default("PUBLIC"),
+  include_signature: z.boolean().default(false),
   is_pinned: z.boolean().default(false),
   is_public_website: z.boolean().default(true),
   send_sms: z.boolean().default(false),
@@ -35,7 +36,7 @@ export const galleryAlbumSchema = z.object({
 
 export const galleryImageReorderSchema = z.array(z.object({ id: z.string().min(1), display_order: z.number().int() }));
 
-export const downloadCategorySchema = z.enum(["SYLLABUS", "EXAM_SCHEDULE", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"]);
+export const downloadCategorySchema = z.enum(["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"]);
 
 export const downloadMetaSchema = z.object({
   title: z.string().min(1),
@@ -64,6 +65,13 @@ export const governingBodyMemberSchema = z.object({
 });
 
 export const governingBodyReorderSchema = z.array(z.object({ id: z.string().min(1), display_order: z.number().int() }));
+
+export const importantLinkSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().url(),
+  display_order: z.number().int().default(0),
+  is_active: z.boolean().default(true),
+});
 
 export const eventSchema = z.object({
   name: z.string().min(1),

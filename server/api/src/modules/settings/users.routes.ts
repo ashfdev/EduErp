@@ -2,15 +2,14 @@ import { Router } from "express";
 import { reqParam } from "../../lib/req-param";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { SETTINGS_USERS_ROLES } from "../../lib/roles";
-import { createUserSchema } from "@education-erp/validators";
+import { createUserSchema, adminResetPasswordSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
-import { createOrLinkPortalLogin } from "../../lib/portal-login";
+import { createOrLinkPortalLogin, generateMemorablePassword } from "../../lib/portal-login";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
@@ -18,10 +17,6 @@ import { env } from "../../lib/env";
 
 export const usersRouter = Router();
 usersRouter.use(authenticate);
-
-function generateTempPassword(): string {
-  return `Temp${randomBytes(4).toString("hex")}!1`;
-}
 
 function generateStaffUid(): string {
   return `STF-${Date.now().toString(36).toUpperCase()}`;
@@ -64,7 +59,7 @@ usersRouter.post(
       // takes the "create new" branch in practice — same reasoning as staff
       // creation (hr/staff.routes.ts), reusing the shared helper regardless
       // for consistent password generation + the User row itself.
-      const login = await createOrLinkPortalLogin(tx, { role: body.role, phone: body.phone, name: body.name_en });
+      const login = await createOrLinkPortalLogin(tx, { role: body.role, phone: body.phone, name: body.name_en, password_override: body.login_password });
       await tx.staff.create({
         data: {
           user_id: login.userId,
@@ -86,11 +81,11 @@ usersRouter.post(
     if (tempPassword) {
       await sendNotification({
         trigger: "PORTAL_LOGIN_CREATED",
-        recipients: [{ name: body.name_en, phone: body.phone }],
+        recipients: [{ name: body.name_en, phone: body.phone, email: body.email }],
         template_data: { name: body.name_en, phone: body.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
       });
     }
-    res.status(201).json({ success: true, data: user, message: "User created and credentials sent via SMS" });
+    res.status(201).json({ success: true, data: { ...user, temp_password: tempPassword }, message: "User created and credentials sent via SMS" });
   }),
 );
 
@@ -125,16 +120,18 @@ usersRouter.post(
   "/:id/reset-password",
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
-    const tempPassword = generateTempPassword();
+    const body = adminResetPasswordSchema.parse(req.body ?? {});
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { name_en: true, phone: true } });
+    const tempPassword = body.login_password ?? generateMemorablePassword(target.name_en, target.phone);
     const password_hash = await bcrypt.hash(tempPassword, 10);
     const user = await prisma.user.update({
       where: { id: reqParam(req, "id") },
-      data: { password_hash },
-      select: { phone: true, name_en: true },
+      data: { password_hash, must_change_password: true },
+      select: { phone: true, name_en: true, email: true },
     });
     await sendNotification({
       trigger: "PORTAL_LOGIN_CREATED",
-      recipients: [{ name: user.name_en, phone: user.phone }],
+      recipients: [{ name: user.name_en, phone: user.phone, email: user.email }],
       template_data: { name: user.name_en, phone: user.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
     });
     res.json({ success: true, data: { temp_password: tempPassword }, message: "Password reset and SMS sent" });

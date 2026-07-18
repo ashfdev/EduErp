@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Checkbox } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -25,6 +25,8 @@ export default function NewStaffPage() {
   const [employmentType, setEmploymentType] = useState("PERMANENT");
   const [showOnWebsite, setShowOnWebsite] = useState(false);
   const [createLogin, setCreateLogin] = useState(true);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [credentialModal, setCredentialModal] = useState<{ staffId: string; name: string; phone: string; password: string } | null>(null);
 
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
 
@@ -40,13 +42,29 @@ export default function NewStaffPage() {
         employment_type: employmentType,
         show_on_website: showOnWebsite,
         create_login: createLogin,
+        login_password: createLogin ? loginPassword || undefined : undefined,
       }),
     onSuccess: (res) => {
       toast.success("Staff member added");
-      router.push(`/hr/staff/${res.data.data.id}`);
+      if (res.data.data.temp_password) {
+        setCredentialModal({ staffId: res.data.data.id, name: nameEn, phone, password: res.data.data.temp_password });
+      } else {
+        router.push(`/hr/staff/${res.data.data.id}`);
+      }
     },
-    onError: () => toast.error("Failed to add staff member"),
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      toast.error(message ?? "Failed to add staff member");
+    },
   });
+
+  function copyPassword() {
+    if (!credentialModal) return;
+    navigator.clipboard.writeText(credentialModal.password).then(
+      () => toast.success("Password copied"),
+      () => toast.error("Couldn't copy — select and copy manually"),
+    );
+  }
 
   const canSubmit = nameEn && designation && (!createLogin || phone);
 
@@ -87,6 +105,19 @@ export default function NewStaffPage() {
             </select>
           </div>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={createLogin} onCheckedChange={(v) => setCreateLogin(!!v)} /> Create login account (requires phone) — sends temp password via SMS</label>
+          {createLogin && (
+            <div className="space-y-1.5 pl-6">
+              <Label>Initial Password (optional)</Label>
+              <Input
+                type="text"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="Leave blank to auto-generate a memorable password"
+                className="max-w-sm font-mono"
+              />
+              <p className="text-xs text-muted-foreground">If set, min 8 characters with an uppercase letter, a lowercase letter, and a number. The staff member must still change it on first login.</p>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={showOnWebsite} onCheckedChange={(v) => setShowOnWebsite(!!v)} /> Show on public faculty directory</label>
 
           <Button disabled={!canSubmit || createMutation.isPending} onClick={() => createMutation.mutate()}>
@@ -94,6 +125,30 @@ export default function NewStaffPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={!!credentialModal} onOpenChange={(v) => !v && router.push(`/hr/staff/${credentialModal?.staffId}`)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Login Credentials — {credentialModal?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-amber-700">Save this now — it will not be shown again. It was also sent via SMS to {credentialModal?.phone}.</p>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input readOnly value={credentialModal?.phone ?? ""} className="font-mono" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Temporary Password</Label>
+              <div className="flex gap-2">
+                <Input readOnly value={credentialModal?.password ?? ""} className="font-mono" />
+                <Button type="button" variant="outline" onClick={copyPassword}>Copy</Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">The staff member will be required to set their own password on first login.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => router.push(`/hr/staff/${credentialModal?.staffId}`)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

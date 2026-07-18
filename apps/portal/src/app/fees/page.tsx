@@ -12,12 +12,33 @@ import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner } from "@
 interface Invoice {
   id: string;
   description: string;
+  category: string;
+  month?: number | null;
   amount_due: number;
   amount_paid: number;
   fine_amount: number;
   due_date: string;
   status: string;
+  fee_structure?: { frequency: string } | null;
   payments: { id: string; amount: number; gateway: string; status: string; paid_at: string | null }[];
+}
+
+interface FeesResponse {
+  invoices: Invoice[];
+  credit_balance: number;
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  ADMISSION: "Admission", FORM: "Form", READMISSION: "Readmission", TUITION: "Tuition", EXAM: "Exam",
+  TRANSPORT: "Transport", HOSTEL: "Hostel", LAB: "Lab", LIBRARY: "Library", SPORTS: "Sports",
+  DEVELOPMENT: "Development", OTHER: "Other",
+};
+
+function frequencyLabel(inv: Invoice): string {
+  const freq = inv.fee_structure?.frequency ?? (inv.month ? "MONTHLY" : "ONE_TIME");
+  if (freq === "MONTHLY") return "Monthly";
+  if (freq === "YEARLY") return "Yearly";
+  return "One-time";
 }
 
 interface UpcomingDue {
@@ -43,11 +64,12 @@ function FeesContent() {
   const [pendingSlipPaymentId, setPendingSlipPaymentId] = useState<string | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
-  const { data, isLoading, refetch } = useQuery<Invoice[]>({
+  const { data: feesData, isLoading, refetch } = useQuery<FeesResponse>({
     queryKey: ["portal", "fees", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/fees`)).data.data,
     enabled: !!activeStudentId,
   });
+  const data = feesData?.invoices;
   const { data: upcoming } = useQuery<UpcomingDue[]>({
     queryKey: ["portal", "upcoming-dues", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/upcoming-dues`)).data.data,
@@ -106,6 +128,15 @@ function FeesContent() {
         </Card>
       )}
 
+      {!!feesData?.credit_balance && feesData.credit_balance > 0 && (
+        <Card className="border-emerald-200 bg-emerald-50">
+          <CardContent className="pt-6">
+            <p className="text-sm text-emerald-700">{t("creditBalance")}</p>
+            <p className="text-2xl font-bold text-emerald-700">৳{feesData.credit_balance}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {pendingSlipPaymentId && (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="space-y-2 pt-6">
@@ -126,6 +157,7 @@ function FeesContent() {
               <p className="font-medium">{inv.description}</p>
               <StatusBadge status={inv.status} />
             </div>
+            <p className="text-xs text-gray-400">{CATEGORY_LABEL[inv.category] ?? inv.category} · {frequencyLabel(inv)}</p>
             <p className="text-sm text-gray-500">{t("due", { date: new Date(inv.due_date).toLocaleDateString() })}</p>
             <p className="text-sm">৳{inv.amount_due} {inv.fine_amount > 0 && <span className="text-red-600">{t("fine", { amount: inv.fine_amount })}</span>}</p>
             {payingInvoice === inv.id ? (

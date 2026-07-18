@@ -20,6 +20,7 @@ import { env } from "../../lib/env";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors";
 import type { UserRole } from "@education-erp/types";
+import type { Prisma } from "@education-erp/db";
 
 // Faculty document vault: a staff member manages their own documents;
 // HR_MANAGE_ROLES may manage anyone's (e.g. onboarding uploads a new hire's
@@ -184,7 +185,7 @@ hrStaffRouter.post(
         // The pre-check above already rejected an existing phone (409) — a
         // staff account must never silently link to an unrelated existing
         // login, unlike the guardian-sibling-sharing-a-phone case elsewhere.
-        const login = await createOrLinkPortalLogin(tx, { role: body.role as UserRole, phone: body.phone, name: body.name_en });
+        const login = await createOrLinkPortalLogin(tx, { role: body.role as UserRole, phone: body.phone, name: body.name_en, password_override: body.login_password });
         userId = login.userId;
         tempPassword = login.tempPassword;
       } else {
@@ -220,6 +221,9 @@ hrStaffRouter.post(
           joining_date: body.joining_date ?? new Date(),
           biometric_id: body.biometric_id,
           show_on_website: body.show_on_website,
+          qualifications: body.qualifications,
+          achievements: body.achievements,
+          publications: body.publications as Prisma.InputJsonValue | undefined,
           created_by_id: req.user!.sub,
         },
       });
@@ -230,14 +234,14 @@ hrStaffRouter.post(
     if (body.create_login && body.phone && tempPassword) {
       await sendNotification({
         trigger: "PORTAL_LOGIN_CREATED",
-        recipients: [{ name: body.name_en, phone: body.phone }],
+        recipients: [{ name: body.name_en, phone: body.phone, email: body.email }],
         template_data: { name: body.name_en, phone: body.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
       });
     }
 
     if (body.show_on_website) await triggerRevalidation(["/faculty"]);
 
-    res.status(201).json({ success: true, data: staff });
+    res.status(201).json({ success: true, data: { ...staff, temp_password: tempPassword } });
   }),
 );
 
@@ -250,7 +254,7 @@ hrStaffRouter.put(
     const existing = await prisma.staff.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Staff not found");
 
-    const updated = await prisma.staff.update({ where: { id }, data: body });
+    const updated = await prisma.staff.update({ where: { id }, data: body as Prisma.StaffUpdateInput });
     if (body.show_on_website !== undefined) await triggerRevalidation(["/faculty"]);
     res.json({ success: true, data: updated });
   }),

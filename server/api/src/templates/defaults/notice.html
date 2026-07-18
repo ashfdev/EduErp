@@ -1,0 +1,40 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 18mm; font-size: 13px; line-height: 1.8; }
+  .letterhead { text-align: center; border-bottom: 3px double {{institution.primary_color}}; padding-bottom: 10px; margin-bottom: 20px; }
+  .letterhead img { height: 20mm; }
+  .letterhead h1 { margin: 4px 0; color: {{institution.primary_color}}; }
+  .letterhead p { margin: 2px 0; font-size: 11px; }
+  .notice-label { text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-decoration: underline; margin-bottom: 4px; }
+  .date-line { text-align: right; font-size: 11px; margin-bottom: 16px; }
+  .title { text-align: center; font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+  .body-text { text-align: justify; }
+  .footer { display: flex; justify-content: flex-end; margin-top: 50px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-image { height: 14mm; object-fit: contain; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+</style>
+</head>
+<body>
+  <div class="letterhead">
+    {{institutionLogo}}
+    <h1>{{institution.name_en}}</h1>
+    <p>{{institution.address}} | Phone: {{institution.phone}} | EIIN: {{institution.eiin}}</p>
+  </div>
+  <p class="notice-label">NOTICE</p>
+  <p class="date-line">Date: {{banglaDate publish_at}}</p>
+  <p class="title">{{title}}</p>
+  <div class="body-text">{{{body}}}</div>
+  {{#if include_signature}}
+  <div class="footer">
+    {{signatureBlock 1}}
+  </div>
+  {{/if}}
+</body>
+</html>

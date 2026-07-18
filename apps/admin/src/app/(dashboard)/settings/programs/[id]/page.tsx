@@ -214,7 +214,7 @@ export default function ProgramDetailPage() {
                     <td className="p-2">{c.semester_number}</td>
                     <td className="p-2 font-mono text-xs">{c.code}</td>
                     <td className="p-2">{c.name_en}</td>
-                    <td className="p-2">{c.credit_hours}</td>
+                    <td className="p-2">{c.credit_hours === 0 ? <Badge variant="outline">Audit</Badge> : c.credit_hours}</td>
                     <td className="p-2"><Badge variant="outline">{c.course_type}</Badge></td>
                     <td className="p-2">
                       {c.required_by.length ? c.required_by.map((r) => r.prerequisite_course.code).join(", ") : <span className="text-muted-foreground">None</span>}

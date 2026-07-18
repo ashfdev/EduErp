@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PageWrapper, Card, CardContent, Button, Input, Label, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Textarea, Switch,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -30,6 +30,10 @@ interface StaffDetail {
   employment_type: string;
   max_periods_per_day: number | null;
   max_periods_per_week: number | null;
+  show_on_website: boolean;
+  qualifications: string | null;
+  achievements: string | null;
+  publications: { title: string; url: string }[] | null;
   department: { name_en: string } | null;
   user: { role: string; phone: string; email: string | null };
   salary_structure: { id: string; name: string } | null;
@@ -92,6 +96,41 @@ export default function StaffDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
     },
     onError: () => toast.error("Failed to update routine load caps"),
+  });
+
+  const [profileDraft, setProfileDraft] = useState<{
+    show_on_website: boolean;
+    qualifications: string;
+    achievements: string;
+    publications: { title: string; url: string }[];
+  } | null>(null);
+
+  function startEditingProfile(s: StaffDetail) {
+    setProfileDraft({
+      show_on_website: s.show_on_website,
+      qualifications: s.qualifications ?? "",
+      achievements: s.achievements ?? "",
+      publications: s.publications ?? [],
+    });
+  }
+
+  const updatePublicProfileMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/hr/staff/${id}`, {
+        show_on_website: profileDraft!.show_on_website,
+        qualifications: profileDraft!.qualifications || undefined,
+        achievements: profileDraft!.achievements || undefined,
+        publications: profileDraft!.publications.filter((p) => p.title && p.url),
+      }),
+    onSuccess: () => {
+      toast.success("Public profile updated");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
+      setProfileDraft(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      toast.error(message ?? "Failed to update public profile");
+    },
   });
 
   const { data: documents } = useQuery<StaffDocumentRow[]>({
@@ -186,6 +225,95 @@ export default function StaffDetailPage() {
               <div><span className="text-muted-foreground">Joining Date:</span> {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString() : "—"}</div>
               <div><span className="text-muted-foreground">Salary Structure:</span> {staff.salary_structure?.name ?? "Not assigned"}</div>
               <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {staff.address ?? "—"}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">
+                  Public Website Profile <span className="font-normal text-xs text-muted-foreground">(shown on the Faculty & Staff directory when enabled)</span>
+                </p>
+                {!profileDraft && <Button size="sm" variant="outline" onClick={() => startEditingProfile(staff)}>Edit</Button>}
+              </div>
+
+              {!profileDraft && (
+                <div className="space-y-1 text-sm">
+                  <p><span className="text-muted-foreground">Shown on website:</span> {staff.show_on_website ? "Yes" : "No"}</p>
+                  {staff.qualifications && <p><span className="text-muted-foreground">Qualifications:</span> {staff.qualifications}</p>}
+                  {staff.achievements && <p><span className="text-muted-foreground">Achievements:</span> {staff.achievements}</p>}
+                  {!!staff.publications?.length && (
+                    <div>
+                      <span className="text-muted-foreground">Publications:</span>
+                      <ul className="ml-4 list-disc">
+                        {staff.publications.map((p, i) => <li key={i}><a href={p.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{p.title}</a></li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {profileDraft && (
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch checked={profileDraft.show_on_website} onCheckedChange={(v) => setProfileDraft({ ...profileDraft, show_on_website: v })} />
+                    Show on public Faculty & Staff directory
+                  </label>
+                  <div className="space-y-1.5">
+                    <Label>Qualifications</Label>
+                    <Textarea rows={2} value={profileDraft.qualifications} onChange={(e) => setProfileDraft({ ...profileDraft, qualifications: e.target.value })} placeholder="e.g. PhD in Computer Science, University of Dhaka" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Achievements</Label>
+                    <Textarea rows={2} value={profileDraft.achievements} onChange={(e) => setProfileDraft({ ...profileDraft, achievements: e.target.value })} placeholder="Awards, recognitions, notable work" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Publications / Papers (optional)</Label>
+                    {profileDraft.publications.map((p, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          placeholder="Paper/journal title"
+                          value={p.title}
+                          onChange={(e) => {
+                            const next = [...profileDraft.publications];
+                            next[i] = { ...next[i]!, title: e.target.value };
+                            setProfileDraft({ ...profileDraft, publications: next });
+                          }}
+                        />
+                        <Input
+                          placeholder="https://..."
+                          value={p.url}
+                          onChange={(e) => {
+                            const next = [...profileDraft.publications];
+                            next[i] = { ...next[i]!, url: e.target.value };
+                            setProfileDraft({ ...profileDraft, publications: next });
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setProfileDraft({ ...profileDraft, publications: profileDraft.publications.filter((_, idx) => idx !== i) })}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setProfileDraft({ ...profileDraft, publications: [...profileDraft.publications, { title: "", url: "" }] })}
+                    >
+                      + Add Publication
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updatePublicProfileMutation.mutate()} disabled={updatePublicProfileMutation.isPending}>
+                      {updatePublicProfileMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setProfileDraft(null)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

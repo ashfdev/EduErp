@@ -1,4 +1,6 @@
 export interface Institution {
+  type: "SCHOOL" | "COLLEGE" | "UNIVERSITY" | "MADRASAH";
+  has_semesters: boolean;
   name_en: string;
   name_bn: string | null;
   tagline_en: string | null;
@@ -76,6 +78,30 @@ export interface StaticPageContent {
   meta_desc: string | null;
 }
 
+export interface FacultyMember {
+  id: string;
+  name_en: string;
+  designation: string;
+  photo_url: string | null;
+}
+
+export interface Publication {
+  title: string;
+  url: string;
+}
+
+export interface FacultyDetail {
+  id: string;
+  name_en: string;
+  name_bn: string | null;
+  designation: string;
+  photo_url: string | null;
+  qualifications: string | null;
+  achievements: string | null;
+  publications: Publication[] | null;
+  department: { name_en: string } | null;
+}
+
 export interface GoverningBodyMember {
   id: string;
   name: string;
@@ -101,6 +127,72 @@ export interface JobPosting {
   description: string;
   requirements: string | null;
   deadline: string | null;
+}
+
+export interface ProgramCourse {
+  id: string;
+  semester_number: number;
+  code: string;
+  name_en: string;
+  credit_hours: number;
+  course_type: string;
+}
+
+export interface ProgramSummary {
+  id: string;
+  name_en: string;
+  name_bn: string | null;
+  code: string;
+  duration_semesters: number;
+  total_credit_hours: number;
+  degree_level: "UNDERGRADUATE" | "GRADUATE" | "PHD";
+  courses: ProgramCourse[];
+}
+
+export interface DepartmentSummary {
+  id: string;
+  name_en: string;
+  name_bn: string | null;
+  code: string;
+  programs: ProgramSummary[];
+}
+
+export interface DepartmentsResponse {
+  departments: DepartmentSummary[];
+  unassigned_programs: ProgramSummary[];
+}
+
+export interface ImportantLink {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface ClassPickerSection {
+  id: string;
+  name: string;
+}
+
+export interface ClassPickerGroup {
+  id: string;
+  name_en: string;
+}
+
+export interface ClassPicker {
+  id: string;
+  name_en: string;
+  sections: ClassPickerSection[];
+  groups: ClassPickerGroup[];
+}
+
+export interface RoutineSlotItem {
+  id: string;
+  day_of_week: number;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+  subject: { name_en: string } | null;
+  teacher: { name_en: string } | null;
 }
 
 export interface AdmissionCycleSummary {

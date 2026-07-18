@@ -43,6 +43,7 @@
     "complaints": "অভিযোগ",
     "ptm": "অভিভাবক-শিক্ষক সভা",
     "quizzes": "কুইজ",
+    "documentRequests": "ডকুমেন্ট অনুরোধ",
     "recentNotices": "সাম্প্রতিক নোটিশ",
     "noNotices": "এখনো কোনো নোটিশ নেই।",
     "recentResult": "সাম্প্রতিক ফলাফল",
@@ -86,6 +87,7 @@
   "fees": {
     "title": "ফি",
     "totalOutstanding": "মোট বকেয়া",
+    "creditBalance": "ক্রেডিট ব্যালেন্স (ভবিষ্যৎ চালানে স্বয়ংক্রিয়ভাবে প্রয়োগ হবে)",
     "uploadSlip": "আপনার ব্যাংক ট্রান্সফার স্লিপ আপলোড করুন",
     "uploading": "আপলোড হচ্ছে...",
     "uploadSlipButton": "স্লিপ আপলোড করুন",
@@ -143,6 +145,23 @@
     "submitQuiz": "কুইজ জমা দিন",
     "quizSubmitted": "কুইজ জমা হয়েছে",
     "noAnswer": "—"
+  },
+  "documentRequests": {
+    "title": "ডকুমেন্ট অনুরোধ",
+    "request": "+ অনুরোধ করুন",
+    "requestTitle": "একটি ডকুমেন্ট অনুরোধ করুন",
+    "docType": "ডকুমেন্ট",
+    "docTypeTestimonial": "প্রশংসাপত্র",
+    "docTypeTransferCertificate": "স্থানান্তর সনদ",
+    "reason": "কারণ (ঐচ্ছিক)",
+    "submit": "অনুরোধ জমা দিন",
+    "submitted": "অনুরোধ জমা হয়েছে",
+    "noRequests": "এখনো কোনো ডকুমেন্ট অনুরোধ নেই",
+    "statusPending": "পর্যালোচনাধীন",
+    "statusApproved": "অনুমোদিত",
+    "statusRejected": "প্রত্যাখ্যাত",
+    "rejectionReason": "কারণ: {reason}",
+    "download": "পিডিএফ ডাউনলোড করুন"
   },
   "resources": {
     "title": "শিক্ষা উপকরণ",

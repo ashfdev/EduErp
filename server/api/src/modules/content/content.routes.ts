@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { contentLimiter } from "../../middleware/rate-limit";
@@ -7,6 +8,7 @@ import { reqParam } from "../../lib/req-param";
 import { contactSubmitSchema } from "@education-erp/validators";
 import { notFound } from "../../lib/errors";
 import { sendEmail } from "../../services/email.service";
+import { renderDocument } from "../../services/pdf.service";
 
 export const contentRouter = Router();
 contentRouter.use(contentLimiter);
@@ -56,6 +58,30 @@ contentRouter.get(
       });
     });
     res.json({ success: true, data });
+  }),
+);
+
+// Institution-branded PDF of a published notice — same public/no-auth
+// posture as the /notices list itself (a notice on the public website is
+// public content); scoped to is_published+is_public_website exactly like
+// that list, so a draft or staff-only notice can never be reached this way
+// even by guessing an id.
+contentRouter.get(
+  "/notices/:id/pdf",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const notice = await prisma.notice.findFirst({ where: { id, is_published: true, is_public_website: true } });
+    if (!notice) throw notFound("Notice not found");
+
+    const pdf = await renderDocument("NOTICE", {
+      title: notice.title,
+      body: notice.body,
+      publish_at: notice.publish_at,
+      include_signature: notice.include_signature,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="notice-${id}.pdf"`);
+    res.send(pdf);
   }),
 );
 
@@ -148,13 +174,30 @@ contentRouter.get(
   }),
 );
 
+// Public-safe field set — deliberately excludes nid/tin/phone/email/
+// biometric_id/salary_structure_id and every other sensitive Staff field.
+// The route previously had no `select` at all (a real data-exposure gap
+// found while extending this route for per-faculty profile pages) — every
+// scalar field, including NID/TIN, was being returned to anyone.
+const FACULTY_PUBLIC_SELECT = {
+  id: true,
+  name_en: true,
+  name_bn: true,
+  designation: true,
+  photo_url: true,
+  qualifications: true,
+  achievements: true,
+  publications: true,
+  department: { select: { name_en: true } },
+} as const;
+
 contentRouter.get(
   "/faculty",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("faculty"), CONTENT_CACHE_TTL_SECONDS, async () => {
       const staff = await prisma.staff.findMany({
         where: { show_on_website: true, is_active: true, deleted_at: null },
-        include: { department: { select: { name_en: true } } },
+        select: FACULTY_PUBLIC_SELECT,
         orderBy: { name_en: "asc" },
       });
       const grouped: Record<string, typeof staff> = {};
@@ -164,6 +207,21 @@ contentRouter.get(
       }
       return grouped;
     });
+    res.json({ success: true, data });
+  }),
+);
+
+contentRouter.get(
+  "/faculty/:id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const data = await cached(contentCacheKey(`faculty:${id}`), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.staff.findFirst({
+        where: { id, show_on_website: true, is_active: true, deleted_at: null },
+        select: FACULTY_PUBLIC_SELECT,
+      }),
+    );
+    if (!data) throw notFound("Faculty member not found");
     res.json({ success: true, data });
   }),
 );
@@ -259,6 +317,109 @@ contentRouter.get(
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("academic-years"), CONTENT_CACHE_TTL_SECONDS, async () =>
       prisma.academicYear.findMany({ select: { id: true, label: true, is_active: true }, orderBy: { start_date: "desc" } }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
+// Public, read-only — Department/Program listing for university-type
+// institutions. Confirmed no such route existed anywhere: Program/Course
+// data was only ever exposed via authenticated /api/settings/* routes.
+// Deliberately minimal (name, code, duration, total credit hours) — no
+// student data, no internal ids beyond what's needed to link out.
+contentRouter.get(
+  "/departments",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("departments"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      // Curriculum breakdown (courses per program, grouped by semester on
+      // the frontend) is nested directly rather than requiring a second
+      // request per program — realistic program/course counts for a single
+      // institution are small enough that this is cheap.
+      const programSelect = {
+        id: true,
+        name_en: true,
+        name_bn: true,
+        code: true,
+        duration_semesters: true,
+        total_credit_hours: true,
+        degree_level: true,
+        courses: {
+          where: { is_active: true },
+          select: { id: true, semester_number: true, code: true, name_en: true, credit_hours: true, course_type: true },
+          orderBy: [{ semester_number: "asc" as const }, { code: "asc" as const }],
+        },
+      };
+      const departments = await prisma.department.findMany({
+        where: { is_active: true },
+        include: {
+          programs: { where: { is_active: true }, select: programSelect, orderBy: { name_en: "asc" } },
+        },
+        orderBy: { name_en: "asc" },
+      });
+      // Programs with no department (department_id: null) still need to be
+      // publicly listed — surfaced as a synthetic "General" group rather
+      // than silently dropped.
+      const unassigned = await prisma.program.findMany({
+        where: { is_active: true, department_id: null },
+        select: programSelect,
+        orderBy: { name_en: "asc" },
+      });
+      return { departments, unassigned_programs: unassigned };
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+contentRouter.get(
+  "/important-links",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("important-links"), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.importantLink.findMany({ where: { is_active: true }, orderBy: { display_order: "asc" }, select: { id: true, title: true, url: true } }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
+// Public, id+name only — the class/section/group picker for the public
+// Class Routine viewer below. Deliberately no counts/capacity/teacher data,
+// unlike the authenticated /api/settings/classes this otherwise mirrors.
+contentRouter.get(
+  "/classes",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("classes"), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const classes = await prisma.class.findMany({
+        include: {
+          sections: { where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } },
+          groups: { where: { is_active: true }, select: { id: true, name_en: true }, orderBy: { display_order: "asc" } },
+        },
+        orderBy: { numeric_level: "asc" },
+      });
+      return classes.map((c) => ({ id: c.id, name_en: c.name_en, sections: c.sections, groups: c.groups }));
+    });
+    res.json({ success: true, data });
+  }),
+);
+
+// Public class/section(/group) routine grid — same shape and same
+// shared(group:null)+own-group filter the portal's own routine view uses,
+// just keyed by explicit query params instead of a logged-in student's
+// current_class_id, so any visitor can look up any published class's
+// schedule without needing a portal login.
+contentRouter.get(
+  "/routine",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional(), group_id: z.string().optional() }).parse(req.query);
+    const cacheKey = `routine:${query.class_id}:${query.section_id ?? ""}:${query.group_id ?? ""}`;
+    const data = await cached(contentCacheKey(cacheKey), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.routineSlot.findMany({
+        where: {
+          class_id: query.class_id,
+          ...(query.section_id && { OR: [{ section_id: query.section_id }, { section_id: null }] }),
+          AND: [{ OR: [{ group_id: query.group_id ?? null }, { group_id: null }] }],
+        },
+        include: { subject: { select: { name_en: true } }, teacher: { select: { name_en: true } } },
+        orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
+      }),
     );
     res.json({ success: true, data });
   }),

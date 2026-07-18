@@ -26,6 +26,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 interface Subject {
   id: string;
@@ -39,15 +40,17 @@ interface Teacher {
 interface RoutineSlotRow {
   id: string;
   section_id: string | null;
+  group_id: string | null;
   day_of_week: number;
   period_no: number;
   start_time: string;
   end_time: string;
   subject: { name_en: string } | null;
   teacher: { name_en: string } | null;
+  group: { name_en: string } | null;
 }
 
-const emptyForm = { section_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "" };
+const emptyForm = { section_id: "", group_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "" };
 
 interface UnplacedItem {
   section_id: string;
@@ -71,6 +74,7 @@ export default function RoutineSettingsPage() {
   const queryClient = useQueryClient();
   const [classId, setClassId] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -79,7 +83,9 @@ export default function RoutineSettingsPage() {
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
-  const sections = classes?.find((c) => c.id === classId)?.sections ?? [];
+  const selectedClass = classes?.find((c) => c.id === classId);
+  const sections = selectedClass?.sections ?? [];
+  const groups = selectedClass?.groups ?? [];
 
   const { data: subjects } = useQuery<Subject[]>({
     queryKey: ["subjects", classId],
@@ -92,20 +98,26 @@ export default function RoutineSettingsPage() {
   });
 
   const { data: slots } = useQuery<RoutineSlotRow[]>({
-    queryKey: ["settings", "routine", classId, sectionFilter],
-    queryFn: async () => (await api.get("/api/settings/routine", { params: { class_id: classId, ...(sectionFilter && { section_id: sectionFilter }) } })).data.data,
+    queryKey: ["settings", "routine", classId, sectionFilter, groupFilter],
+    queryFn: async () =>
+      (
+        await api.get("/api/settings/routine", {
+          params: { class_id: classId, ...(sectionFilter && { section_id: sectionFilter }), ...(groupFilter && { group_id: groupFilter }) },
+        })
+      ).data.data,
     enabled: !!classId,
   });
 
   function openCreate() {
     setEditingId(null);
-    setForm({ ...emptyForm, section_id: sectionFilter });
+    setForm({ ...emptyForm, section_id: sectionFilter, group_id: groupFilter });
     setDialogOpen(true);
   }
   function openEdit(s: RoutineSlotRow) {
     setEditingId(s.id);
     setForm({
       section_id: s.section_id ?? "",
+      group_id: "",
       day_of_week: s.day_of_week,
       period_no: s.period_no,
       start_time: s.start_time,
@@ -121,6 +133,7 @@ export default function RoutineSettingsPage() {
       const payload = {
         class_id: classId,
         section_id: form.section_id || null,
+        group_id: form.group_id || null,
         day_of_week: Number(form.day_of_week),
         period_no: Number(form.period_no),
         start_time: form.start_time,
@@ -187,10 +200,14 @@ export default function RoutineSettingsPage() {
       />
 
       <Card>
-        <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-3">
+        <CardContent className={`grid grid-cols-1 gap-4 pt-6 ${groups.length ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <div className="space-y-1.5">
             <Label>Class</Label>
-            <select className="w-full rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionFilter(""); }}>
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={classId}
+              onChange={(e) => { setClassId(e.target.value); setSectionFilter(""); setGroupFilter(""); }}
+            >
               <option value="">Select...</option>
               {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
@@ -202,6 +219,15 @@ export default function RoutineSettingsPage() {
               {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          {!!groups.length && (
+            <div className="space-y-1.5">
+              <Label>Group (optional)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+                <option value="">All Groups</option>
+                {groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex items-end">
             <Button onClick={openCreate} disabled={!classId}>+ Add Slot</Button>
           </div>
@@ -220,6 +246,7 @@ export default function RoutineSettingsPage() {
                     <th className="p-2">Period</th>
                     <th className="p-2">Time</th>
                     <th className="p-2">Section</th>
+                    {!!groups.length && <th className="p-2">Group</th>}
                     <th className="p-2">Subject</th>
                     <th className="p-2">Teacher</th>
                     <th className="p-2" />
@@ -232,6 +259,7 @@ export default function RoutineSettingsPage() {
                       <td className="p-2">{s.period_no}</td>
                       <td className="p-2">{s.start_time}–{s.end_time}</td>
                       <td className="p-2">{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</td>
+                      {!!groups.length && <td className="p-2">{s.group?.name_en ?? "All Groups"}</td>}
                       <td className="p-2">{s.subject?.name_en ?? "-"}</td>
                       <td className="p-2">{s.teacher?.name_en ?? "-"}</td>
                       <td className="p-2 text-right">
@@ -276,6 +304,15 @@ export default function RoutineSettingsPage() {
                 {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            {!!groups.length && (
+              <div className="space-y-1.5">
+                <Label>Group</Label>
+                <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.group_id} onChange={(e) => setForm({ ...form, group_id: e.target.value })}>
+                  <option value="">All Groups (shared subject)</option>
+                  {groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+                </select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Subject</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.subject_id} onChange={(e) => setForm({ ...form, subject_id: e.target.value })}>

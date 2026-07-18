@@ -13,6 +13,7 @@ import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPro
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
+import { invoiceReadmissionFeeIfConfigured } from "../fees/invoice-helpers";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -212,7 +213,7 @@ studentsRouter.get(
         student_subjects: { include: { subject: true } },
         attendance: { orderBy: { date: "desc" }, take: 60 },
         mark_entries: { include: { exam: true, subject: true } },
-        invoices: { include: { payments: true }, orderBy: { due_date: "desc" } },
+        invoices: { include: { payments: true, fee_structure: { select: { frequency: true } } }, orderBy: { due_date: "desc" } },
       },
     });
     if (!student) throw notFound("Student not found");
@@ -535,6 +536,7 @@ studentsRouter.post(
       });
 
       await inheritSubjectsForClass(tx, id, body.new_class_id, body.new_academic_year_id, [], body.new_group_id);
+      await invoiceReadmissionFeeIfConfigured(tx, id, body.new_class_id, body.new_academic_year_id);
       return result;
     });
 
@@ -649,6 +651,7 @@ studentsRouter.post(
           data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, group_id: groupId ?? null },
         });
         await inheritSubjectsForClass(tx, studentId, body.new_class_id, body.new_academic_year_id, [], groupId);
+        await invoiceReadmissionFeeIfConfigured(tx, studentId, body.new_class_id, body.new_academic_year_id);
       });
       promoted.push(studentId);
     }

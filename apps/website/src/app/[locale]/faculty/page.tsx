@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
 import { fetchContent } from "@/lib/content-api";
 
 interface FacultyMember {
@@ -31,13 +32,13 @@ export default function FacultyPage() {
           <h2 className="mb-3 text-lg font-semibold">{dept}</h2>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {grouped[dept]!.map((m) => (
-              <div key={m.id} className="rounded-lg border p-4 text-center">
+              <Link key={m.id} href={`/faculty/${m.id}`} className="rounded-lg border p-4 text-center transition hover:border-[var(--primary)] hover:shadow-sm">
                 <div className="relative mx-auto mb-2 h-20 w-20 overflow-hidden rounded-full bg-gray-100">
                   {m.photo_url && <Image src={m.photo_url} alt={m.name_en} fill sizes="80px" className="object-cover" />}
                 </div>
                 <p className="text-sm font-medium">{m.name_en}</p>
                 <p className="text-xs text-gray-500">{m.designation}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

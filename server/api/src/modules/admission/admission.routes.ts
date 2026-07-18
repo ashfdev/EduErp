@@ -900,7 +900,7 @@ admissionRouter.post(
     if (guardianLogin?.tempPassword) {
       await sendNotification({
         trigger: "PORTAL_LOGIN_CREATED",
-        recipients: [{ name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian", phone: guardianInfo.phone }],
+        recipients: [{ name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian", phone: guardianInfo.phone, email: guardianEmail }],
         template_data: {
           name: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian",
           phone: guardianInfo.phone,

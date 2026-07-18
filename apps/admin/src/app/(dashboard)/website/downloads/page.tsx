@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
-const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
+const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
 
 interface DownloadItem {
   id: string;

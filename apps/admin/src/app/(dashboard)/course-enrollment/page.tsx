@@ -33,6 +33,15 @@ interface ClassRow {
   program_id: string | null;
   academic_year_id: string;
 }
+interface ProgramRow {
+  id: string;
+  name_en: string;
+  department_id: string | null;
+}
+interface DepartmentRow {
+  id: string;
+  name_en: string;
+}
 interface CourseRow {
   id: string;
   code: string;
@@ -48,10 +57,18 @@ interface Enrollment {
   grade_point: number | null;
   course: { code: string; name_en: string; credit_hours: number; semester_number: number };
 }
+interface SemesterSgpa {
+  class_id: string;
+  class_name: string;
+  semester_number: number;
+  sgpa: number;
+  credit_hours: number;
+}
 interface CgpaData {
   cgpa: number | null;
   current_semester: number | null;
   courses: Enrollment[];
+  semesters: SemesterSgpa[];
 }
 
 const STATUS_OPTIONS = ["ENROLLED", "COMPLETED", "FAILED", "DROPPED", "WITHDRAWN"];
@@ -59,16 +76,35 @@ const STATUS_OPTIONS = ["ENROLLED", "COMPLETED", "FAILED", "DROPPED", "WITHDRAWN
 function errMsg(err: unknown, fallback: string) {
   return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? fallback;
 }
+function errCode(err: unknown): string | undefined {
+  return (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+}
 
 export default function CourseEnrollmentPage() {
   const queryClient = useQueryClient();
+
+  // Department -> Program pre-filter, before the student search even
+  // becomes usable — answers "which department/program's student is this"
+  // as the entry point, not an afterthought.
+  const [departmentId, setDepartmentId] = useState("");
+  const [programId, setProgramId] = useState("");
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
 
+  const { data: departments } = useQuery<DepartmentRow[]>({
+    queryKey: ["settings", "departments"],
+    queryFn: async () => (await api.get("/api/settings/departments")).data.data,
+  });
+  const { data: programs } = useQuery<ProgramRow[]>({
+    queryKey: ["settings", "programs"],
+    queryFn: async () => (await api.get("/api/settings/programs")).data.data,
+  });
+  const programsInDepartment = departmentId ? (programs ?? []).filter((p) => p.department_id === departmentId) : programs ?? [];
+
   const { data: searchResults } = useQuery<{ data: StudentRow[] }>({
-    queryKey: ["students", "search", search],
-    queryFn: async () => (await api.get("/api/students", { params: { search, limit: 10 } })).data,
-    enabled: search.length > 1,
+    queryKey: ["students", "search", programId, search],
+    queryFn: async () => (await api.get("/api/students", { params: { program_id: programId, search, limit: 10 } })).data,
+    enabled: !!programId && search.length > 1,
   });
 
   const { data: cgpaData } = useQuery<CgpaData>({
@@ -77,39 +113,47 @@ export default function CourseEnrollmentPage() {
     enabled: !!selectedStudent,
   });
 
-  // Enroll dialog
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const [classId, setClassId] = useState("");
-  const [courseId, setCourseId] = useState("");
-
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
-  const programClasses = (classes ?? []).filter((c) => c.program_id);
-  const selectedClass = programClasses.find((c) => c.id === classId);
+  // A student can only enroll into their OWN current semester's courses —
+  // no class picker needed since there's only ever one valid answer.
+  const studentClass = classes?.find((c) => c.id === selectedStudent?.current_class_id);
+
+  // Enroll dialog
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [courseId, setCourseId] = useState("");
 
   const { data: coursesForProgram } = useQuery<CourseRow[]>({
-    queryKey: ["settings", "courses", selectedClass?.program_id],
-    queryFn: async () => (await api.get("/api/settings/courses", { params: { program_id: selectedClass!.program_id } })).data.data,
-    enabled: !!selectedClass?.program_id,
+    queryKey: ["settings", "courses", studentClass?.program_id],
+    queryFn: async () => (await api.get("/api/settings/courses", { params: { program_id: studentClass!.program_id } })).data.data,
+    enabled: !!studentClass?.program_id,
   });
+  const selectedCourse = coursesForProgram?.find((c) => c.id === courseId);
 
   const enrollMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (override?: boolean) =>
       api.post("/api/course-enrollments", {
         student_id: selectedStudent!.id,
         course_id: courseId,
-        class_id: classId,
-        academic_year_id: selectedClass!.academic_year_id,
+        class_id: studentClass!.id,
+        academic_year_id: studentClass!.academic_year_id,
+        override,
       }),
     onSuccess: () => {
       toast.success("Enrolled");
       queryClient.invalidateQueries({ queryKey: ["course-enrollments", "cgpa", selectedStudent?.id] });
       setEnrollOpen(false);
-      setClassId(""); setCourseId("");
+      setCourseId("");
     },
-    onError: (err: unknown) => toast.error(errMsg(err, "Failed to enroll — check prerequisites")),
+    onError: (err: unknown) => {
+      if (errCode(err) === "CREDIT_CAP_EXCEEDED" && confirm(errMsg(err, "Credit cap exceeded"))) {
+        enrollMutation.mutate(true);
+        return;
+      }
+      toast.error(errMsg(err, "Failed to enroll — check prerequisites"));
+    },
   });
 
   // Grade entry
@@ -129,22 +173,53 @@ export default function CourseEnrollmentPage() {
       <PageHeader title="Course Enrollment" subtitle="University-mode course enrollment, grading, and CGPA" breadcrumbs={[{ label: "Course Enrollment" }]} />
 
       <Card>
-        <CardContent className="pt-6">
-          <Label>Find Student</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, ID, or roll..." />
-          {!!searchResults?.data.length && !selectedStudent && (
-            <div className="mt-2 space-y-1">
-              {searchResults.data.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => { setSelectedStudent(s); setSearch(""); }}
-                  className="block w-full rounded-md border p-2 text-left text-sm hover:bg-accent"
-                >
-                  {s.name_en} <span className="font-mono text-xs text-muted-foreground">{s.student_uid}</span>
-                </button>
-              ))}
+        <CardContent className="space-y-3 pt-6">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Department (optional)</Label>
+              <select
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={departmentId}
+                onChange={(e) => { setDepartmentId(e.target.value); setProgramId(""); setSelectedStudent(null); }}
+              >
+                <option value="">All Departments</option>
+                {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
+              </select>
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label>Program</Label>
+              <select
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={programId}
+                onChange={(e) => { setProgramId(e.target.value); setSelectedStudent(null); }}
+              >
+                <option value="">Select a program...</option>
+                {programsInDepartment.map((p) => <option key={p.id} value={p.id}>{p.name_en}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Find Student</Label>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={programId ? "Search by name, ID, or roll..." : "Select a program first"}
+              disabled={!programId}
+            />
+            {!!searchResults?.data.length && !selectedStudent && (
+              <div className="mt-2 space-y-1">
+                {searchResults.data.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setSelectedStudent(s); setSearch(""); }}
+                    className="block w-full rounded-md border p-2 text-left text-sm hover:bg-accent"
+                  >
+                    {s.name_en} <span className="font-mono text-xs text-muted-foreground">{s.student_uid}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -155,15 +230,30 @@ export default function CourseEnrollmentPage() {
               <div>
                 <p className="font-medium">{selectedStudent.name_en} <span className="font-mono text-xs text-muted-foreground">{selectedStudent.student_uid}</span></p>
                 <p className="text-sm text-muted-foreground">
-                  CGPA: {cgpaData?.cgpa?.toFixed(2) ?? "N/A"} {cgpaData?.current_semester ? `· Semester ${cgpaData.current_semester}` : ""}
+                  {studentClass?.name_en ?? "No current semester assigned"} · CGPA: {cgpaData?.cgpa?.toFixed(2) ?? "N/A"}
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setEnrollOpen(true)}>+ Enroll in Course</Button>
+                <Button size="sm" onClick={() => setEnrollOpen(true)} disabled={!studentClass}>+ Enroll in Course</Button>
                 <Button size="sm" variant="outline" onClick={() => setSelectedStudent(null)}>Change Student</Button>
               </div>
             </CardContent>
           </Card>
+
+          {!!cgpaData?.semesters.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="mb-2 text-sm font-medium">Semester-wise SGPA</p>
+                <div className="flex flex-wrap gap-2">
+                  {cgpaData.semesters.map((s) => (
+                    <Badge key={s.class_id} variant="outline">
+                      {s.class_name}: {s.sgpa.toFixed(2)} ({s.credit_hours} cr)
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {!cgpaData?.courses.length && <EmptyState title="No course enrollments yet" />}
           {!!cgpaData?.courses.length && (
@@ -187,7 +277,10 @@ export default function CourseEnrollmentPage() {
                       return (
                         <tr key={e.id} className="border-b">
                           <td className="p-2">{e.course.semester_number}</td>
-                          <td className="p-2">{e.course.code} - {e.course.name_en}</td>
+                          <td className="p-2">
+                            {e.course.code} - {e.course.name_en}
+                            {e.course.credit_hours === 0 && <Badge variant="outline" className="ml-2">Audit</Badge>}
+                          </td>
                           <td className="p-2">{e.course.credit_hours}</td>
                           <td className="p-1">
                             <Input
@@ -232,23 +325,22 @@ export default function CourseEnrollmentPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Enroll in Course</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Semester (Class)</Label>
-              <select className="w-full rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setCourseId(""); }}>
-                <option value="">Select...</option>
-                {programClasses.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-              </select>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Enrolling <strong>{selectedStudent?.name_en}</strong> into <strong>{studentClass?.name_en}</strong> — their current semester.
+            </p>
             <div className="space-y-1.5">
               <Label>Course</Label>
-              <select className="w-full rounded-md border px-3 py-2 text-sm" value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!classId}>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
                 <option value="">Select...</option>
-                {coursesForProgram?.map((c) => <option key={c.id} value={c.id}>{c.code} - {c.name_en} ({c.credit_hours} cr)</option>)}
+                {coursesForProgram?.map((c) => (
+                  <option key={c.id} value={c.id}>{c.code} - {c.name_en} ({c.credit_hours === 0 ? "Audit" : `${c.credit_hours} cr`})</option>
+                ))}
               </select>
+              {selectedCourse?.credit_hours === 0 && <Badge variant="outline">Non-credit / Audit course</Badge>}
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => enrollMutation.mutate()} disabled={enrollMutation.isPending || !classId || !courseId}>
+            <Button onClick={() => enrollMutation.mutate(undefined)} disabled={enrollMutation.isPending || !courseId}>
               {enrollMutation.isPending ? "Enrolling..." : "Enroll"}
             </Button>
           </DialogFooter>

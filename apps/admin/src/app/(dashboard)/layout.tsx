@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/students", key: "students" },
   { href: "/alumni", key: "alumni" },
   { href: "/complaints", key: "complaints" },
+  { href: "/document-requests", key: "documentRequests" },
   { href: "/attendance/mark", key: "attendance" },
   { href: "/examination", key: "examination" },
   { href: "/marks", key: "marks" },

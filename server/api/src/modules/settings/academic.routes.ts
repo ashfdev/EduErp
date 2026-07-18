@@ -238,6 +238,7 @@ classesRouter.get(
       include: {
         sections: { include: { shift: { select: { id: true, name: true, start_time: true, end_time: true } }, _count: { select: { students: true } } } },
         groups: { where: { is_active: true }, orderBy: { display_order: "asc" }, include: { _count: { select: { students: true } } } },
+        academic_year: { select: { label: true } },
         _count: { select: { students: true } },
       },
       orderBy: { numeric_level: "asc" },
@@ -400,13 +401,25 @@ export async function assertNoTeacherClash(input: { teacher_id?: string | null; 
 routineRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional() }).parse(req.query);
+    const query = z
+      .object({ class_id: z.string().optional(), section_id: z.string().optional(), group_id: z.string().optional() })
+      .parse(req.query);
     const slots = await prisma.routineSlot.findMany({
       where: {
         ...(query.class_id && { class_id: query.class_id }),
         ...(query.section_id && { section_id: query.section_id }),
+        // Omitted entirely = every slot (shared + every group), matching the
+        // admin "no group filter selected" view. Explicitly passed = that
+        // group's own slots PLUS the shared (group_id: null) ones every
+        // group attends — never just an exact-match-only filter, since a
+        // shared subject is part of every group's real schedule too.
+        ...(query.group_id && { OR: [{ group_id: query.group_id }, { group_id: null }] }),
       },
-      include: { subject: { select: { name_en: true } }, teacher: { select: { name_en: true } } },
+      include: {
+        subject: { select: { name_en: true } },
+        teacher: { select: { name_en: true } },
+        group: { select: { name_en: true } },
+      },
       orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
     });
     res.json({ success: true, data: slots });
@@ -475,6 +488,7 @@ export interface GeneratedPlacement {
   end_time: string;
   subject_id: string;
   teacher_id: string;
+  group_id: string | null;
 }
 export interface UnplacedItem {
   section_id: string;
@@ -550,12 +564,28 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
 
     // Existing manual slots for this class/section (auto-generated ones were
     // just wiped above) — these occupy real slots the generator must avoid.
+    // Split by group_id: a shared (group_id: null) row blocks every group's
+    // sub-loop below (the whole section attends it together), while a
+    // Group-specific row only blocks placements for that same Group — a
+    // different Group can legitimately use the same day/period (e.g. Science
+    // sits Physics while Commerce sits Accounting in the same slot).
     const existingSectionSlots = await tx.routineSlot.findMany({
       where: { class_id: classId, section_id: section.id },
-      select: { day_of_week: true, period_no: true },
+      select: { day_of_week: true, period_no: true, group_id: true },
     });
-    const occupied = new Set(existingSectionSlots.map((s) => `${s.day_of_week}-${s.period_no}`));
+    const baseOccupied = new Set(
+      existingSectionSlots.filter((s) => !s.group_id).map((s) => `${s.day_of_week}-${s.period_no}`),
+    );
+    const existingGroupOccupied = new Map<string, Set<string>>();
+    for (const s of existingSectionSlots) {
+      if (!s.group_id) continue;
+      if (!existingGroupOccupied.has(s.group_id)) existingGroupOccupied.set(s.group_id, new Set());
+      existingGroupOccupied.get(s.group_id)!.add(`${s.day_of_week}-${s.period_no}`);
+    }
 
+    // Teacher-clash tracking stays global across the shared queue and every
+    // Group's queue below — one teacher can't be in two places at once
+    // regardless of which Group a subject belongs to.
     const teacherIds = [...new Set(subjectsWithTeacher.map((s) => assignmentBySubject.get(s.id)!))];
     const existingTeacherSlots = await tx.routineSlot.findMany({
       where: { teacher_id: { in: teacherIds } },
@@ -598,98 +628,126 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
       dayMap.set(p.day_of_week, (dayMap.get(p.day_of_week) ?? 0) + 1);
     }
 
-    // Explicit per-subject weekly period counts (Subject.weekly_periods) take
-    // priority; subjects with no explicit count fall back to an even split of
-    // whatever's left, matching this generator's original behavior exactly
-    // when no subject in the class has weekly_periods set.
     const totalSlots = days.length * periods.length;
-    const explicitTotal = subjectsWithTeacher.reduce((sum, s) => sum + (s.weekly_periods ?? 0), 0);
-    if (explicitTotal > totalSlots) {
-      for (const subject of subjectsWithTeacher) {
-        unplaced.push({
-          section_id: section.id,
-          section_name: section.name,
-          subject_id: subject.id,
-          subject_name: subject.name_en,
-          reason: `Subjects with an explicit weekly period count need ${explicitTotal} periods/week, but this section only has ${totalSlots} available`,
-        });
-      }
-      continue;
-    }
-    const unsetSubjects = subjectsWithTeacher.filter((s) => !s.weekly_periods);
-    const remainingSlots = totalSlots - explicitTotal;
-    const baseCount = unsetSubjects.length > 0 ? Math.floor(remainingSlots / unsetSubjects.length) : 0;
-    const remainder = unsetSubjects.length > 0 ? remainingSlots % unsetSubjects.length : 0;
 
-    let unsetIndex = 0;
-    const queue = subjectsWithTeacher.map((subject, i) => {
-      let count: number;
-      if (subject.weekly_periods) {
-        count = subject.weekly_periods;
-      } else {
-        count = baseCount + (unsetIndex < remainder ? 1 : 0);
-        unsetIndex++;
-      }
-      return {
-        subject,
-        teacherId: assignmentBySubject.get(subject.id)!,
-        remaining: count,
-        usedDays: new Set<number>(),
-        dayOffset: i % days.length,
-      };
-    });
-
-    let progressed = true;
-    while (progressed) {
-      progressed = false;
-      for (const item of queue) {
-        if (item.remaining <= 0) continue;
-        progressed = true;
-        const teacherSet = teacherOccupied.get(item.teacherId)!;
-        const dayCounts = teacherDayCounts.get(item.teacherId)!;
-        const cap = teacherCaps.get(item.teacherId);
-        const dayCandidatesFresh = rotate(days, item.dayOffset).filter((d) => !item.usedDays.has(d));
-        const dayCandidatesAll = rotate(days, item.dayOffset);
-        let placedHere = false;
-        for (const dayList of [dayCandidatesFresh, dayCandidatesAll]) {
-          for (const day of dayList) {
-            if (cap?.maxPerDay && (dayCounts.get(day) ?? 0) >= cap.maxPerDay) continue;
-            if (cap?.maxPerWeek && teacherSet.size >= cap.maxPerWeek) continue;
-            for (const period of periods) {
-              const slotKey = `${day}-${period.period_no}`;
-              if (occupied.has(slotKey) || teacherSet.has(slotKey)) continue;
-              occupied.add(slotKey);
-              teacherSet.add(slotKey);
-              dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
-              item.usedDays.add(day);
-              placements.push({
-                section_id: section.id,
-                day_of_week: day,
-                period_no: period.period_no,
-                start_time: period.start_time,
-                end_time: period.end_time,
-                subject_id: item.subject.id,
-                teacher_id: item.teacherId,
-              });
-              item.remaining--;
-              placedHere = true;
-              break;
-            }
-            if (placedHere) break;
-          }
-          if (placedHere) break;
-        }
-        if (!placedHere) {
+    // Places one subject list (either the shared/ungrouped queue, or one
+    // Group's own queue) into the given occupied set, stamping groupId onto
+    // every resulting placement. Identical placement logic to before this
+    // phase — only now parameterized so it can run once for the shared
+    // queue and again per Group, instead of once for the whole section.
+    const runQueue = (subjectList: typeof subjectsWithTeacher, occupied: Set<string>, groupId: string | null) => {
+      // Explicit per-subject weekly period counts (Subject.weekly_periods)
+      // take priority; subjects with no explicit count fall back to an even
+      // split of whatever's left, matching this generator's original
+      // behavior exactly when no subject in the list has weekly_periods set.
+      const explicitTotal = subjectList.reduce((sum, s) => sum + (s.weekly_periods ?? 0), 0);
+      if (explicitTotal > totalSlots) {
+        for (const subject of subjectList) {
           unplaced.push({
             section_id: section.id,
             section_name: section.name,
-            subject_id: item.subject.id,
-            subject_name: item.subject.name_en,
-            reason: "Could not schedule without double-booking the assigned teacher or exceeding their period-load cap",
+            subject_id: subject.id,
+            subject_name: subject.name_en,
+            reason: `Subjects with an explicit weekly period count need ${explicitTotal} periods/week, but this section only has ${totalSlots} available`,
           });
-          item.remaining = 0;
+        }
+        return;
+      }
+      const unsetSubjects = subjectList.filter((s) => !s.weekly_periods);
+      const remainingSlots = totalSlots - explicitTotal;
+      const baseCount = unsetSubjects.length > 0 ? Math.floor(remainingSlots / unsetSubjects.length) : 0;
+      const remainder = unsetSubjects.length > 0 ? remainingSlots % unsetSubjects.length : 0;
+
+      let unsetIndex = 0;
+      const queue = subjectList.map((subject, i) => {
+        let count: number;
+        if (subject.weekly_periods) {
+          count = subject.weekly_periods;
+        } else {
+          count = baseCount + (unsetIndex < remainder ? 1 : 0);
+          unsetIndex++;
+        }
+        return {
+          subject,
+          teacherId: assignmentBySubject.get(subject.id)!,
+          remaining: count,
+          usedDays: new Set<number>(),
+          dayOffset: i % days.length,
+        };
+      });
+
+      let progressed = true;
+      while (progressed) {
+        progressed = false;
+        for (const item of queue) {
+          if (item.remaining <= 0) continue;
+          progressed = true;
+          const teacherSet = teacherOccupied.get(item.teacherId)!;
+          const dayCounts = teacherDayCounts.get(item.teacherId)!;
+          const cap = teacherCaps.get(item.teacherId);
+          const dayCandidatesFresh = rotate(days, item.dayOffset).filter((d) => !item.usedDays.has(d));
+          const dayCandidatesAll = rotate(days, item.dayOffset);
+          let placedHere = false;
+          for (const dayList of [dayCandidatesFresh, dayCandidatesAll]) {
+            for (const day of dayList) {
+              if (cap?.maxPerDay && (dayCounts.get(day) ?? 0) >= cap.maxPerDay) continue;
+              if (cap?.maxPerWeek && teacherSet.size >= cap.maxPerWeek) continue;
+              for (const period of periods) {
+                const slotKey = `${day}-${period.period_no}`;
+                if (occupied.has(slotKey) || teacherSet.has(slotKey)) continue;
+                occupied.add(slotKey);
+                teacherSet.add(slotKey);
+                dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
+                item.usedDays.add(day);
+                placements.push({
+                  section_id: section.id,
+                  day_of_week: day,
+                  period_no: period.period_no,
+                  start_time: period.start_time,
+                  end_time: period.end_time,
+                  subject_id: item.subject.id,
+                  teacher_id: item.teacherId,
+                  group_id: groupId,
+                });
+                item.remaining--;
+                placedHere = true;
+                break;
+              }
+              if (placedHere) break;
+            }
+            if (placedHere) break;
+          }
+          if (!placedHere) {
+            unplaced.push({
+              section_id: section.id,
+              section_name: section.name,
+              subject_id: item.subject.id,
+              subject_name: item.subject.name_en,
+              reason: "Could not schedule without double-booking the assigned teacher or exceeding their period-load cap",
+            });
+            item.remaining = 0;
+          }
         }
       }
+    };
+
+    // Shared (group_id: null) subjects schedule once for the whole section,
+    // exactly as every subject did before Group-awareness existed. For a
+    // class with no Group-restricted subjects, sharedSubjects === every
+    // subject with a resolved teacher, so this is the ONLY queue that runs —
+    // byte-for-byte the same placement result as before this phase.
+    const sharedSubjects = subjectsWithTeacher.filter((s) => !s.group_id);
+    runQueue(sharedSubjects, baseOccupied, null);
+
+    // Each Group gets its own independent sub-loop, seeded from the
+    // now-updated baseOccupied (shared placements just made above) plus that
+    // Group's own pre-existing rows — but NOT from any other Group's
+    // occupied set, so different Groups can share the same day/period.
+    const groupIds = [...new Set(subjectsWithTeacher.filter((s) => s.group_id).map((s) => s.group_id!))];
+    for (const groupId of groupIds) {
+      const groupOccupied = new Set([...baseOccupied, ...(existingGroupOccupied.get(groupId) ?? [])]);
+      const subjectsForGroup = subjectsWithTeacher.filter((s) => s.group_id === groupId);
+      runQueue(subjectsForGroup, groupOccupied, groupId);
     }
   }
 
@@ -702,6 +760,7 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
         period_no: p.period_no,
         subject_id: p.subject_id,
         teacher_id: p.teacher_id,
+        group_id: p.group_id,
         start_time: p.start_time,
         end_time: p.end_time,
         generated: true,

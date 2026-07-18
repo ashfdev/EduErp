@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { fetchContent, API_URL } from "@/lib/content-api";
 import type { Notice } from "@/lib/types";
 
 const TAB_KEYS = ["tabAll", "tabRecent", "tabPublic", "tabStudents", "tabStaff", "tabGuardians"] as const;
@@ -46,11 +46,21 @@ export default function NoticesPage() {
               <p className="mt-1 text-sm text-gray-600" dangerouslySetInnerHTML={{ __html: n.body }} />
               <p className="mt-1 text-xs text-gray-400">{n.publish_at ? new Date(n.publish_at).toLocaleDateString() : ""} · {n.audience}</p>
             </div>
-            {n.attachment_url && (
-              <a href={n.attachment_url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50">
-                {t("download")}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <a
+                href={`${API_URL}/api/content/notices/${n.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                {t("viewPdf")}
               </a>
-            )}
+              {n.attachment_url && (
+                <a href={n.attachment_url} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50">
+                  {t("download")}
+                </a>
+              )}
+            </div>
           </div>
         ))}
       </div>

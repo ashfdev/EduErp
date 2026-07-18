@@ -32,9 +32,17 @@ interface ProgramRow {
   department_id: string | null;
   duration_semesters: number;
   total_credit_hours: number;
+  max_credit_hours_per_semester: number | null;
+  degree_level: string;
   department: { name_en: string } | null;
   _count: { courses: number };
 }
+
+const DEGREE_LEVELS = [
+  { value: "UNDERGRADUATE", label: "Undergraduate" },
+  { value: "GRADUATE", label: "Graduate" },
+  { value: "PHD", label: "PhD" },
+];
 
 export default function ProgramsPage() {
   const queryClient = useQueryClient();
@@ -45,6 +53,8 @@ export default function ProgramsPage() {
   const [departmentId, setDepartmentId] = useState("");
   const [durationSemesters, setDurationSemesters] = useState(8);
   const [totalCreditHours, setTotalCreditHours] = useState(140);
+  const [maxCreditPerSemester, setMaxCreditPerSemester] = useState("");
+  const [degreeLevel, setDegreeLevel] = useState("UNDERGRADUATE");
 
   const { data: programs } = useQuery<ProgramRow[]>({
     queryKey: ["settings", "programs"],
@@ -56,7 +66,7 @@ export default function ProgramsPage() {
   });
 
   function resetForm() {
-    setNameEn(""); setCode(""); setDepartmentId(""); setDurationSemesters(8); setTotalCreditHours(140);
+    setNameEn(""); setCode(""); setDepartmentId(""); setDurationSemesters(8); setTotalCreditHours(140); setMaxCreditPerSemester(""); setDegreeLevel("UNDERGRADUATE");
   }
   function openCreate() {
     setEditingId(null);
@@ -70,6 +80,8 @@ export default function ProgramsPage() {
     setDepartmentId(p.department_id ?? "");
     setDurationSemesters(p.duration_semesters);
     setTotalCreditHours(p.total_credit_hours);
+    setMaxCreditPerSemester(p.max_credit_hours_per_semester != null ? String(p.max_credit_hours_per_semester) : "");
+    setDegreeLevel(p.degree_level);
     setOpen(true);
   }
 
@@ -81,6 +93,8 @@ export default function ProgramsPage() {
         department_id: departmentId || undefined,
         duration_semesters: durationSemesters,
         total_credit_hours: totalCreditHours,
+        max_credit_hours_per_semester: maxCreditPerSemester === "" ? null : Number(maxCreditPerSemester),
+        degree_level: degreeLevel,
       };
       return editingId ? api.put(`/api/settings/programs/${editingId}`, payload) : api.post("/api/settings/programs", payload);
     },
@@ -127,7 +141,8 @@ export default function ProgramsPage() {
                 <p className="font-medium">{p.name_en} <span className="font-mono text-xs text-muted-foreground">{p.code}</span></p>
                 <p className="text-sm text-muted-foreground">{p.department?.name_en ?? "No department"}</p>
                 <p className="text-xs text-muted-foreground">
-                  {p.duration_semesters} semesters · {p.total_credit_hours} credit hours · {p._count.courses} course(s)
+                  {DEGREE_LEVELS.find((d) => d.value === p.degree_level)?.label ?? p.degree_level} · {p.duration_semesters} semesters · {p.total_credit_hours} credit hours · {p._count.courses} course(s)
+                  {p.max_credit_hours_per_semester != null && ` · max ${p.max_credit_hours_per_semester} cr/semester`}
                 </p>
                 <div className="mt-2 flex gap-2">
                   <Button
@@ -163,16 +178,35 @@ export default function ProgramsPage() {
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Name</Label><Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. BSc in Computer Science & Engineering" /></div>
             <div className="space-y-1.5"><Label>Code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. BSC-CSE" /></div>
-            <div className="space-y-1.5">
-              <Label>Department (optional)</Label>
-              <select className="w-full rounded-md border px-3 py-2 text-sm" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-                <option value="">None</option>
-                {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Department (optional)</Label>
+                <select className="w-full rounded-md border px-3 py-2 text-sm" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                  <option value="">None</option>
+                  {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Degree Level</Label>
+                <select className="w-full rounded-md border px-3 py-2 text-sm" value={degreeLevel} onChange={(e) => setDegreeLevel(e.target.value)}>
+                  {DEGREE_LEVELS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Duration (semesters)</Label><Input type="number" min={1} value={durationSemesters} onChange={(e) => setDurationSemesters(Number(e.target.value))} /></div>
               <div className="space-y-1.5"><Label>Total Credit Hours</Label><Input type="number" min={0} value={totalCreditHours} onChange={(e) => setTotalCreditHours(Number(e.target.value))} /></div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Max Credit Hours / Semester (optional)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={maxCreditPerSemester}
+                onChange={(e) => setMaxCreditPerSemester(e.target.value)}
+                placeholder="No cap"
+              />
+              <p className="text-xs text-muted-foreground">Leave blank for no cap. Enforced as a warning with override at enrollment, not a hard block.</p>
             </div>
           </div>
           <DialogFooter>

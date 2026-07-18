@@ -7,6 +7,8 @@ export const programSchema = z.object({
   department_id: z.string().optional().nullable(),
   duration_semesters: z.number().int().min(1),
   total_credit_hours: z.number().min(0),
+  max_credit_hours_per_semester: z.number().min(0).optional().nullable(),
+  degree_level: z.enum(["UNDERGRADUATE", "GRADUATE", "PHD"]).default("UNDERGRADUATE"),
 });
 export type ProgramInput = z.infer<typeof programSchema>;
 
@@ -30,6 +32,7 @@ export const courseEnrollSchema = z.object({
   course_id: z.string().min(1),
   class_id: z.string().min(1),
   academic_year_id: z.string().min(1),
+  override: z.boolean().optional(),
 });
 export type CourseEnrollInput = z.infer<typeof courseEnrollSchema>;
 

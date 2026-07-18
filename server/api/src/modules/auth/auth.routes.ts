@@ -25,8 +25,24 @@ const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 const OTP_TTL_SECONDS = 600;
 const RESET_TOKEN_TTL_SECONDS = 300;
 
-function publicUser(user: { id: string; name_en: string; name_bn: string | null; role: string; phone: string; lang_pref: string }) {
-  return { id: user.id, name_en: user.name_en, name_bn: user.name_bn, role: user.role, phone: user.phone, lang_pref: user.lang_pref };
+function publicUser(user: {
+  id: string;
+  name_en: string;
+  name_bn: string | null;
+  role: string;
+  phone: string;
+  lang_pref: string;
+  must_change_password: boolean;
+}) {
+  return {
+    id: user.id,
+    name_en: user.name_en,
+    name_bn: user.name_bn,
+    role: user.role,
+    phone: user.phone,
+    lang_pref: user.lang_pref,
+    must_change_password: user.must_change_password,
+  };
 }
 
 authRouter.post(
@@ -120,7 +136,7 @@ authRouter.post(
     if (!validOld) throw badRequest("Old password is incorrect");
 
     const password_hash = await bcrypt.hash(body.new_password, 10);
-    await prisma.user.update({ where: { id: userId }, data: { password_hash } });
+    await prisma.user.update({ where: { id: userId }, data: { password_hash, must_change_password: false } });
 
     res.json({ success: true, message: "Password changed successfully" });
   }),
@@ -173,7 +189,7 @@ authRouter.post(
     if (!user) throw notFound("Account not found");
 
     const password_hash = await bcrypt.hash(body.new_password, 10);
-    await prisma.user.update({ where: { id: user.id }, data: { password_hash } });
+    await prisma.user.update({ where: { id: user.id }, data: { password_hash, must_change_password: false } });
     await redis.del(`reset:${body.reset_token}`);
 
     await sendSms(phone, "Your password has been reset successfully. If this wasn't you, contact admin immediately.");

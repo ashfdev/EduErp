@@ -29,6 +29,7 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   TRANSPORT_CARD: "transport-card",
   HOSTEL_CARD: "hostel-card",
   SEAT_PLAN: "seat-plan",
+  NOTICE: "notice",
 };
 
 let helpersRegistered = false;

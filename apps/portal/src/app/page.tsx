@@ -136,6 +136,13 @@ function HomeContent() {
       </Card>
 
       <Card>
+        <CardContent className="flex items-center justify-between pt-6">
+          <p className="font-medium">{t("documentRequests")}</p>
+          <Link href="/document-requests" className="text-xs text-[var(--primary,#1a3c4a)]">{t("view")}</Link>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardContent className="pt-6">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-medium">{t("recentNotices")}</p>

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { fetchContent } from "@/lib/content-api";
 import type { DownloadItem } from "@/lib/types";
 
-const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
+const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
 
 export default function DownloadsPage() {
   const t = useTranslations("downloads");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
@@ -10,12 +10,18 @@ import type { PortalStudent } from "@/stores/auth-store";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, hasHydrated, setStudents, logout } = useAuthStore();
+  const pathname = usePathname();
+  const { isAuthenticated, hasHydrated, user, setStudents, logout } = useAuthStore();
+  const forcedPasswordChange = !!user?.must_change_password && pathname !== "/change-password";
 
   useEffect(() => {
     if (!hasHydrated) return; // wait for localStorage rehydration before trusting isAuthenticated
-    if (!isAuthenticated) router.replace("/login");
-  }, [hasHydrated, isAuthenticated, router]);
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
+    }
+    if (forcedPasswordChange) router.replace("/change-password");
+  }, [hasHydrated, isAuthenticated, router, forcedPasswordChange]);
 
   const meQuery = useQuery({
     queryKey: ["portal", "me"],
@@ -24,11 +30,11 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       setStudents(res.data.data.students as PortalStudent[]);
       return res.data.data;
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !forcedPasswordChange,
     retry: 1,
   });
 
-  if (!hasHydrated || !isAuthenticated) {
+  if (!hasHydrated || !isAuthenticated || forcedPasswordChange) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <LoadingSpinner />

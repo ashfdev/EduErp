@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema } from "@education-erp/validators";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema } from "@education-erp/validators";
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
@@ -252,8 +252,15 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
-    const invoices = await prisma.invoice.findMany({ where: { student_id: id }, include: { payments: true }, orderBy: { due_date: "desc" } });
-    res.json({ success: true, data: invoices });
+    const [invoices, student] = await Promise.all([
+      prisma.invoice.findMany({
+        where: { student_id: id },
+        include: { payments: true, fee_structure: { select: { frequency: true } } },
+        orderBy: { due_date: "desc" },
+      }),
+      prisma.student.findUnique({ where: { id }, select: { credit_balance: true } }),
+    ]);
+    res.json({ success: true, data: { invoices, credit_balance: student?.credit_balance ?? 0 } });
   }),
 );
 
@@ -393,11 +400,60 @@ portalRouter.get(
     if (!student?.current_class_id) return res.json({ success: true, data: [] });
 
     const slots = await prisma.routineSlot.findMany({
-      where: { class_id: student.current_class_id, OR: [{ section_id: student.current_section_id }, { section_id: null }] },
-      include: { subject: true },
+      where: {
+        class_id: student.current_class_id,
+        OR: [{ section_id: student.current_section_id }, { section_id: null }],
+        // A Group-restricted slot only belongs on this student's own
+        // schedule if it's their Group; a shared (group_id: null) slot is
+        // on every student's schedule regardless of Group.
+        AND: [{ OR: [{ group_id: student.group_id }, { group_id: null }] }],
+      },
+      include: { subject: true, group: { select: { name_en: true } } },
       orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
     });
     res.json({ success: true, data: slots });
+  }),
+);
+
+portalRouter.post(
+  "/student/:id/document-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const body = createDocumentRequestSchema.omit({ student_id: true }).parse(req.body);
+
+    const request = await prisma.documentRequest.create({
+      data: { student_id: id, requested_by_user_id: req.user!.sub, doc_type: body.doc_type, reason: body.reason },
+    });
+    res.status(201).json({ success: true, data: request });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/document-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const requests = await prisma.documentRequest.findMany({ where: { student_id: id }, orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: requests });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/document-requests/:request_id/download",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    // 404, not 403, for a request that exists but isn't this student's or
+    // isn't approved yet — same "don't confirm existence to an ineligible
+    // caller" discipline as the Resource Library.
+    const request = await prisma.documentRequest.findFirst({
+      where: { id: reqParam(req, "request_id"), student_id: id, status: "APPROVED" },
+    });
+    if (!request?.document_blob_key) throw notFound("Document not found or not yet approved");
+
+    const url = await getSignedDownloadUrl(request.document_blob_key);
+    res.json({ success: true, data: { url } });
   }),
 );
 

@@ -43,6 +43,7 @@
     "complaints": "Complaints",
     "ptm": "Parent-Teacher Meetings",
     "quizzes": "Quizzes",
+    "documentRequests": "Document Requests",
     "recentNotices": "Recent Notices",
     "noNotices": "No notices yet.",
     "recentResult": "Recent Result",
@@ -86,6 +87,7 @@
   "fees": {
     "title": "Fees",
     "totalOutstanding": "Total Outstanding",
+    "creditBalance": "Credit Balance (applied automatically to future invoices)",
     "uploadSlip": "Upload your bank transfer slip",
     "uploading": "Uploading...",
     "uploadSlipButton": "Upload Slip",
@@ -143,6 +145,23 @@
     "submitQuiz": "Submit Quiz",
     "quizSubmitted": "Quiz submitted",
     "noAnswer": "—"
+  },
+  "documentRequests": {
+    "title": "Document Requests",
+    "request": "+ Request",
+    "requestTitle": "Request a Document",
+    "docType": "Document",
+    "docTypeTestimonial": "Testimonial",
+    "docTypeTransferCertificate": "Transfer Certificate",
+    "reason": "Reason (optional)",
+    "submit": "Submit Request",
+    "submitted": "Request submitted",
+    "noRequests": "No document requests yet",
+    "statusPending": "Pending Review",
+    "statusApproved": "Approved",
+    "statusRejected": "Rejected",
+    "rejectionReason": "Reason: {reason}",
+    "download": "Download PDF"
   },
   "resources": {
     "title": "Resources",

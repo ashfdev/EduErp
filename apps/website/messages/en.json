@@ -8,15 +8,23 @@
   "nav": {
     "home": "Home",
     "about": "About",
+    "academic": "Academic",
+    "notices": "Notices & Events",
+    "media": "Media & Contact",
     "noticeBoard": "Notice Board",
     "gallery": "Gallery",
     "downloads": "Downloads",
+    "departments": "Departments & Programs",
     "admission": "Admission",
+    "applyNow": "Apply Now",
+    "checkStatus": "Check Application Status",
     "events": "Events",
     "careers": "Careers",
     "contact": "Contact",
     "resultLookup": "Result Lookup",
-    "portalLogin": "Portal Login"
+    "portalLogin": "Portal Login",
+    "academicCalendar": "Academic Calendar",
+    "routine": "Class Schedule / Routine"
   },
   "footer": {
     "quickLinks": "Quick Links",
@@ -26,6 +34,7 @@
     "careers": "Careers",
     "resultLookup": "Result Lookup",
     "contact": "Contact",
+    "importantLinks": "Important Links",
     "contactHeading": "Contact",
     "poweredBy": "Powered by AshDevs"
   },
@@ -49,7 +58,16 @@
     "viewGallery": "View Gallery →",
     "upcomingEvents": "Upcoming Events",
     "noUpcomingEvents": "No upcoming events.",
-    "contactUs": "Contact Us"
+    "governingBody": "Governing Body",
+    "viewAll": "View All",
+    "contactUs": "Contact Us",
+    "quickLinks": "Quick Links",
+    "quickPolicies": "Policies & Regulations",
+    "quickFaculty": "Faculty & Staff",
+    "quickCurriculum": "Course Curriculum",
+    "quickCalendar": "Academic Calendar",
+    "quickDownloads": "Downloads",
+    "quickAdmission": "Admission"
   },
   "about": {
     "navAbout": "About Us",
@@ -63,6 +81,15 @@
     "navAdmissionInfo": "Admission Info",
     "title": "About Us",
     "selectPrompt": "Select a section from the left to learn more about our institution.",
+    "notConfigured": "This page has not been configured yet."
+  },
+  "academic": {
+    "navCourseCurriculum": "Course Curriculum",
+    "navGradingSystem": "Grading System",
+    "navAcademicRegulations": "Academic Regulations",
+    "navPolicies": "Policies",
+    "title": "Academic",
+    "selectPrompt": "Select a section from the left to learn more about our academic structure.",
     "notConfigured": "This page has not been configured yet."
   },
   "contact": {
@@ -88,7 +115,13 @@
   },
   "faculty": {
     "title": "Faculty Directory",
-    "notPublished": "Faculty directory has not been published yet."
+    "notPublished": "Faculty directory has not been published yet.",
+    "notFound": "Faculty member not found.",
+    "backToFaculty": "Back to Faculty Directory",
+    "loading": "Loading...",
+    "qualifications": "Qualifications",
+    "achievements": "Achievements",
+    "publications": "Publications & Papers"
   },
   "gallery": {
     "title": "Gallery",
@@ -99,6 +132,43 @@
     "title": "Governing Body",
     "noMembers": "No members published yet."
   },
+  "departments": {
+    "title": "Departments & Programs",
+    "subtitle": "Faculties, departments, and the degree programs offered under each.",
+    "noDepartments": "No departments or programs published yet.",
+    "noPrograms": "No programs published yet for this department.",
+    "otherPrograms": "Other Programs",
+    "duration": "{count} semesters",
+    "creditHours": "{count} credit hours",
+    "undergraduate": "Undergraduate Programs",
+    "graduate": "Graduate Programs",
+    "phd": "PhD Programs",
+    "viewCurriculum": "View Course Curriculum",
+    "hideCurriculum": "Hide Course Curriculum",
+    "semester": "Semester {number}"
+  },
+  "routine": {
+    "title": "Class Schedule / Routine",
+    "subtitle": "Select a class to view its weekly class schedule.",
+    "class": "Class",
+    "section": "Section",
+    "group": "Group",
+    "selectClass": "Select a class",
+    "allSections": "All sections",
+    "allGroups": "All groups",
+    "viewRoutine": "View Routine",
+    "loading": "Loading...",
+    "noClasses": "No classes scheduled.",
+    "freePeriod": "Free Period",
+    "period": "Period {no}",
+    "daySun": "Sun",
+    "dayMon": "Mon",
+    "dayTue": "Tue",
+    "dayWed": "Wed",
+    "dayThu": "Thu",
+    "dayFri": "Fri",
+    "daySat": "Sat"
+  },
   "notices": {
     "title": "Notice Board",
     "tabAll": "All",
@@ -108,7 +178,8 @@
     "tabStaff": "STAFF",
     "tabGuardians": "GUARDIANS",
     "noNotices": "No notices found.",
-    "download": "Download"
+    "download": "Download",
+    "viewPdf": "View PDF"
   },
   "admission": {
     "title": "Online Admission",

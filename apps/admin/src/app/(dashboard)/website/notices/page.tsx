@@ -14,6 +14,7 @@ interface Notice {
   title: string;
   body: string;
   audience: string;
+  include_signature: boolean;
   is_pinned: boolean;
   is_published: boolean;
   is_public_website: boolean;
@@ -33,6 +34,7 @@ export default function NoticesPage() {
   const [isPinned, setIsPinned] = useState(false);
   const [isPublicWebsite, setIsPublicWebsite] = useState(true);
   const [sendSms, setSendSms] = useState(false);
+  const [includeSignature, setIncludeSignature] = useState(false);
 
   const { data: notices } = useQuery<Notice[]>({
     queryKey: ["website", "notices", filter],
@@ -46,10 +48,20 @@ export default function NoticesPage() {
     setIsPinned(false);
     setIsPublicWebsite(true);
     setSendSms(false);
+    setIncludeSignature(false);
   }
 
   const createMutation = useMutation({
-    mutationFn: () => api.post("/api/website/notices", { title, body, audience, is_pinned: isPinned, is_public_website: isPublicWebsite, send_sms: sendSms }),
+    mutationFn: () =>
+      api.post("/api/website/notices", {
+        title,
+        body,
+        audience,
+        is_pinned: isPinned,
+        is_public_website: isPublicWebsite,
+        send_sms: sendSms,
+        include_signature: includeSignature,
+      }),
     onSuccess: () => {
       toast.success("Notice created");
       queryClient.invalidateQueries({ queryKey: ["website", "notices"] });
@@ -130,6 +142,11 @@ export default function NoticesPage() {
                         <Button size="sm" onClick={() => publishMutation.mutate(n.id)}>Publish</Button>
                       )}
                       {n.is_published && <Button size="sm" variant="outline" onClick={() => sendSmsMutation.mutate(n.id)}>Send SMS</Button>}
+                      {n.is_published && n.is_public_website && (
+                        <a href={`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/content/notices/${n.id}/pdf`} target="_blank" rel="noreferrer">
+                          <Button size="sm" variant="outline">PDF</Button>
+                        </a>
+                      )}
                       <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(n.id)}>Delete</Button>
                     </td>
                   </tr>
@@ -155,6 +172,9 @@ export default function NoticesPage() {
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={isPinned} onCheckedChange={(v) => setIsPinned(!!v)} /> Pin this notice</label>
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={isPublicWebsite} onCheckedChange={(v) => setIsPublicWebsite(!!v)} /> Show on public website</label>
             <label className="flex items-center gap-2 text-sm"><Checkbox checked={sendSms} onCheckedChange={(v) => setSendSms(!!v)} /> Send SMS on publish</label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={includeSignature} onCheckedChange={(v) => setIncludeSignature(!!v)} /> Include authority signature on the PDF
+            </label>
           </div>
           <DialogFooter>
             <Button disabled={!title || !body || createMutation.isPending} onClick={() => createMutation.mutate()}>

@@ -29,6 +29,7 @@ teacherRouter.get(
         class: { select: { id: true, name_en: true } },
         section: { select: { id: true, name: true } },
         subject: { select: { id: true, name_en: true } },
+        group: { select: { id: true, name_en: true } },
       },
       orderBy: { period_no: "asc" },
     });

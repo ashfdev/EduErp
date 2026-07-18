@@ -8,15 +8,23 @@
   "nav": {
     "home": "হোম",
     "about": "পরিচিতি",
+    "academic": "একাডেমিক",
+    "notices": "নোটিশ ও অনুষ্ঠান",
+    "media": "মিডিয়া ও যোগাযোগ",
     "noticeBoard": "নোটিশ বোর্ড",
     "gallery": "গ্যালারি",
     "downloads": "ডাউনলোড",
+    "departments": "বিভাগ ও প্রোগ্রাম",
     "admission": "ভর্তি",
+    "applyNow": "আবেদন করুন",
+    "checkStatus": "আবেদনের অবস্থা দেখুন",
     "events": "অনুষ্ঠান",
     "careers": "ক্যারিয়ার",
     "contact": "যোগাযোগ",
     "resultLookup": "ফলাফল অনুসন্ধান",
-    "portalLogin": "পোর্টাল লগইন"
+    "portalLogin": "পোর্টাল লগইন",
+    "academicCalendar": "একাডেমিক ক্যালেন্ডার",
+    "routine": "ক্লাস রুটিন"
   },
   "footer": {
     "quickLinks": "দ্রুত লিংক",
@@ -26,6 +34,7 @@
     "careers": "ক্যারিয়ার",
     "resultLookup": "ফলাফল অনুসন্ধান",
     "contact": "যোগাযোগ",
+    "importantLinks": "গুরুত্বপূর্ণ লিংক",
     "contactHeading": "যোগাযোগ",
     "poweredBy": "Powered by AshDevs"
   },
@@ -49,7 +58,16 @@
     "viewGallery": "গ্যালারি দেখুন →",
     "upcomingEvents": "আসন্ন অনুষ্ঠান",
     "noUpcomingEvents": "কোনো আসন্ন অনুষ্ঠান নেই।",
-    "contactUs": "যোগাযোগ করুন"
+    "governingBody": "পরিচালনা পর্ষদ",
+    "viewAll": "সব দেখুন",
+    "contactUs": "যোগাযোগ করুন",
+    "quickLinks": "দ্রুত লিংক",
+    "quickPolicies": "নীতিমালা ও বিধি",
+    "quickFaculty": "শিক্ষক ও কর্মচারী",
+    "quickCurriculum": "কোর্স কারিকুলাম",
+    "quickCalendar": "একাডেমিক ক্যালেন্ডার",
+    "quickDownloads": "ডাউনলোড",
+    "quickAdmission": "ভর্তি"
   },
   "about": {
     "navAbout": "আমাদের সম্পর্কে",
@@ -63,6 +81,15 @@
     "navAdmissionInfo": "ভর্তি তথ্য",
     "title": "আমাদের সম্পর্কে",
     "selectPrompt": "আমাদের প্রতিষ্ঠান সম্পর্কে আরও জানতে বাম পাশ থেকে একটি বিভাগ নির্বাচন করুন।",
+    "notConfigured": "এই পাতাটি এখনো তৈরি করা হয়নি।"
+  },
+  "academic": {
+    "navCourseCurriculum": "কোর্স কারিকুলাম",
+    "navGradingSystem": "গ্রেডিং পদ্ধতি",
+    "navAcademicRegulations": "একাডেমিক বিধিমালা",
+    "navPolicies": "নীতিমালা",
+    "title": "একাডেমিক",
+    "selectPrompt": "আমাদের একাডেমিক কাঠামো সম্পর্কে আরও জানতে বাম পাশ থেকে একটি বিভাগ নির্বাচন করুন।",
     "notConfigured": "এই পাতাটি এখনো তৈরি করা হয়নি।"
   },
   "contact": {
@@ -88,7 +115,13 @@
   },
   "faculty": {
     "title": "শিক্ষক তালিকা",
-    "notPublished": "শিক্ষক তালিকা এখনো প্রকাশিত হয়নি।"
+    "notPublished": "শিক্ষক তালিকা এখনো প্রকাশিত হয়নি।",
+    "notFound": "শিক্ষক পাওয়া যায়নি।",
+    "backToFaculty": "শিক্ষক তালিকায় ফিরে যান",
+    "loading": "লোড হচ্ছে...",
+    "qualifications": "শিক্ষাগত যোগ্যতা",
+    "achievements": "অর্জন",
+    "publications": "প্রকাশনা ও গবেষণাপত্র"
   },
   "gallery": {
     "title": "গ্যালারি",
@@ -99,6 +132,43 @@
     "title": "পরিচালনা পর্ষদ",
     "noMembers": "এখনো কোনো সদস্য প্রকাশিত হয়নি।"
   },
+  "departments": {
+    "title": "বিভাগ ও প্রোগ্রাম",
+    "subtitle": "অনুষদ, বিভাগ এবং প্রতিটির অধীনে প্রদত্ত ডিগ্রি প্রোগ্রামসমূহ।",
+    "noDepartments": "এখনো কোনো বিভাগ বা প্রোগ্রাম প্রকাশিত হয়নি।",
+    "noPrograms": "এই বিভাগের জন্য এখনো কোনো প্রোগ্রাম প্রকাশিত হয়নি।",
+    "otherPrograms": "অন্যান্য প্রোগ্রাম",
+    "duration": "{count} সেমিস্টার",
+    "creditHours": "{count} ক্রেডিট আওয়ার",
+    "undergraduate": "স্নাতক প্রোগ্রাম",
+    "graduate": "স্নাতকোত্তর প্রোগ্রাম",
+    "phd": "পিএইচডি প্রোগ্রাম",
+    "viewCurriculum": "কোর্স কারিকুলাম দেখুন",
+    "hideCurriculum": "কোর্স কারিকুলাম লুকান",
+    "semester": "সেমিস্টার {number}"
+  },
+  "routine": {
+    "title": "ক্লাস রুটিন",
+    "subtitle": "সাপ্তাহিক ক্লাস রুটিন দেখতে একটি শ্রেণি নির্বাচন করুন।",
+    "class": "শ্রেণি",
+    "section": "শাখা",
+    "group": "গ্রুপ",
+    "selectClass": "একটি শ্রেণি নির্বাচন করুন",
+    "allSections": "সকল শাখা",
+    "allGroups": "সকল গ্রুপ",
+    "viewRoutine": "রুটিন দেখুন",
+    "loading": "লোড হচ্ছে...",
+    "noClasses": "কোনো ক্লাস নির্ধারিত নেই।",
+    "freePeriod": "ফ্রি পিরিয়ড",
+    "period": "পিরিয়ড {no}",
+    "daySun": "রবি",
+    "dayMon": "সোম",
+    "dayTue": "মঙ্গল",
+    "dayWed": "বুধ",
+    "dayThu": "বৃহঃ",
+    "dayFri": "শুক্র",
+    "daySat": "শনি"
+  },
   "notices": {
     "title": "নোটিশ বোর্ড",
     "tabAll": "সব",
@@ -108,7 +178,8 @@
     "tabStaff": "স্টাফ",
     "tabGuardians": "অভিভাবক",
     "noNotices": "কোনো নোটিশ পাওয়া যায়নি।",
-    "download": "ডাউনলোড"
+    "download": "ডাউনলোড",
+    "viewPdf": "পিডিএফ দেখুন"
   },
   "admission": {
     "title": "অনলাইন ভর্তি",

@@ -21,6 +21,10 @@ const LABELS: Record<string, string> = {
   achievements: "Achievements",
   contact: "Contact Info",
   admission_info: "Admission Info",
+  course_curriculum: "Course Curriculum",
+  grading_system: "Grading System",
+  academic_regulations: "Academic Regulations",
+  policies: "Policies",
 };
 
 export default function StaticPagesListPage() {

@@ -88,6 +88,7 @@ noticesRouter.post(
       is_pinned: req.body.is_pinned === "true" || req.body.is_pinned === true,
       is_public_website: req.body.is_public_website === "true" || req.body.is_public_website === true,
       send_sms: req.body.send_sms === "true" || req.body.send_sms === true,
+      include_signature: req.body.include_signature === "true" || req.body.include_signature === true,
     });
     body.body = sanitizeHtml(body.body);
 
@@ -113,6 +114,7 @@ noticesRouter.put(
       ...(req.body.is_pinned !== undefined && { is_pinned: req.body.is_pinned === "true" || req.body.is_pinned === true }),
       ...(req.body.is_public_website !== undefined && { is_public_website: req.body.is_public_website === "true" || req.body.is_public_website === true }),
       ...(req.body.send_sms !== undefined && { send_sms: req.body.send_sms === "true" || req.body.send_sms === true }),
+      ...(req.body.include_signature !== undefined && { include_signature: req.body.include_signature === "true" || req.body.include_signature === true }),
     });
     if (body.body) body.body = sanitizeHtml(body.body);
 

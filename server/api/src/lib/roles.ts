@@ -33,6 +33,11 @@ export const HR_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"]
 export const LEAVE_APPROVE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const PAYROLL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
 export const LIBRARY_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "LIBRARIAN"];
+// Reviews/approves student-initiated sensitive-document requests (TC,
+// Testimonial) — the same leadership tier as EXAM_MANAGE_ROLES/
+// RESULT_PUBLISH_ROLES, plus REGISTRAR since issuing official student
+// records is that role's core function at institutions that have it.
+export const DOCUMENT_REQUEST_REVIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "REGISTRAR"];
 export const TRANSPORT_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "TRANSPORT_MANAGER"];
 export const HOSTEL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "HOSTEL_MANAGER"];
 // Gates the at-risk-students list and guardian-messaging routes — mixes

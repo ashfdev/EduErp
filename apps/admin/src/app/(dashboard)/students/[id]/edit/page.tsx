@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PageWrapper,
@@ -89,6 +89,7 @@ const emptyForm = {
 export default function EditStudentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { terms } = useInstitution();
   const [form, setForm] = useState(emptyForm);
   const [loaded, setLoaded] = useState(false);
@@ -166,7 +167,10 @@ export default function EditStudentPage() {
         registration_no: form.registration_no || undefined,
       }),
     onSuccess: () => {
-      toast.success("Student updated");
+      toast.success(classChanged ? `Student promoted to ${selectedClass?.name_en ?? "the new class"}` : "Student updated");
+      // Prefix match: also invalidates ["students", id] (the profile page)
+      // and the promotion roster, not just the list page.
+      queryClient.invalidateQueries({ queryKey: ["students"] });
       router.push(`/students/${id}`);
     },
     onError: (err: unknown) => {

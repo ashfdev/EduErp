@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AuthorityRole, DocumentType, UserRole } from "@education-erp/types";
+import { passwordSchema } from "./auth";
 
 export const institutionTypeSchema = z.enum(["SCHOOL", "COLLEGE", "UNIVERSITY", "MADRASAH"]);
 
@@ -209,6 +210,8 @@ export const routineSlotSchema = z.object({
   period_no: z.number().int().min(1),
   subject_id: z.string().optional().nullable(),
   teacher_id: z.string().optional().nullable(),
+  // null = applies to every group in this class — see RoutineSlot.group_id.
+  group_id: z.string().optional().nullable(),
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
 });
@@ -229,4 +232,13 @@ export const createUserSchema = z.object({
   role: z.nativeEnum(UserRole),
   designation: z.string().optional().nullable(),
   department_id: z.string().optional().nullable(),
+  // Optional — leave blank to auto-generate a memorable name+phone-derived
+  // temp password; set explicitly to choose the account's initial password
+  // instead. Either way must_change_password still forces a real,
+  // self-chosen password on first login.
+  login_password: passwordSchema.optional(),
+});
+
+export const adminResetPasswordSchema = z.object({
+  login_password: passwordSchema.optional(),
 });

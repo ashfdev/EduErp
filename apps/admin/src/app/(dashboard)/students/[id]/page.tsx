@@ -71,17 +71,33 @@ interface StudentProfile {
     invoices: {
       id: string;
       description: string;
+      category: string;
+      month?: number | null;
       amount_due: number;
       amount_paid: number;
       fine_amount: number;
       status: string;
       due_date: string;
+      fee_structure?: { frequency: string } | null;
       payments?: { id: string; receipt_no: string | null; gateway: string; amount: number; paid_at: string | null; notes: string | null }[];
     }[];
     outstanding_total: number;
     paid_total: number;
     credit_balance: number;
   };
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  ADMISSION: "Admission", FORM: "Form", READMISSION: "Readmission", TUITION: "Tuition", EXAM: "Exam",
+  TRANSPORT: "Transport", HOSTEL: "Hostel", LAB: "Lab", LIBRARY: "Library", SPORTS: "Sports",
+  DEVELOPMENT: "Development", OTHER: "Other",
+};
+
+function frequencyLabel(inv: { month?: number | null; fee_structure?: { frequency: string } | null }): string {
+  const freq = inv.fee_structure?.frequency ?? (inv.month ? "MONTHLY" : "ONE_TIME");
+  if (freq === "MONTHLY") return "Monthly";
+  if (freq === "YEARLY") return "Yearly";
+  return "One-time";
 }
 
 async function downloadPdf(url: string, filename: string) {
@@ -306,7 +322,13 @@ export default function StudentProfilePage() {
                   {fees.invoices.map((inv) => (
                     <>
                       <tr key={inv.id} className="border-b">
-                        <td className="p-2">{inv.description}</td>
+                        <td className="p-2">
+                          {inv.description}
+                          <div className="mt-1 flex gap-1">
+                            <Badge variant="outline">{CATEGORY_LABEL[inv.category] ?? inv.category}</Badge>
+                            <Badge variant="outline">{frequencyLabel(inv)}</Badge>
+                          </div>
+                        </td>
                         <td className="p-2">৳{inv.amount_due}</td>
                         <td className="p-2">৳{inv.amount_paid}</td>
                         <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>

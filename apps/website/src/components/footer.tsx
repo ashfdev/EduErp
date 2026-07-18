@@ -1,14 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
+import { fetchContent } from "@/lib/content-api";
 import type { Institution } from "@/lib/types";
+
+interface ImportantLink {
+  id: string;
+  title: string;
+  url: string;
+}
 
 export function Footer({ institution }: { institution: Institution | null }) {
   const t = useTranslations("footer");
+  const [links, setLinks] = useState<ImportantLink[]>([]);
+
+  useEffect(() => {
+    fetchContent<ImportantLink[]>("/important-links").then((data) => setLinks(data ?? []));
+  }, []);
+
   return (
     <footer className="mt-12 border-t bg-gray-900 text-gray-300">
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 md:grid-cols-3">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 py-10 sm:grid-cols-2 md:grid-cols-4">
         <div>
           <p className="text-lg font-semibold text-white">{institution?.name_en ?? "Institution"}</p>
           <p className="mt-2 text-sm">{institution?.established_text ?? institution?.tagline_en ?? ""}</p>
@@ -24,6 +38,18 @@ export function Footer({ institution }: { institution: Institution | null }) {
             <li><Link href="/contact">{t("contact")}</Link></li>
           </ul>
         </div>
+        {!!links.length && (
+          <div>
+            <p className="mb-2 font-semibold text-white">{t("importantLinks")}</p>
+            <ul className="space-y-1 text-sm">
+              {links.map((l) => (
+                <li key={l.id}>
+                  <a href={l.url} target="_blank" rel="noreferrer" className="hover:text-white">{l.title}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div>
           <p className="mb-2 font-semibold text-white">{t("contactHeading")}</p>
           <p className="text-sm">{institution?.address}</p>

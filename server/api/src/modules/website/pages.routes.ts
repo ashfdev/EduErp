@@ -16,7 +16,16 @@ pagesRouter.use(authenticate);
 export const PAGE_KEYS = [
   "about", "history", "mission_vision", "principal_message", "vice_principal_message",
   "chairman_message", "facilities", "achievements", "contact", "admission_info",
+  "course_curriculum", "grading_system", "academic_regulations", "policies",
 ] as const;
+
+// The public route these page keys are served from differs by cluster —
+// Academic's 4 keys live under /academic/[slug], everything else under
+// /about/[slug] (see apps/website/src/app/[locale]/{about,academic}).
+const ACADEMIC_PAGE_KEYS = new Set(["course_curriculum", "grading_system", "academic_regulations", "policies"]);
+function publicPathFor(pageKey: string): string {
+  return ACADEMIC_PAGE_KEYS.has(pageKey) ? `/academic/${pageKey}` : `/about/${pageKey}`;
+}
 
 pagesRouter.get(
   "/",
@@ -51,7 +60,7 @@ pagesRouter.put(
       create: { page_key: pageKey, ...body },
       update: body,
     });
-    await triggerRevalidation([`/about/${pageKey}`]);
+    await triggerRevalidation([publicPathFor(pageKey)]);
     res.json({ success: true, data: page });
   }),
 );

@@ -1,9 +1,16 @@
-import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@education-erp/db";
 import { prisma } from "./prisma";
 import { createOrLinkPortalLogin } from "./portal-login";
+
+// Digit-only fake BD phone numbers — generateMemorablePassword strips
+// non-digits before taking the last 4 characters, so (unlike the old
+// random-hex password scheme) tests need real numeric phone strings, not
+// hex-derived ones that could contain a-f letters in the final 4 chars.
+function randomPhone(prefix: string): string {
+  return prefix + Math.floor(10000000 + Math.random() * 89999999).toString();
+}
 
 // Every test runs inside a transaction that always rolls back (via a
 // sentinel throw), so no fixture rows are ever actually committed —
@@ -25,30 +32,39 @@ async function inRollbackTx<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>)
 }
 
 describe("createOrLinkPortalLogin", () => {
-  it("creates a new user with a temp password when the phone is unused", async () => {
-    const phone = `017${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+  it("creates a new user with a memorable, name+phone-derived temp password when the phone is unused", async () => {
+    const phone = randomPhone("017");
     const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "STUDENT", phone, name: "Test Student" }));
 
     expect(result.created).toBe(true);
     expect(result.tempPassword).not.toBeNull();
-    expect(result.tempPassword).toMatch(/^Stu[0-9a-f]{8}!1$/);
+    expect(result.tempPassword).toBe(`Test${phone.slice(-4)}!1`);
     expect(result.userId).toBeTruthy();
   });
 
-  it("prefixes the temp password by role", async () => {
-    const phone = `018${randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: "Test Guardian" }));
-    expect(result.tempPassword).toMatch(/^Grd/);
+  it("derives the password from the caller's own first name, regardless of role", async () => {
+    const phone = randomPhone("018");
+    const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: "Karim Guardian" }));
+    expect(result.tempPassword).toBe(`Karim${phone.slice(-4)}!1`);
   });
 
-  it("falls back to a generic prefix for roles with no dedicated one", async () => {
-    const phone = `019${randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "CLASS_TEACHER", phone, name: "Test Teacher" }));
-    expect(result.tempPassword).toMatch(/^Stf/);
+  it("pads a very short first name so the password still satisfies the minimum-length policy", async () => {
+    const phone = randomPhone("019");
+    const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "CLASS_TEACHER", phone, name: "Li Teacher" }));
+    expect(result.tempPassword).toBe(`Lix${phone.slice(-4)}!1`);
+    expect(result.tempPassword!.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("uses an explicit password_override instead of generating one, when provided", async () => {
+    const phone = randomPhone("013");
+    const result = await inRollbackTx((tx) =>
+      createOrLinkPortalLogin(tx, { role: "ACCOUNTANT", phone, name: "Override Case", password_override: "Chosen@1234" }),
+    );
+    expect(result.tempPassword).toBe("Chosen@1234");
   });
 
   it("links to an existing user by phone instead of creating a duplicate, and returns no password", async () => {
-    const phone = `016${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    const phone = randomPhone("016");
 
     await inRollbackTx(async (tx) => {
       const passwordHash = await bcrypt.hash("Existing@1234", 10);
@@ -69,8 +85,8 @@ describe("createOrLinkPortalLogin", () => {
   });
 
   it("never returns the same temp password twice across calls", async () => {
-    const phone1 = `015${randomUUID().replace(/-/g, "").slice(0, 8)}`;
-    const phone2 = `014${randomUUID().replace(/-/g, "").slice(0, 8)}`;
+    const phone1 = randomPhone("015");
+    const phone2 = randomPhone("014");
 
     const [r1, r2] = await inRollbackTx(async (tx) => {
       const a = await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: phone1, name: "Student A" });

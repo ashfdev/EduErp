@@ -8,6 +8,7 @@ export interface AuthUser {
   role: string;
   phone: string;
   lang_pref?: string;
+  must_change_password?: boolean;
 }
 
 interface AuthState {
@@ -24,6 +25,7 @@ interface AuthState {
   hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
   setSession: (data: { user: AuthUser; access_token: string; refresh_token: string }) => void;
+  clearMustChangePassword: () => void;
   logout: () => void;
 }
 
@@ -38,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
       setSession: ({ user, access_token, refresh_token }) =>
         set({ user, accessToken: access_token, refreshToken: refresh_token, isAuthenticated: true }),
+      clearMustChangePassword: () =>
+        set((state) => (state.user ? { user: { ...state.user, must_change_password: false } } : {})),
       logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
     }),
     {

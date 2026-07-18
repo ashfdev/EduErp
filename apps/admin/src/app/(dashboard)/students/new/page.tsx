@@ -82,9 +82,13 @@ export default function NewStudentPage() {
     queryKey: ["settings", "academic-years"],
     queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
+  // Scoped to the selected year — Class rows are recreated every academic
+  // year, so an unscoped list would let an admin pick a stale prior-year
+  // Class row here while academic_year_id points at a different year.
   const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ["settings", "classes"],
-    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+    queryKey: ["settings", "classes", form.academic_year_id],
+    queryFn: async () => (await api.get("/api/settings/classes", { params: { academic_year_id: form.academic_year_id } })).data.data,
+    enabled: !!form.academic_year_id,
   });
 
   const selectedClass = classes?.find((c) => c.id === form.current_class_id);
@@ -193,7 +197,15 @@ export default function NewStudentPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Academic Year *</Label>
-                <Select value={form.academic_year_id} onValueChange={(v) => set("academic_year_id", v)}>
+                <Select
+                  value={form.academic_year_id}
+                  onValueChange={(v) => {
+                    set("academic_year_id", v);
+                    set("current_class_id", "");
+                    set("current_section_id", "");
+                    set("group_id", "");
+                  }}
+                >
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     {years?.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}{y.is_active ? " (Active)" : ""}</SelectItem>)}
@@ -202,8 +214,12 @@ export default function NewStudentPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Class *</Label>
-                <Select value={form.current_class_id} onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); set("group_id", ""); }}>
-                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                <Select
+                  value={form.current_class_id}
+                  onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); set("group_id", ""); }}
+                  disabled={!form.academic_year_id}
+                >
+                  <SelectTrigger><SelectValue placeholder={form.academic_year_id ? "Select..." : "Select an academic year first"} /></SelectTrigger>
                   <SelectContent>
                     {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
                   </SelectContent>

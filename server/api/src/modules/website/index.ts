@@ -7,6 +7,7 @@ import { pagesRouter } from "./pages.routes";
 import { governingBodyRouter } from "./governing-body.routes";
 import { eventsRouter } from "./events.routes";
 import { contactRouter } from "./contact.routes";
+import { importantLinksRouter } from "./important-links.routes";
 
 export const websiteRouter = Router();
 
@@ -18,3 +19,4 @@ websiteRouter.use("/pages", pagesRouter);
 websiteRouter.use("/governing-body", governingBodyRouter);
 websiteRouter.use("/events", eventsRouter);
 websiteRouter.use("/contact", contactRouter);
+websiteRouter.use("/important-links", importantLinksRouter);

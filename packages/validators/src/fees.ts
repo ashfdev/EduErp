@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const feeCategorySchema = z.enum([
-  "ADMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER",
+  "ADMISSION", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER",
 ]);
 
 export const feeStructureSchema = z.object({

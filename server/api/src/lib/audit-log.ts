@@ -24,7 +24,8 @@ export type AuditAction =
   | "ROUTINE_GENERATE"
   | "JOB_APPLICATION_STATUS_CHANGE"
   | "EXAM_REOPENED"
-  | "PERMISSION_UPDATE";
+  | "PERMISSION_UPDATE"
+  | "DOCUMENT_REQUEST_REVIEWED";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

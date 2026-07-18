@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "./auth";
 
 export const createStaffSchema = z.object({
   name_en: z.string().min(1),
@@ -21,11 +22,18 @@ export const createStaffSchema = z.object({
   max_periods_per_week: z.number().int().min(1).optional().nullable(),
   role: z.string().min(1).default("SUBJECT_TEACHER"),
   show_on_website: z.boolean().default(false),
+  qualifications: z.string().optional().nullable(),
+  achievements: z.string().optional().nullable(),
+  publications: z.array(z.object({ title: z.string().min(1), url: z.string().url() })).optional().nullable(),
   create_login: z.boolean().default(false),
+  // Optional — leave blank to auto-generate a memorable name+phone-derived
+  // temp password when create_login is true; set explicitly to choose it
+  // instead. Ignored when create_login is false.
+  login_password: passwordSchema.optional(),
 });
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 
-export const updateStaffSchema = createStaffSchema.partial().omit({ create_login: true, role: true });
+export const updateStaffSchema = createStaffSchema.partial().omit({ create_login: true, role: true, login_password: true });
 
 export const staffDocumentSchema = z.object({
   doc_type: z.enum(["CERTIFICATE", "NID", "TIN", "CONTRACT", "OTHER"]),

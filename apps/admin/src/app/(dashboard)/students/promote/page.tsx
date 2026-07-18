@@ -11,6 +11,7 @@ interface ClassOption {
   name_en: string;
   sections: { id: string; name: string }[];
   groups?: { id: string; name_en: string }[];
+  academic_year?: { label: string } | null;
 }
 interface YearOption {
   id: string;
@@ -41,17 +42,29 @@ export default function PromoteStudentsPage() {
   const [studentGroupIds, setStudentGroupIds] = useState<Record<string, string>>({});
   const [result, setResult] = useState<PromoteResult | null>(null);
 
+  // Intentionally unscoped by year — an admin needs to find a student's
+  // CURRENT class regardless of which year that class row was created in.
+  // Each option is labeled with its own academic year so a stale-looking
+  // row is never ambiguous.
   const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ["settings", "classes"],
+    queryKey: ["settings", "classes", "all"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
   const { data: years } = useQuery<YearOption[]>({
     queryKey: ["settings", "academic-years"],
     queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
+  // The DESTINATION class must belong to the destination year — Class rows
+  // are recreated every academic year, so this list is scoped, unlike the
+  // source list above.
+  const { data: destClasses } = useQuery<ClassOption[]>({
+    queryKey: ["settings", "classes", destYearId],
+    queryFn: async () => (await api.get("/api/settings/classes", { params: { academic_year_id: destYearId } })).data.data,
+    enabled: !!destYearId,
+  });
 
   const sourceClass = classes?.find((c) => c.id === sourceClassId);
-  const destClass = classes?.find((c) => c.id === destClassId);
+  const destClass = destClasses?.find((c) => c.id === destClassId);
   const destHasGroups = !!destClass?.groups?.length;
 
   const { data: roster, isFetching: rosterLoading, refetch } = useQuery<RosterStudent[]>({
@@ -104,7 +117,10 @@ export default function PromoteStudentsPage() {
     onSuccess: (res) => {
       const data: PromoteResult = res.data.data;
       setResult(data);
+      setSelected(new Set());
+      setStudentGroupIds({});
       toast.success(`Promoted ${data.promoted.length} student(s)${data.skipped.length ? `, ${data.skipped.length} skipped` : ""}`);
+      refetch();
     },
     onError: (err: unknown) => {
       const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Promotion failed";
@@ -122,7 +138,7 @@ export default function PromoteStudentsPage() {
             <p className="text-sm font-medium">From</p>
             <select className="w-full rounded-md border px-3 py-2 text-sm" value={sourceClassId} onChange={(e) => { setSourceClassId(e.target.value); setSourceSectionId(""); }}>
               <option value="">Select source class...</option>
-              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}{c.academic_year ? ` (${c.academic_year.label})` : ""}</option>)}
             </select>
             <select className="w-full rounded-md border px-3 py-2 text-sm" value={sourceSectionId} onChange={(e) => setSourceSectionId(e.target.value)} disabled={!sourceClassId}>
               <option value="">All Sections</option>
@@ -137,17 +153,26 @@ export default function PromoteStudentsPage() {
         <Card>
           <CardContent className="space-y-3 pt-6">
             <p className="text-sm font-medium">To</p>
-            <select className="w-full rounded-md border px-3 py-2 text-sm" value={destClassId} onChange={(e) => { setDestClassId(e.target.value); setDestSectionId(""); setStudentGroupIds({}); }}>
-              <option value="">Select destination class...</option>
-              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={destYearId}
+              onChange={(e) => { setDestYearId(e.target.value); setDestClassId(""); setDestSectionId(""); setStudentGroupIds({}); }}
+            >
+              <option value="">Select academic year...</option>
+              {years?.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_active ? " (Active)" : ""}</option>)}
+            </select>
+            <select
+              className="w-full rounded-md border px-3 py-2 text-sm"
+              value={destClassId}
+              onChange={(e) => { setDestClassId(e.target.value); setDestSectionId(""); setStudentGroupIds({}); }}
+              disabled={!destYearId}
+            >
+              <option value="">{destYearId ? "Select destination class..." : "Select an academic year first"}</option>
+              {destClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
             <select className="w-full rounded-md border px-3 py-2 text-sm" value={destSectionId} onChange={(e) => setDestSectionId(e.target.value)} disabled={!destClassId}>
               <option value="">Select destination section...</option>
               {destClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <select className="w-full rounded-md border px-3 py-2 text-sm" value={destYearId} onChange={(e) => setDestYearId(e.target.value)}>
-              <option value="">Select academic year...</option>
-              {years?.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_active ? " (Active)" : ""}</option>)}
             </select>
             {destHasGroups && <p className="text-xs text-muted-foreground">This class has Groups/Streams — pick each promoted student&apos;s group below.</p>}
           </CardContent>

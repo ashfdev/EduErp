@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
-const CATEGORIES = ["ADMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
+const CATEGORIES = ["ADMISSION", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
 interface FeeStructure {
   id: string;

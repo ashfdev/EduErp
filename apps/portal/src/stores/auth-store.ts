@@ -8,6 +8,7 @@ export interface AuthUser {
   role: string;
   phone: string;
   lang_pref?: string;
+  must_change_password?: boolean;
 }
 
 export interface PortalStudent {
@@ -41,6 +42,7 @@ interface AuthState {
   setSession: (data: { user: AuthUser; access_token: string; refresh_token: string }) => void;
   setStudents: (students: PortalStudent[]) => void;
   setActiveStudent: (id: string) => void;
+  clearMustChangePassword: () => void;
   logout: () => void;
 }
 
@@ -60,6 +62,8 @@ export const useAuthStore = create<AuthState>()(
       setStudents: (students) =>
         set((state) => ({ students, activeStudentId: state.activeStudentId ?? students[0]?.id ?? null })),
       setActiveStudent: (id) => set({ activeStudentId: id }),
+      clearMustChangePassword: () =>
+        set((state) => (state.user ? { user: { ...state.user, must_change_password: false } } : {})),
       logout: () => set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, students: [], activeStudentId: null }),
     }),
     {

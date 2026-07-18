@@ -5,10 +5,13 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { STAFF_ONLY_ROLES } from "../../lib/roles";
+import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES } from "../../lib/roles";
 import { badRequest, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
+import { uploadBuffer } from "../../services/storage.service";
+import { rejectDocumentRequestSchema } from "@education-erp/validators";
+import { logAudit } from "../../lib/audit-log";
 
 export const documentsRouter = Router();
 // Generates PDFs containing full personal/academic/financial data for any
@@ -89,6 +92,119 @@ documentsRouter.get(
       remarks: "N/A",
     });
     sendPdf(res, pdf, `${student.student_uid}-transfer-certificate.pdf`, download);
+  }),
+);
+
+// ─────────────── Student-Initiated Document Requests ───────────────
+// The TESTIMONIAL/TRANSFER_CERTIFICATE routes above are staff-triggered and
+// ungated — this is the request→review→approve/reject layer a student or
+// guardian actually goes through from the portal (portal.routes.ts submits
+// the request; these routes review/decide it), mirroring LeaveRequest's
+// submit→approve shape.
+
+documentsRouter.get(
+  "/requests",
+  authorize(DOCUMENT_REQUEST_REVIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const requests = await prisma.documentRequest.findMany({
+      where: { status: "PENDING" },
+      include: {
+        student: {
+          select: {
+            id: true, name_en: true, student_uid: true, cgpa: true, current_class_id: true, group_id: true,
+            current_class: { select: { name_en: true } },
+            current_section: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { created_at: "asc" },
+    });
+
+    // Context the reviewer needs to decide — computed here, not left for the
+    // admin to look up separately in another module.
+    const data = await Promise.all(
+      requests.map(async (r) => {
+        const invoices = await prisma.invoice.findMany({ where: { student_id: r.student_id }, select: { amount_due: true, fine_amount: true, amount_paid: true } });
+        const outstanding_due = invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+        const latestResult = r.student.current_class_id
+          ? await prisma.resultPublication.findFirst({
+              where: { class_id: r.student.current_class_id, group_id: r.student.group_id },
+              orderBy: { published_at: "desc" },
+            })
+          : null;
+        return {
+          ...r,
+          context: {
+            outstanding_due,
+            latest_result_published: !!latestResult?.is_published,
+          },
+        };
+      }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
+documentsRouter.put(
+  "/requests/:id/approve",
+  authorize(DOCUMENT_REQUEST_REVIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const request = await prisma.documentRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const student = await prisma.student.findUnique({ where: { id: request.student_id }, include: { current_class: true } });
+    if (!student) throw notFound("Student not found");
+
+    let pdf: Buffer;
+    if (request.doc_type === "TESTIMONIAL") {
+      const latestExam = await prisma.exam.findFirst({ where: { mark_entries: { some: { student_id: student.id } } }, orderBy: { created_at: "desc" } });
+      pdf = await renderDocument("TESTIMONIAL", {
+        student,
+        exam_name: latestExam?.name ?? "N/A",
+        year: new Date().getFullYear(),
+        leaving_date: new Date(),
+        issue_date: new Date(),
+      });
+    } else {
+      const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+      pdf = await renderDocument("TRANSFER_CERTIFICATE", {
+        student,
+        tc_number: `TC-${new Date().getFullYear()}-${String(tcCount + 1).padStart(4, "0")}`,
+        issue_date: new Date(),
+        leaving_date: new Date(),
+        leaving_reason: request.reason ?? "N/A",
+        conduct: "Good",
+        last_exam_result: "N/A",
+        remarks: "N/A",
+      });
+    }
+
+    const { blobKey } = await uploadBuffer("document-requests", `${student.student_uid}-${request.doc_type.toLowerCase()}.pdf`, pdf, "application/pdf");
+    const updated = await prisma.documentRequest.update({
+      where: { id },
+      data: { status: "APPROVED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), document_blob_key: blobKey },
+    });
+    await logAudit("DOCUMENT_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "DocumentRequest", targetId: id, metadata: { decision: "APPROVED", doc_type: request.doc_type }, req });
+    res.json({ success: true, data: updated });
+  }),
+);
+
+documentsRouter.put(
+  "/requests/:id/reject",
+  authorize(DOCUMENT_REQUEST_REVIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = rejectDocumentRequestSchema.parse(req.body);
+    const request = await prisma.documentRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const updated = await prisma.documentRequest.update({
+      where: { id },
+      data: { status: "REJECTED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), rejection_reason: body.rejection_reason },
+    });
+    await logAudit("DOCUMENT_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "DocumentRequest", targetId: id, metadata: { decision: "REJECTED", doc_type: request.doc_type }, req });
+    res.json({ success: true, data: updated });
   }),
 );
 

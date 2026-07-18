@@ -13,6 +13,7 @@ const SECTIONS = [
   { href: "/website/governing-body", label: "Governing Body", icon: "👥" },
   { href: "/website/events", label: "Events", icon: "📅" },
   { href: "/website/pages", label: "Static Pages", icon: "📄" },
+  { href: "/website/important-links", label: "Important Links", icon: "🔗" },
 ];
 
 interface ContactSubmission {

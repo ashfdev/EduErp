@@ -403,6 +403,7 @@ model Group {
   updated_at    DateTime  @updatedAt
   subjects      Subject[]
   students      Student[]
+  routine_slots RoutineSlot[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -434,6 +435,14 @@ model User {
   email          String?        @unique
   phone          String         @unique
   password_hash  String
+  // True whenever the current password_hash was set by someone other than
+  // this user (system-generated on create, or an admin-triggered reset) —
+  // forces a change-password redirect on next login. Cleared the moment the
+  // user sets their own password via self-service change-password or the
+  // forgot-password OTP flow. Existing rows are backfilled to false in the
+  // migration so this never retroactively locks out an already-active
+  // account — only newly-created/reset accounts start out true.
+  must_change_password Boolean  @default(true)
   lang_pref      Lang           @default(BN)
   is_active      Boolean        @default(true)
   last_login_at  DateTime?
@@ -558,6 +567,7 @@ model Student {
   ptm_bookings          PTMBooking[]
   assignment_submissions AssignmentSubmission[]
   quiz_attempts          QuizAttempt[]
+  document_requests      DocumentRequest[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -675,6 +685,43 @@ model Complaint {
   @@index([status])
 }
 
+enum DocumentRequestType {
+  TRANSFER_CERTIFICATE
+  TESTIMONIAL
+}
+
+enum DocumentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Student/guardian-initiated request for a sensitive document — the actual
+// PDF templates and renderDocument() pipeline already exist and are
+// staff-triggered/ungated (documents.routes.ts); this is only the missing
+// request→review→approve/reject layer in front of it, mirroring
+// LeaveRequest's shape (requester + reason + status + approver + rejection
+// reason). Approval renders the real document via the existing pipeline and
+// stores a private blob_key — never a permanent public URL — exactly like
+// every other sensitive document in this codebase.
+model DocumentRequest {
+  id                  String                 @id @default(cuid())
+  student_id          String
+  student             Student                @relation(fields: [student_id], references: [id])
+  requested_by_user_id String
+  doc_type            DocumentRequestType
+  reason              String?
+  status              DocumentRequestStatus  @default(PENDING)
+  reviewed_by_id      String?
+  reviewed_at         DateTime?
+  rejection_reason    String?
+  document_blob_key   String?
+  created_at          DateTime               @default(now())
+
+  @@index([student_id])
+  @@index([status])
+}
+
 // Phase 33 — the general school calendar already exists (Event model);
 // this is only the slot-booking layer on top, for parent-teacher meetings
 // specifically. Booking a slot must be atomic (checked in a $transaction
@@ -752,6 +799,16 @@ model Staff {
   photo_url           String?
   signature_url       String?
   biometric_id        String?
+  // Public-profile fields — only ever rendered when show_on_website is
+  // true; nullable/empty on every existing row until an admin fills them
+  // in, same "opt-in, never retroactively populated" convention as every
+  // other Settings-driven optional field in this codebase.
+  qualifications      String?                    @db.Text
+  achievements        String?                    @db.Text
+  // Array of {title, url} — a short, admin-curated list, not a separate
+  // table (mirrors AppraisalTemplate.criteria's exact same "small static
+  // list doesn't need its own model" reasoning).
+  publications        Json?
   employment_type     EmploymentType             @default(PERMANENT)
   joining_date        DateTime?
   max_periods_per_day  Int?
@@ -1714,6 +1771,11 @@ model Notice {
   title             String
   body              String         @db.Text
   attachment_url    String?
+  // Per-notice opt-in — AuthorityConfig's NOTICE mapping is doc-type-global
+  // (one authority per slot for every notice), but not every notice needs a
+  // signature on its generated PDF, so this decides per record whether the
+  // globally-configured signature actually renders.
+  include_signature Boolean        @default(false)
   audience          NoticeAudience @default(PUBLIC)
   is_pinned         Boolean        @default(false)
   is_published      Boolean        @default(false)
@@ -1797,6 +1859,18 @@ model GoverningBodyMember {
   group         String   @default("Governing Body")
   photo_url     String?
   bio           String?
+  display_order Int      @default(0)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+}
+
+// Footer "Important Links" — external government/board/ministry links an
+// admin curates (e.g. Education Board, UGC, Ministry of Education), not
+// tied to any other model.
+model ImportantLink {
+  id            String   @id @default(cuid())
+  title         String
+  url           String
   display_order Int      @default(0)
   is_active     Boolean  @default(true)
   created_at    DateTime @default(now())
@@ -2303,6 +2377,15 @@ model Program {
   department         Department?    @relation(fields: [department_id], references: [id])
   duration_semesters Int
   total_credit_hours Float
+  // Nullable = no cap enforced (opt-in constraint, same convention as every
+  // other Settings-driven soft limit in this codebase). Enforced as a soft
+  // warning-with-override at enroll time, mirroring Section.capacity's
+  // exact UX (Phase 62) rather than a hard block.
+  max_credit_hours_per_semester Float?
+  // Groups the public Departments/Programs page into Undergraduate/
+  // Graduate/PhD sections — purely a display/classification field, doesn't
+  // affect enrollment or grading logic anywhere.
+  degree_level       DegreeLevel    @default(UNDERGRADUATE)
   is_active          Boolean        @default(true)
   created_at         DateTime       @default(now())
   updated_at         DateTime       @updatedAt
@@ -2394,6 +2477,11 @@ model RoutineSlot {
   subject     Subject? @relation(fields: [subject_id], references: [id])
   teacher_id  String?
   teacher     Staff?   @relation(fields: [teacher_id], references: [id])
+  // null = applies to every group in this class (unchanged behavior for
+  // every existing row). Set only when this slot is a Group-restricted
+  // subject's period — mirrors Subject.group_id's exact convention.
+  group_id    String?
+  group       Group?   @relation(fields: [group_id], references: [id])
   start_time  String
   end_time    String
   // Distinguishes auto-generated rows (Phase 45 routine generator) from
@@ -2412,10 +2500,22 @@ model RoutineSlot {
   // schema language can't express a partial index, so both exist only in
   // migrations 20260714150000_review_fixes and
   // 20260714150500_routine_teacher_clash_constraint, not here.
-  @@unique([class_id, section_id, day_of_week, period_no])
+  // group_id joins the composite key so two different Groups can legitimately
+  // share the same class/section/day/period (e.g. Science sits Physics while
+  // Commerce sits Accounting in the same slot) without colliding with each
+  // other. Same NULL-collapses-differently-in-Postgres caveat as section_id
+  // above applies to group_id too — the existing partial index (section_id
+  // IS NULL) is untouched and still correct for every non-grouped class,
+  // since group_id is NULL there as well; a dedicated partial index for a
+  // whole-class (no section split) Group-specific slot isn't added here, as
+  // that combination isn't a real scheduling shape this phase needs to
+  // support — the app-level clash check is the primary guard in practice,
+  // same as it already is for the section_id/teacher_id cases.
+  @@unique([class_id, section_id, group_id, day_of_week, period_no])
   @@index([class_id])
   @@index([teacher_id])
   @@index([section_id])
+  @@index([group_id])
 }
 
 model PushSubscription {
@@ -2643,6 +2743,7 @@ enum MarkStatus {
 enum FeeCategory {
   ADMISSION
   FORM
+  READMISSION
   TUITION
   EXAM
   TRANSPORT
@@ -2751,6 +2852,7 @@ enum DocumentType {
   TRANSPORT_CARD
   HOSTEL_CARD
   SEAT_PLAN
+  NOTICE
 }
 
 enum NoticeAudience {
@@ -2787,6 +2889,8 @@ enum NotifLogStatus {
 enum DownloadCategory {
   SYLLABUS
   EXAM_SCHEDULE
+  CLASS_ROUTINE
+  ACADEMIC_CALENDAR
   FORMS
   RESULTS
   CIRCULARS
@@ -2806,6 +2910,12 @@ enum EmploymentType {
   PERMANENT
   CONTRACT
   PART_TIME
+}
+
+enum DegreeLevel {
+  UNDERGRADUATE
+  GRADUATE
+  PHD
 }
 
 // ─────────────────────────────────────────────
