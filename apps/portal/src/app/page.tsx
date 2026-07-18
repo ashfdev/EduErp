@@ -57,9 +57,9 @@ function HomeContent() {
   ];
 
   return (
-    <div className="space-y-6 p-4 pb-8">
+    <div className="space-y-6 lg:space-y-8 pb-8 lg:pb-0">
       {/* Profile Header */}
-      <div className="flex items-center gap-4 pt-2">
+      <div className="flex items-center gap-4">
         <div className="h-14 w-14 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
           {data.student.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -96,7 +96,7 @@ function HomeContent() {
       </Card>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 lg:gap-4">
         <Card className="border-0 bg-emerald-50 shadow-sm">
           <CardContent className="flex flex-col items-center justify-center p-4 text-center">
             <div className="mb-2 rounded-full bg-emerald-100 p-2 text-emerald-600">
@@ -128,8 +128,11 @@ function HomeContent() {
         </Card>
       </div>
 
-      {/* Upcoming Exams */}
-      {!!data.upcoming_exams.length && (
+      {/* Main Content Grid for Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+        <div className="space-y-6 lg:space-y-8">
+          {/* Upcoming Exams */}
+          {!!data.upcoming_exams.length && (
         <div>
           <div className="mb-3 flex items-center justify-between px-1">
             <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("upcomingExams")}</h3>
@@ -183,7 +186,7 @@ function HomeContent() {
       {/* Quick Links Grid */}
       <div>
         <h3 className="mb-3 px-1 text-sm font-semibold tracking-tight text-slate-800">Quick Actions</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 lg:gap-4">
           {quickLinks.map((link) => (
             <Link key={link.href} href={link.href}>
               <Card className="border-0 shadow-sm transition-shadow hover:shadow-md h-full">
@@ -198,6 +201,9 @@ function HomeContent() {
           ))}
         </div>
       </div>
+    </div>
+    
+    <div className="space-y-6 lg:space-y-8">
 
       {/* Recent Notices */}
       <div>
@@ -223,8 +229,9 @@ function HomeContent() {
             ))}
           </CardContent>
         </Card>
+    </div>
       </div>
-      
+    </div>
     </div>
   );
 }

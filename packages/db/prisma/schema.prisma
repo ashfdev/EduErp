@@ -23,6 +23,8 @@ model InstitutionProfile {
   founded_year          Int?
   logo_url              String?
   favicon_url           String?
+  student_login_bg_url  String?
+  teacher_login_bg_url  String?
   primary_color         String            @default("#1a3c4a")
   secondary_color       String            @default("#2e7d9a")
   address               String?

@@ -124,116 +124,174 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <div className="hidden w-2/5 flex-col items-center justify-center bg-primary p-12 text-primary-foreground md:flex">
-        {institution?.logo_url ? (
-          <img src={institution.logo_url} alt="Logo" className="mb-6 h-20" />
-        ) : (
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-white/10 text-3xl">🏫</div>
-        )}
-        <h1 className="text-center text-2xl font-semibold">{institution?.name_en ?? "Education ERP"}</h1>
-        <p className="mt-auto text-sm text-primary-foreground/70">{t("poweredBy")}</p>
-      </div>
+    <div className="relative flex min-h-screen w-full bg-white">
+      
+      {/* Mobile Full Background Illustration */}
+      <div 
+        className="absolute inset-0 z-0 bg-cover bg-center lg:hidden"
+        style={{
+          backgroundImage: "url('/assets/login-illustration.png')",
+        }}
+      />
+      <div className="absolute inset-0 z-0 bg-white/60 lg:hidden backdrop-blur-sm" /> {/* Mobile readability overlay */}
 
-      <div className="flex flex-1 items-center justify-center p-6">
-        <Card className="w-full max-w-sm">
-          <CardContent className="space-y-4 pt-6">
+      <div className="relative z-10 flex w-full">
+        
+        {/* Left Side - Full Background Illustration (Desktop) */}
+        <div className="relative hidden w-1/2 flex-col items-center justify-start p-10 lg:flex overflow-hidden">
+          
+          {/* Background Image with Zoom to hide white borders */}
+          <div 
+            className="absolute inset-0 z-0 bg-cover bg-center"
+            style={{
+              backgroundImage: "url('/assets/login-illustration.png')",
+              transform: "scale(1.25)",
+            }}
+          />
+          
+          {/* Stronger gradient at the top for text readability without drawing a box */}
+          <div className="absolute top-0 left-0 right-0 z-0 bg-gradient-to-b from-white via-white/70 to-transparent h-[350px] pointer-events-none"></div>
+          
+          {/* Branding at the top */}
+          <div className="relative z-10 flex flex-col items-center text-center mt-6">
+            {institution?.logo_url ? (
+              <div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full bg-white p-4 shadow-xl ring-4 ring-white/60">
+                <img src={institution.logo_url} alt="Logo" className="h-full w-full object-contain" />
+              </div>
+            ) : (
+              <div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full bg-white text-5xl shadow-xl ring-4 ring-white/60">🏫</div>
+            )}
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight px-2 [text-shadow:_0_0_20px_rgba(255,255,255,1),_0_0_30px_rgba(255,255,255,1),_0_0_40px_rgba(255,255,255,1)]">
+              {institution?.name_en ?? "Education ERP"}
+            </h1>
+          </div>
+          
+          <p className="absolute bottom-6 w-full text-center text-xs font-bold text-slate-500 drop-shadow-sm z-10">{t("poweredBy")}</p>
+        </div>
+
+        {/* Right Side - Form Container */}
+        <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-transparent lg:bg-[#eef3fb] p-6 sm:p-12">
+          
+          {/* Mobile Branding - Only visible on small screens */}
+          <div className="w-full text-center mb-8 lg:hidden relative z-10">
+            {institution?.logo_url ? (
+              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white p-3 shadow-xl ring-4 ring-white/60">
+                <img src={institution.logo_url} alt="Logo" className="h-full w-full object-contain" />
+              </div>
+            ) : (
+              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white text-4xl shadow-xl ring-4 ring-white/60">🏫</div>
+            )}
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight px-2 [text-shadow:_0_0_15px_rgba(255,255,255,1),_0_0_25px_rgba(255,255,255,1)]">
+              {institution?.name_en ?? "Education ERP"}
+            </h1>
+          </div>
+
+          <div className="mx-auto w-full max-w-md text-center mb-8">
+            <h2 className="text-3xl font-medium tracking-tight text-[#2d3748]">
+              {forgotState === "hidden" ? t("staffLogin") : forgotState === "phone" ? t("resetPassword") : forgotState === "otp" ? t("enterOtp") : forgotState === "reset" ? t("setNewPassword") : ""}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {forgotState === "hidden" ? "Hey enter your details to sign in to your account" : forgotState === "phone" ? "Enter your phone number to reset" : forgotState === "otp" ? t("otpSentTo", { phone: forgotPhone }) : ""}
+            </p>
+          </div>
+
+          <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-slate-100">
             {forgotState === "hidden" && (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold">{t("staffLogin")}</h2>
-                  <p className="text-sm text-muted-foreground">{t("adminPortal")}</p>
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-700">{t("phoneOrEmail")}</Label>
+                  <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus placeholder="e.g. admin@school.com" />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label>{t("phoneOrEmail")}</Label>
-                  <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label>{t("password")}</Label>
-                  <div className="flex gap-2">
-                    <Input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
-                    <Button type="button" variant="outline" size="sm" onClick={() => setShowPassword((s) => !s)}>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-700">{t("password")}</Label>
+                    <button type="button" className="text-xs font-medium text-blue-500 hover:text-blue-600" onClick={() => setForgotState("phone")}>
+                      {t("forgotPassword")}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white pr-16" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600" onClick={() => setShowPassword((s) => !s)}>
                       {showPassword ? t("hide") : t("show")}
-                    </Button>
+                    </button>
                   </div>
                 </div>
 
-                <button type="button" className="text-sm text-primary hover:underline" onClick={() => setForgotState("phone")}>
-                  {t("forgotPassword")}
-                </button>
-
                 {error && (
-                  <div className={`rounded-md border p-3 text-sm ${error.type === "disabled" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-red-300 bg-red-50 text-red-700"}`}>
-                    {error.message}
+                  <div className={`rounded-lg border p-4 text-sm ${error.type === "disabled" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-red-200 bg-red-50 text-red-700"}`}>
+                    <span className="font-semibold">{error.message}</span>
                     {error.type === "disabled" && <p className="mt-1 text-xs">{t("contactAdmin")}</p>}
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? t("signingIn") : t("signIn")}
+                <Button type="submit" className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 transition-all text-white" disabled={loading}>
+                  {loading ? t("signingIn") : "Login"}
                 </Button>
+
+                <div className="mt-4 text-center text-sm text-slate-500">
+                  <span className="mr-1">Don't have account?</span>
+                  <button type="button" className="text-blue-500 hover:underline">Create new account</button>
+                </div>
               </form>
             )}
 
             {forgotState === "phone" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">{t("resetPassword")}</h2>
-                <div className="space-y-1.5">
-                  <Label>{t("phoneNumber")}</Label>
-                  <Input value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="01XXXXXXXXX" />
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-700">{t("phoneNumber")}</Label>
+                  <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="01XXXXXXXXX" />
                 </div>
-                <Button className="w-full" onClick={sendOtp} disabled={forgotLoading || !forgotPhone}>
+                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={sendOtp} disabled={forgotLoading || !forgotPhone}>
                   {t("sendOtp")}
                 </Button>
-                <button type="button" className="text-sm text-muted-foreground hover:underline" onClick={() => setForgotState("hidden")}>
+                <button type="button" className="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-800" onClick={() => setForgotState("hidden")}>
                   {t("backToLogin")}
                 </button>
               </div>
             )}
 
             {forgotState === "otp" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">{t("enterOtp")}</h2>
-                <p className="text-sm text-muted-foreground">{t("otpSentTo", { phone: forgotPhone })}</p>
-                <Input value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} placeholder="000000" />
-                <Button className="w-full" onClick={verifyOtp} disabled={forgotLoading || otp.length !== 6}>
+              <div className="space-y-6">
+                <Input className="text-center tracking-widest text-xl rounded-lg bg-[#f8fafc] py-6" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} placeholder="000000" />
+                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={verifyOtp} disabled={forgotLoading || otp.length !== 6}>
                   {t("verify")}
                 </Button>
-                <Button type="button" variant="outline" className="w-full" disabled={resendTimer > 0} onClick={sendOtp}>
+                <Button type="button" variant="outline" className="w-full rounded-lg py-6 text-base font-bold" disabled={resendTimer > 0} onClick={sendOtp}>
                   {resendTimer > 0 ? t("resendIn", { seconds: resendTimer }) : t("resendOtp")}
                 </Button>
               </div>
             )}
 
             {forgotState === "reset" && (
-              <div className="space-y-4">
-                <h2 className="text-lg font-semibold">{t("setNewPassword")}</h2>
-                <div className="space-y-1.5">
-                  <Label>{t("newPassword")}</Label>
-                  <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-700">{t("newPassword")}</Label>
+                  <Input type="password" className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>{t("confirmPassword")}</Label>
-                  <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-700">{t("confirmPassword")}</Label>
+                  <Input type="password" className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
                 </div>
-                <Button className="w-full" onClick={submitReset} disabled={forgotLoading || !newPassword}>
+                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={submitReset} disabled={forgotLoading || !newPassword}>
                   {t("resetPasswordButton")}
                 </Button>
               </div>
             )}
 
             {forgotState === "done" && (
-              <div className="space-y-4 text-center">
-                <p className="text-lg font-semibold text-emerald-600">{t("resetSuccess")}</p>
-                <Button className="w-full" onClick={() => setForgotState("hidden")}>
+              <div className="space-y-6 text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <p className="text-lg font-bold text-slate-800">{t("resetSuccess")}</p>
+                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={() => setForgotState("hidden")}>
                   {t("backToLoginButton")}
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

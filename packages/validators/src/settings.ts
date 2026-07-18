@@ -24,6 +24,8 @@ export const institutionProfileSchema = z.object({
   website_url: z.string().url().optional().nullable(),
   facebook_url: z.string().url().optional().nullable(),
   youtube_url: z.string().url().optional().nullable(),
+  student_login_bg_url: z.string().url().optional().nullable(),
+  teacher_login_bg_url: z.string().url().optional().nullable(),
   map_embed_code: z.string().optional().nullable(),
   principal_name: z.string().optional().nullable(),
   principal_designation: z.string().optional().nullable(),

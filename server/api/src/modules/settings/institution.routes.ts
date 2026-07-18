@@ -87,6 +87,36 @@ institutionRouter.post(
   }),
 );
 
+institutionRouter.post(
+  "/student-login-bg",
+  authenticate,
+  authorize(SETTINGS_INSTITUTION_ROLES),
+  imageUpload.single("file"),
+  verifyImageMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A file is required");
+    const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { student_login_bg_url: url } });
+    await redis.del(PROFILE_CACHE_KEY);
+    res.json({ success: true, data: profile });
+  }),
+);
+
+institutionRouter.post(
+  "/teacher-login-bg",
+  authenticate,
+  authorize(SETTINGS_INSTITUTION_ROLES),
+  imageUpload.single("file"),
+  verifyImageMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A file is required");
+    const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { teacher_login_bg_url: url } });
+    await redis.del(PROFILE_CACHE_KEY);
+    res.json({ success: true, data: profile });
+  }),
+);
+
 institutionRouter.put(
   "/type",
   authenticate,

@@ -82,12 +82,13 @@ export default function InstitutionSettingsPage() {
 
   const [pendingType, setPendingType] = useState<string | null>(null);
 
-  async function uploadBrand(kind: "logo" | "favicon", file: File) {
+  async function uploadBrand(kind: "logo" | "favicon" | "student-login-bg" | "teacher-login-bg", file: File) {
     const form = new FormData();
     form.append("file", file);
     try {
       await api.post(`/api/settings/institution/${kind}`, form, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success(`${kind === "logo" ? "Logo" : "Favicon"} uploaded`);
+      const label = kind === "logo" ? "Logo" : kind === "favicon" ? "Favicon" : kind === "student-login-bg" ? "Student Login Background" : "Teacher Login Background";
+      toast.success(`${label} uploaded`);
       queryClient.invalidateQueries({ queryKey: ["settings", "institution"] });
     } catch {
       toast.error(`Failed to upload ${kind}`);
@@ -197,7 +198,7 @@ export default function InstitutionSettingsPage() {
           <TabsContent value="branding">
             <Card>
               <CardContent className="space-y-4 pt-6">
-                <div className="flex gap-8">
+                <div className="flex flex-wrap gap-8">
                   <div className="space-y-2">
                     <Label>Logo</Label>
                     {data?.logo_url && <img src={data.logo_url} alt="Logo" className="h-16 rounded border object-contain p-1" />}
@@ -207,6 +208,16 @@ export default function InstitutionSettingsPage() {
                     <Label>Favicon</Label>
                     {data?.favicon_url && <img src={data.favicon_url} alt="Favicon" className="h-16 w-16 rounded border object-contain p-1" />}
                     <Input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadBrand("favicon", e.target.files[0])} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Student Portal Login Background</Label>
+                    {data?.student_login_bg_url && <img src={data.student_login_bg_url} alt="Student BG" className="h-16 rounded border object-contain p-1" />}
+                    <Input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadBrand("student-login-bg", e.target.files[0])} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Teacher Portal Login Background</Label>
+                    {data?.teacher_login_bg_url && <img src={data.teacher_login_bg_url} alt="Teacher BG" className="h-16 rounded border object-contain p-1" />}
+                    <Input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && uploadBrand("teacher-login-bg", e.target.files[0])} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
