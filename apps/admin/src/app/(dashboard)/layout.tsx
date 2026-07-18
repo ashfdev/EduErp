@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuthStore } from "@/stores/auth-store";
@@ -9,35 +9,43 @@ import { api } from "@/lib/api";
 import { Button } from "@education-erp/ui";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useInstitution } from "@/hooks/use-institution";
+import { 
+  LayoutDashboard, Users, GraduationCap, AlertCircle, FileText, 
+  ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen, 
+  Wallet, Calculator, Package, UserPlus, Printer, Globe, 
+  Briefcase, Library, Bus, Home, BarChart3, MessageSquare, 
+  Settings, LogOut, Bell, Search 
+} from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", key: "dashboard" },
-  { href: "/students", key: "students" },
-  { href: "/alumni", key: "alumni" },
-  { href: "/complaints", key: "complaints" },
-  { href: "/document-requests", key: "documentRequests" },
-  { href: "/attendance/mark", key: "attendance" },
-  { href: "/examination", key: "examination" },
-  { href: "/marks", key: "marks" },
-  { href: "/results", key: "results" },
-  { href: "/course-enrollment", key: "courseEnrollment" },
-  { href: "/fees", key: "fees" },
-  { href: "/accounts", key: "accounts" },
-  { href: "/inventory", key: "inventory" },
-  { href: "/admission", key: "admission" },
-  { href: "/documents/print", key: "documents" },
-  { href: "/website", key: "website" },
-  { href: "/hr", key: "hr" },
-  { href: "/library", key: "library" },
-  { href: "/transport", key: "transport" },
-  { href: "/hostel", key: "hostel" },
-  { href: "/reports", key: "reports" },
-  { href: "/notifications/bulk-sms", key: "bulkSms" },
-  { href: "/settings/institution", key: "settings" },
+  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
+  { href: "/students", key: "students", icon: Users },
+  { href: "/alumni", key: "alumni", icon: GraduationCap },
+  { href: "/complaints", key: "complaints", icon: AlertCircle },
+  { href: "/document-requests", key: "documentRequests", icon: FileText },
+  { href: "/attendance/mark", key: "attendance", icon: ClipboardCheck },
+  { href: "/examination", key: "examination", icon: FileSpreadsheet },
+  { href: "/marks", key: "marks", icon: Edit3 },
+  { href: "/results", key: "results", icon: Award },
+  { href: "/course-enrollment", key: "courseEnrollment", icon: BookOpen },
+  { href: "/fees", key: "fees", icon: Wallet },
+  { href: "/accounts", key: "accounts", icon: Calculator },
+  { href: "/inventory", key: "inventory", icon: Package },
+  { href: "/admission", key: "admission", icon: UserPlus },
+  { href: "/documents/print", key: "documents", icon: Printer },
+  { href: "/website", key: "website", icon: Globe },
+  { href: "/hr", key: "hr", icon: Briefcase },
+  { href: "/library", key: "library", icon: Library },
+  { href: "/transport", key: "transport", icon: Bus },
+  { href: "/hostel", key: "hostel", icon: Home },
+  { href: "/reports", key: "reports", icon: BarChart3 },
+  { href: "/notifications/bulk-sms", key: "bulkSms", icon: MessageSquare },
+  { href: "/settings/institution", key: "settings", icon: Settings },
 ] as const;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, refreshToken, logout } = useAuthStore();
   const { institutionName, logoUrl } = useInstitution();
   const t = useTranslations("nav");
@@ -54,33 +62,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen">
-        <aside className="w-64 shrink-0 border-r bg-card">
-          <div className="flex h-[60px] items-center gap-2 border-b px-4 font-semibold">
-            {logoUrl ? <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded object-contain" /> : null}
-            <span className="truncate">{institutionName ?? tCommon("appName")}</span>
+      <div className="flex min-h-screen bg-background text-foreground">
+        {/* Sidebar */}
+        <aside className="flex w-64 flex-col bg-[#0B1437] text-white shadow-xl">
+          <div className="flex min-h-[4rem] shrink-0 items-center gap-3 border-b border-white/10 px-6 py-3 font-bold tracking-tight">
+            {logoUrl ? <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 rounded object-contain" /> : <div className="h-8 w-8 shrink-0 rounded bg-primary flex items-center justify-center text-white">E</div>}
+            <span className="text-base leading-tight">{institutionName ?? tCommon("appName")}</span>
           </div>
-          <nav className="flex flex-col gap-1 p-3 text-sm">
-            {NAV_ITEMS.map((item) => (
-              <Link key={item.href} href={item.href} className="rounded-md px-3 py-2 hover:bg-accent">
-                {t(item.key)}
-              </Link>
-            ))}
-          </nav>
+          
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <nav className="flex flex-col gap-1 text-sm font-medium">
+              {NAV_ITEMS.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link 
+                    key={item.href} 
+                    href={item.href} 
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 ${
+                      isActive 
+                        ? "bg-primary text-white shadow-md shadow-primary/25" 
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {t(item.key)}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* User Profile Widget */}
+          <div className="border-t border-white/10 p-4">
+            <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary-foreground font-semibold">
+                {user?.name_en?.[0] || "U"}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="truncate text-sm font-medium text-white">{user?.name_en || "User"}</p>
+                <p className="truncate text-xs text-slate-400">{user?.role?.replace(/_/g, " ")}</p>
+              </div>
+              <button onClick={handleLogout} className="text-slate-400 hover:text-white transition-colors" title={tCommon("signOut")}>
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </aside>
+
+        {/* Main Content */}
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="flex h-[60px] items-center justify-end gap-3 border-b px-6">
-            {user && (
-              <span className="text-sm text-muted-foreground">
-                {user.name_en} · {user.role.replace(/_/g, " ")}
-              </span>
-            )}
-            <LanguageToggle />
-            <Button size="sm" variant="outline" onClick={handleLogout}>
-              {tCommon("signOut")}
-            </Button>
+          {/* Header */}
+          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between gap-4 border-b bg-card px-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="relative w-full max-w-sm hidden md:block">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <input 
+                  type="text" 
+                  placeholder={tCommon("searchPlaceholder") ?? "Search..."} 
+                  className="h-9 w-full rounded-full border border-input bg-muted/50 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button className="relative rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                <Bell className="h-5 w-5" />
+                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive border border-card"></span>
+              </button>
+              <div className="h-6 w-px bg-border"></div>
+              <LanguageToggle />
+            </div>
           </header>
-          <main className="flex-1">{children}</main>
+          
+          <main className="flex-1 overflow-y-auto bg-background/50 p-6">
+            <div className="mx-auto max-w-7xl">
+              {children}
+            </div>
+          </main>
         </div>
       </div>
     </ProtectedRoute>

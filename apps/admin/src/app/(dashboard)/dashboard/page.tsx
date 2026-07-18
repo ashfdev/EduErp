@@ -10,6 +10,7 @@ import {
 import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight, Activity, ClipboardCheck } from "lucide-react";
 
 interface Overview {
   students: { total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null };
@@ -72,71 +73,145 @@ export default function DashboardPage() {
   const radarData = resultPerf?.subject_performance.map((s) => ({ subject: s.subject_name, marks: s.average_marks })) ?? [];
   const upcomingEvents = events?.filter((e) => new Date(e.date_from) >= new Date()).slice(0, 5) ?? [];
 
+  // Theme colors for charts
+  const CHART_PRIMARY = "#2563EB"; // Tailwind blue-600
+  const CHART_SECONDARY = "#60A5FA"; // Tailwind blue-400
+
   return (
     <PageWrapper>
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <div className="mb-8">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      </div>
 
       {/* Row 1 — Quick Stats */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{t("totalStudents")}</p>
-            <p className="text-2xl font-semibold">{overview?.students.total ?? "-"}</p>
-            <div className="mt-1 flex gap-2 text-xs">
-              <span className="text-emerald-600">{t("present", { count: overview?.students.today_present ?? 0 })}</span>
-              <span className="text-red-600">{t("absent", { count: overview?.students.today_absent ?? 0 })}</span>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-muted-foreground">{t("totalStudents")}</p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <Users className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tracking-tight">{overview?.students.total ?? "-"}</p>
+            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
+              <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                <ArrowUpRight className="mr-1 h-3 w-3" />
+                {t("present", { count: overview?.students.today_present ?? 0 })}
+              </span>
+              <span className="flex items-center text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+                <ArrowDownRight className="mr-1 h-3 w-3" />
+                {t("absent", { count: overview?.students.today_absent ?? 0 })}
+              </span>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{t("staff")}</p>
-            <p className="text-2xl font-semibold">{overview?.staff.total ?? "-"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}</p>
+        
+        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-muted-foreground">{t("staff")}</p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                <UserCheck className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tracking-tight">{overview?.staff.total ?? "-"}</p>
+            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
+              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">
+                {t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}
+              </span>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{t("todaysCollection")}</p>
-            <p className="text-2xl font-semibold">৳{overview?.finance.today_collection ?? 0}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{t("thisMonth", { amount: overview?.finance.this_month_collection ?? 0 })}</p>
+        
+        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-muted-foreground">{t("todaysCollection")}</p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <Wallet className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tracking-tight">৳{overview?.finance.today_collection ?? 0}</p>
+            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
+              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">
+                {t("thisMonth", { amount: overview?.finance.this_month_collection ?? 0 })}
+              </span>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{t("attendanceToday")}</p>
-            <p className="text-2xl font-semibold">{overview?.students.today_percentage ?? "-"}%</p>
+        
+        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-medium text-muted-foreground">{t("attendanceToday")}</p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <Activity className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold tracking-tight">{overview?.students.today_percentage ?? "-"}%</p>
+            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
+              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+                <div 
+                  className="bg-amber-500 h-1.5 rounded-full" 
+                  style={{ width: `${overview?.students.today_percentage ?? 0}%` }}
+                ></div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Row 2 — Attendance Trend + Notices */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("attendanceTrend")}</p>
-            <ResponsiveContainer width="100%" height={220}>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <p className="font-semibold text-foreground tracking-tight">{t("attendanceTrend")}</p>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} />
-                <Tooltip />
-                <Line type="monotone" dataKey="present" stroke="#1a3c4a" strokeWidth={2} name={t("presentPercent")} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} domain={[0, 100]} axisLine={false} tickLine={false} dx={-10} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="present" 
+                  stroke={CHART_PRIMARY} 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+                  activeDot={{ r: 6, strokeWidth: 0, fill: CHART_PRIMARY }}
+                  name={t("presentPercent")} 
+                />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("latestNotices")}</p>
+        
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <p className="font-semibold text-foreground tracking-tight">{t("latestNotices")}</p>
+              <Button variant="ghost" size="sm" asChild className="text-primary">
+                <Link href="/website/notices">View All</Link>
+              </Button>
+            </div>
             {!notices?.length && <EmptyState title={t("noNotices")} />}
-            <div className="divide-y">
+            <div className="space-y-4">
               {notices?.map((n) => (
-                <div key={n.id} className="flex items-center justify-between py-2 text-sm">
-                  <span>{n.title}</span>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={n.audience} />
-                    <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</span>
+                <div key={n.id} className="group flex items-start gap-4 rounded-xl p-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <Bell className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{n.title}</p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <StatusBadge status={n.audience} />
+                      <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -146,33 +221,37 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 3 — Fee Collection + Result Performance */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("feeCollection30")}</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={feeData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="amount" fill="#2e7d9a" name={t("collected")} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-6 font-semibold tracking-tight">{t("feeCollection30")}</p>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={feeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dx={-10} />
+                <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Bar dataKey="amount" fill={CHART_PRIMARY} radius={[4, 4, 0, 0]} name={t("collected")} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("subjectPerformance")}</p>
+        
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-6 font-semibold tracking-tight">{t("subjectPerformance")}</p>
             {!radarData.length ? (
-              <EmptyState title={t("noPublishedResults")} />
+              <div className="flex h-[260px] items-center justify-center">
+                <EmptyState title={t("noPublishedResults")} />
+              </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={260}>
                 <RadarChart data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-                  <PolarRadiusAxis tick={{ fontSize: 10 }} />
-                  <Radar dataKey="marks" stroke="#1a3c4a" fill="#1a3c4a" fillOpacity={0.4} />
+                  <PolarGrid stroke="#E5E7EB" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#4B5563' }} />
+                  <PolarRadiusAxis tick={{ fontSize: 10 }} axisLine={false} />
+                  <Radar dataKey="marks" stroke={CHART_PRIMARY} strokeWidth={2} fill={CHART_SECONDARY} fillOpacity={0.5} />
+                  <Tooltip />
                 </RadarChart>
               </ResponsiveContainer>
             )}
@@ -180,92 +259,80 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Row 5 — Events + Quick Actions + System Status */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("upcomingEvents")}</p>
+      {/* Row 4 — Events + Quick Actions + System Status */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <p className="font-semibold tracking-tight">{t("upcomingEvents")}</p>
+            </div>
             {!upcomingEvents.length && <EmptyState title={t("noUpcomingEvents")} />}
-            <div className="divide-y">
+            <div className="space-y-4">
               {upcomingEvents.map((e) => (
-                <div key={e.id} className="py-2 text-sm">
-                  <p>{e.name}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(e.date_from).toLocaleDateString()}</p>
+                <div key={e.id} className="flex items-start gap-4">
+                  <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                    <span className="text-[10px] font-bold uppercase">{new Date(e.date_from).toLocaleString('default', { month: 'short' })}</span>
+                    <span className="text-sm font-bold leading-none">{new Date(e.date_from).getDate()}</span>
+                  </div>
+                  <div className="flex flex-col justify-center py-1">
+                    <p className="text-sm font-medium leading-tight">{e.name}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-2 pt-6">
-            <p className="mb-2 font-medium">{t("quickActions")}</p>
-            <Link href="/attendance/mark"><Button variant="outline" className="w-full justify-start">{t("markAttendance")}</Button></Link>
-            <Link href="/fees/collect"><Button variant="outline" className="w-full justify-start">{t("collectFee")}</Button></Link>
-            <Link href="/website/notices"><Button variant="outline" className="w-full justify-start">{t("postNotice")}</Button></Link>
-            <Link href="/students/at-risk"><Button variant="outline" className="w-full justify-start">{t("viewAtRiskStudents")}</Button></Link>
+        
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-6 font-semibold tracking-tight">{t("quickActions")}</p>
+            <div className="space-y-3">
+              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
+                <Link href="/attendance/mark">
+                  <ClipboardCheck className="mr-2 h-4 w-4 text-primary" />
+                  {t("markAttendance")}
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
+                <Link href="/fees/collect">
+                  <Wallet className="mr-2 h-4 w-4 text-emerald-600" />
+                  {t("collectFee")}
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
+                <Link href="/website/notices">
+                  <Bell className="mr-2 h-4 w-4 text-amber-500" />
+                  {t("postNotice")}
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("systemStatus")}</p>
-            <div className="space-y-1 text-sm text-muted-foreground">
-              <p>{t("activeExams", { count: overview?.academic.active_exams ?? 0 })}</p>
-              <p>{t("publishedResults", { count: overview?.academic.published_results ?? 0 })}</p>
-              {overview?.academic.latest_published_exam && (
-                <p className="text-xs">
-                  {t("latestPublishedExam", {
-                    name: overview.academic.latest_published_exam.name,
-                    date: overview.academic.latest_published_exam.published_at ? new Date(overview.academic.latest_published_exam.published_at).toLocaleDateString() : "",
-                  })}
-                </p>
-              )}
-              <p>{t("overdueInvoices", { count: overview?.finance.overdue_invoices ?? 0 })}</p>
-              <p>{t("overdueLibraryBooks", { count: overview?.library.overdue_issues ?? 0 })}</p>
+        
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-6 font-semibold tracking-tight">{t("systemStatus")}</p>
+            <div className="space-y-4 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between border-b pb-3">
+                <span>{t("activeExams", { count: "" })}</span>
+                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.academic.active_exams ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <span>{t("publishedResults", { count: "" })}</span>
+                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.academic.published_results ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between border-b pb-3">
+                <span>{t("overdueInvoices", { count: "" })}</span>
+                <span className="font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full">{overview?.finance.overdue_invoices ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>{t("overdueLibraryBooks", { count: "" })}</span>
+                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.library.overdue_issues ?? 0}</span>
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Role-specific views */}
-      {(user?.role === "CLASS_TEACHER" || user?.role === "SUBJECT_TEACHER") && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("myTeachingOverview")}</p>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/marks" className="text-primary hover:underline">{t("viewPendingMarkEntries")}</Link>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <Link href="/attendance/mark" className="text-primary hover:underline">{t("markTodayAttendance")}</Link>
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {user?.role === "ACCOUNTANT" && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("accountantOverview")}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <p>{t("todaysCollectionLabel", { amount: overview?.finance.today_collection ?? 0 })}</p>
-              <p>{t("overdueInvoicesAmount", { count: overview?.finance.overdue_invoices ?? 0, amount: overview?.finance.total_outstanding ?? 0 })}</p>
-            </div>
-            <Link href="/fees/reports" className="mt-2 inline-block text-sm text-primary hover:underline">{t("viewFeeReports")}</Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {user?.role === "EXAM_CONTROLLER" && (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{t("examControllerOverview")}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <p>{t("activeExams", { count: overview?.academic.active_exams ?? 0 })}</p>
-              <p>{t("publishedResults", { count: overview?.academic.published_results ?? 0 })}</p>
-            </div>
-            <Link href="/examination" className="mt-2 inline-block text-sm text-primary hover:underline">{t("manageExaminations")}</Link>
-          </CardContent>
-        </Card>
-      )}
     </PageWrapper>
   );
 }
