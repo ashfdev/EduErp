@@ -121,7 +121,8 @@
     "loading": "Loading...",
     "qualifications": "Qualifications",
     "achievements": "Achievements",
-    "publications": "Publications & Papers"
+    "publications": "Publications & Papers",
+    "subjectsTaught": "Subjects Taught"
   },
   "gallery": {
     "title": "Gallery",

@@ -179,6 +179,10 @@ contentRouter.get(
 // The route previously had no `select` at all (a real data-exposure gap
 // found while extending this route for per-faculty profile pages) — every
 // scalar field, including NID/TIN, was being returned to anyone.
+// subject_assignments carries academic_year_id only so it can be filtered
+// to the currently-active year and deduped in application code (a teacher
+// can have multiple section-rows for the same subject) — never returned
+// as-is, always collapsed into a plain subjects_taught: string[] below.
 const FACULTY_PUBLIC_SELECT = {
   id: true,
   name_en: true,
@@ -189,20 +193,44 @@ const FACULTY_PUBLIC_SELECT = {
   achievements: true,
   publications: true,
   department: { select: { name_en: true } },
+  program: { select: { name_en: true } },
+  subject_assignments: { select: { academic_year_id: true, subject: { select: { name_en: true } } } },
 } as const;
+
+type FacultyPublicRow = { subject_assignments: { academic_year_id: string; subject: { name_en: string } }[] } & Record<string, unknown>;
+
+// Resolves the currently-active academic year via this codebase's
+// established idiom (nullable-safe, never throws — a public content
+// endpoint must degrade gracefully, not 500, when none is configured yet).
+async function activeAcademicYearId(): Promise<string | null> {
+  const year = await prisma.academicYear.findFirst({ where: { is_active: true } });
+  return year?.id ?? null;
+}
+
+function withSubjectsTaught<T extends FacultyPublicRow>(staff: T, activeYearId: string | null) {
+  const { subject_assignments, ...rest } = staff;
+  const names = activeYearId
+    ? subject_assignments.filter((a) => a.academic_year_id === activeYearId).map((a) => a.subject.name_en)
+    : [];
+  return { ...rest, subjects_taught: [...new Set(names)] };
+}
 
 contentRouter.get(
   "/faculty",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("faculty"), CONTENT_CACHE_TTL_SECONDS, async () => {
-      const staff = await prisma.staff.findMany({
-        where: { show_on_website: true, is_active: true, deleted_at: null },
-        select: FACULTY_PUBLIC_SELECT,
-        orderBy: { name_en: "asc" },
-      });
-      const grouped: Record<string, typeof staff> = {};
-      for (const s of staff) {
-        const key = s.department?.name_en ?? "General";
+      const [staff, activeYearId] = await Promise.all([
+        prisma.staff.findMany({
+          where: { show_on_website: true, is_active: true, deleted_at: null },
+          select: FACULTY_PUBLIC_SELECT,
+          orderBy: { name_en: "asc" },
+        }),
+        activeAcademicYearId(),
+      ]);
+      const withSubjects = staff.map((s) => withSubjectsTaught(s, activeYearId));
+      const grouped: Record<string, typeof withSubjects> = {};
+      for (const s of withSubjects) {
+        const key = (s.department as { name_en: string } | null)?.name_en ?? "General";
         (grouped[key] ??= []).push(s);
       }
       return grouped;
@@ -215,12 +243,16 @@ contentRouter.get(
   "/faculty/:id",
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const data = await cached(contentCacheKey(`faculty:${id}`), CONTENT_CACHE_TTL_SECONDS, () =>
-      prisma.staff.findFirst({
-        where: { id, show_on_website: true, is_active: true, deleted_at: null },
-        select: FACULTY_PUBLIC_SELECT,
-      }),
-    );
+    const data = await cached(contentCacheKey(`faculty:${id}`), CONTENT_CACHE_TTL_SECONDS, async () => {
+      const [staff, activeYearId] = await Promise.all([
+        prisma.staff.findFirst({
+          where: { id, show_on_website: true, is_active: true, deleted_at: null },
+          select: FACULTY_PUBLIC_SELECT,
+        }),
+        activeAcademicYearId(),
+      ]);
+      return staff ? withSubjectsTaught(staff, activeYearId) : null;
+    });
     if (!data) throw notFound("Faculty member not found");
     res.json({ success: true, data });
   }),

@@ -45,7 +45,7 @@ export default function HrDashboardPage() {
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{activeStaff}</p><p className="text-sm text-muted-foreground">Active</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{pendingLeaves?.length ?? 0}</p><p className="text-sm text-muted-foreground">Pending Leave</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">৳{payrollTotal.toLocaleString()}</p><p className="text-sm text-muted-foreground">This Month Payroll</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><Link href="/hr/payroll" className="text-primary hover:underline">Manage Payroll →</Link><br /><Link href="/hr/staff" className="text-primary hover:underline">All Staff →</Link><br /><Link href="/hr/appraisals" className="text-primary hover:underline">Appraisals →</Link><br /><Link href="/hr/jobs" className="text-primary hover:underline">Job Postings →</Link></CardContent></Card>
+        <Card><CardContent className="space-y-1 pt-6 text-center"><Link href="/hr/payroll" className="block text-primary hover:underline">Manage Payroll →</Link><Link href="/hr/faculty" className="block text-primary hover:underline">Faculty List →</Link><Link href="/hr/staff" className="block text-primary hover:underline">Staff List →</Link><Link href="/hr/appraisals" className="block text-primary hover:underline">Appraisals →</Link><Link href="/hr/jobs" className="block text-primary hover:underline">Job Postings →</Link></CardContent></Card>
       </div>
     </PageWrapper>
   );

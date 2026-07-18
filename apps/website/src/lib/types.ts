@@ -100,6 +100,8 @@ export interface FacultyDetail {
   achievements: string | null;
   publications: Publication[] | null;
   department: { name_en: string } | null;
+  program: { name_en: string } | null;
+  subjects_taught: string[];
 }
 
 export interface GoverningBodyMember {

@@ -10,7 +10,7 @@ import { authorize } from "../../middleware/authorize";
 import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
-import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES } from "../../lib/roles";
+import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
 import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
@@ -38,8 +38,21 @@ async function resolveDocumentStaffId(req: import("express").Request, rawStaffId
 export const hrStaffRouter = Router();
 hrStaffRouter.use(authenticate);
 
+// Faculty vs Staff split for the HR admin's two list pages — derived from
+// User.role (matches TEACHING_ROLES exactly, the same boundary the "assign
+// a teacher" picker in staff/staff.routes.ts uses), not a separate stored
+// category field, so a role change (e.g. teacher reassigned to Accountant)
+// automatically moves someone between lists with nothing to keep in sync.
+const categorySchema = z.enum(["FACULTY", "STAFF"]).optional();
+function categoryWhereClause(category?: "FACULTY" | "STAFF") {
+  if (category === "FACULTY") return { user: { role: { in: TEACHING_ROLES } } };
+  if (category === "STAFF") return { user: { role: { notIn: TEACHING_ROLES } } };
+  return {};
+}
+
 hrStaffRouter.get(
   "/",
+  authorize(STAFF_READ_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
@@ -47,6 +60,7 @@ hrStaffRouter.get(
         department_id: z.string().optional(),
         employment_type: z.string().optional(),
         is_active: z.string().optional(),
+        category: categorySchema,
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(20),
       })
@@ -57,6 +71,7 @@ hrStaffRouter.get(
       ...(query.department_id && { department_id: query.department_id }),
       ...(query.employment_type && { employment_type: query.employment_type as never }),
       ...(query.is_active !== undefined && { is_active: query.is_active === "true" }),
+      ...categoryWhereClause(query.category),
       ...(query.search && {
         OR: [
           { name_en: { contains: query.search, mode: "insensitive" as const } },
@@ -68,7 +83,11 @@ hrStaffRouter.get(
     const [items, total] = await Promise.all([
       prisma.staff.findMany({
         where,
-        include: { department: { select: { id: true, name_en: true } }, user: { select: { role: true, is_active: true } } },
+        include: {
+          department: { select: { id: true, name_en: true } },
+          user: { select: { role: true, is_active: true } },
+          _count: { select: { documents: true } },
+        },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { created_at: "desc" },
@@ -83,6 +102,7 @@ hrStaffRouter.get(
 // Registered before "/:id" — otherwise Express would match "export" as an id.
 hrStaffRouter.get(
   "/export",
+  authorize(STAFF_READ_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
@@ -90,6 +110,7 @@ hrStaffRouter.get(
         department_id: z.string().optional(),
         employment_type: z.string().optional(),
         is_active: z.string().optional(),
+        category: categorySchema,
       })
       .parse(req.query);
 
@@ -98,6 +119,7 @@ hrStaffRouter.get(
       ...(query.department_id && { department_id: query.department_id }),
       ...(query.employment_type && { employment_type: query.employment_type as never }),
       ...(query.is_active !== undefined && { is_active: query.is_active === "true" }),
+      ...categoryWhereClause(query.category),
       ...(query.search && {
         OR: [
           { name_en: { contains: query.search, mode: "insensitive" as const } },
@@ -146,17 +168,20 @@ hrStaffRouter.get(
 
 hrStaffRouter.get(
   "/:id",
+  authorize(STAFF_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const staff = await prisma.staff.findFirst({
       where: { id, deleted_at: null },
       include: {
         department: true,
+        program: { select: { id: true, name_en: true } },
         user: { select: { role: true, phone: true, email: true, is_active: true, last_login_at: true } },
         salary_structure: true,
         subject_assignments: { include: { subject: true } },
         leave_requests: { include: { leave_type: true }, orderBy: { created_at: "desc" } },
         payroll_records: { orderBy: [{ year: "desc" }, { month: "desc" }] },
+        _count: { select: { documents: true } },
       },
     });
     if (!staff) throw notFound("Staff not found");
@@ -208,6 +233,7 @@ hrStaffRouter.post(
           name_bn: body.name_bn,
           designation: body.designation,
           department_id: body.department_id,
+          program_id: body.program_id,
           date_of_birth: body.date_of_birth,
           gender: body.gender,
           religion: body.religion,

@@ -6,6 +6,7 @@ export const createStaffSchema = z.object({
   name_bn: z.string().optional(),
   designation: z.string().min(1),
   department_id: z.string().optional().nullable(),
+  program_id: z.string().optional().nullable(),
   date_of_birth: z.coerce.date().optional(),
   gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
   religion: z.string().optional(),

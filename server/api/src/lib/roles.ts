@@ -16,6 +16,12 @@ export const STAFF_READ_ROLES: UserRole[] = [
   "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
   "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
 ];
+// The "teaching staff" boundary — used to derive the HR module's Faculty
+// vs Staff split (a Staff row whose User.role is in this set is "Faculty"),
+// and originally lived only as a local const in staff/staff.routes.ts
+// feeding its "assign a teacher" picker; centralized here so both call
+// sites can never drift apart.
+export const TEACHING_ROLES: UserRole[] = ["CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT"];
 export const ATTENDANCE_MARK_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"];
 export const EXAM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const MARK_ENTRY_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"];

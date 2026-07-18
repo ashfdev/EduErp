@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, Card, CardContent, Button, Input, Label, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
+  PageWrapper, Card, CardContent, Button, Input, Label, Badge, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Textarea, Switch,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -19,6 +19,7 @@ interface StaffDetail {
   photo_url: string | null;
   is_active: boolean;
   gender: string | null;
+  religion: string | null;
   date_of_birth: string | null;
   blood_group: string | null;
   nid: string | null;
@@ -34,12 +35,23 @@ interface StaffDetail {
   qualifications: string | null;
   achievements: string | null;
   publications: { title: string; url: string }[] | null;
-  department: { name_en: string } | null;
+  department: { id: string; name_en: string } | null;
+  program: { id: string; name_en: string } | null;
   user: { role: string; phone: string; email: string | null };
   salary_structure: { id: string; name: string } | null;
   subject_assignments: { id: string; subject: { name_en: string; code: string } }[];
   leave_requests: { id: string; leave_type: { name: string }; from_date: string; to_date: string; status: string; reason: string }[];
   payroll_records: { id: string; month: number; year: number; net_salary: number; status: string; payslip_url: string | null }[];
+  _count: { documents: number };
+}
+
+interface Department {
+  id: string;
+  name_en: string;
+}
+interface Program {
+  id: string;
+  name_en: string;
 }
 
 interface StaffDocumentRow {
@@ -73,6 +85,8 @@ export default function StaffDetailPage() {
   const { data: staff } = useQuery<StaffDetail>({ queryKey: ["hr", "staff", "detail", id], queryFn: async () => (await api.get(`/api/hr/staff/${id}`)).data.data });
   const { data: leaveTypes } = useQuery<LeaveType[]>({ queryKey: ["hr", "leave-types"], queryFn: async () => (await api.get("/api/hr/leave-types")).data.data });
   const { data: balance } = useQuery<LeaveBalance[]>({ queryKey: ["hr", "leaves", "balance", id], queryFn: async () => (await api.get(`/api/hr/leaves/balance/${id}`)).data.data });
+  const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
+  const { data: programs } = useQuery<Program[]>({ queryKey: ["settings", "programs"], queryFn: async () => (await api.get("/api/settings/programs")).data.data });
 
   const applyLeaveMutation = useMutation({
     mutationFn: () => api.post("/api/hr/leaves/apply", { staff_id: id, leave_type_id: leaveTypeId, from_date: fromDate, to_date: toDate, reason }),
@@ -96,6 +110,74 @@ export default function StaffDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
     },
     onError: () => toast.error("Failed to update routine load caps"),
+  });
+
+  const [coreDraft, setCoreDraft] = useState<{
+    name_en: string;
+    name_bn: string;
+    designation: string;
+    department_id: string;
+    program_id: string;
+    phone: string;
+    email: string;
+    employment_type: string;
+    date_of_birth: string;
+    gender: string;
+    religion: string;
+    blood_group: string;
+    nid: string;
+    tin: string;
+    address: string;
+  } | null>(null);
+
+  function startEditingCore(s: StaffDetail) {
+    setCoreDraft({
+      name_en: s.name_en,
+      name_bn: s.name_bn ?? "",
+      designation: s.designation,
+      department_id: s.department?.id ?? "",
+      program_id: s.program?.id ?? "",
+      phone: s.phone ?? "",
+      email: s.email ?? "",
+      employment_type: s.employment_type,
+      date_of_birth: s.date_of_birth ? s.date_of_birth.slice(0, 10) : "",
+      gender: s.gender ?? "",
+      religion: s.religion ?? "",
+      blood_group: s.blood_group ?? "",
+      nid: s.nid ?? "",
+      tin: s.tin ?? "",
+      address: s.address ?? "",
+    });
+  }
+
+  const updateCoreProfileMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/hr/staff/${id}`, {
+        name_en: coreDraft!.name_en,
+        name_bn: coreDraft!.name_bn || undefined,
+        designation: coreDraft!.designation,
+        department_id: coreDraft!.department_id || null,
+        program_id: coreDraft!.program_id || null,
+        phone: coreDraft!.phone || undefined,
+        email: coreDraft!.email || undefined,
+        employment_type: coreDraft!.employment_type,
+        date_of_birth: coreDraft!.date_of_birth || undefined,
+        gender: coreDraft!.gender || undefined,
+        religion: coreDraft!.religion || undefined,
+        blood_group: coreDraft!.blood_group || undefined,
+        nid: coreDraft!.nid || undefined,
+        tin: coreDraft!.tin || undefined,
+        address: coreDraft!.address || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Staff details updated");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
+      setCoreDraft(null);
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      toast.error(message ?? "Failed to update staff details");
+    },
   });
 
   const [profileDraft, setProfileDraft] = useState<{
@@ -196,9 +278,12 @@ export default function StaffDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{staff.name_en}</h1>
             <StatusBadge status={staff.is_active ? "ACTIVE" : "INACTIVE"} />
+            {staff._count.documents === 0 && <Badge variant="warning">No documents on file</Badge>}
           </div>
           <p className="mt-1 font-mono text-sm text-muted-foreground">{staff.staff_uid}</p>
-          <p className="text-sm text-muted-foreground">{staff.designation} {staff.department && `· ${staff.department.name_en}`}</p>
+          <p className="text-sm text-muted-foreground">
+            {staff.designation} {staff.department && `· ${staff.department.name_en}`} {staff.program && `· ${staff.program.name_en}`}
+          </p>
         </div>
       </div>
 
@@ -213,18 +298,95 @@ export default function StaffDetailPage() {
 
         <TabsContent value="profile">
           <Card>
-            <CardContent className="grid grid-cols-2 gap-4 pt-6 text-sm">
-              <div><span className="text-muted-foreground">Role:</span> {staff.user?.role?.replace(/_/g, " ")}</div>
-              <div><span className="text-muted-foreground">Employment Type:</span> {staff.employment_type}</div>
-              <div><span className="text-muted-foreground">Phone:</span> {staff.phone ?? "—"}</div>
-              <div><span className="text-muted-foreground">Email:</span> {staff.email ?? "—"}</div>
-              <div><span className="text-muted-foreground">Gender:</span> {staff.gender ?? "—"}</div>
-              <div><span className="text-muted-foreground">Blood Group:</span> {staff.blood_group ?? "—"}</div>
-              <div><span className="text-muted-foreground">NID:</span> {staff.nid ?? "—"}</div>
-              <div><span className="text-muted-foreground">TIN:</span> {staff.tin ?? "—"}</div>
-              <div><span className="text-muted-foreground">Joining Date:</span> {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString() : "—"}</div>
-              <div><span className="text-muted-foreground">Salary Structure:</span> {staff.salary_structure?.name ?? "Not assigned"}</div>
-              <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {staff.address ?? "—"}</div>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">Staff Details</p>
+                {!coreDraft && <Button size="sm" variant="outline" onClick={() => startEditingCore(staff)}>Edit</Button>}
+              </div>
+
+              {!coreDraft && (
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-muted-foreground">Name:</span> {staff.name_en}</div>
+                  <div><span className="text-muted-foreground">Designation:</span> {staff.designation}</div>
+                  <div><span className="text-muted-foreground">Role:</span> {staff.user?.role?.replace(/_/g, " ")}</div>
+                  <div><span className="text-muted-foreground">Employment Type:</span> {staff.employment_type}</div>
+                  <div><span className="text-muted-foreground">Department:</span> {staff.department?.name_en ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Program:</span> {staff.program?.name_en ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Phone:</span> {staff.phone ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Email:</span> {staff.email ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Gender:</span> {staff.gender ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Religion:</span> {staff.religion ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Blood Group:</span> {staff.blood_group ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Date of Birth:</span> {staff.date_of_birth ? new Date(staff.date_of_birth).toLocaleDateString() : "—"}</div>
+                  <div><span className="text-muted-foreground">NID:</span> {staff.nid ?? "—"}</div>
+                  <div><span className="text-muted-foreground">TIN:</span> {staff.tin ?? "—"}</div>
+                  <div><span className="text-muted-foreground">Joining Date:</span> {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString() : "—"}</div>
+                  <div><span className="text-muted-foreground">Salary Structure:</span> {staff.salary_structure?.name ?? "Not assigned"}</div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {staff.address ?? "—"}</div>
+                </div>
+              )}
+
+              {coreDraft && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label>Full Name</Label><Input value={coreDraft.name_en} onChange={(e) => setCoreDraft({ ...coreDraft, name_en: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label>Designation</Label><Input value={coreDraft.designation} onChange={(e) => setCoreDraft({ ...coreDraft, designation: e.target.value })} /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Department</Label>
+                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={coreDraft.department_id} onChange={(e) => setCoreDraft({ ...coreDraft, department_id: e.target.value })}>
+                        <option value="">None</option>
+                        {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Program (optional)</Label>
+                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={coreDraft.program_id} onChange={(e) => setCoreDraft({ ...coreDraft, program_id: e.target.value })}>
+                        <option value="">None</option>
+                        {programs?.map((p) => <option key={p.id} value={p.id}>{p.name_en}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label>Phone</Label><Input value={coreDraft.phone} onChange={(e) => setCoreDraft({ ...coreDraft, phone: e.target.value })} placeholder="01XXXXXXXXX" /></div>
+                    <div className="space-y-1.5"><Label>Email</Label><Input value={coreDraft.email} onChange={(e) => setCoreDraft({ ...coreDraft, email: e.target.value })} /></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Employment Type</Label>
+                    <select className="w-full rounded-md border px-3 py-2 text-sm" value={coreDraft.employment_type} onChange={(e) => setCoreDraft({ ...coreDraft, employment_type: e.target.value })}>
+                      <option value="PERMANENT">Permanent</option>
+                      <option value="CONTRACT">Contract</option>
+                      <option value="PART_TIME">Part Time</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={coreDraft.date_of_birth} onChange={(e) => setCoreDraft({ ...coreDraft, date_of_birth: e.target.value })} /></div>
+                    <div className="space-y-1.5">
+                      <Label>Gender</Label>
+                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={coreDraft.gender} onChange={(e) => setCoreDraft({ ...coreDraft, gender: e.target.value })}>
+                        <option value="">—</option>
+                        <option value="MALE">Male</option>
+                        <option value="FEMALE">Female</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5"><Label>Blood Group</Label><Input value={coreDraft.blood_group} onChange={(e) => setCoreDraft({ ...coreDraft, blood_group: e.target.value })} placeholder="e.g. O+" /></div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5"><Label>Religion</Label><Input value={coreDraft.religion} onChange={(e) => setCoreDraft({ ...coreDraft, religion: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label>NID</Label><Input value={coreDraft.nid} onChange={(e) => setCoreDraft({ ...coreDraft, nid: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label>TIN</Label><Input value={coreDraft.tin} onChange={(e) => setCoreDraft({ ...coreDraft, tin: e.target.value })} /></div>
+                  </div>
+                  <div className="space-y-1.5"><Label>Address</Label><Textarea rows={2} value={coreDraft.address} onChange={(e) => setCoreDraft({ ...coreDraft, address: e.target.value })} /></div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateCoreProfileMutation.mutate()} disabled={updateCoreProfileMutation.isPending}>
+                      {updateCoreProfileMutation.isPending ? "Saving..." : "Save"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setCoreDraft(null)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

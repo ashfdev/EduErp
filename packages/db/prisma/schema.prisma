@@ -787,6 +787,11 @@ model Staff {
   designation         String
   department_id       String?
   department          Department?                @relation("StaffDept", fields: [department_id], references: [id])
+  // Faculty's primary program (university-mode) — mirrors department_id's
+  // exact shape; stays null/inert for the school/college/madrasah rows this
+  // deployment currently has.
+  program_id          String?
+  program             Program?                   @relation("StaffProgram", fields: [program_id], references: [id])
   date_of_birth       DateTime?
   gender              Gender?
   religion            String?
@@ -834,6 +839,7 @@ model Staff {
   performance_reviews PerformanceReview[]
 
   @@index([department_id])
+  @@index([program_id])
   @@index([salary_structure_id])
 }
 
@@ -2392,6 +2398,7 @@ model Program {
   courses            Course[]
   classes            Class[]
   fee_structures     FeeStructure[]
+  staff              Staff[]        @relation("StaffProgram")
 
   @@index([department_id])
 }

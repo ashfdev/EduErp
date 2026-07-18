@@ -121,7 +121,8 @@
     "loading": "লোড হচ্ছে...",
     "qualifications": "শিক্ষাগত যোগ্যতা",
     "achievements": "অর্জন",
-    "publications": "প্রকাশনা ও গবেষণাপত্র"
+    "publications": "প্রকাশনা ও গবেষণাপত্র",
+    "subjectsTaught": "যেসব বিষয় পড়ান"
   },
   "gallery": {
     "title": "গ্যালারি",

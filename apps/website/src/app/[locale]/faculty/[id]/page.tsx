@@ -49,9 +49,26 @@ export default function FacultyDetailPage() {
         <div>
           <h1 className="text-2xl font-semibold">{member.name_en}</h1>
           <p className="mt-1 text-gray-600">{member.designation}</p>
-          {member.department && <p className="text-sm text-gray-500">{member.department.name_en}</p>}
+          {(member.department || member.program) && (
+            <p className="text-sm text-gray-500">
+              {member.department?.name_en}
+              {member.department && member.program && " · "}
+              {member.program?.name_en}
+            </p>
+          )}
         </div>
       </div>
+
+      {!!member.subjects_taught?.length && (
+        <section className="mt-8">
+          <h2 className="mb-2 text-lg font-semibold">{t("subjectsTaught")}</h2>
+          <ul className="flex flex-wrap gap-2">
+            {member.subjects_taught.map((s) => (
+              <li key={s} className="rounded-full border px-3 py-1 text-sm text-gray-700">{s}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {member.qualifications && (
         <section className="mt-8">
