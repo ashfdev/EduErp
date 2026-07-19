@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { DirectoryList } from "@/components/directory-list";
 
-export default function FacultyPage() {
+export default function StaffPage() {
   const t = useTranslations("faculty");
-  return <DirectoryList category="FACULTY" title={t("title")} subtitle={t("facultySubtitle")} />;
+  return <DirectoryList category="STAFF" title={t("staffTitle")} subtitle={t("staffSubtitle")} />;
 }

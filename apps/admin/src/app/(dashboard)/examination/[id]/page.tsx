@@ -13,7 +13,6 @@ import {
   Button,
   Input,
   Label,
-  StatusBadge,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -60,12 +59,26 @@ function slugifyKey(label: string): string {
   return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "component";
 }
 
-const NEXT_STATUS: Record<string, string | null> = {
-  DRAFT: "ACTIVE",
-  ACTIVE: "MARK_ENTRY",
-  MARK_ENTRY: "COMPLETED",
-  COMPLETED: "PUBLISHED",
-  PUBLISHED: null,
+const STAGES = ["DRAFT", "ACTIVE", "MARK_ENTRY", "COMPLETED", "PUBLISHED"] as const;
+const STAGE_LABELS: Record<string, string> = {
+  DRAFT: "Draft",
+  ACTIVE: "Active",
+  MARK_ENTRY: "Mark Entry",
+  COMPLETED: "Completed",
+  PUBLISHED: "Published",
+};
+
+// The one manual, one-click transition per status — each with a real
+// explanation of what it locks/unlocks, matching the "Reopen for
+// Correction" button's already-good confirm-dialog precedent instead of a
+// bare "Move to X" label. COMPLETED has no entry here: publishing is
+// reached automatically once every class/group's results are approved and
+// published on the Marks page (see the dedicated notice rendered for that
+// status below), not by a manual click on this page.
+const STATUS_TRANSITIONS: Record<string, { next: string; label: string; confirm: string } | undefined> = {
+  DRAFT: { next: "ACTIVE", label: "Activate Exam", confirm: "Activate this exam? Subject configuration stays editable until you open Mark Entry." },
+  ACTIVE: { next: "MARK_ENTRY", label: "Open Mark Entry", confirm: "Open Mark Entry for this exam? Teachers can start submitting marks, and subject configuration will be locked." },
+  MARK_ENTRY: { next: "COMPLETED", label: "Mark as Completed", confirm: "Mark this exam as Completed? This closes Mark Entry — use \"Reopen for Correction\" afterward if a mark needs fixing." },
 };
 
 export default function ExamDetailPage() {
@@ -79,6 +92,12 @@ export default function ExamDetailPage() {
 
   const [configs, setConfigs] = useState<Record<string, SubjectConfig> | null>(null);
   const effectiveConfigs = configs ?? Object.fromEntries((exam?.subject_configs ?? []).map((c) => [c.subject_id, c]));
+  // Purely a view filter — Save Configuration always submits every class's
+  // rows regardless of which tab is selected, since effectiveConfigs
+  // already holds the full set.
+  const [selectedClass, setSelectedClass] = useState<string>("");
+  const classNames = [...new Set(Object.values(effectiveConfigs).map((c) => c.subject.class.name_en))].sort();
+  const visibleConfigs = Object.values(effectiveConfigs).filter((c) => !selectedClass || c.subject.class.name_en === selectedClass);
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => api.put(`/api/exams/${id}/status`, { status }),
@@ -154,7 +173,8 @@ export default function ExamDetailPage() {
 
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
-  const next = NEXT_STATUS[exam.status];
+  const transition = STATUS_TRANSITIONS[exam.status];
+  const currentStageIndex = STAGES.indexOf(exam.status as (typeof STAGES)[number]);
 
   return (
     <PageWrapper>
@@ -177,11 +197,62 @@ export default function ExamDetailPage() {
                 Reopen for Correction
               </Button>
             )}
-            {next && <Button onClick={() => statusMutation.mutate(next)}>Move to {next.replace(/_/g, " ")}</Button>}
+            {transition && (
+              <Button
+                onClick={() => {
+                  if (window.confirm(transition.confirm)) statusMutation.mutate(transition.next);
+                }}
+                disabled={statusMutation.isPending}
+              >
+                {transition.label}
+              </Button>
+            )}
           </div>
         }
       />
-      <StatusBadge status={exam.status} />
+
+      {/* Stage legend — always-visible flow overview, not just per-click confirms */}
+      <div className="flex items-center gap-1 text-xs">
+        {STAGES.map((s, i) => (
+          <div key={s} className="flex items-center gap-1">
+            <span
+              className={`rounded-full px-2.5 py-1 font-medium ${
+                i === currentStageIndex
+                  ? "bg-primary text-primary-foreground"
+                  : i < currentStageIndex
+                    ? "bg-muted text-foreground"
+                    : "bg-muted/50 text-muted-foreground"
+              }`}
+            >
+              {STAGE_LABELS[s]}
+            </span>
+            {i < STAGES.length - 1 && <span className="text-muted-foreground">→</span>}
+          </div>
+        ))}
+      </div>
+
+      {exam.status === "COMPLETED" && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          This exam becomes <strong>Published</strong> automatically once every class&apos;s (and group&apos;s, if any) marks are
+          approved and published — it&apos;s not a one-click action here.{" "}
+          <Link href={`/marks/${id}/approve`} className="font-medium underline">
+            Go to Approve & Publish →
+          </Link>
+        </p>
+      )}
+
+      {classNames.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={selectedClass === "" ? "default" : "outline"} onClick={() => setSelectedClass("")}>
+            All Classes ({Object.values(effectiveConfigs).length})
+          </Button>
+          {classNames.map((cn) => (
+            <Button key={cn} size="sm" variant={selectedClass === cn ? "default" : "outline"} onClick={() => setSelectedClass(cn)}>
+              {cn} ({Object.values(effectiveConfigs).filter((c) => c.subject.class.name_en === cn).length})
+            </Button>
+          ))}
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -200,7 +271,7 @@ export default function ExamDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {Object.values(effectiveConfigs).map((c) => {
+              {visibleConfigs.map((c) => {
                 const componentCount = (exam.component_configs ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
                 return (
                   <tr key={c.subject_id} className="border-b">

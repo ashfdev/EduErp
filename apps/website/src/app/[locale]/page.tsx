@@ -37,7 +37,7 @@ export default function HomePage() {
     fetchContent<EventItem[]>("/events", { upcoming: "true", limit: "3" }).then((d) => setEvents(d ?? []));
     fetchContent<AdmissionCycleSummary[]>("/admission/open").then((d) => setOpenCycles(d ?? []));
     fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setGoverningBody((d ?? []).slice(0, 4)));
-    fetchContent<Record<string, FacultyMember[]>>("/faculty").then((d) => setFaculty(Object.values(d ?? {}).flat().slice(0, 4)));
+    fetchContent<FacultyMember[]>("/faculty", { category: "FACULTY" }).then((d) => setFaculty((d ?? []).slice(0, 4)));
   }, []);
 
   useEffect(() => {

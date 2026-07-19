@@ -81,7 +81,9 @@
     "navAdmissionInfo": "Admission Info",
     "title": "About Us",
     "selectPrompt": "Select a section from the left to learn more about our institution.",
-    "notConfigured": "This page has not been configured yet."
+    "notConfigured": "This page has not been configured yet.",
+    "groupInstitution": "Institution",
+    "groupLeadership": "Leadership Messages"
   },
   "academic": {
     "navCourseCurriculum": "Course Curriculum",
@@ -115,14 +117,25 @@
   },
   "faculty": {
     "title": "Faculty Directory",
+    "facultySubtitle": "Meet our teaching staff — class teachers, subject teachers, and heads of department.",
+    "staffTitle": "Staff Directory",
+    "staffSubtitle": "Meet our support staff — accounts, library, transport, and other departments.",
     "notPublished": "Faculty directory has not been published yet.",
-    "notFound": "Faculty member not found.",
+    "noResults": "No one found matching your search.",
+    "notFound": "Profile not found.",
     "backToFaculty": "Back to Faculty Directory",
+    "backToStaff": "Back to Staff Directory",
     "loading": "Loading...",
     "qualifications": "Qualifications",
     "achievements": "Achievements",
     "publications": "Publications & Papers",
-    "subjectsTaught": "Subjects Taught"
+    "subjectsTaught": "Subjects Taught",
+    "searchPlaceholder": "Search by name or designation...",
+    "allDepartments": "All Departments",
+    "colName": "Name",
+    "colDesignation": "Designation",
+    "colDepartment": "Department",
+    "view": "View"
   },
   "gallery": {
     "title": "Gallery",

@@ -8,15 +8,15 @@ import { fetchContent } from "@/lib/content-api";
 import type { StaticPageContent } from "@/lib/types";
 
 const PAGES = [
-  { key: "about", labelKey: "navAbout" },
-  { key: "history", labelKey: "navHistory" },
-  { key: "mission_vision", labelKey: "navMissionVision" },
-  { key: "principal_message", labelKey: "navPrincipalMessage" },
-  { key: "vice_principal_message", labelKey: "navVicePrincipalMessage" },
-  { key: "chairman_message", labelKey: "navChairmanMessage" },
-  { key: "facilities", labelKey: "navFacilities" },
-  { key: "achievements", labelKey: "navAchievements" },
-  { key: "admission_info", labelKey: "navAdmissionInfo" },
+  { key: "about", labelKey: "navAbout", subheading: "groupInstitution" },
+  { key: "history", labelKey: "navHistory", subheading: "groupInstitution" },
+  { key: "mission_vision", labelKey: "navMissionVision", subheading: "groupInstitution" },
+  { key: "facilities", labelKey: "navFacilities", subheading: "groupInstitution" },
+  { key: "achievements", labelKey: "navAchievements", subheading: "groupInstitution" },
+  { key: "admission_info", labelKey: "navAdmissionInfo", subheading: "groupInstitution" },
+  { key: "principal_message", labelKey: "navPrincipalMessage", subheading: "groupLeadership" },
+  { key: "vice_principal_message", labelKey: "navVicePrincipalMessage", subheading: "groupLeadership" },
+  { key: "chairman_message", labelKey: "navChairmanMessage", subheading: "groupLeadership" },
 ] as const;
 
 export default function AboutSlugPage() {
@@ -43,20 +43,26 @@ export default function AboutSlugPage() {
               {t("navAbout")}
             </h3>
             <nav className="space-y-1">
-              {PAGES.map((p) => {
+              {PAGES.map((p, i) => {
                 const isActive = p.key === slug;
                 return (
-                  <Link 
-                    key={p.key} 
-                    href={`/about/${p.key}`} 
-                    className={`block rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
-                      isActive 
-                        ? "bg-blue-50 text-blue-700" 
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    {t(p.labelKey)}
-                  </Link>
+                  <div key={p.key}>
+                    {p.subheading !== PAGES[i - 1]?.subheading && (
+                      <p className={`px-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-3 pt-3 border-t border-slate-100" : ""}`}>
+                        {t(p.subheading)}
+                      </p>
+                    )}
+                    <Link
+                      href={`/about/${p.key}`}
+                      className={`block rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                        isActive
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      }`}
+                    >
+                      {t(p.labelKey)}
+                    </Link>
+                  </div>
                 );
               })}
             </nav>

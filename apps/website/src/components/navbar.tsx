@@ -12,6 +12,12 @@ interface NavLink {
   href: string;
   key: string;
   labelFrom?: "nav" | "about" | "academic" | "governingBody" | "faculty";
+  // Renders a non-clickable sub-header row before this link whenever it
+  // differs from the previous child's — purely additive to the generic
+  // dropdown renderer below, so groups that never set it (Academic,
+  // Notices, Admission, Media) are completely unaffected. Resolved via the
+  // "about" namespace since only the About cluster uses this today.
+  subheading?: string;
 }
 interface NavGroup {
   key: string;
@@ -19,19 +25,20 @@ interface NavGroup {
 }
 
 const ABOUT_CHILDREN: NavLink[] = [
-  { href: "/about", key: "navAbout", labelFrom: "about" },
-  { href: "/about/history", key: "navHistory", labelFrom: "about" },
-  { href: "/about/mission_vision", key: "navMissionVision", labelFrom: "about" },
-  { href: "/about/principal_message", key: "navPrincipalMessage", labelFrom: "about" },
-  { href: "/about/vice_principal_message", key: "navVicePrincipalMessage", labelFrom: "about" },
-  { href: "/about/chairman_message", key: "navChairmanMessage", labelFrom: "about" },
-  { href: "/about/facilities", key: "navFacilities", labelFrom: "about" },
-  { href: "/about/achievements", key: "navAchievements", labelFrom: "about" },
-  { href: "/governing-body", key: "title", labelFrom: "governingBody" },
+  { href: "/about", key: "navAbout", labelFrom: "about", subheading: "groupInstitution" },
+  { href: "/about/history", key: "navHistory", labelFrom: "about", subheading: "groupInstitution" },
+  { href: "/about/mission_vision", key: "navMissionVision", labelFrom: "about", subheading: "groupInstitution" },
+  { href: "/about/facilities", key: "navFacilities", labelFrom: "about", subheading: "groupInstitution" },
+  { href: "/about/achievements", key: "navAchievements", labelFrom: "about", subheading: "groupInstitution" },
+  { href: "/governing-body", key: "title", labelFrom: "governingBody", subheading: "groupInstitution" },
+  { href: "/about/principal_message", key: "navPrincipalMessage", labelFrom: "about", subheading: "groupLeadership" },
+  { href: "/about/vice_principal_message", key: "navVicePrincipalMessage", labelFrom: "about", subheading: "groupLeadership" },
+  { href: "/about/chairman_message", key: "navChairmanMessage", labelFrom: "about", subheading: "groupLeadership" },
 ];
 
 const ACADEMIC_CHILDREN: NavLink[] = [
   { href: "/faculty", key: "title", labelFrom: "faculty" },
+  { href: "/staff", key: "staffTitle", labelFrom: "faculty" },
   { href: "/events", key: "academicCalendar" },
   { href: "/routine", key: "routine" },
   { href: "/academic/course_curriculum", key: "navCourseCurriculum", labelFrom: "academic" },
@@ -146,14 +153,20 @@ export function Navbar({ institution }: { institution: Institution | null }) {
               {/* Dropdown Menu */}
               <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
                 <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
-                  {g.children.map((c) => (
-                    <Link 
-                      key={c.href} 
-                      href={c.href} 
-                      className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
-                    >
-                      {label(c)}
-                    </Link>
+                  {g.children.map((c, i) => (
+                    <div key={c.href}>
+                      {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
+                        <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100" : ""}`}>
+                          {tAbout(c.subheading)}
+                        </p>
+                      )}
+                      <Link
+                        href={c.href}
+                        className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
+                      >
+                        {label(c)}
+                      </Link>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -215,15 +228,21 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 
                 {mobileGroupOpen === g.key && (
                   <div className="mb-2 ml-4 flex flex-col space-y-1 border-l-2 border-slate-100 pl-4 py-1">
-                    {g.children.map((c) => (
-                      <Link 
-                        key={c.href} 
-                        href={c.href} 
-                        className="rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-primary" 
-                        onClick={() => setOpen(false)}
-                      >
-                        {label(c)}
-                      </Link>
+                    {g.children.map((c, i) => (
+                      <div key={c.href}>
+                        {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
+                          <p className={`px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100" : ""}`}>
+                            {tAbout(c.subheading)}
+                          </p>
+                        )}
+                        <Link
+                          href={c.href}
+                          className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-primary"
+                          onClick={() => setOpen(false)}
+                        >
+                          {label(c)}
+                        </Link>
+                      </div>
                     ))}
                   </div>
                 )}

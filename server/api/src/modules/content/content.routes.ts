@@ -9,6 +9,7 @@ import { contactSubmitSchema } from "@education-erp/validators";
 import { notFound } from "../../lib/errors";
 import { sendEmail } from "../../services/email.service";
 import { renderDocument } from "../../services/pdf.service";
+import { TEACHING_ROLES } from "../../lib/roles";
 
 export const contentRouter = Router();
 contentRouter.use(contentLimiter);
@@ -192,7 +193,9 @@ const FACULTY_PUBLIC_SELECT = {
   qualifications: true,
   achievements: true,
   publications: true,
-  department: { select: { name_en: true } },
+  public_contact_email: true,
+  public_office_location: true,
+  department: { select: { id: true, name_en: true } },
   program: { select: { name_en: true } },
   subject_assignments: { select: { academic_year_id: true, subject: { select: { name_en: true } } } },
 } as const;
@@ -215,25 +218,39 @@ function withSubjectsTaught<T extends FacultyPublicRow>(staff: T, activeYearId: 
   return { ...rest, subjects_taught: [...new Set(names)] };
 }
 
+const facultyListQuerySchema = z.object({
+  category: z.enum(["FACULTY", "STAFF"]).default("FACULTY"),
+  search: z.string().optional(),
+  department_id: z.string().optional(),
+});
+
 contentRouter.get(
   "/faculty",
-  asyncHandler(async (_req, res) => {
-    const data = await cached(contentCacheKey("faculty"), CONTENT_CACHE_TTL_SECONDS, async () => {
+  asyncHandler(async (req, res) => {
+    const query = facultyListQuerySchema.parse(req.query);
+    const cacheKey = `faculty:${query.category}:${query.search ?? ""}:${query.department_id ?? ""}`;
+    const data = await cached(contentCacheKey(cacheKey), CONTENT_CACHE_TTL_SECONDS, async () => {
       const [staff, activeYearId] = await Promise.all([
         prisma.staff.findMany({
-          where: { show_on_website: true, is_active: true, deleted_at: null },
+          where: {
+            show_on_website: true,
+            is_active: true,
+            deleted_at: null,
+            user: { role: query.category === "FACULTY" ? { in: TEACHING_ROLES } : { notIn: TEACHING_ROLES } },
+            ...(query.department_id && { department_id: query.department_id }),
+            ...(query.search && {
+              OR: [
+                { name_en: { contains: query.search, mode: "insensitive" as const } },
+                { designation: { contains: query.search, mode: "insensitive" as const } },
+              ],
+            }),
+          },
           select: FACULTY_PUBLIC_SELECT,
           orderBy: { name_en: "asc" },
         }),
         activeAcademicYearId(),
       ]);
-      const withSubjects = staff.map((s) => withSubjectsTaught(s, activeYearId));
-      const grouped: Record<string, typeof withSubjects> = {};
-      for (const s of withSubjects) {
-        const key = (s.department as { name_en: string } | null)?.name_en ?? "General";
-        (grouped[key] ??= []).push(s);
-      }
-      return grouped;
+      return staff.map((s) => withSubjectsTaught(s, activeYearId));
     });
     res.json({ success: true, data });
   }),
@@ -398,6 +415,20 @@ contentRouter.get(
       });
       return { departments, unassigned_programs: unassigned };
     });
+    res.json({ success: true, data });
+  }),
+);
+
+// Public, id+name only — the department filter dropdown on the public
+// Faculty/Staff directories. Deliberately lighter than /departments above
+// (which nests full program/course trees for the university curriculum
+// page) since a filter dropdown only ever needs id+name.
+contentRouter.get(
+  "/department-options",
+  asyncHandler(async (_req, res) => {
+    const data = await cached(contentCacheKey("department-options"), CONTENT_CACHE_TTL_SECONDS, () =>
+      prisma.department.findMany({ where: { is_active: true }, select: { id: true, name_en: true }, orderBy: { name_en: "asc" } }),
+    );
     res.json({ success: true, data });
   }),
 );

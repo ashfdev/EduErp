@@ -816,6 +816,12 @@ model Staff {
   // table (mirrors AppraisalTemplate.criteria's exact same "small static
   // list doesn't need its own model" reasoning).
   publications        Json?
+  // Public-safe contact info, deliberately separate from phone/email above
+  // (which are login/HR-only and never selected into any public route) —
+  // an admin opts in explicitly per field, same convention as every other
+  // show_on_website-gated field on this model.
+  public_contact_email    String?
+  public_office_location  String?
   employment_type     EmploymentType             @default(PERMANENT)
   joining_date        DateTime?
   max_periods_per_day  Int?

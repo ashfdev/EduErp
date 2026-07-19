@@ -35,6 +35,8 @@ interface StaffDetail {
   qualifications: string | null;
   achievements: string | null;
   publications: { title: string; url: string }[] | null;
+  public_contact_email: string | null;
+  public_office_location: string | null;
   department: { id: string; name_en: string } | null;
   program: { id: string; name_en: string } | null;
   user: { role: string; phone: string; email: string | null };
@@ -185,6 +187,8 @@ export default function StaffDetailPage() {
     qualifications: string;
     achievements: string;
     publications: { title: string; url: string }[];
+    public_contact_email: string;
+    public_office_location: string;
   } | null>(null);
 
   function startEditingProfile(s: StaffDetail) {
@@ -193,6 +197,8 @@ export default function StaffDetailPage() {
       qualifications: s.qualifications ?? "",
       achievements: s.achievements ?? "",
       publications: s.publications ?? [],
+      public_contact_email: s.public_contact_email ?? "",
+      public_office_location: s.public_office_location ?? "",
     });
   }
 
@@ -202,7 +208,14 @@ export default function StaffDetailPage() {
         show_on_website: profileDraft!.show_on_website,
         qualifications: profileDraft!.qualifications || undefined,
         achievements: profileDraft!.achievements || undefined,
-        publications: profileDraft!.publications.filter((p) => p.title && p.url),
+        // A publication URL typed without a protocol (e.g. "www.site.com/paper")
+        // fails the backend's z.string().url() check — normalize here so the
+        // common case just works instead of surfacing a confusing "invalid" error.
+        publications: profileDraft!.publications
+          .filter((p) => p.title && p.url)
+          .map((p) => ({ title: p.title, url: /^https?:\/\//i.test(p.url) ? p.url : `https://${p.url}` })),
+        public_contact_email: profileDraft!.public_contact_email || undefined,
+        public_office_location: profileDraft!.public_office_location || undefined,
       }),
     onSuccess: () => {
       toast.success("Public profile updated");
@@ -210,8 +223,8 @@ export default function StaffDetailPage() {
       setProfileDraft(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      toast.error(message ?? "Failed to update public profile");
+      const error = (err as { response?: { data?: { error?: { message?: string; details?: { message?: string }[] } } } })?.response?.data?.error;
+      toast.error(error?.details?.[0]?.message ?? error?.message ?? "Failed to update public profile");
     },
   });
 
@@ -402,6 +415,8 @@ export default function StaffDetailPage() {
               {!profileDraft && (
                 <div className="space-y-1 text-sm">
                   <p><span className="text-muted-foreground">Shown on website:</span> {staff.show_on_website ? "Yes" : "No"}</p>
+                  {staff.public_contact_email && <p><span className="text-muted-foreground">Public Contact Email:</span> {staff.public_contact_email}</p>}
+                  {staff.public_office_location && <p><span className="text-muted-foreground">Office Location:</span> {staff.public_office_location}</p>}
                   {staff.qualifications && <p><span className="text-muted-foreground">Qualifications:</span> {staff.qualifications}</p>}
                   {staff.achievements && <p><span className="text-muted-foreground">Achievements:</span> {staff.achievements}</p>}
                   {!!staff.publications?.length && (
@@ -421,6 +436,27 @@ export default function StaffDetailPage() {
                     <Switch checked={profileDraft.show_on_website} onCheckedChange={(v) => setProfileDraft({ ...profileDraft, show_on_website: v })} />
                     Show on public Faculty & Staff directory
                   </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Public Contact Email (optional)</Label>
+                      <Input
+                        value={profileDraft.public_contact_email}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, public_contact_email: e.target.value })}
+                        placeholder="office@institution.edu.bd"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Office Location (optional)</Label>
+                      <Input
+                        value={profileDraft.public_office_location}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, public_office_location: e.target.value })}
+                        placeholder="Room 204, Science Building"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    A separate, public-safe contact — never the private phone/email used for login. Leave blank to show none.
+                  </p>
                   <div className="space-y-1.5">
                     <Label>Qualifications</Label>
                     <Textarea rows={2} value={profileDraft.qualifications} onChange={(e) => setProfileDraft({ ...profileDraft, qualifications: e.target.value })} placeholder="e.g. PhD in Computer Science, University of Dhaka" />

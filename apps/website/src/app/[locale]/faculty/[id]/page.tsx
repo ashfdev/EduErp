@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { fetchContent } from "@/lib/content-api";
@@ -10,6 +10,8 @@ import type { FacultyDetail } from "@/lib/types";
 
 export default function FacultyDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const fromStaff = searchParams.get("from") === "staff";
   const t = useTranslations("faculty");
   const [member, setMember] = useState<FacultyDetail | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -22,12 +24,15 @@ export default function FacultyDetailPage() {
     });
   }, [id]);
 
+  const backHref = fromStaff ? "/staff" : "/faculty";
+  const backLabel = fromStaff ? t("backToStaff") : t("backToFaculty");
+
   if (notFound) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
         <p className="text-sm text-gray-500">{t("notFound")}</p>
-        <Link href="/faculty" className="mt-4 inline-block text-sm text-[var(--primary)] hover:underline">
-          {t("backToFaculty")}
+        <Link href={backHref} className="mt-4 inline-block text-sm text-[var(--primary)] hover:underline">
+          {backLabel}
         </Link>
       </main>
     );
@@ -39,8 +44,8 @@ export default function FacultyDetailPage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <Link href="/faculty" className="mb-6 inline-block text-sm text-[var(--primary)] hover:underline">
-        ← {t("backToFaculty")}
+      <Link href={backHref} className="mb-6 inline-block text-sm text-[var(--primary)] hover:underline">
+        ← {backLabel}
       </Link>
       <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
         <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-full bg-gray-100">
@@ -54,6 +59,13 @@ export default function FacultyDetailPage() {
               {member.department?.name_en}
               {member.department && member.program && " · "}
               {member.program?.name_en}
+            </p>
+          )}
+          {(member.public_contact_email || member.public_office_location) && (
+            <p className="mt-2 text-sm text-gray-600">
+              {member.public_contact_email && <span>{member.public_contact_email}</span>}
+              {member.public_contact_email && member.public_office_location && " · "}
+              {member.public_office_location && <span>{member.public_office_location}</span>}
             </p>
           )}
         </div>

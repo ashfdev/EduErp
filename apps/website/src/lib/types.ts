@@ -90,7 +90,10 @@ export interface Publication {
   url: string;
 }
 
-export interface FacultyDetail {
+// The shape GET /api/content/faculty (list, flat array) and
+// /api/content/faculty/:id (detail) both return — same FACULTY_PUBLIC_SELECT
+// on the backend either way, just used more sparsely on the list page.
+export interface FacultyProfile {
   id: string;
   name_en: string;
   name_bn: string | null;
@@ -99,9 +102,18 @@ export interface FacultyDetail {
   qualifications: string | null;
   achievements: string | null;
   publications: Publication[] | null;
-  department: { name_en: string } | null;
+  public_contact_email: string | null;
+  public_office_location: string | null;
+  department: { id: string; name_en: string } | null;
   program: { name_en: string } | null;
   subjects_taught: string[];
+}
+
+export type FacultyDetail = FacultyProfile;
+
+export interface DepartmentOption {
+  id: string;
+  name_en: string;
 }
 
 export interface GoverningBodyMember {
