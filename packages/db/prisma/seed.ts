@@ -63,6 +63,8 @@ const CHART_OF_ACCOUNTS: { code: string; name: string; group: string; is_system?
   { code: "4010", name: "Bank Interest Income", group: "grp-income" },
   { code: "4011", name: "Other Income", group: "grp-income" },
   { code: "4012", name: "Government Grant", group: "grp-income" },
+  { code: "4013", name: "Readmission Fee Income", group: "grp-income" },
+  { code: "4014", name: "Form Fee Income", group: "grp-income" },
 
   { code: "5001", name: "Salary Expense — Teaching Staff", group: "grp-expenses", is_system: true },
   { code: "5002", name: "Salary Expense — Non-Teaching Staff", group: "grp-expenses", is_system: true },
@@ -97,6 +99,8 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   DEVELOPMENT: "4008",
   SPORTS: "4011",
   OTHER: "4011",
+  FORM: "4014",
+  READMISSION: "4013",
 };
 
 const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED"] as const;
@@ -332,6 +336,56 @@ async function main() {
       where: { category: category as never },
       update: {},
       create: { category: category as never, account_id: accountIdByCode[code]! },
+    });
+  }
+
+  // Starter FeeStructure rows so a fresh install has something to invoice
+  // against out of the box — confirmed via audit that zero FeeStructure
+  // rows existed anywhere before this. Amounts (BDT) are representative
+  // placeholders, not real institution figures — an admin reviews/adjusts
+  // them via Settings → Fee Rules before going live.
+  const TUITION_BY_LEVEL: Record<number, number> = { 6: 700, 7: 750, 8: 800, 9: 900, 10: 1000 };
+  for (const level of [6, 7, 8, 9, 10]) {
+    const cls = classes[level];
+    await prisma.feeStructure.upsert({
+      where: { id: `fee-tuition-${level}` },
+      update: {},
+      create: {
+        id: `fee-tuition-${level}`,
+        academic_year_id: academicYear.id,
+        class_id: cls.id,
+        category: "TUITION",
+        name: `Class ${level} Monthly Tuition`,
+        amount: TUITION_BY_LEVEL[level]!,
+        frequency: "MONTHLY",
+        due_day: 10,
+      },
+    });
+    await prisma.feeStructure.upsert({
+      where: { id: `fee-admission-${level}` },
+      update: {},
+      create: {
+        id: `fee-admission-${level}`,
+        academic_year_id: academicYear.id,
+        class_id: cls.id,
+        category: "ADMISSION",
+        name: `Class ${level} Admission Fee`,
+        amount: 3000,
+        frequency: "ONE_TIME",
+      },
+    });
+    await prisma.feeStructure.upsert({
+      where: { id: `fee-exam-${level}` },
+      update: {},
+      create: {
+        id: `fee-exam-${level}`,
+        academic_year_id: academicYear.id,
+        class_id: cls.id,
+        category: "EXAM",
+        name: `Class ${level} Exam Fee`,
+        amount: 300,
+        frequency: "ONE_TIME",
+      },
     });
   }
 
