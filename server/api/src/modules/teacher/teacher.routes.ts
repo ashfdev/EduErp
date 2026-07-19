@@ -33,6 +33,52 @@ teacherRouter.get(
       },
       orderBy: { period_no: "asc" },
     });
+
+    // Lets the frontend show a real "attendance already marked" vs. "missed"
+    // status per class instead of treating every past-end-time slot the same
+    // — attendance here is taken once per section per day (no period_no), so
+    // one groupBy across today's distinct sections covers every slot.
+    const sectionIds = [...new Set(slots.map((s) => s.section_id).filter((id): id is string => !!id))];
+    const markedSectionIds = sectionIds.length
+      ? await prisma.attendanceRecord
+          .groupBy({ by: ["section_id"], where: { section_id: { in: sectionIds }, person_type: "STUDENT", date: { gte: startOfDay(), lt: endOfDay() } } })
+          .then((rows) => new Set(rows.map((r) => r.section_id)))
+      : new Set<string>();
+
+    res.json({
+      success: true,
+      data: slots.map((s) => ({ ...s, attendance_marked: s.section_id ? markedSectionIds.has(s.section_id) : false })),
+    });
+  }),
+);
+
+function startOfDay(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function endOfDay(): Date {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+teacherRouter.get(
+  "/schedule/week",
+  asyncHandler(async (req, res) => {
+    const staffId = await resolveOwnStaffId(req.user!.sub);
+    if (!staffId) return res.json({ success: true, data: [] });
+
+    const slots = await prisma.routineSlot.findMany({
+      where: { teacher_id: staffId },
+      include: {
+        class: { select: { id: true, name_en: true } },
+        section: { select: { id: true, name: true } },
+        subject: { select: { id: true, name_en: true } },
+        group: { select: { id: true, name_en: true } },
+      },
+      orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
+    });
     res.json({ success: true, data: slots });
   }),
 );

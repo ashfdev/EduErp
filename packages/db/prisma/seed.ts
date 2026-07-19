@@ -597,7 +597,7 @@ async function main() {
     { key: "STUDENT_PROMOTE_ROLES", label: "Student Promotion", category: "Students", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
     { key: "ATTENDANCE_MARK_ROLES", label: "Attendance Marking", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"] },
     { key: "EXAM_MANAGE_ROLES", label: "Exam Management", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
-    { key: "MARK_ENTRY_ROLES", label: "Mark Entry", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"] },
+    { key: "MARK_ENTRY_ROLES", label: "Mark Entry", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"] },
     { key: "MARK_VIEW_ROLES", label: "Mark View (read-only)", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"] },
     { key: "MARK_APPROVAL_ROLES", label: "Mark Approval", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },
     { key: "RESULT_PUBLISH_ROLES", label: "Result Publish", category: "Academic", roles: ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"] },

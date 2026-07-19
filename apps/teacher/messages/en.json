@@ -31,7 +31,28 @@
     "myClassesToday": "My Classes Today",
     "noClassesToday": "No classes scheduled for today",
     "classFallback": "Class",
-    "period": "Period {no}"
+    "period": "Period {no}",
+    "statusUpcoming": "Upcoming",
+    "statusOngoing": "Ongoing",
+    "statusCompleted": "Completed",
+    "statusMissed": "Missed — attendance not taken"
+  },
+  "routine": {
+    "title": "My Routine",
+    "subtitle": "Your full weekly class schedule",
+    "noRoutine": "No routine has been set up for you yet.",
+    "periodShort": "Period",
+    "classFallback": "Class",
+    "todayBadge": "Today",
+    "days": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    }
   },
   "attendance": {
     "title": "Attendance",
@@ -46,6 +67,8 @@
     "colName": "Name",
     "saving": "Saving...",
     "saveAttendance": "Save Attendance",
+    "updateAttendance": "Update Attendance",
+    "alreadyMarkedNotice": "Attendance was already marked for {date} — you're editing existing records. Change any status below and update to save your changes.",
     "savedConflicts": "Saved {saved}. {conflicts} conflict(s) with biometric records.",
     "savedOk": "Saved {count} attendance records",
     "saveFailed": "Failed to save attendance"
@@ -107,14 +130,19 @@
     "class": "Class",
     "section": "Section",
     "select": "Select...",
-    "openGrid": "Open Mark Entry Grid"
+    "openGrid": "Open Mark Entry Grid",
+    "noOwnSections": "You are not the class teacher or an assigned subject teacher for any class/section yet."
   },
   "marksGrid": {
     "title": "Mark Entry",
     "entryOpen": "Entry window is open",
     "entryClosed": "Entry window is closed",
     "loading": "Loading...",
+    "loadError": "Could not load this grid",
+    "loadErrorDetail": "You may not have access to this class/section, or something went wrong loading it. Go back and pick a class/section from the Marks page.",
+    "viewOnlyColumn": "view only",
     "noSubjects": "No subjects assigned to you for this class/section.",
+    "noStudents": "No students are currently enrolled in this section.",
     "colRoll": "Roll",
     "colName": "Name",
     "theoryOutOf": "Theory, out of {max}",

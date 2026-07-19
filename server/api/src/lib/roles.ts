@@ -24,10 +24,15 @@ export const STAFF_READ_ROLES: UserRole[] = [
 export const TEACHING_ROLES: UserRole[] = ["CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT"];
 export const ATTENDANCE_MARK_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"];
 export const EXAM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
-export const MARK_ENTRY_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER"];
-// Read-only grid access — adds CLASS_TEACHER on top of MARK_ENTRY_ROLES so a
-// class teacher can monitor their own class's marks even though they can't
-// submit/edit them (that stays gated to MARK_ENTRY_ROLES on POST /submit).
+// CLASS_TEACHER is included here too — a person can simultaneously be the
+// homeroom class teacher of one section AND hold a real
+// SubjectTeacherAssignment for specific subjects elsewhere (e.g. also
+// teaching English in another section). Being let through this role gate is
+// necessary but not sufficient: POST /submit still validates every
+// submitted subject_id against real SubjectTeacherAssignment rows for
+// SUBJECT_TEACHER and CLASS_TEACHER alike, so a class teacher with no real
+// subject assignment still can't submit anything.
+export const MARK_ENTRY_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"];
 export const MARK_VIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"];
 export const MARK_APPROVAL_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const RESULT_PUBLISH_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];

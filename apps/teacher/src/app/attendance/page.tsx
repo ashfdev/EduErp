@@ -58,6 +58,10 @@ export default function TeacherAttendancePage() {
   }, [rows, marks]);
 
   const unmarked = (rows?.length ?? 0) - Object.values(effectiveMarks).filter(Boolean).length;
+  // Attendance already exists for this section/date if the server sent back
+  // a pre-existing status on any row — drives the "you're editing, not
+  // creating" banner and button label below.
+  const alreadyMarked = (rows ?? []).some((r) => !!r.status);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -119,6 +123,11 @@ export default function TeacherAttendancePage() {
 
         {rows && (
           <div className="space-y-6">
+            {alreadyMarked && (
+              <div className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+                {t("alreadyMarkedNotice", { date })}
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex gap-2">
                 <Badge variant="outline" className="bg-white px-3 py-1.5 rounded-lg border-slate-200 shadow-sm font-bold">{t("total", { count: rows.length })}</Badge>
@@ -165,7 +174,7 @@ export default function TeacherAttendancePage() {
 
             <div className="flex justify-end pt-2">
               <Button className="rounded-xl px-8 py-6 text-base font-bold shadow-md" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? t("saving") : t("saveAttendance")}
+                {saveMutation.isPending ? t("saving") : alreadyMarked ? t("updateAttendance") : t("saveAttendance")}
               </Button>
             </div>
           </div>

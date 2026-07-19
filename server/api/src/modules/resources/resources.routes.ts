@@ -17,15 +17,27 @@ import { badRequest, forbidden, notFound } from "../../lib/errors";
 // teacher of one of its sections, or via a SubjectTeacherAssignment for that
 // class (any section). ADMIN/SUPER_ADMIN bypass, matching every other
 // ownership check introduced this round (attendance, marks, leave).
-async function assertResourceClassOwnership(userId: string, role: string, classId: string): Promise<string> {
+async function assertResourceClassOwnership(userId: string, role: string, classId: string, subjectId?: string | null): Promise<string> {
   if (role === "ADMIN" || role === "SUPER_ADMIN") return "ADMIN_OVERRIDE";
 
   const staffId = await resolveOwnStaffId(userId);
+
+  // A resource tagged with a specific subject requires a real assignment
+  // for that exact subject — being the class's homeroom teacher, or
+  // teaching some other subject in the same class, isn't enough. Without
+  // this, a teacher assigned to any one subject in a class could publish a
+  // resource under a subject they don't actually teach.
+  if (subjectId) {
+    const subjectAssignment = await prisma.subjectTeacherAssignment.findFirst({ where: { staff_id: staffId, subject_id: subjectId } });
+    if (!subjectAssignment) throw forbidden("You are not assigned to this subject");
+    return staffId!;
+  }
+
   const ownsSection = await prisma.section.findFirst({ where: { class_id: classId, class_teacher_id: staffId } });
-  if (ownsSection) return staffId;
+  if (ownsSection) return staffId!;
 
   const assignment = await prisma.subjectTeacherAssignment.findFirst({ where: { staff_id: staffId, subject: { class_id: classId } } });
-  if (assignment) return staffId;
+  if (assignment) return staffId!;
 
   throw forbidden("You are not assigned to this class");
 }
@@ -62,7 +74,7 @@ resourcesRouter.post(
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A file is required");
     const body = createTeachingResourceSchema.parse(req.body);
-    const ownerStaffId = await assertResourceClassOwnership(req.user!.sub, req.user!.role, body.class_id);
+    const ownerStaffId = await assertResourceClassOwnership(req.user!.sub, req.user!.role, body.class_id, body.subject_id);
     // ADMIN/SUPER_ADMIN commonly have no linked Staff row at all — attribute
     // the resource to "administration" (null) rather than forcing a staff
     // link that may not exist, same nullable shape as RoutineSlot.teacher_id.

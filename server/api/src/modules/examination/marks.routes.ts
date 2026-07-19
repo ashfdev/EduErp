@@ -103,23 +103,39 @@ marksRouter.get(
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
 
-    if (req.user!.role === "CLASS_TEACHER") {
-      const section = await prisma.section.findUnique({ where: { id: sectionId } });
+    // assignedSubjectIds is populated for SUBJECT_TEACHER and CLASS_TEACHER
+    // alike — null means "every subject is editable" (admin-tier roles).
+    // A CLASS_TEACHER may be the section's homeroom teacher (full view
+    // access, matching today's behavior) and/or separately hold a real
+    // SubjectTeacherAssignment for specific subjects in this class (e.g.
+    // teaching English here while being class teacher of a different
+    // section) — either is enough to view the grid; assignedSubjectIds
+    // drives which columns they can actually edit, not whether they can see it.
+    let subjectIds: string[] | undefined;
+    let assignedSubjectIds: Set<string> | null = null;
+    if (req.user!.role === "CLASS_TEACHER" || req.user!.role === "SUBJECT_TEACHER") {
       const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
-      if (!section || section.class_teacher_id !== staff?.id) {
-        throw forbidden("You are not the class teacher for this section");
+      const assignments = await prisma.subjectTeacherAssignment.findMany({
+        where: { staff_id: staff?.id, OR: [{ section_id: sectionId }, { section_id: null }] },
+      });
+      assignedSubjectIds = new Set(assignments.map((a) => a.subject_id));
+
+      if (req.user!.role === "CLASS_TEACHER") {
+        const section = await prisma.section.findUnique({ where: { id: sectionId } });
+        const isOwnSection = !!section && section.class_teacher_id === staff?.id;
+        if (!section || (!isOwnSection && assignedSubjectIds.size === 0)) {
+          throw forbidden("You are not associated with this class/section");
+        }
       }
     }
 
-    let subjectIds: string[] | undefined;
     if (query.subject_id) {
       subjectIds = [query.subject_id];
     } else if (req.user!.role === "SUBJECT_TEACHER") {
-      const assignments = await prisma.subjectTeacherAssignment.findMany({
-        where: { staff: { user_id: req.user!.sub }, OR: [{ section_id: sectionId }, { section_id: null }] },
-      });
-      subjectIds = assignments.map((a) => a.subject_id);
+      subjectIds = [...(assignedSubjectIds ?? [])];
     }
+    // CLASS_TEACHER keeps seeing every subject in the class (subjectIds
+    // stays undefined) — assignedSubjectIds only drives per-column editability below.
 
     const rawSubjects = await prisma.subject.findMany({
       where: { class_id: classId, is_active: true, ...(subjectIds && { id: { in: subjectIds } }) },
@@ -184,7 +200,12 @@ marksRouter.get(
           is_open: exam.status === "MARK_ENTRY",
           time_remaining: exam.mark_entry_closes_at ? Math.max(0, exam.mark_entry_closes_at.getTime() - Date.now()) : null,
         },
-        subjects: subjects.map((s) => ({ ...s, config: configBySubject.get(s.id), components: componentsBySubject.get(s.id) ?? [] })),
+        subjects: subjects.map((s) => ({
+          ...s,
+          config: configBySubject.get(s.id),
+          components: componentsBySubject.get(s.id) ?? [],
+          editable: assignedSubjectIds ? assignedSubjectIds.has(s.id) : true,
+        })),
         students: students.map((s) => ({
           id: s.id,
           name_en: s.name_en,
@@ -210,7 +231,7 @@ marksRouter.post(
     if (exam.status !== "MARK_ENTRY") throw badRequest("Mark entry is not open for this exam");
     if (exam.mark_entry_closes_at && exam.mark_entry_closes_at < new Date()) throw badRequest("Mark entry window has closed");
 
-    if (req.user!.role === "SUBJECT_TEACHER") {
+    if (req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "CLASS_TEACHER") {
       const subjectIds = [...new Set(body.entries.map((e) => e.subject_id))];
       const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
       const assignments = await prisma.subjectTeacherAssignment.findMany({ where: { staff_id: staff?.id, subject_id: { in: subjectIds } } });

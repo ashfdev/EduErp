@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, EmptyState, Badge } from "@education-erp/ui";
 import { CalendarCheck, BookOpen, Target, Plane, Clock, ArrowRight, Activity } from "lucide-react";
 import Link from "next/link";
 
@@ -18,7 +18,32 @@ interface ScheduleSlot {
   section: { name: string } | null;
   subject: { name_en: string } | null;
   group: { name_en: string } | null;
+  attendance_marked: boolean;
 }
+
+type SlotStatus = "upcoming" | "ongoing" | "completed" | "missed";
+
+// "Missed" only applies to a slot that's actually over with no attendance on
+// record — a still-upcoming or currently-running class is never mislabeled
+// as missed just because the day hasn't caught up to it yet.
+function computeSlotStatus(s: ScheduleSlot, now: Date): SlotStatus {
+  const [startH, startM] = s.start_time.split(":").map(Number);
+  const [endH, endM] = s.end_time.split(":").map(Number);
+  const start = new Date(now);
+  start.setHours(startH || 0, startM || 0, 0, 0);
+  const end = new Date(now);
+  end.setHours(endH || 0, endM || 0, 0, 0);
+  if (now < start) return "upcoming";
+  if (now <= end) return "ongoing";
+  return s.attendance_marked ? "completed" : "missed";
+}
+
+const STATUS_BADGE_VARIANT: Record<SlotStatus, "outline" | "default" | "success" | "destructive"> = {
+  upcoming: "outline",
+  ongoing: "default",
+  completed: "success",
+  missed: "destructive",
+};
 
 export default function TeacherHomePage() {
   const { user } = useAuthStore();
@@ -98,31 +123,39 @@ export default function TeacherHomePage() {
                 </div>
               )}
               <div className="space-y-2">
-                {schedule?.map((s) => (
-                  <div key={s.id} className="group flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500 group-hover:bg-primary group-hover:text-white transition-colors">
-                        <span className="text-xs font-bold uppercase">Period</span>
-                        <span className="text-lg font-black leading-none">{s.period_no}</span>
+                {schedule?.map((s) => {
+                  const status = computeSlotStatus(s, new Date());
+                  return (
+                    <div key={s.id} className="group flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500 group-hover:bg-primary group-hover:text-white transition-colors">
+                          <span className="text-xs font-bold uppercase">Period</span>
+                          <span className="text-lg font-black leading-none">{s.period_no}</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-base">{s.subject?.name_en ?? t("classFallback")}</p>
+                          <p className="text-sm font-medium text-slate-500 mt-0.5">
+                            {s.class.name_en}{s.section ? ` • ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
+                          </p>
+                          <Badge variant={STATUS_BADGE_VARIANT[status]} className="mt-1.5">
+                            {t(`status${status.charAt(0).toUpperCase()}${status.slice(1)}`)}
+                          </Badge>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-bold text-slate-800 text-base">{s.subject?.name_en ?? t("classFallback")}</p>
-                        <p className="text-sm font-medium text-slate-500 mt-0.5">
-                          {s.class.name_en}{s.section ? ` • ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
-                        </p>
+                      <div className="mt-3 sm:mt-0 flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          {s.start_time} - {s.end_time}
+                        </div>
+                        {status !== "completed" && (
+                          <Link href={`/attendance?class=${s.class.name_en}&section=${s.section?.name}`} className="text-xs font-bold text-primary hover:underline mt-2 hidden sm:block">
+                            Mark Attendance
+                          </Link>
+                        )}
                       </div>
                     </div>
-                    <div className="mt-3 sm:mt-0 flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
-                      <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
-                        <Clock className="h-3.5 w-3.5 text-slate-400" />
-                        {s.start_time} - {s.end_time}
-                      </div>
-                      <Link href={`/attendance?class=${s.class.name_en}&section=${s.section?.name}`} className="text-xs font-bold text-primary hover:underline mt-2 hidden sm:block">
-                        Mark Attendance
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
