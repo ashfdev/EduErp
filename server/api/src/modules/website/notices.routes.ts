@@ -13,6 +13,7 @@ import { noticeSchema } from "@education-erp/validators";
 import { sendNotification, type NotificationRecipient } from "../../services/notification.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { badRequest, notFound } from "../../lib/errors";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 
 export const noticesRouter = Router();
 noticesRouter.use(authenticate);
@@ -152,6 +153,14 @@ noticesRouter.post(
 
     const notice = await prisma.notice.update({ where: { id }, data: { is_published: true, publish_at: new Date() } });
     if (notice.is_public_website) await triggerRevalidation(["/notices"]);
+
+    const recipients = await audienceRecipients(notice.audience);
+    await Promise.all(
+      recipients
+        .filter((r): r is typeof r & { user_id: string } => !!r.user_id)
+        .map((r) => createInAppNotification({ userId: r.user_id, type: "NOTICE_PUBLISHED", title: notice.title, link: "/notices" })),
+    );
+
     res.json({ success: true, data: notice });
   }),
 );

@@ -11,6 +11,7 @@ import { createComplaintSchema, updateComplaintSchema, createComplaintMessageSch
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
 import { postComplaintMessage } from "./complaint-message.helper";
+import { notifyRoles } from "../../services/in-app-notification.service";
 
 // Staff-side surface. Portal callers use the separate routes in
 // portal.routes.ts — STAFF_ONLY_ROLES and PORTAL_ROLES are disjoint role
@@ -92,6 +93,12 @@ complaintsRouter.post(
   asyncHandler(async (req, res) => {
     const body = createComplaintSchema.parse(req.body);
     const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
+    await notifyRoles(COMPLAINT_MANAGE_ROLES, {
+      type: "COMPLAINT_FILED",
+      title: "New complaint filed",
+      body: complaint.description.slice(0, 140),
+      link: "/complaints",
+    });
     res.status(201).json({ success: true, data: complaint });
   }),
 );

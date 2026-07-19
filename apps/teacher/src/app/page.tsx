@@ -6,7 +6,7 @@ import { TeacherShell } from "@/components/teacher-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, CardContent, EmptyState } from "@education-erp/ui";
-import { CalendarCheck, BookOpen, Target, Plane, Clock, ArrowRight, Activity, Bell } from "lucide-react";
+import { CalendarCheck, BookOpen, Target, Plane, Clock, ArrowRight, Activity } from "lucide-react";
 import Link from "next/link";
 
 interface ScheduleSlot {
@@ -53,10 +53,6 @@ export default function TeacherHomePage() {
             <CalendarCheck className="h-4 w-4" />
             Attendance
           </Link>
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md text-white hover:bg-white/30 transition-all border border-white/10 relative">
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-400 border border-indigo-600"></span>
-          </button>
         </div>
       </div>
 

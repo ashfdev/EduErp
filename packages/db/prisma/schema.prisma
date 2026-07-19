@@ -2909,6 +2909,38 @@ enum NotificationTrigger {
   PORTAL_LOGIN_CREATED
 }
 
+enum InAppNotificationType {
+  COMPLAINT_FILED
+  COMPLAINT_REPLIED
+  COMPLAINT_REOPENED
+  DOCUMENT_REQUESTED
+  DOCUMENT_APPROVED
+  DOCUMENT_REJECTED
+  LEAVE_APPLIED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  NOTICE_PUBLISHED
+  ROUTINE_UPDATED
+}
+
+// In-app notification-center feed item — distinct from NotificationLog
+// (an SMS/email/push delivery audit log). user_id is a raw User.id, the
+// same role-agnostic convention already used by Complaint.raised_by_user_id,
+// so one model/one set of routes serves staff, teacher, and portal callers.
+model InAppNotification {
+  id         String                 @id @default(cuid())
+  user_id    String
+  type       InAppNotificationType
+  title      String
+  body       String?
+  link       String?
+  is_read    Boolean                @default(false)
+  created_at DateTime               @default(now())
+
+  @@index([user_id, is_read])
+  @@index([user_id, created_at])
+}
+
 enum NotificationChannel {
   SMS
   EMAIL

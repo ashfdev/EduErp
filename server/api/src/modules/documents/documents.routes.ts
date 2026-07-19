@@ -13,6 +13,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 
 export const documentsRouter = Router();
 // Generates PDFs containing full personal/academic/financial data for any
@@ -187,6 +188,13 @@ documentsRouter.put(
       data: { status: "APPROVED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), document_blob_key: blobKey },
     });
     await logAudit("DOCUMENT_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "DocumentRequest", targetId: id, metadata: { decision: "APPROVED", doc_type: request.doc_type }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "DOCUMENT_APPROVED",
+      title: "Document request approved",
+      body: `Your ${request.doc_type} request is ready to download`,
+      link: "/document-requests",
+    });
     res.json({ success: true, data: updated });
   }),
 );
@@ -205,6 +213,13 @@ documentsRouter.put(
       data: { status: "REJECTED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), rejection_reason: body.rejection_reason },
     });
     await logAudit("DOCUMENT_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "DocumentRequest", targetId: id, metadata: { decision: "REJECTED", doc_type: request.doc_type }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "DOCUMENT_REJECTED",
+      title: "Document request rejected",
+      body: body.rejection_reason,
+      link: "/document-requests",
+    });
     res.json({ success: true, data: updated });
   }),
 );

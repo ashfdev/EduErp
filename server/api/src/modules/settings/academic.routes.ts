@@ -20,6 +20,7 @@ import {
 } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 
 export const academicYearsRouter = Router();
 export const shiftsRouter = Router();
@@ -810,6 +811,17 @@ routineRouter.post(
       metadata: { scope: body.scope, class_count: classIds.length, placed: results.reduce((sum, r) => sum + r.placed_count, 0), failed: failures.length },
       req,
     });
+
+    const affectedSlots = await prisma.routineSlot.findMany({
+      where: { class_id: { in: classIds }, generated: true },
+      select: { teacher: { select: { user_id: true } } },
+      distinct: ["teacher_id"],
+    });
+    await Promise.all(
+      affectedSlots
+        .filter((s): s is typeof s & { teacher: { user_id: string } } => !!s.teacher?.user_id)
+        .map((s) => createInAppNotification({ userId: s.teacher.user_id, type: "ROUTINE_UPDATED", title: "Your class routine was updated", link: "/routine" })),
+    );
 
     res.json({ success: true, data: { results, failures } });
   }),

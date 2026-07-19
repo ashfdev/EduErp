@@ -2,6 +2,8 @@ import type { Request } from "express";
 import { prisma } from "../../lib/prisma";
 import { badRequest, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
+import { createInAppNotification, notifyRoles } from "../../services/in-app-notification.service";
+import { COMPLAINT_MANAGE_ROLES } from "../../lib/roles";
 
 // Shared by both the staff-side and portal-side complaint routers — a
 // CLOSED complaint is a genuine terminal state (a new complaint should be
@@ -29,5 +31,25 @@ export async function postComplaintMessage(complaintId: string, senderUserId: st
   if (shouldReopen) {
     await logAudit("COMPLAINT_REOPENED", { userId: senderUserId, targetType: "Complaint", targetId: complaintId, req });
   }
+
+  const isRequester = complaint.raised_by_user_id === senderUserId;
+  const link = `/complaints`;
+  if (isRequester) {
+    await notifyRoles(COMPLAINT_MANAGE_ROLES, {
+      type: shouldReopen ? "COMPLAINT_REOPENED" : "COMPLAINT_REPLIED",
+      title: shouldReopen ? "Complaint reopened" : "New reply on a complaint",
+      body: message.slice(0, 140),
+      link,
+    });
+  } else {
+    await createInAppNotification({
+      userId: complaint.raised_by_user_id,
+      type: "COMPLAINT_REPLIED",
+      title: "New reply on your complaint",
+      body: message.slice(0, 140),
+      link,
+    });
+  }
+
   return created;
 }

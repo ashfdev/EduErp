@@ -7,6 +7,8 @@ import { Link, usePathname, useRouter } from "@/i18n/routing";
 import type { Institution } from "@/lib/types";
 import { Menu, X, ChevronDown, UserCircle2, Search, Languages } from "lucide-react";
 import { Button } from "@education-erp/ui";
+import { fetchContent } from "@/lib/content-api";
+import { NOTICES_LAST_VISIT_KEY, markNoticesVisited } from "@/lib/notices-visit";
 
 interface NavLink {
   href: string;
@@ -71,6 +73,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [hasNewNotice, setHasNewNotice] = useState(false);
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   const locale = useLocale();
   const pathname = usePathname();
@@ -90,6 +93,24 @@ export function Navbar({ institution }: { institution: Institution | null }) {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Login-free "new since your last visit" badge — no visitor accounts on
+  // the public site, so this compares the latest Notice's timestamp against
+  // one stored in the visitor's own browser, not a real per-user unread
+  // state like the admin/portal/teacher notification bell.
+  useEffect(() => {
+    fetchContent<{ created_at: string }[]>("/notices", { limit: "1" }).then((notices) => {
+      const latest = notices?.[0]?.created_at;
+      if (!latest) return;
+      const lastVisit = localStorage.getItem(NOTICES_LAST_VISIT_KEY);
+      if (!lastVisit || new Date(latest) > new Date(lastVisit)) setHasNewNotice(true);
+    });
+  }, []);
+
+  function clearNoticeBadge() {
+    markNoticesVisited();
+    setHasNewNotice(false);
+  }
 
   function submitSearch() {
     const q = searchQuery.trim();
@@ -156,11 +177,14 @@ export function Navbar({ institution }: { institution: Institution | null }) {
           </Link>
           {groups.map((g) => (
             <div key={g.key} className="group/dropdown relative">
-              <button className="flex items-center gap-1 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
+              <button className="relative flex items-center gap-1 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
                 {t(g.key)}
                 <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180" />
+                {g.key === "notices" && hasNewNotice && (
+                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
+                )}
               </button>
-              
+
               {/* Dropdown Menu */}
               <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
                 <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
@@ -173,6 +197,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                       )}
                       <Link
                         href={c.href}
+                        onClick={g.key === "notices" ? clearNoticeBadge : undefined}
                         className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
                       >
                         {label(c)}
@@ -253,7 +278,10 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                   className="flex w-full items-center justify-between rounded-lg px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   onClick={() => setMobileGroupOpen((k) => (k === g.key ? null : g.key))}
                 >
-                  {t(g.key)}
+                  <span className="flex items-center gap-1.5">
+                    {t(g.key)}
+                    {g.key === "notices" && hasNewNotice && <span className="h-2 w-2 rounded-full bg-destructive" />}
+                  </span>
                   <ChevronDown className={`h-4 w-4 transition-transform ${mobileGroupOpen === g.key ? "rotate-180 text-primary" : "text-slate-400"}`} />
                 </button>
                 
@@ -269,7 +297,10 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                         <Link
                           href={c.href}
                           className="block rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-primary"
-                          onClick={() => setOpen(false)}
+                          onClick={() => {
+                            setOpen(false);
+                            if (g.key === "notices") clearNoticeBadge();
+                          }}
                         >
                           {label(c)}
                         </Link>

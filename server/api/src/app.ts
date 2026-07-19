@@ -46,6 +46,7 @@ import { devicesRouter } from "./modules/devices/devices.routes";
 import { accountsModuleRouter } from "./modules/accounts";
 import { inventoryModuleRouter } from "./modules/inventory";
 import { bulkSmsRouter } from "./modules/notifications/bulk.routes";
+import { notificationCenterRouter } from "./modules/notifications/notification-center.routes";
 import { internalRouter } from "./routes/internal";
 
 const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL, env.TEACHER_URL].filter((url): url is string => !!url);
@@ -128,6 +129,7 @@ export function createApp(): Express {
   app.use("/api/accounts", accountsModuleRouter);
   app.use("/api/inventory", inventoryModuleRouter);
   app.use("/api/notifications", bulkSmsRouter);
+  app.use("/api/notifications", notificationCenterRouter);
   app.use("/internal", internalRouter);
 
   app.use(errorHandler);

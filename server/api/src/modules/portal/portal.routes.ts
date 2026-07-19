@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { PORTAL_ROLES } from "../../lib/roles";
+import { PORTAL_ROLES, COMPLAINT_MANAGE_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES } from "../../lib/roles";
 import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema } from "@education-erp/validators";
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
@@ -20,6 +20,7 @@ import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { postComplaintMessage } from "../complaints/complaint-message.helper";
+import { notifyRoles } from "../../services/in-app-notification.service";
 
 export const portalRouter = Router();
 portalRouter.use(authenticate, authorize(PORTAL_ROLES));
@@ -427,6 +428,12 @@ portalRouter.post(
     const request = await prisma.documentRequest.create({
       data: { student_id: id, requested_by_user_id: req.user!.sub, doc_type: body.doc_type, reason: body.reason },
     });
+    await notifyRoles(DOCUMENT_REQUEST_REVIEW_ROLES, {
+      type: "DOCUMENT_REQUESTED",
+      title: "New document request",
+      body: `${body.doc_type} requested`,
+      link: "/document-requests",
+    });
     res.status(201).json({ success: true, data: request });
   }),
 );
@@ -756,6 +763,12 @@ portalRouter.post(
   asyncHandler(async (req, res) => {
     const body = createComplaintSchema.parse(req.body);
     const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
+    await notifyRoles(COMPLAINT_MANAGE_ROLES, {
+      type: "COMPLAINT_FILED",
+      title: "New complaint filed",
+      body: complaint.description.slice(0, 140),
+      link: "/complaints",
+    });
     res.status(201).json({ success: true, data: complaint });
   }),
 );

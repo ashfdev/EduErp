@@ -3,6 +3,7 @@ import { env } from "./lib/env";
 import { createApp } from "./app";
 import { logger } from "./lib/logger";
 import { loadPermissionsFromDb } from "./lib/permissions";
+import { attachSocketServer } from "./realtime/socket";
 
 const port = env.PORT;
 
@@ -14,9 +15,10 @@ async function start() {
   // be checked against them.
   await loadPermissionsFromDb();
   const app = createApp();
-  app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     logger.info(`API listening on http://localhost:${port}`);
   });
+  attachSocketServer(httpServer);
 }
 
 start().catch((err) => {

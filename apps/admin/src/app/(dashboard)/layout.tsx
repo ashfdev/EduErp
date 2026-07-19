@@ -7,15 +7,16 @@ import { useTranslations } from "next-intl";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Button } from "@education-erp/ui";
+import { Button, NotificationBell } from "@education-erp/ui";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useInstitution } from "@/hooks/use-institution";
-import { 
-  LayoutDashboard, Users, GraduationCap, AlertCircle, FileText, 
-  ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen, 
-  Wallet, Calculator, Package, UserPlus, Printer, Globe, 
-  Briefcase, Library, Bus, Home, BarChart3, MessageSquare, 
-  Settings, LogOut, Bell, Search 
+import { useNotifications } from "@/hooks/use-notifications";
+import {
+  LayoutDashboard, Users, GraduationCap, AlertCircle, FileText,
+  ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
+  Wallet, Calculator, Package, UserPlus, Printer, Globe,
+  Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
+  Settings, LogOut, Search
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -49,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { user, refreshToken, logout } = useAuthStore();
   const { institutionName, logoUrl } = useInstitution();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
   const [headerSearch, setHeaderSearch] = useState("");
@@ -136,10 +138,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button className="relative rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                <Bell className="h-5 w-5" />
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive border border-card"></span>
-              </button>
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadCount}
+                onMarkAllRead={markAllRead}
+                onNotificationClick={(n) => {
+                  markRead(n.id);
+                  if (n.link) router.push(n.link);
+                }}
+              />
               <div className="h-6 w-px bg-border"></div>
               <LanguageToggle />
             </div>

@@ -10,6 +10,7 @@ import { HR_MANAGE_ROLES, LEAVE_APPROVE_ROLES } from "../../lib/roles";
 import { leaveTypeSchema, applyLeaveSchema, rejectLeaveSchema } from "@education-erp/validators";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
+import { createInAppNotification, notifyRoles } from "../../services/in-app-notification.service";
 
 // GET / and POST /apply took a caller-supplied staff_id with no ownership
 // check at all — any authenticated staff member could list every other
@@ -159,6 +160,12 @@ leavesRouter.post(
     }
 
     const leave = await prisma.leaveRequest.create({ data: body });
+    await notifyRoles(LEAVE_APPROVE_ROLES, {
+      type: "LEAVE_APPLIED",
+      title: "New leave application",
+      body: `${leaveType.name}, ${body.from_date.toLocaleDateString()} - ${body.to_date.toLocaleDateString()}`,
+      link: "/hr/leave",
+    });
     res.status(201).json({ success: true, data: leave });
   }),
 );
@@ -189,6 +196,15 @@ leavesRouter.put(
       return result;
     });
 
+    const staff = await prisma.staff.findUnique({ where: { id: leave.staff_id }, select: { user_id: true } });
+    if (staff?.user_id) {
+      await createInAppNotification({
+        userId: staff.user_id,
+        type: "LEAVE_APPROVED",
+        title: "Leave request approved",
+        link: "/leave",
+      });
+    }
     res.json({ success: true, data: updated });
   }),
 );
@@ -204,6 +220,16 @@ leavesRouter.put(
     if (leave.status !== "PENDING") throw badRequest("Only pending leave requests can be rejected");
 
     const updated = await prisma.leaveRequest.update({ where: { id }, data: { status: "REJECTED", rejection_reason: body.reason } });
+    const staff = await prisma.staff.findUnique({ where: { id: leave.staff_id }, select: { user_id: true } });
+    if (staff?.user_id) {
+      await createInAppNotification({
+        userId: staff.user_id,
+        type: "LEAVE_REJECTED",
+        title: "Leave request rejected",
+        body: body.reason,
+        link: "/leave",
+      });
+    }
     res.json({ success: true, data: updated });
   }),
 );

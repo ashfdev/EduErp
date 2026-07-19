@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { fetchContent, API_URL } from "@/lib/content-api";
 import type { Notice } from "@/lib/types";
 import { PdfPreviewModal } from "@education-erp/ui";
+import { markNoticesVisited } from "@/lib/notices-visit";
 
 const TAB_KEYS = ["tabAll", "tabRecent", "tabPublic", "tabStudents", "tabStaff", "tabGuardians"] as const;
 const TAB_FILTER_VALUES = ["All", "Recent", "PUBLIC", "STUDENTS", "STAFF", "GUARDIANS"] as const;
@@ -17,6 +18,7 @@ export default function NoticesPage() {
 
   useEffect(() => {
     fetchContent<Notice[]>("/notices", { limit: "100" }).then((d) => setNotices(d ?? []));
+    markNoticesVisited();
   }, []);
 
   const filtered = notices.filter((n) => {

@@ -4,13 +4,21 @@ import { ProtectedRoute } from "./protected-route";
 import { PortalNav } from "./portal-nav";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
+import { useNotifications } from "@/hooks/use-notifications";
+import { NotificationBell } from "@education-erp/ui";
 import { UserCircle2, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const { students, activeStudentId, setActiveStudent, logout } = useAuthStore();
   const { institutionName, logoUrl } = useInstitution();
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const router = useRouter();
+
+  function handleNotificationClick(n: { id: string; link?: string | null }) {
+    markRead(n.id);
+    if (n.link) router.push(n.link);
+  }
 
   const handleLogout = () => {
     logout();
@@ -28,7 +36,14 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
             ) : (
               <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-sm font-bold text-white">E</div>
             )}
-            <span className="line-clamp-2 leading-tight text-base font-bold tracking-tight text-white">{institutionName ?? "Education ERP"}</span>
+            <span className="line-clamp-2 leading-tight flex-1 text-base font-bold tracking-tight text-white">{institutionName ?? "Education ERP"}</span>
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadCount}
+              onMarkAllRead={markAllRead}
+              onNotificationClick={handleNotificationClick}
+              className="text-slate-300"
+            />
           </div>
           
           {students.length > 1 && (
@@ -77,9 +92,17 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 )}
                 <span className="line-clamp-2 leading-tight text-sm font-semibold tracking-tight text-foreground">{institutionName ?? "Education ERP"}</span>
               </div>
-              <button onClick={handleLogout} className="text-slate-400 hover:text-red-500">
-                <LogOut className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <NotificationBell
+                  notifications={notifications}
+                  unreadCount={unreadCount}
+                  onMarkAllRead={markAllRead}
+                  onNotificationClick={handleNotificationClick}
+                />
+                <button onClick={handleLogout} className="text-slate-400 hover:text-red-500">
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             
             {students.length > 1 && (
