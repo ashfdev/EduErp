@@ -228,11 +228,6 @@ export default function LoginPage() {
                 <Button type="submit" className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 transition-all text-white" disabled={loading}>
                   {loading ? t("signingIn") : "Login"}
                 </Button>
-
-                <div className="mt-4 text-center text-sm text-slate-500">
-                  <span className="mr-1">Don't have account?</span>
-                  <button type="button" className="text-blue-500 hover:underline">Create new account</button>
-                </div>
               </form>
             )}
 

@@ -189,7 +189,7 @@ export default function TeacherProfilePage() {
                         <p className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg inline-block mb-2">
                           {t("overallScore", { score: r.overall_score ?? 0 })}
                         </p>
-                        {r.overall_comments && <p className="text-sm text-slate-600 mt-1 italic">"{r.overall_comments}"</p>}
+                        {r.overall_comments && <p className="text-sm text-slate-600 mt-1 italic">&ldquo;{r.overall_comments}&rdquo;</p>}
                         {r.status === "SUBMITTED" && (
                           <Button size="sm" className="mt-4 rounded-xl font-bold" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
                             {t("acknowledge")}

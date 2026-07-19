@@ -7,10 +7,11 @@ import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 import { NoticeBoardWidget } from "@/components/notice-board-widget";
 import type { Institution, Slider, Notice, GalleryAlbum, EventItem, AdmissionCycleSummary, GoverningBodyMember, FacultyMember } from "@/lib/types";
-import { 
-  Users, UserCheck, CalendarDays, BookOpen, 
+import {
+  Users, UserCheck, CalendarDays, BookOpen,
   ChevronRight, Megaphone, ArrowRight, Image as ImageIcon,
-  GraduationCap, Download, MapPin, Building2, MessageSquare
+  GraduationCap, Download, MapPin, Building2, MessageSquare,
+  type LucideIcon
 } from "lucide-react";
 import { Button } from "@education-erp/ui";
 
@@ -61,7 +62,7 @@ export default function HomePage() {
         <div className="bg-primary text-primary-foreground overflow-hidden py-2 text-sm font-medium">
           <div className="flex animate-[ticker_40s_linear_infinite] gap-12 whitespace-nowrap px-4 hover:[animation-play-state:paused]">
             {[...notices, ...notices].map((n, i) => (
-              <Link key={`${n.id}-${i}`} href={`/notices/${n.id}`} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <Link key={`${n.id}-${i}`} href="/notices" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                 {n.is_pinned ? <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">Pinned</span> : <Megaphone className="h-3 w-3" />}
                 {n.title}
               </Link>
@@ -179,7 +180,7 @@ export default function HomePage() {
                 <p className="font-bold text-lg text-slate-800">{institution?.principal_name ?? t("principalFallback")}</p>
                 <p className="text-sm font-medium text-primary mb-4">{institution?.principal_designation}</p>
                 <p className="line-clamp-4 text-sm leading-relaxed text-slate-600 mb-4 italic flex-1">
-                  "{institution?.mission_text ?? t("welcomeMessage")}"
+                  &ldquo;{institution?.mission_text ?? t("welcomeMessage")}&rdquo;
                 </p>
                 <Link href="/about/principal_message" className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 mt-auto">
                   {t("readMore")} <ChevronRight className="ml-1 h-4 w-4" />
@@ -207,6 +208,59 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* Governing Body & Teachers */}
+        {(governingBody.length > 0 || faculty.length > 0) && (
+          <div className="grid grid-cols-1 gap-12 mb-20 lg:grid-cols-2">
+            {governingBody.length > 0 && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                    <Users className="h-6 w-6 text-primary" />
+                    {t("governingBody")}
+                  </h2>
+                  <Button variant="ghost" asChild className="text-primary hover:bg-primary/10">
+                    <Link href="/governing-body">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {governingBody.map((m) => (
+                    <div key={m.id} className="w-24 text-center">
+                      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                        {m.photo_url && <Image src={m.photo_url} alt={m.name} width={64} height={64} className="h-full w-full object-cover" />}
+                      </div>
+                      <p className="mt-2 truncate text-xs font-bold text-slate-700">{m.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {faculty.length > 0 && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                    <GraduationCap className="h-6 w-6 text-primary" />
+                    {t("teachers")}
+                  </h2>
+                  <Button variant="ghost" asChild className="text-primary hover:bg-primary/10">
+                    <Link href="/faculty">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {faculty.map((f) => (
+                    <div key={f.id} className="w-24 text-center">
+                      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                        {f.photo_url && <Image src={f.photo_url} alt={f.name_en} width={64} height={64} className="h-full w-full object-cover" />}
+                      </div>
+                      <p className="mt-2 truncate text-xs font-bold text-slate-700">{f.name_en}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
 
         {/* Gallery & Events */}
         <div className={`grid grid-cols-1 gap-12 mb-20 ${albums.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1 max-w-4xl mx-auto"}`}>
@@ -294,7 +348,7 @@ export default function HomePage() {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number, icon: any, color: string }) {
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: LucideIcon; color: string }) {
   return (
     <div className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-xl shadow-black/5 ring-1 ring-slate-100 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/10">
       <div className={`absolute -right-4 -top-4 rounded-full bg-slate-50 p-6 transition-transform duration-500 group-hover:scale-150`}>

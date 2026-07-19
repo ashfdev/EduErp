@@ -13,10 +13,9 @@ interface AttendanceRecord {
   status: string;
 }
 
-import { ChevronLeft, ChevronRight, CalendarDays, CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, CheckCircle2, XCircle, Clock, AlertCircle, type LucideIcon } from "lucide-react";
 
-// (Skipping boilerplate above AttendanceContent - we'll just rewrite AttendanceContent)
-const STATUS_STYLES: Record<string, { bg: string, text: string, label: string, icon: any }> = {
+const STATUS_STYLES: Record<string, { bg: string, text: string, label: string, icon: LucideIcon }> = {
   PRESENT: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Present", icon: CheckCircle2 },
   ABSENT: { bg: "bg-rose-100", text: "text-rose-700", label: "Absent", icon: XCircle },
   LATE: { bg: "bg-amber-100", text: "text-amber-700", label: "Late", icon: Clock },
