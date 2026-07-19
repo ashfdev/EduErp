@@ -11,6 +11,7 @@ import {
   Button,
   Input,
   Label,
+  Textarea,
   Badge,
   EmptyState,
   Dialog,
@@ -30,6 +31,18 @@ interface ComplaintRow {
   created_at: string;
 }
 
+interface ComplaintMessage {
+  id: string;
+  sender_user_id: string;
+  sender_name: string | null;
+  message: string;
+  created_at: string;
+}
+interface ComplaintDetail extends ComplaintRow {
+  raised_by_name: string | null;
+  messages: ComplaintMessage[];
+}
+
 const STATUS_OPTIONS = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 
 export default function ComplaintsPage() {
@@ -38,10 +51,31 @@ export default function ComplaintsPage() {
   const [draft, setDraft] = useState({ category: "ACADEMIC", description: "" });
   const [resolveId, setResolveId] = useState<string | null>(null);
   const [resolveDraft, setResolveDraft] = useState({ status: "RESOLVED", resolution_notes: "" });
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
 
   const { data: complaints } = useQuery<ComplaintRow[]>({
     queryKey: ["complaints"],
     queryFn: async () => (await api.get("/api/complaints")).data.data,
+  });
+
+  const { data: thread } = useQuery<ComplaintDetail>({
+    queryKey: ["complaints", threadId],
+    queryFn: async () => (await api.get(`/api/complaints/${threadId}`)).data.data,
+    enabled: !!threadId,
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: () => api.post(`/api/complaints/${threadId}/messages`, { message: reply }),
+    onSuccess: () => {
+      setReply("");
+      queryClient.invalidateQueries({ queryKey: ["complaints", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["complaints"] });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to send reply";
+      toast.error(message);
+    },
   });
 
   async function downloadExcel() {
@@ -112,7 +146,10 @@ export default function ComplaintsPage() {
                   <td className="p-2"><Badge variant="outline">{c.category}</Badge></td>
                   <td className="p-2">{c.description}</td>
                   <td className="p-2"><Badge variant={c.status === "RESOLVED" || c.status === "CLOSED" ? "default" : "outline"}>{c.status}</Badge></td>
-                  <td className="p-2">
+                  <td className="p-2 space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => { setThreadId(c.id); setReply(""); }}>
+                      Thread
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => { setResolveId(c.id); setResolveDraft({ status: c.status === "OPEN" ? "IN_PROGRESS" : "RESOLVED", resolution_notes: c.resolution_notes ?? "" }); }}>
                       Update
                     </Button>
@@ -157,6 +194,50 @@ export default function ComplaintsPage() {
             <div className="space-y-1.5"><Label>Resolution Notes</Label><Input value={resolveDraft.resolution_notes} onChange={(e) => setResolveDraft((p) => ({ ...p, resolution_notes: e.target.value }))} /></div>
           </div>
           <DialogFooter><Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>Save</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!threadId} onOpenChange={(o) => !o && setThreadId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Complaint Thread</DialogTitle></DialogHeader>
+          {thread && (
+            <div className="space-y-3">
+              <div className="rounded-md border p-3 text-sm">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="font-medium">{thread.raised_by_name ?? "Requester"}</span>
+                  <Badge variant={thread.status === "RESOLVED" || thread.status === "CLOSED" ? "default" : "outline"}>{thread.status}</Badge>
+                </div>
+                <p>{thread.description}</p>
+              </div>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {thread.messages.map((m) => (
+                  <div key={m.id} className="rounded-md bg-muted/50 p-2 text-sm">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{m.sender_name ?? "User"}</span>
+                      <span>{new Date(m.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1">{m.message}</p>
+                  </div>
+                ))}
+                {!thread.messages.length && <p className="text-sm text-muted-foreground">No replies yet.</p>}
+              </div>
+              {thread.status !== "CLOSED" ? (
+                <div className="space-y-1.5">
+                  <Label>Reply</Label>
+                  <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">This complaint is closed — file a new complaint instead of replying here.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {thread?.status !== "CLOSED" && (
+              <Button onClick={() => replyMutation.mutate()} disabled={replyMutation.isPending || !reply.trim()}>
+                {replyMutation.isPending ? "Sending..." : "Send Reply"}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageWrapper>

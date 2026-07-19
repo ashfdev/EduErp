@@ -82,7 +82,15 @@
     "categoryBullying": "Bullying",
     "categoryOther": "Other",
     "submit": "Submit",
-    "submitted": "Complaint submitted"
+    "submitted": "Complaint submitted",
+    "viewThread": "View Thread",
+    "threadTitle": "Complaint Thread",
+    "noReplies": "No replies yet.",
+    "reply": "Reply",
+    "sendReply": "Send Reply",
+    "sending": "Sending...",
+    "replyFailed": "Failed to send reply",
+    "closedNotice": "This complaint is closed — please raise a new complaint instead of replying here."
   },
   "fees": {
     "title": "Fees",

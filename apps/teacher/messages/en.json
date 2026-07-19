@@ -14,6 +14,7 @@
     "quizzes": "Quizzes",
     "ptm": "PTM",
     "leave": "Leave",
+    "complaints": "Complaints",
     "profile": "Profile"
   },
   "login": {
@@ -224,5 +225,29 @@
     "typeHandout": "Handout",
     "typeAssignment": "Assignment",
     "typeOther": "Other"
+  },
+  "complaints": {
+    "title": "Complaints",
+    "subtitle": "Raise or track your own complaints and grievances",
+    "raise": "+ Raise Complaint",
+    "noComplaints": "No complaints raised yet",
+    "raiseTitle": "Raise a Complaint",
+    "category": "Category",
+    "description": "Description",
+    "categoryAcademic": "Academic",
+    "categoryFacility": "Facility",
+    "categoryStaffConduct": "Staff Conduct",
+    "categoryBullying": "Bullying",
+    "categoryOther": "Other",
+    "submit": "Submit",
+    "submitted": "Complaint submitted",
+    "viewThread": "View Thread",
+    "threadTitle": "Complaint Thread",
+    "noReplies": "No replies yet.",
+    "reply": "Reply",
+    "sendReply": "Send Reply",
+    "sending": "Sending...",
+    "replyFailed": "Failed to send reply",
+    "closedNotice": "This complaint is closed — please raise a new complaint instead of replying here."
   }
 }

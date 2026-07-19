@@ -14,6 +14,7 @@
     "quizzes": "কুইজ",
     "ptm": "অভিভাবক সভা",
     "leave": "ছুটি",
+    "complaints": "অভিযোগ",
     "profile": "প্রোফাইল"
   },
   "login": {
@@ -224,5 +225,29 @@
     "typeHandout": "হ্যান্ডআউট",
     "typeAssignment": "অ্যাসাইনমেন্ট",
     "typeOther": "অন্যান্য"
+  },
+  "complaints": {
+    "title": "অভিযোগ",
+    "subtitle": "নিজের অভিযোগ জানান বা পর্যালোচনা করুন",
+    "raise": "+ অভিযোগ জানান",
+    "noComplaints": "এখনো কোনো অভিযোগ জানানো হয়নি",
+    "raiseTitle": "অভিযোগ জানান",
+    "category": "বিভাগ",
+    "description": "বিবরণ",
+    "categoryAcademic": "একাডেমিক",
+    "categoryFacility": "সুযোগ-সুবিধা",
+    "categoryStaffConduct": "কর্মীর আচরণ",
+    "categoryBullying": "বুলিং",
+    "categoryOther": "অন্যান্য",
+    "submit": "জমা দিন",
+    "submitted": "অভিযোগ জমা হয়েছে",
+    "viewThread": "থ্রেড দেখুন",
+    "threadTitle": "অভিযোগের থ্রেড",
+    "noReplies": "এখনো কোনো উত্তর নেই।",
+    "reply": "উত্তর দিন",
+    "sendReply": "উত্তর পাঠান",
+    "sending": "পাঠানো হচ্ছে...",
+    "replyFailed": "উত্তর পাঠানো যায়নি",
+    "closedNotice": "এই অভিযোগটি বন্ধ করা হয়েছে — এখানে উত্তর না দিয়ে নতুন অভিযোগ জানান।"
   }
 }

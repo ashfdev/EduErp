@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema } from "@education-erp/validators";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema } from "@education-erp/validators";
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
@@ -19,6 +19,7 @@ import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.servi
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
+import { postComplaintMessage } from "../complaints/complaint-message.helper";
 
 export const portalRouter = Router();
 portalRouter.use(authenticate, authorize(PORTAL_ROLES));
@@ -756,6 +757,39 @@ portalRouter.post(
     const body = createComplaintSchema.parse(req.body);
     const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
     res.status(201).json({ success: true, data: complaint });
+  }),
+);
+
+portalRouter.get(
+  "/complaints/:id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const complaint = await prisma.complaint.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { created_at: "asc" } } },
+    });
+    if (!complaint || complaint.raised_by_user_id !== req.user!.sub) throw notFound("Complaint not found");
+
+    const senderIds = [...new Set(complaint.messages.map((m) => m.sender_user_id))];
+    const senders = await prisma.user.findMany({ where: { id: { in: senderIds } }, select: { id: true, name_en: true } });
+    const nameById = new Map(senders.map((s) => [s.id, s.name_en]));
+    res.json({
+      success: true,
+      data: { ...complaint, messages: complaint.messages.map((m) => ({ ...m, sender_name: nameById.get(m.sender_user_id) ?? null })) },
+    });
+  }),
+);
+
+portalRouter.post(
+  "/complaints/:id/messages",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.complaint.findUnique({ where: { id } });
+    if (!existing || existing.raised_by_user_id !== req.user!.sub) throw notFound("Complaint not found");
+
+    const body = createComplaintMessageSchema.parse(req.body);
+    const message = await postComplaintMessage(id, req.user!.sub, body.message, req);
+    res.status(201).json({ success: true, data: message });
   }),
 );
 

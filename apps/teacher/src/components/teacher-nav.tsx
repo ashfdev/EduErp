@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/stores/auth-store";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useInstitution } from "@/hooks/use-institution";
-import { Home, CalendarCheck, BookOpen, Layers, Target, Users, Plane, User, LogOut } from "lucide-react";
+import { Home, CalendarCheck, BookOpen, Layers, Target, Users, Plane, User, LogOut, AlertCircle } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", key: "home", icon: Home },
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/resources", key: "resources", icon: Layers },
   { href: "/ptm", key: "ptm", icon: Users },
   { href: "/leave", key: "leave", icon: Plane },
+  { href: "/complaints", key: "complaints", icon: AlertCircle },
   { href: "/profile", key: "profile", icon: User },
 ];
 

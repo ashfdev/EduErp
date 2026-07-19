@@ -682,9 +682,24 @@ model Complaint {
   resolved_at       DateTime?
   created_at        DateTime          @default(now())
   updated_at        DateTime          @updatedAt
+  messages          ComplaintMessage[]
 
   @@index([raised_by_user_id])
   @@index([status])
+}
+
+// Ticket-style reply thread on a Complaint — lets the original requester
+// push back on a RESOLVED complaint (auto-reopens it, see
+// postComplaintMessage()) instead of only ever filing a brand-new one.
+model ComplaintMessage {
+  id              String    @id @default(cuid())
+  complaint_id    String
+  complaint       Complaint @relation(fields: [complaint_id], references: [id])
+  sender_user_id  String
+  message         String
+  created_at      DateTime  @default(now())
+
+  @@index([complaint_id])
 }
 
 enum DocumentRequestType {

@@ -82,7 +82,15 @@
     "categoryBullying": "বুলিং",
     "categoryOther": "অন্যান্য",
     "submit": "জমা দিন",
-    "submitted": "অভিযোগ জমা হয়েছে"
+    "submitted": "অভিযোগ জমা হয়েছে",
+    "viewThread": "থ্রেড দেখুন",
+    "threadTitle": "অভিযোগের থ্রেড",
+    "noReplies": "এখনো কোনো উত্তর নেই।",
+    "reply": "উত্তর দিন",
+    "sendReply": "উত্তর পাঠান",
+    "sending": "পাঠানো হচ্ছে...",
+    "replyFailed": "উত্তর পাঠানো যায়নি",
+    "closedNotice": "এই অভিযোগটি বন্ধ করা হয়েছে — এখানে উত্তর না দিয়ে নতুন অভিযোগ জানান।"
   },
   "fees": {
     "title": "ফি",

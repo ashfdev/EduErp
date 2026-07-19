@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, Input, Label, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, Badge, Button, Input, Label, Textarea, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState } from "@education-erp/ui";
 
 interface ComplaintRow {
   id: string;
@@ -16,15 +16,47 @@ interface ComplaintRow {
   created_at: string;
 }
 
+interface ComplaintMessage {
+  id: string;
+  sender_user_id: string;
+  sender_name: string | null;
+  message: string;
+  created_at: string;
+}
+interface ComplaintDetail extends ComplaintRow {
+  messages: ComplaintMessage[];
+}
+
 function ComplaintsContent() {
   const queryClient = useQueryClient();
   const t = useTranslations("complaints");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ category: "ACADEMIC", description: "" });
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
 
   const { data, isLoading } = useQuery<ComplaintRow[]>({
     queryKey: ["portal", "complaints"],
     queryFn: async () => (await api.get("/api/portal/complaints")).data.data,
+  });
+
+  const { data: thread } = useQuery<ComplaintDetail>({
+    queryKey: ["portal", "complaints", threadId],
+    queryFn: async () => (await api.get(`/api/portal/complaints/${threadId}`)).data.data,
+    enabled: !!threadId,
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: () => api.post(`/api/portal/complaints/${threadId}/messages`, { message: reply }),
+    onSuccess: () => {
+      setReply("");
+      queryClient.invalidateQueries({ queryKey: ["portal", "complaints", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["portal", "complaints"] });
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("replyFailed");
+      toast.error(message);
+    },
   });
 
   const createMutation = useMutation({
@@ -55,7 +87,10 @@ function ComplaintsContent() {
               <Badge variant={c.status === "RESOLVED" || c.status === "CLOSED" ? "default" : "outline"}>{c.status}</Badge>
             </div>
             <p className="text-sm">{c.description}</p>
-            <p className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</p>
+              <Button size="sm" variant="outline" onClick={() => { setThreadId(c.id); setReply(""); }}>{t("viewThread")}</Button>
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -77,6 +112,50 @@ function ComplaintsContent() {
             <div className="space-y-1.5"><Label>{t("description")}</Label><Input value={draft.description} onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))} /></div>
           </div>
           <DialogFooter><Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !draft.description}>{t("submit")}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!threadId} onOpenChange={(o) => !o && setThreadId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("threadTitle")}</DialogTitle></DialogHeader>
+          {thread && (
+            <div className="space-y-3">
+              <div className="rounded-md border p-3 text-sm">
+                <div className="mb-1 flex items-center justify-between">
+                  <Badge variant="outline">{thread.category}</Badge>
+                  <Badge variant={thread.status === "RESOLVED" || thread.status === "CLOSED" ? "default" : "outline"}>{thread.status}</Badge>
+                </div>
+                <p>{thread.description}</p>
+              </div>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {thread.messages.map((m) => (
+                  <div key={m.id} className="rounded-md bg-gray-50 p-2 text-sm">
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <span className="font-medium text-gray-700">{m.sender_name ?? "-"}</span>
+                      <span>{new Date(m.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1">{m.message}</p>
+                  </div>
+                ))}
+                {!thread.messages.length && <p className="text-sm text-gray-500">{t("noReplies")}</p>}
+              </div>
+              {thread.status !== "CLOSED" ? (
+                <div className="space-y-1.5">
+                  <Label>{t("reply")}</Label>
+                  <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} />
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">{t("closedNotice")}</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            {thread?.status !== "CLOSED" && (
+              <Button onClick={() => replyMutation.mutate()} disabled={replyMutation.isPending || !reply.trim()}>
+                {replyMutation.isPending ? t("sending") : t("sendReply")}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

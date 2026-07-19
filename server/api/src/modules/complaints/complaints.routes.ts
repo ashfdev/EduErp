@@ -7,9 +7,10 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, COMPLAINT_MANAGE_ROLES } from "../../lib/roles";
-import { createComplaintSchema, updateComplaintSchema } from "@education-erp/validators";
+import { createComplaintSchema, updateComplaintSchema, createComplaintMessageSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
+import { postComplaintMessage } from "./complaint-message.helper";
 
 // Staff-side surface. Portal callers use the separate routes in
 // portal.routes.ts — STAFF_ONLY_ROLES and PORTAL_ROLES are disjoint role
@@ -92,6 +93,45 @@ complaintsRouter.post(
     const body = createComplaintSchema.parse(req.body);
     const complaint = await prisma.complaint.create({ data: { ...body, raised_by_user_id: req.user!.sub } });
     res.status(201).json({ success: true, data: complaint });
+  }),
+);
+
+complaintsRouter.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const complaint = await prisma.complaint.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { created_at: "asc" } } },
+    });
+    if (!complaint) throw notFound("Complaint not found");
+    if (!manageAll(req.user!.role) && complaint.raised_by_user_id !== req.user!.sub) throw notFound("Complaint not found");
+
+    const senderIds = [...new Set([complaint.raised_by_user_id, ...complaint.messages.map((m) => m.sender_user_id)])];
+    const senders = await prisma.user.findMany({ where: { id: { in: senderIds } }, select: { id: true, name_en: true } });
+    const nameById = new Map(senders.map((s) => [s.id, s.name_en]));
+    res.json({
+      success: true,
+      data: {
+        ...complaint,
+        raised_by_name: nameById.get(complaint.raised_by_user_id) ?? null,
+        messages: complaint.messages.map((m) => ({ ...m, sender_name: nameById.get(m.sender_user_id) ?? null })),
+      },
+    });
+  }),
+);
+
+complaintsRouter.post(
+  "/:id/messages",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.complaint.findUnique({ where: { id } });
+    if (!existing) throw notFound("Complaint not found");
+    if (!manageAll(req.user!.role) && existing.raised_by_user_id !== req.user!.sub) throw notFound("Complaint not found");
+
+    const body = createComplaintMessageSchema.parse(req.body);
+    const message = await postComplaintMessage(id, req.user!.sub, body.message, req);
+    res.status(201).json({ success: true, data: message });
   }),
 );
 

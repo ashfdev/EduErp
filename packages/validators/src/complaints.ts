@@ -12,3 +12,8 @@ export const updateComplaintSchema = z.object({
   resolution_notes: z.string().optional().nullable(),
 });
 export type UpdateComplaintInput = z.infer<typeof updateComplaintSchema>;
+
+export const createComplaintMessageSchema = z.object({
+  message: z.string().min(1),
+});
+export type CreateComplaintMessageInput = z.infer<typeof createComplaintMessageSchema>;
