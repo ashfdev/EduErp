@@ -10,6 +10,7 @@ import { notFound } from "../../lib/errors";
 import { sendEmail } from "../../services/email.service";
 import { renderDocument } from "../../services/pdf.service";
 import { TEACHING_ROLES } from "../../lib/roles";
+import { allowIframeEmbed } from "../../middleware/allow-iframe";
 
 export const contentRouter = Router();
 contentRouter.use(contentLimiter);
@@ -110,6 +111,7 @@ contentRouter.get(
 // even by guessing an id.
 contentRouter.get(
   "/notices/:id/pdf",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const notice = await prisma.notice.findFirst({ where: { id, is_published: true, is_public_website: true } });

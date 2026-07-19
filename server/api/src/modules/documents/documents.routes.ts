@@ -12,6 +12,7 @@ import { computeClassResults } from "../results/results.routes";
 import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
+import { allowIframeEmbed } from "../../middleware/allow-iframe";
 
 export const documentsRouter = Router();
 // Generates PDFs containing full personal/academic/financial data for any
@@ -20,7 +21,7 @@ export const documentsRouter = Router();
 // /api/portal/student/:id/results/:exam_id/marksheet route instead.
 documentsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
-function sendPdf(res: import("express").Response, buffer: Buffer, filename: string, download: boolean) {
+export function sendPdf(res: import("express").Response, buffer: Buffer, filename: string, download: boolean) {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `${download ? "attachment" : "inline"}; filename="${filename}"`);
   res.send(buffer);
@@ -251,6 +252,7 @@ documentsRouter.get(
 
 documentsRouter.get(
   "/exam/:exam_id/seat-plan",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
@@ -594,6 +596,7 @@ documentsRouter.get(
 
 documentsRouter.get(
   "/fee/receipt/:payment_id",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const paymentId = reqParam(req, "payment_id");
     const payment = await prisma.payment.findUnique({
@@ -620,6 +623,7 @@ documentsRouter.get(
 
 documentsRouter.get(
   "/fee/invoice/:invoice_id",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const invoiceId = reqParam(req, "invoice_id");
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { student: { include: { current_class: true, current_section: true } } } });

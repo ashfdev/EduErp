@@ -6,7 +6,8 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, LoadingSpinner, PdfPreviewModal } from "@education-erp/ui";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Clearance {
   accounts: { required: boolean; clear: boolean; due_amount: number };
@@ -32,6 +33,7 @@ function AdmitCardContent() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("admitCard");
+  const pdfPreview = usePdfPreview();
 
   const { data, isLoading } = useQuery<Clearance>({
     queryKey: ["portal", "admit-card-clearance", activeStudentId, exam_id],
@@ -70,10 +72,28 @@ function AdmitCardContent() {
       </Card>
 
       {data?.all_clear ? (
-        <Button className="w-full" onClick={download}>{t("download")}</Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => pdfPreview.openPreview(`/api/portal/student/${activeStudentId}/admit-card/${exam_id}`, t("title"))}
+          >
+            {t("view")}
+          </Button>
+          <Button className="flex-1" onClick={download}>{t("download")}</Button>
+        </div>
       ) : (
         <p className="text-center text-sm text-gray-500">{t("clearPending")}</p>
       )}
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(open) => !open && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+        downloadLabel={t("download")}
+        closeLabel={t("close")}
+      />
     </div>
   );
 }

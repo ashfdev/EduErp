@@ -3,6 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../middleware/async-handler";
 import { localFilePath, verifyLocalToken } from "../services/storage.service";
 import { forbidden, badRequest } from "../lib/errors";
+import { allowIframeEmbed } from "../middleware/allow-iframe";
 
 export const uploadsRouter = Router();
 
@@ -21,6 +22,7 @@ function suggestedFilename(blobKey: string): string {
 
 uploadsRouter.get(
   "/local-file",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const query = z
       .object({ blobKey: z.string().min(1), expiresAt: z.coerce.number(), token: z.string().min(1) })
@@ -39,6 +41,7 @@ uploadsRouter.get(
 // unsigned unless a SAS is requested. Used for public assets (logos, etc.).
 uploadsRouter.get(
   "/local-file/direct",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const query = z.object({ blobKey: z.string().min(1) }).safeParse(req.query);
     if (!query.success) throw badRequest("Invalid file reference");

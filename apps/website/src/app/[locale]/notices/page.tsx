@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchContent, API_URL } from "@/lib/content-api";
 import type { Notice } from "@/lib/types";
+import { PdfPreviewModal } from "@education-erp/ui";
 
 const TAB_KEYS = ["tabAll", "tabRecent", "tabPublic", "tabStudents", "tabStaff", "tabGuardians"] as const;
 const TAB_FILTER_VALUES = ["All", "Recent", "PUBLIC", "STUDENTS", "STAFF", "GUARDIANS"] as const;
@@ -12,6 +13,7 @@ export default function NoticesPage() {
   const t = useTranslations("notices");
   const [notices, setNotices] = useState<Notice[]>([]);
   const [tab, setTab] = useState<(typeof TAB_FILTER_VALUES)[number]>("All");
+  const [previewNotice, setPreviewNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
     fetchContent<Notice[]>("/notices", { limit: "100" }).then((d) => setNotices(d ?? []));
@@ -47,14 +49,13 @@ export default function NoticesPage() {
               <p className="mt-1 text-xs text-gray-400">{n.publish_at ? new Date(n.publish_at).toLocaleDateString() : ""} · {n.audience}</p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <a
-                href={`${API_URL}/api/content/notices/${n.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => setPreviewNotice(n)}
                 className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50"
               >
                 {t("viewPdf")}
-              </a>
+              </button>
               {n.attachment_url && (
                 <a href={n.attachment_url} target="_blank" rel="noreferrer" className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50">
                   {t("download")}
@@ -64,6 +65,15 @@ export default function NoticesPage() {
           </div>
         ))}
       </div>
+
+      <PdfPreviewModal
+        open={!!previewNotice}
+        onOpenChange={(open) => !open && setPreviewNotice(null)}
+        title={previewNotice?.title ?? ""}
+        pdfUrl={previewNotice ? `${API_URL}/api/content/notices/${previewNotice.id}/pdf` : null}
+        downloadLabel={t("download")}
+        closeLabel={t("closePreview")}
+      />
     </main>
   );
 }

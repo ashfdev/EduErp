@@ -12,12 +12,13 @@ import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
 import { getPaymentAdapter } from "../../services/payment";
-import { renderDocument } from "../../services/pdf.service";
-import { buildMarksheetData } from "../documents/documents.routes";
+import { renderDocument, generateQrDataUrl } from "../../services/pdf.service";
+import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
+import { allowIframeEmbed } from "../../middleware/allow-iframe";
 
 export const portalRouter = Router();
 portalRouter.use(authenticate, authorize(PORTAL_ROLES));
@@ -586,6 +587,7 @@ portalRouter.get(
 
 portalRouter.get(
   "/student/:id/admit-card/:exam_id",
+  allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const examId = reqParam(req, "exam_id");
@@ -635,6 +637,61 @@ portalRouter.post(
     const payment = await prisma.payment.create({ data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: invoice.amount_due - invoice.amount_paid, status: "INITIATED" } });
 
     res.json({ success: true, data: { payment_id: payment.id, payment_url: result.payment_url, session_id: result.session_id } });
+  }),
+);
+
+// Receipt/invoice PDFs — mirrors documents.routes.ts's staff-side
+// /fee/receipt and /fee/invoice data-building exactly, just ownership-gated
+// via assertAccess instead of a staff role, since the portal has no route
+// into that STAFF_ONLY_ROLES-gated router at all.
+portalRouter.get(
+  "/fees/receipts/:payment_id",
+  allowIframeEmbed,
+  asyncHandler(async (req, res) => {
+    const paymentId = reqParam(req, "payment_id");
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { invoice: { include: { student: { include: { current_class: true, current_section: true } } } } },
+    });
+    if (!payment) throw notFound("Payment not found");
+    await assertAccess(req.user!.sub, req.user!.role, payment.invoice.student_id);
+
+    const qr = await generateQrDataUrl(`receipt:${payment.id}`);
+    const pdf = await renderDocument("FEE_RECEIPT", {
+      receipt_no: payment.receipt_no ?? payment.id,
+      date: payment.paid_at ?? payment.created_at,
+      student: payment.invoice.student,
+      items: [{ category: payment.invoice.category, description: payment.invoice.description, amount: payment.amount, fine: 0 }],
+      total: payment.amount,
+      payment_method: payment.gateway,
+      transaction_id: payment.transaction_id,
+      is_invoice: false,
+      qr_code: qr,
+    });
+    sendPdf(res, pdf, `receipt-${payment.id}.pdf`, req.query.download === "true");
+  }),
+);
+
+portalRouter.get(
+  "/fees/invoices/:invoice_id/pdf",
+  allowIframeEmbed,
+  asyncHandler(async (req, res) => {
+    const invoiceId = reqParam(req, "invoice_id");
+    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { student: { include: { current_class: true, current_section: true } } } });
+    if (!invoice) throw notFound("Invoice not found");
+    await assertAccess(req.user!.sub, req.user!.role, invoice.student_id);
+
+    const pdf = await renderDocument("FEE_RECEIPT", {
+      receipt_no: invoice.invoice_no ?? invoice.id,
+      date: invoice.due_date,
+      student: invoice.student,
+      items: [{ category: invoice.category, description: invoice.description, amount: invoice.amount_due, fine: invoice.fine_amount }],
+      total: invoice.amount_due + invoice.fine_amount,
+      payment_method: "N/A",
+      transaction_id: null,
+      is_invoice: true,
+    });
+    sendPdf(res, pdf, `invoice-${invoice.id}.pdf`, req.query.download === "true");
   }),
 );
 

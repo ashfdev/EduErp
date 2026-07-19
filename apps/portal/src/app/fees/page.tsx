@@ -7,7 +7,8 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner, PdfPreviewModal } from "@education-erp/ui";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Invoice {
   id: string;
@@ -63,6 +64,7 @@ function FeesContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("fees");
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
+  const pdfPreview = usePdfPreview();
   const [showHistory, setShowHistory] = useState(false);
   const [pendingSlipPaymentId, setPendingSlipPaymentId] = useState<string | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
@@ -190,6 +192,13 @@ function FeesContent() {
                   <div className="flex items-center gap-3 text-sm text-slate-500 mt-2">
                     <span className="flex items-center gap-1"><CalendarClock className="h-4 w-4" /> {t("due", { date: new Date(inv.due_date).toLocaleDateString() })}</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => pdfPreview.openPreview(`/api/portal/fees/invoices/${inv.id}/pdf`, inv.description)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    {t("viewInvoice")}
+                  </button>
                 </div>
                 
                 <div className="flex flex-col items-end shrink-0 w-full sm:w-auto">
@@ -257,6 +266,13 @@ function FeesContent() {
                       <div>
                         <p className="font-bold text-slate-800 text-sm">{p.description}</p>
                         <p className="text-xs font-medium text-slate-500 mt-1">{p.gateway} · {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "-"}</p>
+                        <button
+                          type="button"
+                          onClick={() => pdfPreview.openPreview(`/api/portal/fees/receipts/${p.id}`, p.description)}
+                          className="text-xs font-semibold text-primary hover:underline mt-1"
+                        >
+                          {t("viewReceipt")}
+                        </button>
                       </div>
                       <p className="font-bold text-emerald-600">৳{p.amount}</p>
                     </CardContent>
@@ -267,6 +283,13 @@ function FeesContent() {
           </div>
         </div>
       </div>
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(open) => !open && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+      />
     </div>
   );
 }

@@ -100,6 +100,8 @@
     "hideHistory": "Hide Payment History",
     "showHistory": "Show Payment History",
     "noPayments": "No payments yet.",
+    "viewInvoice": "View Invoice",
+    "viewReceipt": "View Receipt",
     "gatewayError": "Payment gateway not configured yet — merchant credentials pending",
     "slipUploaded": "Slip uploaded — staff will verify it against the bank statement",
     "slipUploadFailed": "Failed to upload slip"
@@ -161,7 +163,9 @@
     "statusApproved": "Approved",
     "statusRejected": "Rejected",
     "rejectionReason": "Reason: {reason}",
-    "download": "Download PDF"
+    "download": "Download PDF",
+    "view": "View",
+    "close": "Close"
   },
   "resources": {
     "title": "Resources",
@@ -242,6 +246,8 @@
     "fineAmount": "৳{amount} fine",
     "awaitingSignoff": "Awaiting sign-off",
     "download": "Download Admit Card",
+    "view": "View",
+    "close": "Close",
     "clearPending": "Clear all pending items above to unlock your admit card."
   },
   "profile": {

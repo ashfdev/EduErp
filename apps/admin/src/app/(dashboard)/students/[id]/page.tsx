@@ -24,8 +24,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  PdfPreviewModal,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface StudentProfile {
   personal: {
@@ -115,6 +117,7 @@ export default function StudentProfilePage() {
   const queryClient = useQueryClient();
   const [graduateOpen, setGraduateOpen] = useState(false);
   const [graduationYear, setGraduationYear] = useState(new Date().getFullYear());
+  const pdfPreview = usePdfPreview();
 
   const { data: profile, isLoading } = useQuery<StudentProfile>({
     queryKey: ["students", id],
@@ -333,9 +336,12 @@ export default function StudentProfilePage() {
                         <td className="p-2">৳{inv.amount_paid}</td>
                         <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
                         <td className="p-2"><StatusBadge status={inv.status} /></td>
-                        <td className="p-2 text-right">
+                        <td className="p-2 text-right space-x-2">
+                          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.id}`)}>
+                            View
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/fee/invoice/${inv.id}`, `Invoice_${inv.id}.pdf`)}>
-                            Invoice
+                            Download
                           </Button>
                         </td>
                       </tr>
@@ -361,13 +367,20 @@ export default function StudentProfilePage() {
                                     <td className="py-1">৳{p.amount}</td>
                                     <td className="py-1">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
                                     <td className="py-1">{p.notes ?? "—"}</td>
-                                    <td className="py-1 text-right">
+                                    <td className="py-1 text-right space-x-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => pdfPreview.openPreview(`/api/documents/fee/receipt/${p.id}`, `Receipt — ${p.receipt_no ?? p.id}`)}
+                                      >
+                                        View
+                                      </Button>
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() => downloadPdf(`/api/documents/fee/receipt/${p.id}`, `Receipt_${p.receipt_no ?? p.id}.pdf`)}
                                       >
-                                        Receipt
+                                        Download
                                       </Button>
                                     </td>
                                   </tr>
@@ -393,6 +406,13 @@ export default function StudentProfilePage() {
           <StudentDisciplineTab studentId={id} />
         </TabsContent>
       </Tabs>
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(open) => !open && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+      />
     </PageWrapper>
   );
 }

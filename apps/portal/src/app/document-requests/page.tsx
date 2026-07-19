@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, Label, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, Badge, Button, Label, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState, PdfPreviewModal } from "@education-erp/ui";
 
 interface DocumentRequestRow {
   id: string;
@@ -33,6 +33,9 @@ function DocumentRequestsContent() {
   const [open, setOpen] = useState(false);
   const [docType, setDocType] = useState<"TESTIMONIAL" | "TRANSFER_CERTIFICATE">("TESTIMONIAL");
   const [reason, setReason] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data, isLoading } = useQuery<DocumentRequestRow[]>({
     queryKey: ["portal", "document-requests", activeStudentId],
@@ -53,6 +56,14 @@ function DocumentRequestsContent() {
   async function download(requestId: string) {
     const res = await api.get(`/api/portal/student/${activeStudentId}/document-requests/${requestId}/download`);
     window.open(res.data.data.url, "_blank");
+  }
+
+  async function preview(requestId: string, docType: "TESTIMONIAL" | "TRANSFER_CERTIFICATE") {
+    setPreviewTitle(t(docType === "TESTIMONIAL" ? "docTypeTestimonial" : "docTypeTransferCertificate"));
+    setPreviewUrl(null);
+    setPreviewOpen(true);
+    const res = await api.get(`/api/portal/student/${activeStudentId}/document-requests/${requestId}/download`);
+    setPreviewUrl(res.data.data.url);
   }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
@@ -77,7 +88,10 @@ function DocumentRequestsContent() {
             )}
             <p className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString()}</p>
             {r.status === "APPROVED" && (
-              <Button size="sm" variant="outline" onClick={() => download(r.id)}>{t("download")}</Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => preview(r.id, r.doc_type)}>{t("view")}</Button>
+                <Button size="sm" variant="outline" onClick={() => download(r.id)}>{t("download")}</Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -108,6 +122,15 @@ function DocumentRequestsContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfPreviewModal
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title={previewTitle}
+        pdfUrl={previewUrl}
+        downloadLabel={t("download")}
+        closeLabel={t("close")}
+      />
     </div>
   );
 }

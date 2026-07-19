@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, Badge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, Badge, EmptyState, PdfPreviewModal } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface SeatPlanRow {
   id: string;
@@ -48,6 +49,7 @@ export default function SeatPlanPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const pdfPreview = usePdfPreview();
 
   const { data: plans } = useQuery<SeatPlanRow[]>({
     queryKey: ["exams", id, "seat-plan"],
@@ -86,7 +88,14 @@ export default function SeatPlanPage() {
         title="Seat Plan"
         subtitle="Define each exam session and the classes sitting in it, then generate seats per session"
         breadcrumbs={[{ label: "Examination", href: "/examination" }, { label: "Seat Plan" }]}
-        action={!!plans?.length && <Button variant="outline" onClick={() => printSeatPlan(id)}>Print Seat Plan</Button>}
+        action={
+          !!plans?.length && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/exam/${id}/seat-plan`, "Seat Plan")}>View Seat Plan</Button>
+              <Button variant="outline" onClick={() => printSeatPlan(id)}>Print Seat Plan</Button>
+            </div>
+          )
+        }
       />
 
       <AddSessionForm examId={id} classes={classes} />
@@ -127,6 +136,13 @@ export default function SeatPlanPage() {
           </CardContent>
         </Card>
       )}
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(open) => !open && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+      />
     </PageWrapper>
   );
 }

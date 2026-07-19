@@ -193,7 +193,8 @@
     "tabGuardians": "GUARDIANS",
     "noNotices": "No notices found.",
     "download": "Download",
-    "viewPdf": "View PDF"
+    "viewPdf": "View PDF",
+    "closePreview": "Close"
   },
   "search": {
     "title": "Search",

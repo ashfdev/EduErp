@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, PdfPreviewModal } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Invoice {
   id: string;
@@ -31,6 +32,7 @@ async function downloadInvoicePdf(invoiceId: string) {
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
+  const pdfPreview = usePdfPreview();
   const { data: invoices } = useQuery<Invoice[]>({
     queryKey: ["fees", "invoices", status],
     queryFn: async () => (await api.get("/api/fees/invoices", { params: { status: status || undefined } })).data.data,
@@ -82,7 +84,8 @@ export default function InvoicesPage() {
                   <td className="p-2">৳{inv.fine_amount}</td>
                   <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
                   <td className="p-2"><StatusBadge status={inv.status} /></td>
-                  <td className="p-2 text-right">
+                  <td className="p-2 text-right space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.student.name_en}`)}>View</Button>
                     <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
                   </td>
                 </tr>
@@ -91,6 +94,13 @@ export default function InvoicesPage() {
           </table>
         </CardContent>
       </Card>
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(open) => !open && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+      />
     </PageWrapper>
   );
 }

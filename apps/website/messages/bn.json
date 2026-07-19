@@ -193,7 +193,8 @@
     "tabGuardians": "অভিভাবক",
     "noNotices": "কোনো নোটিশ পাওয়া যায়নি।",
     "download": "ডাউনলোড",
-    "viewPdf": "পিডিএফ দেখুন"
+    "viewPdf": "পিডিএফ দেখুন",
+    "closePreview": "বন্ধ করুন"
   },
   "search": {
     "title": "অনুসন্ধান",
