@@ -1738,6 +1738,12 @@ model PayrollRecord {
   year             Int
   working_days     Int
   present_days     Int
+  // True when fewer AttendanceRecord rows were found for the month than
+  // working_days — i.e. some days have no attendance data at all. Those
+  // days contribute zero absence deduction (never inferred as absent), so
+  // this flag exists to surface "review before finalizing" rather than let
+  // missing data silently under- or over-deduct.
+  attendance_incomplete Boolean  @default(false)
   gross_salary     Float
   deductions       Float
   net_salary       Float

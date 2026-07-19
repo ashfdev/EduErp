@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, StatusBadge, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -11,10 +11,15 @@ interface PayrollRow {
   staff: { name_en: string; department: { name_en: string } | null };
   working_days: number;
   present_days: number;
+  attendance_incomplete: boolean;
   gross_salary: number;
   deductions: number;
   net_salary: number;
   status: string;
+}
+interface DepartmentOption {
+  id: string;
+  name_en: string;
 }
 
 export default function PayrollPage() {
@@ -23,14 +28,26 @@ export default function PayrollPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [selected, setSelected] = useState<string[]>([]);
+  const [departmentId, setDepartmentId] = useState("");
+  const [status, setStatus] = useState("");
+
+  const { data: departments } = useQuery<DepartmentOption[]>({
+    queryKey: ["settings", "departments"],
+    queryFn: async () => (await api.get("/api/settings/departments")).data.data,
+  });
 
   const { data: records } = useQuery<PayrollRow[]>({
-    queryKey: ["hr", "payroll", month, year],
-    queryFn: async () => (await api.get("/api/hr/payroll", { params: { month, year } })).data.data,
+    queryKey: ["hr", "payroll", month, year, departmentId, status],
+    queryFn: async () =>
+      (
+        await api.get("/api/hr/payroll", {
+          params: { month, year, department_id: departmentId || undefined, status: status || undefined },
+        })
+      ).data.data,
   });
 
   const calculateMutation = useMutation({
-    mutationFn: () => api.post("/api/hr/payroll/calculate", { month, year }),
+    mutationFn: () => api.post("/api/hr/payroll/calculate", { month, year, department_id: departmentId || undefined }),
     onSuccess: (res) => {
       toast.success(`Processed ${res.data.data.processed} staff — total payable ৳${res.data.data.total_payable}`);
       queryClient.invalidateQueries({ queryKey: ["hr", "payroll", month, year] });
@@ -86,9 +103,25 @@ export default function PayrollPage() {
         action={<Button variant="outline" onClick={downloadExcel}>Export Excel</Button>}
       />
 
-      <div className="flex items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div><label className="text-sm">Month</label><Input type="number" min={1} max={12} value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-24" /></div>
         <div><label className="text-sm">Year</label><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-28" /></div>
+        <div>
+          <label className="text-sm">Department</label>
+          <select className="block w-44 rounded-md border px-3 py-2 text-sm" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            <option value="">All Departments</option>
+            {departments?.map((d) => <option key={d.id} value={d.id}>{d.name_en}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-sm">Status</label>
+          <select className="block w-36 rounded-md border px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="FINALIZED">Finalized</option>
+            <option value="PAID">Paid</option>
+          </select>
+        </div>
         <Button onClick={() => calculateMutation.mutate()} disabled={calculateMutation.isPending}>Calculate Payroll</Button>
         {hasDraft && <Button variant="outline" onClick={() => finalizeMutation.mutate()} disabled={finalizeMutation.isPending}>Finalize Month</Button>}
         {hasFinalized && selected.length > 0 && <Button variant="outline" onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>Mark Paid ({selected.length})</Button>}
@@ -116,7 +149,14 @@ export default function PayrollPage() {
                     <td className="p-2">{r.staff.name_en}</td>
                     <td className="p-2">{r.staff.department?.name_en ?? "-"}</td>
                     <td className="p-2">{r.working_days}</td>
-                    <td className="p-2">{r.present_days}</td>
+                    <td className="p-2">
+                      {r.present_days}
+                      {r.attendance_incomplete && (
+                        <Badge variant="warning" className="ml-2" title="Fewer attendance records than working days this month — absence deduction may be inaccurate, review before finalizing">
+                          Incomplete
+                        </Badge>
+                      )}
+                    </td>
                     <td className="p-2">৳{r.gross_salary.toFixed(0)}</td>
                     <td className="p-2">৳{r.deductions.toFixed(0)}</td>
                     <td className="p-2 font-medium">৳{r.net_salary.toFixed(0)}</td>

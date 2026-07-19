@@ -11,7 +11,7 @@ import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagic
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
-import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
+import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -336,6 +336,24 @@ hrStaffRouter.put(
 
     const updated = await prisma.staff.update({ where: { id }, data: { salary_structure_id: body.salary_structure_id } });
     res.json({ success: true, data: updated });
+  }),
+);
+
+// Bulk equivalent of the single-staff route above — added because
+// one-at-a-time assignment was the actual reason payroll only ever showed
+// a single staff member's salary option (POST /calculate only picks up
+// staff with a salary_structure_id already set, and nothing seeded one at
+// creation time), not a bug in the payroll query itself.
+hrStaffRouter.put(
+  "/salary-structure/bulk",
+  authorize(PAYROLL_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = bulkAssignSalaryStructureSchema.parse(req.body);
+    const result = await prisma.staff.updateMany({
+      where: { id: { in: body.staff_ids }, deleted_at: null },
+      data: { salary_structure_id: body.salary_structure_id },
+    });
+    res.json({ success: true, data: { updated: result.count } });
   }),
 );
 

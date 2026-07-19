@@ -3,9 +3,27 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import Image from "next/image";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, StatusBadge, EmptyState } from "@education-erp/ui";
+import {
+  PageWrapper,
+  PageHeader,
+  Card,
+  CardContent,
+  Button,
+  Input,
+  Label,
+  Badge,
+  StatusBadge,
+  EmptyState,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -25,6 +43,11 @@ interface StaffRow {
   _count: { documents: number };
 }
 
+interface SalaryStructureOption {
+  id: string;
+  name: string;
+}
+
 interface StaffListProps {
   category: "FACULTY" | "STAFF";
   title: string;
@@ -34,13 +57,47 @@ interface StaffListProps {
 
 export function StaffList({ category, title, subtitle, addLabel }: StaffListProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkSalaryStructureId, setBulkSalaryStructureId] = useState("");
 
   const { data: departments } = useQuery<Department[]>({
     queryKey: ["settings", "departments"],
     queryFn: async () => (await api.get("/api/settings/departments")).data.data,
   });
+
+  const { data: salaryStructures } = useQuery<SalaryStructureOption[]>({
+    queryKey: ["hr", "salary-structures"],
+    queryFn: async () => (await api.get("/api/hr/salary-structures")).data.data,
+    enabled: bulkAssignOpen,
+  });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: () => api.put("/api/hr/staff/salary-structure/bulk", { staff_ids: [...selected], salary_structure_id: bulkSalaryStructureId }),
+    onSuccess: (res) => {
+      toast.success(`Salary structure assigned to ${res.data.data.updated} staff`);
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff"] });
+      setBulkAssignOpen(false);
+      setSelected(new Set());
+      setBulkSalaryStructureId("");
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to assign salary structure";
+      toast.error(message);
+    },
+  });
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const { data: staff } = useQuery<StaffRow[]>({
     queryKey: ["hr", "staff", category, search, departmentId],
@@ -73,6 +130,11 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
         breadcrumbs={[{ label: "HR", href: "/hr" }, { label: title }]}
         action={
           <div className="flex gap-2">
+            {selected.size > 0 && (
+              <Button variant="outline" onClick={() => setBulkAssignOpen(true)}>
+                Assign Salary Structure ({selected.size})
+              </Button>
+            )}
             <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
             <Button onClick={() => router.push(`/hr/staff/new?category=${category}`)}>{addLabel}</Button>
           </div>
@@ -100,6 +162,12 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
+                  <th className="p-2">
+                    <Checkbox
+                      checked={!!staff.length && selected.size === staff.length}
+                      onCheckedChange={(v) => setSelected(v ? new Set(staff.map((s) => s.id)) : new Set())}
+                    />
+                  </th>
                   <th className="p-2"></th>
                   <th className="p-2">Name</th>
                   <th className="p-2">Designation</th>
@@ -111,6 +179,9 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
               <tbody>
                 {staff.map((s) => (
                   <tr key={s.id} className="border-b">
+                    <td className="p-2">
+                      <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggleSelected(s.id)} />
+                    </td>
                     <td className="p-2">
                       <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-muted text-xs">
                         {s.photo_url ? <Image src={s.photo_url} alt="" width={32} height={32} className="h-8 w-8 object-cover" /> : "👤"}
@@ -137,6 +208,24 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Assign Salary Structure — {selected.size} staff</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Salary Structure</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={bulkSalaryStructureId} onChange={(e) => setBulkSalaryStructureId(e.target.value)}>
+              <option value="">Select...</option>
+              {salaryStructures?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => bulkAssignMutation.mutate()} disabled={!bulkSalaryStructureId || bulkAssignMutation.isPending}>
+              {bulkAssignMutation.isPending ? "Assigning..." : "Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

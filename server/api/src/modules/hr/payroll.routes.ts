@@ -47,14 +47,21 @@ payrollRouter.post(
       const records = await prisma.attendanceRecord.findMany({
         where: { person_id: staff.id, person_type: "STAFF", date: { gte: monthStart, lt: monthEnd } },
       });
-      const presentDays = records.filter((r) => r.status === "PRESENT" || r.status === "LATE" || r.status === "LEAVE").length;
-      const absentDays = Math.max(0, workingDays - presentDays);
+      const presentDays = records.filter((r) => r.status === "PRESENT" || r.status === "LATE" || r.status === "LEAVE" || r.status === "HALF_DAY").length;
+      // Absence deduction only ever comes from an explicit ABSENT record —
+      // a day with no attendance row at all contributes zero deduction,
+      // never an inferred absence (see attendance_incomplete below for why
+      // this matters: most staff simply have no attendance marked for most
+      // days, and workingDays-presentDays used to treat all of that as
+      // absence, which could deduct the entire basic salary).
+      const absentDaysExplicit = records.filter((r) => r.status === "ABSENT").length;
+      const attendanceIncomplete = records.length < workingDays;
 
       const gross = structure.basic + structure.house_rent + structure.medical + structure.transport;
       const perDaySalary = workingDays > 0 ? structure.basic / workingDays : 0;
       const pf = gross * (structure.pf_percentage / 100);
       const tds = gross * (structure.tds_percentage / 100);
-      const absentDeduction = absentDays * perDaySalary;
+      const absentDeduction = absentDaysExplicit * perDaySalary;
       const deductions = pf + tds + absentDeduction;
       const net = Math.max(0, gross - deductions);
 
@@ -66,6 +73,7 @@ payrollRouter.post(
           year: body.year,
           working_days: workingDays,
           present_days: presentDays,
+          attendance_incomplete: attendanceIncomplete,
           gross_salary: gross,
           deductions,
           net_salary: net,
@@ -75,6 +83,7 @@ payrollRouter.post(
         update: {
           working_days: workingDays,
           present_days: presentDays,
+          attendance_incomplete: attendanceIncomplete,
           gross_salary: gross,
           deductions,
           net_salary: net,

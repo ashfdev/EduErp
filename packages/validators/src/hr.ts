@@ -75,6 +75,11 @@ export const assignSalaryStructureSchema = z.object({
   salary_structure_id: z.string().min(1),
 });
 
+export const bulkAssignSalaryStructureSchema = z.object({
+  staff_ids: z.array(z.string().min(1)).min(1),
+  salary_structure_id: z.string().min(1),
+});
+
 export const calculatePayrollSchema = z.object({
   month: z.number().int().min(1).max(12),
   year: z.number().int(),
