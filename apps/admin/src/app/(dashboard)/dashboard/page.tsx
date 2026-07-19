@@ -10,7 +10,12 @@ import {
 import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight, Activity, ClipboardCheck } from "lucide-react";
+import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight, Activity, ClipboardCheck, AlertTriangle } from "lucide-react";
+
+// Matches the backend's ANALYTICS_MESSAGE_ROLES gate on /api/analytics/
+// defaulters-risk — the at-risk page mixes financial due data with a
+// dropout-risk judgment, both leadership/accounts-domain information.
+const AT_RISK_VISIBLE_ROLES = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"];
 
 interface Overview {
   students: { total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null };
@@ -305,6 +310,14 @@ export default function DashboardPage() {
                   {t("postNotice")}
                 </Link>
               </Button>
+              {user?.role && AT_RISK_VISIBLE_ROLES.includes(user.role) && (
+                <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
+                  <Link href="/students/at-risk">
+                    <AlertTriangle className="mr-2 h-4 w-4 text-red-500" />
+                    {t("viewAtRiskStudents")}
+                  </Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
