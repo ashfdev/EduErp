@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -156,6 +157,7 @@ export default function ProgramDetailPage() {
 
   // Prerequisite dialog
   const [prereqCourseId, setPrereqCourseId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name_en: string } | null>(null);
   const [newPrereqId, setNewPrereqId] = useState("");
   const prereqCourse = courses?.find((c) => c.id === prereqCourseId);
 
@@ -222,7 +224,7 @@ export default function ProgramDetailPage() {
                     <td className="p-2 flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEditCourse(c)}>Edit</Button>
                       <Button size="sm" variant="outline" onClick={() => setPrereqCourseId(c.id)}>Prerequisites</Button>
-                      <Button size="sm" variant="outline" onClick={() => { if (confirm(`Delete course "${c.name_en}"?`)) deleteCourseMutation.mutate(c.id); }}>Delete</Button>
+                      <Button size="sm" variant="outline" onClick={() => setDeleteTarget({ id: c.id, name_en: c.name_en })}>Delete</Button>
                     </td>
                   </tr>
                 ))}
@@ -326,6 +328,20 @@ export default function ProgramDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete course"
+        description={deleteTarget ? `Delete course "${deleteTarget.name_en}"?` : undefined}
+        destructive
+        confirmLabel="Delete"
+        loading={deleteCourseMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteCourseMutation.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+      />
     </PageWrapper>
   );
 }

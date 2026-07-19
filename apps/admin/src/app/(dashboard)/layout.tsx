@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -50,6 +51,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { institutionName, logoUrl } = useInstitution();
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
+  const [headerSearch, setHeaderSearch] = useState("");
+
+  function handleHeaderSearch(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && headerSearch.trim()) {
+      router.push(`/students?search=${encodeURIComponent(headerSearch.trim())}`);
+    }
+  }
 
   async function handleLogout() {
     try {
@@ -117,9 +125,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex items-center gap-4 flex-1">
               <div className="relative w-full max-w-sm hidden md:block">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input 
-                  type="text" 
-                  placeholder={tCommon("searchPlaceholder") ?? "Search..."} 
+                <input
+                  type="text"
+                  placeholder={tCommon("searchPlaceholder")}
+                  value={headerSearch}
+                  onChange={(e) => setHeaderSearch(e.target.value)}
+                  onKeyDown={handleHeaderSearch}
                   className="h-9 w-full rounded-full border border-input bg-muted/50 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all"
                 />
               </div>

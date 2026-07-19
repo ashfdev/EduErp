@@ -195,6 +195,15 @@
     "download": "Download",
     "viewPdf": "View PDF"
   },
+  "search": {
+    "title": "Search",
+    "resultsFor": "Results for \"{q}\"",
+    "searching": "Searching…",
+    "noResults": "No results found.",
+    "noticesHeading": "Notices",
+    "pagesHeading": "Pages",
+    "placeholder": "Search notices and pages…"
+  },
   "admission": {
     "title": "Online Admission",
     "subtitle": "Browse currently published admission cycles.",

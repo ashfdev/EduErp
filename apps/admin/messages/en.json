@@ -5,6 +5,7 @@
     "logout": "Log out",
     "save": "Save",
     "signOut": "Sign Out",
+    "searchPlaceholder": "Search students...",
     "appName": "Education ERP"
   },
   "nav": {

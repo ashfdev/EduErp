@@ -195,6 +195,15 @@
     "download": "ডাউনলোড",
     "viewPdf": "পিডিএফ দেখুন"
   },
+  "search": {
+    "title": "অনুসন্ধান",
+    "resultsFor": "\"{q}\" এর ফলাফল",
+    "searching": "খোঁজা হচ্ছে…",
+    "noResults": "কোনো ফলাফল পাওয়া যায়নি।",
+    "noticesHeading": "নোটিশ",
+    "pagesHeading": "পাতা",
+    "placeholder": "নোটিশ ও পাতা খুঁজুন…"
+  },
   "admission": {
     "title": "অনলাইন ভর্তি",
     "subtitle": "বর্তমানে প্রকাশিত ভর্তি চক্র দেখুন।",

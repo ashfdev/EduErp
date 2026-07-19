@@ -69,6 +69,8 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   const locale = useLocale();
   const pathname = usePathname();
@@ -79,6 +81,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const tAcademic = useTranslations("academic");
   const tGoverningBody = useTranslations("governingBody");
   const tFaculty = useTranslations("faculty");
+  const tSearch = useTranslations("search");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -87,6 +90,14 @@ export function Navbar({ institution }: { institution: Institution | null }) {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  function submitSearch() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+    setSearchOpen(false);
+    setSearchQuery("");
+  }
 
   function label(link: NavLink): string {
     if (link.labelFrom === "about") return tAbout(link.key);
@@ -187,9 +198,29 @@ export function Navbar({ institution }: { institution: Institution | null }) {
             <Languages className="h-4 w-4" />
             {otherLocale === "bn" ? "বাংলা" : "En"}
           </button>
-          <Button variant="outline" size="icon" onClick={() => alert("Search functionality is coming soon!")} className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300">
-            <Search className="h-4 w-4" />
-          </Button>
+          {searchOpen ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSearch();
+              }}
+              className="flex items-center"
+            >
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => !searchQuery && setSearchOpen(false)}
+                placeholder={tSearch("placeholder")}
+                className="h-9 w-48 rounded-full border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+            </form>
+          ) : (
+            <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)} className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300" aria-label={tSearch("title")}>
+              <Search className="h-4 w-4" />
+            </Button>
+          )}
           <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0">
             <a href={portalUrl} target="_blank" rel="noreferrer">
               <UserCircle2 className="mr-2 h-4 w-4" />

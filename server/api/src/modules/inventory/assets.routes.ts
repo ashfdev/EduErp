@@ -11,6 +11,7 @@ import { reqParam } from "../../lib/req-param";
 import { INVENTORY_MANAGE_ROLES } from "../../lib/roles";
 import { assetCategorySchema, assetSchema, assetTransferSchema, assetMaintenanceSchema, assetDisposeSchema } from "@education-erp/validators";
 import { createWithUniqueAssetUid } from "../../utils/asset-id.generator";
+import { resolveBaseUrl } from "../../lib/env";
 import { createInventoryPurchaseJournal, createMaintenanceJournal, createAssetDisposalJournal } from "../accounts/auto-journal.service";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
@@ -130,7 +131,7 @@ assetsRouter.post(
     if (!category) throw notFound("Asset category not found");
 
     const asset = await createWithUniqueAssetUid(async (asset_uid) => {
-      const qrPayload = `${process.env.ADMIN_URL ?? "http://localhost:3000"}/inventory/assets/${asset_uid}`;
+      const qrPayload = `${resolveBaseUrl("ADMIN_URL", process.env.ADMIN_URL, "http://localhost:3000")}/inventory/assets/${asset_uid}`;
       const qrBuffer = await QRCode.toBuffer(qrPayload, { margin: 1, width: 300 });
       const { url: qr_code_url } = await uploadBuffer("assets", `${asset_uid}-qr.png`, qrBuffer, "image/png");
 

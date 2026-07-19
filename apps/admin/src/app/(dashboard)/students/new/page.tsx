@@ -19,6 +19,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
@@ -77,6 +78,7 @@ export default function NewStudentPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [selectedOptional, setSelectedOptional] = useState<string[]>([]);
+  const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
 
   const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
@@ -117,8 +119,8 @@ export default function NewStudentPage() {
     },
     onError: (err: unknown) => {
       const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
-      if (error?.code === "SECTION_AT_CAPACITY" && confirm(error.message)) {
-        createMutation.mutate(true);
+      if (error?.code === "SECTION_AT_CAPACITY") {
+        setCapacityMessage(error.message ?? "This section is at or over capacity.");
         return;
       }
       toast.error(error?.message ?? "Failed to create student — check required fields");
@@ -213,7 +215,7 @@ export default function NewStudentPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Class *</Label>
+                <Label>{terms.term_class} *</Label>
                 <Select
                   value={form.current_class_id}
                   onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); set("group_id", ""); }}
@@ -226,7 +228,7 @@ export default function NewStudentPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Section</Label>
+                <Label>{terms.term_section}</Label>
                 <Select value={form.current_section_id} onValueChange={(v) => set("current_section_id", v)}>
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
@@ -249,8 +251,8 @@ export default function NewStudentPage() {
                   </Select>
                 </div>
               )}
-              <div className="space-y-1.5"><Label>Roll No</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Registration No</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{terms.term_roll}</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{terms.term_registration}</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => set("admission_date", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Previous Institution</Label><Input value={form.previous_institution} onChange={(e) => set("previous_institution", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Previous Result</Label><Input value={form.previous_result} onChange={(e) => set("previous_result", e.target.value)} /></div>
@@ -311,6 +313,19 @@ export default function NewStudentPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!capacityMessage}
+        onOpenChange={(open) => !open && setCapacityMessage(null)}
+        title="Section at capacity"
+        description={capacityMessage ?? undefined}
+        confirmLabel="Continue anyway"
+        loading={createMutation.isPending}
+        onConfirm={() => {
+          setCapacityMessage(null);
+          createMutation.mutate(true);
+        }}
+      />
     </PageWrapper>
   );
 }

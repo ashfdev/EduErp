@@ -18,6 +18,7 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
@@ -93,6 +94,7 @@ export default function EditStudentPage() {
   const { terms } = useInstitution();
   const [form, setForm] = useState(emptyForm);
   const [loaded, setLoaded] = useState(false);
+  const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
 
   const { data: profile } = useQuery<StudentProfile>({
     queryKey: ["students", id],
@@ -175,8 +177,8 @@ export default function EditStudentPage() {
     },
     onError: (err: unknown) => {
       const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
-      if (error?.code === "SECTION_AT_CAPACITY" && confirm(error.message)) {
-        saveMutation.mutate(true);
+      if (error?.code === "SECTION_AT_CAPACITY") {
+        setCapacityMessage(error.message ?? "This section is at or over capacity.");
         return;
       }
       toast.error(error?.message ?? "Failed to update student");
@@ -246,7 +248,7 @@ export default function EditStudentPage() {
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Class *</Label>
+                <Label>{terms.term_class} *</Label>
                 <Select
                   value={form.current_class_id}
                   onValueChange={(v) => { set("current_class_id", v); set("current_section_id", ""); if (v !== originalClassId) set("group_id", ""); }}
@@ -258,7 +260,7 @@ export default function EditStudentPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Section</Label>
+                <Label>{terms.term_section}</Label>
                 <Select value={form.current_section_id} onValueChange={(v) => set("current_section_id", v)}>
                   <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
@@ -281,8 +283,8 @@ export default function EditStudentPage() {
                   </Select>
                 </div>
               )}
-              <div className="space-y-1.5"><Label>Roll No</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Registration No</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{terms.term_roll}</Label><Input value={form.current_roll_no} onChange={(e) => set("current_roll_no", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>{terms.term_registration}</Label><Input value={form.registration_no} onChange={(e) => set("registration_no", e.target.value)} /></div>
             </div>
           </div>
 
@@ -298,6 +300,19 @@ export default function EditStudentPage() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!capacityMessage}
+        onOpenChange={(open) => !open && setCapacityMessage(null)}
+        title="Section at capacity"
+        description={capacityMessage ?? undefined}
+        confirmLabel="Continue anyway"
+        loading={saveMutation.isPending}
+        onConfirm={() => {
+          setCapacityMessage(null);
+          saveMutation.mutate(true);
+        }}
+      />
     </PageWrapper>
   );
 }

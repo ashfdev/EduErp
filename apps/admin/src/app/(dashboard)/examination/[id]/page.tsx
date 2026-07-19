@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -142,6 +143,8 @@ export default function ExamDetailPage() {
 
   const [componentSubjectId, setComponentSubjectId] = useState<string | null>(null);
   const [componentDraft, setComponentDraft] = useState<ComponentDraftRow[]>([]);
+  const [confirmReopen, setConfirmReopen] = useState(false);
+  const [confirmTransition, setConfirmTransition] = useState(false);
 
   function openComponentEditor(subjectId: string) {
     const existing = (exam?.component_configs ?? [])
@@ -185,25 +188,12 @@ export default function ExamDetailPage() {
           <div className="flex gap-2">
             <Link href={`/examination/${id}/seat-plan`}><Button variant="outline">Seat Plan</Button></Link>
             {exam.status === "COMPLETED" && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (window.confirm("Reopen this exam for mark correction? It will move back to Mark Entry status until marked Completed again.")) {
-                    reopenMutation.mutate();
-                  }
-                }}
-                disabled={reopenMutation.isPending}
-              >
+              <Button variant="outline" onClick={() => setConfirmReopen(true)} disabled={reopenMutation.isPending}>
                 Reopen for Correction
               </Button>
             )}
             {transition && (
-              <Button
-                onClick={() => {
-                  if (window.confirm(transition.confirm)) statusMutation.mutate(transition.next);
-                }}
-                disabled={statusMutation.isPending}
-              >
+              <Button onClick={() => setConfirmTransition(true)} disabled={statusMutation.isPending}>
                 {transition.label}
               </Button>
             )}
@@ -363,6 +353,34 @@ export default function ExamDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmReopen}
+        onOpenChange={setConfirmReopen}
+        title="Reopen for Correction"
+        description="Reopen this exam for mark correction? It will move back to Mark Entry status until marked Completed again."
+        confirmLabel="Reopen"
+        loading={reopenMutation.isPending}
+        onConfirm={() => {
+          setConfirmReopen(false);
+          reopenMutation.mutate();
+        }}
+      />
+
+      {transition && (
+        <ConfirmDialog
+          open={confirmTransition}
+          onOpenChange={setConfirmTransition}
+          title={transition.label}
+          description={transition.confirm}
+          confirmLabel={transition.label}
+          loading={statusMutation.isPending}
+          onConfirm={() => {
+            setConfirmTransition(false);
+            statusMutation.mutate(transition.next);
+          }}
+        />
+      )}
     </PageWrapper>
   );
 }

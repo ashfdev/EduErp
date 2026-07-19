@@ -10,6 +10,7 @@ import { INVENTORY_MANAGE_ROLES, REQUISITION_APPROVE_ROLES } from "../../lib/rol
 import { requisitionSchema, requisitionRejectSchema, purchaseOrderSchema, grnSchema } from "@education-erp/validators";
 import { createWithUniqueAssetUid } from "../../utils/asset-id.generator";
 import { uploadBuffer } from "../../services/storage.service";
+import { resolveBaseUrl } from "../../lib/env";
 import { createInventoryPurchaseJournal } from "../accounts/auto-journal.service";
 import { badRequest, notFound } from "../../lib/errors";
 
@@ -238,7 +239,7 @@ purchaseRouter.post(
         // One Asset row per unit received (a batch of 5 chairs = 5 Asset rows).
         for (let i = 0; i < receivedItem.received_qty; i++) {
           const asset = await createWithUniqueAssetUid(async (asset_uid) => {
-            const qrPayload = `${process.env.ADMIN_URL ?? "http://localhost:3000"}/inventory/assets/${asset_uid}`;
+            const qrPayload = `${resolveBaseUrl("ADMIN_URL", process.env.ADMIN_URL, "http://localhost:3000")}/inventory/assets/${asset_uid}`;
             const qrBuffer = await QRCode.toBuffer(qrPayload, { margin: 1, width: 300 });
             const { url: qr_code_url } = await uploadBuffer("assets", `${asset_uid}-qr.png`, qrBuffer, "image/png");
             return prisma.asset.create({

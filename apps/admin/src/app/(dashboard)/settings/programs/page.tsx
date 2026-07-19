@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -55,6 +56,7 @@ export default function ProgramsPage() {
   const [totalCreditHours, setTotalCreditHours] = useState(140);
   const [maxCreditPerSemester, setMaxCreditPerSemester] = useState("");
   const [degreeLevel, setDegreeLevel] = useState("UNDERGRADUATE");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name_en: string } | null>(null);
 
   const { data: programs } = useQuery<ProgramRow[]>({
     queryKey: ["settings", "programs"],
@@ -160,7 +162,7 @@ export default function ProgramsPage() {
                     variant="outline"
                     onClick={(e) => {
                       e.preventDefault();
-                      if (confirm(`Delete program "${p.name_en}"?`)) deleteMutation.mutate(p.id);
+                      setDeleteTarget({ id: p.id, name_en: p.name_en });
                     }}
                   >
                     Delete
@@ -216,6 +218,20 @@ export default function ProgramsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete program"
+        description={deleteTarget ? `Delete program "${deleteTarget.name_en}"?` : undefined}
+        destructive
+        confirmLabel="Delete"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+      />
     </PageWrapper>
   );
 }

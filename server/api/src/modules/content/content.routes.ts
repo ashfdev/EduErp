@@ -62,6 +62,47 @@ contentRouter.get(
   }),
 );
 
+// Minimal public search — Notices + Static Pages only, matching the two
+// content types that already have real, publicly-listable text to search.
+// Scoped narrowly on purpose (see Plan Ten Phase A4) rather than indexing
+// every content type on the site in one pass.
+contentRouter.get(
+  "/search",
+  asyncHandler(async (req, res) => {
+    const q = String(req.query.q ?? "").trim();
+    if (!q || q.length < 2) {
+      res.json({ success: true, data: { notices: [], pages: [] } });
+      return;
+    }
+    const now = new Date();
+    const [notices, pages] = await Promise.all([
+      prisma.notice.findMany({
+        where: {
+          is_published: true,
+          is_public_website: true,
+          OR: [{ expire_at: null }, { expire_at: { gte: now } }],
+          title: { contains: q, mode: "insensitive" },
+        },
+        orderBy: { publish_at: "desc" },
+        take: 10,
+        select: { id: true, title: true, publish_at: true },
+      }),
+      prisma.staticPage.findMany({
+        where: {
+          is_published: true,
+          OR: [
+            { title_en: { contains: q, mode: "insensitive" } },
+            { title_bn: { contains: q, mode: "insensitive" } },
+          ],
+        },
+        take: 10,
+        select: { page_key: true, title_en: true, title_bn: true },
+      }),
+    ]);
+    res.json({ success: true, data: { notices, pages } });
+  }),
+);
+
 // Institution-branded PDF of a published notice — same public/no-auth
 // posture as the /notices list itself (a notice on the public website is
 // public content); scoped to is_published+is_public_website exactly like

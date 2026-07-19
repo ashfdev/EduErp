@@ -2,6 +2,7 @@ import { BlobServiceClient, BlobSASPermissions } from "@azure/storage-blob";
 import { randomUUID, createHmac } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname, resolve, sep } from "node:path";
+import { resolveBaseUrl } from "../lib/env";
 
 const containerName = process.env.AZURE_BLOB_CONTAINER_NAME ?? "education-erp";
 let cachedClient: BlobServiceClient | null = null;
@@ -58,7 +59,7 @@ export async function uploadBuffer(
     const filePath = localFilePath(blobKey);
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, buffer);
-    const base = process.env.API_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    const base = resolveBaseUrl("API_URL", process.env.API_URL, `http://localhost:${process.env.PORT ?? 4000}`);
     return { blobKey, url: `${base}/api/uploads/local-file/direct?blobKey=${encodeURIComponent(blobKey)}` };
   }
 
@@ -76,7 +77,7 @@ export async function getSignedDownloadUrl(blobKey: string, expiresInMinutes = 1
   if (!isAzureConfigured()) {
     const expiresAt = Date.now() + expiresInMinutes * 60 * 1000;
     const token = signLocalToken(blobKey, expiresAt);
-    const base = process.env.API_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    const base = resolveBaseUrl("API_URL", process.env.API_URL, `http://localhost:${process.env.PORT ?? 4000}`);
     return `${base}/api/uploads/local-file?blobKey=${encodeURIComponent(blobKey)}&expiresAt=${expiresAt}&token=${token}`;
   }
 

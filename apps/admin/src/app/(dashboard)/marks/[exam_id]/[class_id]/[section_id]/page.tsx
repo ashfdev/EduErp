@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput, ConfirmDialog } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -140,19 +140,24 @@ export default function MarkEntryGridPage() {
     },
   });
 
+  const [confirmReapproval, setConfirmReapproval] = useState(false);
+
   function handleSubmit() {
     const approvedTouched = Object.keys(edits).filter((k) => {
       const [studentId, subjectId] = k.split(":") as [string, string];
       return entryStatus(studentId, subjectId) === "APPROVED";
     }).length;
     if (approvedTouched > 0) {
-      const ok = window.confirm(
-        `${approvedTouched} of your pending change(s) touch mark(s) that were already approved. Saving will revert ${approvedTouched === 1 ? "it" : "them"} back to Submitted, and ${approvedTouched === 1 ? "it" : "they"} will need to be re-approved before results can be published. Continue?`,
-      );
-      if (!ok) return;
+      setConfirmReapproval(true);
+      return;
     }
     submitMutation.mutate();
   }
+
+  const approvedTouchedCount = Object.keys(edits).filter((k) => {
+    const [studentId, subjectId] = k.split(":") as [string, string];
+    return entryStatus(studentId, subjectId) === "APPROVED";
+  }).length;
 
   if (!data) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
@@ -311,6 +316,19 @@ export default function MarkEntryGridPage() {
           <Badge variant="outline">{Object.keys(edits).length} pending change(s)</Badge>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmReapproval}
+        onOpenChange={setConfirmReapproval}
+        title="Re-approval required"
+        description={`${approvedTouchedCount} of your pending change(s) touch mark(s) that were already approved. Saving will revert ${approvedTouchedCount === 1 ? "it" : "them"} back to Submitted, and ${approvedTouchedCount === 1 ? "it" : "they"} will need to be re-approved before results can be published. Continue?`}
+        confirmLabel="Continue"
+        loading={submitMutation.isPending}
+        onConfirm={() => {
+          setConfirmReapproval(false);
+          submitMutation.mutate();
+        }}
+      />
     </PageWrapper>
   );
 }

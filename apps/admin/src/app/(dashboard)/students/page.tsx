@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
@@ -42,7 +43,8 @@ export default function StudentsPage() {
   const { type, terms } = useInstitution();
   const isUniversity = type === "UNIVERSITY";
 
-  const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [classId, setClassId] = useState<string>("");
   const [sectionId, setSectionId] = useState<string>("");
   const [groupId, setGroupId] = useState<string>("");

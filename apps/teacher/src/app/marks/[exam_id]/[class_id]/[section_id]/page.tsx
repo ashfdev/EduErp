@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, ConfirmDialog } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -131,17 +131,24 @@ export default function TeacherMarkEntryGridPage() {
     },
   });
 
+  const [confirmReapproval, setConfirmReapproval] = useState(false);
+
   function handleSubmit() {
     const approvedTouched = Object.keys(edits).filter((k) => {
       const [studentId, subjectId] = k.split(":") as [string, string];
       return entryStatus(studentId, subjectId) === "APPROVED";
     }).length;
     if (approvedTouched > 0) {
-      const ok = window.confirm(t("confirmRevertApproved", { count: approvedTouched }));
-      if (!ok) return;
+      setConfirmReapproval(true);
+      return;
     }
     submitMutation.mutate();
   }
+
+  const approvedTouchedCount = Object.keys(edits).filter((k) => {
+    const [studentId, subjectId] = k.split(":") as [string, string];
+    return entryStatus(studentId, subjectId) === "APPROVED";
+  }).length;
 
   return (
     <TeacherShell>
@@ -283,6 +290,19 @@ export default function TeacherMarkEntryGridPage() {
             <Badge variant="outline">{t("pendingChanges", { count: Object.keys(edits).length })}</Badge>
           </div>
         )}
+
+        <ConfirmDialog
+          open={confirmReapproval}
+          onOpenChange={setConfirmReapproval}
+          title={t("confirmRevertTitle")}
+          description={t("confirmRevertApproved", { count: approvedTouchedCount })}
+          confirmLabel={t("continue")}
+          loading={submitMutation.isPending}
+          onConfirm={() => {
+            setConfirmReapproval(false);
+            submitMutation.mutate();
+          }}
+        />
       </PageWrapper>
     </TeacherShell>
   );

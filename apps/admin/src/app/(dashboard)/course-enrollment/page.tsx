@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -124,6 +125,7 @@ export default function CourseEnrollmentPage() {
   // Enroll dialog
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [courseId, setCourseId] = useState("");
+  const [creditCapMessage, setCreditCapMessage] = useState<string | null>(null);
 
   const { data: coursesForProgram } = useQuery<CourseRow[]>({
     queryKey: ["settings", "courses", studentClass?.program_id],
@@ -148,8 +150,8 @@ export default function CourseEnrollmentPage() {
       setCourseId("");
     },
     onError: (err: unknown) => {
-      if (errCode(err) === "CREDIT_CAP_EXCEEDED" && confirm(errMsg(err, "Credit cap exceeded"))) {
-        enrollMutation.mutate(true);
+      if (errCode(err) === "CREDIT_CAP_EXCEEDED") {
+        setCreditCapMessage(errMsg(err, "Credit cap exceeded"));
         return;
       }
       toast.error(errMsg(err, "Failed to enroll — check prerequisites"));
@@ -346,6 +348,19 @@ export default function CourseEnrollmentPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!creditCapMessage}
+        onOpenChange={(open) => !open && setCreditCapMessage(null)}
+        title="Credit cap exceeded"
+        description={creditCapMessage ?? undefined}
+        confirmLabel="Continue anyway"
+        loading={enrollMutation.isPending}
+        onConfirm={() => {
+          setCreditCapMessage(null);
+          enrollMutation.mutate(true);
+        }}
+      />
     </PageWrapper>
   );
 }

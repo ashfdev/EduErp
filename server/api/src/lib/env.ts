@@ -29,3 +29,17 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// A handful of call sites build a user-facing URL (an uploaded-file link, a
+// printed asset QR-code payload) from an optional env var with a localhost
+// fallback meant only for local dev. In production, silently falling back
+// means shipping a dead localhost link/QR code to a real user — fail loudly
+// instead so a missing var is caught at the call site, not discovered later
+// on a printed asset tag or a shared document link.
+export function resolveBaseUrl(varName: string, value: string | undefined, devFallback: string): string {
+  if (value) return value;
+  if (env.NODE_ENV === "production") {
+    throw new Error(`${varName} must be set in production — refusing to fall back to a localhost URL`);
+  }
+  return devFallback;
+}
