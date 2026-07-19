@@ -16,7 +16,10 @@ export const noticeAudienceSchema = z.enum(["PUBLIC", "STUDENTS", "STAFF", "GUAR
 
 export const noticeSchema = z.object({
   title: z.string().min(1),
-  body: z.string().min(1),
+  // Optional at the schema level — a notice can instead be an uploaded
+  // document with just a title, checked at the route level (either body
+  // content or an attachment must be present, not both required).
+  body: z.string().default(""),
   attachment_url: z.string().optional().nullable(),
   audience: noticeAudienceSchema.default("PUBLIC"),
   include_signature: z.boolean().default(false),

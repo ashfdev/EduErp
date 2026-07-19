@@ -12,7 +12,7 @@ import { WEBSITE_CONTENT_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { noticeSchema } from "@education-erp/validators";
 import { sendNotification, type NotificationRecipient } from "../../services/notification.service";
 import { triggerRevalidation } from "../../services/revalidate.service";
-import { notFound } from "../../lib/errors";
+import { badRequest, notFound } from "../../lib/errors";
 
 export const noticesRouter = Router();
 noticesRouter.use(authenticate);
@@ -91,6 +91,8 @@ noticesRouter.post(
       include_signature: req.body.include_signature === "true" || req.body.include_signature === true,
     });
     body.body = sanitizeHtml(body.body);
+    const bodyIsEmpty = !body.body || body.body === "<p></p>";
+    if (bodyIsEmpty && !req.file) throw badRequest("Provide either notice content or an uploaded document");
 
     let attachment_url: string | undefined;
     if (req.file) attachment_url = (await uploadBuffer("notices", req.file.originalname, req.file.buffer, req.file.mimetype)).url;
@@ -120,6 +122,11 @@ noticesRouter.put(
 
     let attachment_url: string | undefined;
     if (req.file) attachment_url = (await uploadBuffer("notices", req.file.originalname, req.file.buffer, req.file.mimetype)).url;
+
+    const resultingBody = body.body !== undefined ? body.body : existing.body;
+    const resultingAttachment = attachment_url ?? existing.attachment_url;
+    const bodyIsEmpty = !resultingBody || resultingBody === "<p></p>";
+    if (bodyIsEmpty && !resultingAttachment) throw badRequest("Provide either notice content or an uploaded document");
 
     const notice = await prisma.notice.update({ where: { id: existing.id }, data: { ...body, ...(attachment_url && { attachment_url }) } });
     res.json({ success: true, data: notice });

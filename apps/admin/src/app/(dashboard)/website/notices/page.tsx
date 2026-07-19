@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Textarea, Checkbox, StatusBadge, EmptyState,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Checkbox, StatusBadge, EmptyState,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, RichTextEditor,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -23,6 +23,10 @@ interface Notice {
   created_at: string;
 }
 
+function isBodyEmpty(html: string): boolean {
+  return !html || html === "<p></p>";
+}
+
 export default function NoticesPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
@@ -30,6 +34,8 @@ export default function NoticesPage() {
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [contentMode, setContentMode] = useState<"write" | "upload">("write");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [audience, setAudience] = useState("PUBLIC");
   const [isPinned, setIsPinned] = useState(false);
   const [isPublicWebsite, setIsPublicWebsite] = useState(true);
@@ -44,6 +50,8 @@ export default function NoticesPage() {
   function resetForm() {
     setTitle("");
     setBody("");
+    setContentMode("write");
+    setAttachmentFile(null);
     setAudience("PUBLIC");
     setIsPinned(false);
     setIsPublicWebsite(true);
@@ -52,8 +60,20 @@ export default function NoticesPage() {
   }
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.post("/api/website/notices", {
+    mutationFn: () => {
+      if (attachmentFile) {
+        const form = new FormData();
+        form.append("title", title);
+        form.append("body", contentMode === "write" ? body : "");
+        form.append("audience", audience);
+        form.append("is_pinned", String(isPinned));
+        form.append("is_public_website", String(isPublicWebsite));
+        form.append("send_sms", String(sendSms));
+        form.append("include_signature", String(includeSignature));
+        form.append("attachment", attachmentFile);
+        return api.post("/api/website/notices", form, { headers: { "Content-Type": "multipart/form-data" } });
+      }
+      return api.post("/api/website/notices", {
         title,
         body,
         audience,
@@ -61,14 +81,18 @@ export default function NoticesPage() {
         is_public_website: isPublicWebsite,
         send_sms: sendSms,
         include_signature: includeSignature,
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Notice created");
       queryClient.invalidateQueries({ queryKey: ["website", "notices"] });
       setOpen(false);
       resetForm();
     },
-    onError: () => toast.error("Failed to create notice"),
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create notice";
+      toast.error(message);
+    },
   });
 
   const publishMutation = useMutation({
@@ -162,7 +186,28 @@ export default function NoticesPage() {
           <DialogHeader><DialogTitle>New Notice</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Body</Label><Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} /></div>
+
+            <div className="space-y-1.5">
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={contentMode === "write" ? "default" : "outline"} onClick={() => setContentMode("write")}>
+                  Write content
+                </Button>
+                <Button type="button" size="sm" variant={contentMode === "upload" ? "default" : "outline"} onClick={() => setContentMode("upload")}>
+                  Upload a document
+                </Button>
+              </div>
+              {contentMode === "write" ? (
+                <RichTextEditor value={body} onChange={setBody} />
+              ) : (
+                <div className="space-y-1.5">
+                  <Input type="file" accept=".pdf,.doc,.docx,image/*" onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)} />
+                  <p className="text-xs text-muted-foreground">
+                    {attachmentFile ? attachmentFile.name : "Choose a file — viewers can view/download it the same way a written notice is shown."}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label>Audience</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={audience} onChange={(e) => setAudience(e.target.value)}>
@@ -177,7 +222,10 @@ export default function NoticesPage() {
             </label>
           </div>
           <DialogFooter>
-            <Button disabled={!title || !body || createMutation.isPending} onClick={() => createMutation.mutate()}>
+            <Button
+              disabled={!title || (contentMode === "write" ? isBodyEmpty(body) : !attachmentFile) || createMutation.isPending}
+              onClick={() => createMutation.mutate()}
+            >
               {createMutation.isPending ? "Saving..." : "Save Notice"}
             </Button>
           </DialogFooter>
