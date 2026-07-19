@@ -72,7 +72,7 @@ function HomeContent() {
         </div>
         <div className="flex-1">
           <p className="text-sm font-medium text-muted-foreground">{greeting},</p>
-          <p className="text-xl font-bold tracking-tight text-foreground">{data.student.name.split(" ")[0]}</p>
+          <p className="text-xl font-bold tracking-tight text-foreground line-clamp-2 leading-tight">{data.student.name}</p>
         </div>
         <Link href="/profile" className="flex h-9 items-center rounded-full bg-slate-100 px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200">
           {t("viewProfile")}
@@ -126,6 +126,25 @@ function HomeContent() {
             <p className="text-[10px] font-medium text-amber-600/80 uppercase tracking-wider">{t("results")}</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Quick Links Grid (Full Width) */}
+      <div>
+        <h3 className="mb-3 px-1 text-sm font-semibold tracking-tight text-slate-800">Quick Actions</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3 lg:gap-4">
+          {quickLinks.map((link) => (
+            <Link key={link.href} href={link.href}>
+              <Card className="border-0 shadow-sm transition-shadow hover:shadow-md h-full">
+                <CardContent className="flex flex-col items-start gap-3 p-4">
+                  <div className={`rounded-xl p-2.5 ${link.bg} ${link.color}`}>
+                    <link.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-700 leading-tight">{link.label}</span>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Main Content Grid for Desktop */}
@@ -183,24 +202,6 @@ function HomeContent() {
         </CardContent>
       </Card>
 
-      {/* Quick Links Grid */}
-      <div>
-        <h3 className="mb-3 px-1 text-sm font-semibold tracking-tight text-slate-800">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 lg:gap-4">
-          {quickLinks.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <Card className="border-0 shadow-sm transition-shadow hover:shadow-md h-full">
-                <CardContent className="flex flex-col items-start gap-3 p-4">
-                  <div className={`rounded-xl p-2.5 ${link.bg} ${link.color}`}>
-                    <link.icon className="h-5 w-5" />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 leading-tight">{link.label}</span>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
     
     <div className="space-y-6 lg:space-y-8">

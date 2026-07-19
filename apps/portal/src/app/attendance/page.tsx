@@ -70,7 +70,7 @@ function AttendanceContent() {
   const percentage = summary.total ? Math.round((summary.P / summary.total) * 100) : 0;
 
   return (
-    <div className="space-y-6 lg:space-y-8">
+    <div className="space-y-6 lg:space-y-8 max-w-5xl mx-auto w-full lg:px-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-purple-100 p-2.5 text-purple-600">
@@ -90,8 +90,8 @@ function AttendanceContent() {
       </div>
 
       {tab === "monthly" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
+          <div className="lg:col-span-3 space-y-6">
             <Card className="border-0 shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <div className="flex items-center justify-between bg-primary p-4 sm:p-6 text-primary-foreground">
@@ -124,13 +124,13 @@ function AttendanceContent() {
                       const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
                       
                       return (
-                        <div key={day} className="aspect-square relative p-0.5">
-                          <div className={`w-full h-full flex flex-col items-center justify-center rounded-xl sm:rounded-2xl transition-all ${
+                        <div key={day} className="aspect-square relative p-0.5 sm:p-1">
+                          <div className={`w-full h-full flex flex-col items-center justify-center rounded-xl transition-all ${
                             style ? style.bg : "bg-slate-50 text-slate-400"
                           } ${isToday ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
                             <span className={`text-sm sm:text-lg font-bold ${style ? style.text : ''}`}>{day}</span>
                             {style && (
-                              <div className="hidden sm:block absolute bottom-1 text-[8px] font-bold uppercase tracking-wider opacity-70">
+                              <div className="block absolute bottom-1 text-[8px] font-bold uppercase tracking-wider opacity-70">
                                 {style.label.substring(0,3)}
                               </div>
                             )}
@@ -144,7 +144,7 @@ function AttendanceContent() {
             </Card>
           </div>
           
-          <div className="space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             <h3 className="font-bold text-slate-800 text-lg">Monthly Summary</h3>
             
             <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
@@ -188,11 +188,11 @@ function AttendanceContent() {
             
             <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white">
                <p className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider">Legend</p>
-               <div className="flex flex-wrap gap-3">
+               <div className="flex flex-wrap gap-x-2 gap-y-1.5 sm:gap-x-3 sm:gap-y-2">
                  {Object.values(STATUS_STYLES).map(s => (
-                   <div key={s.label} className="flex items-center gap-2">
-                     <div className={`h-3 w-3 rounded-full ${s.bg}`}></div>
-                     <span className="text-xs font-medium text-slate-600">{s.label}</span>
+                   <div key={s.label} className="flex items-center gap-1.5">
+                     <div className={`h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full ${s.bg}`}></div>
+                     <span className="text-[10px] sm:text-xs font-medium text-slate-600 whitespace-nowrap">{s.label}</span>
                    </div>
                  ))}
                </div>
