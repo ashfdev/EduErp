@@ -10,7 +10,7 @@ import { itemCategorySchema, itemSchema, stockIssueSchema, stockAdjustSchema } f
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
 export const itemsRouter = Router();
-itemsRouter.use(authenticate);
+itemsRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 
 itemsRouter.get(
   "/item-categories",

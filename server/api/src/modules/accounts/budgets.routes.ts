@@ -10,7 +10,7 @@ import { z } from "zod";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const budgetsRouter = Router();
-budgetsRouter.use(authenticate);
+budgetsRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 budgetsRouter.get(
   "/",

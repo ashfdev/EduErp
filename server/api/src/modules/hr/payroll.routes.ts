@@ -102,6 +102,7 @@ payrollRouter.post(
 
 payrollRouter.get(
   "/",
+  authorize(PAYROLL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ month: z.coerce.number().int().optional(), year: z.coerce.number().int().optional(), department_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
     const records = await prisma.payrollRecord.findMany({
@@ -254,6 +255,7 @@ payrollRouter.post(
 
 payrollRouter.get(
   "/:id/payslip",
+  authorize(PAYROLL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const record = await prisma.payrollRecord.findUnique({ where: { id }, include: { staff: true } });

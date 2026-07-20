@@ -171,16 +171,21 @@ hrStaffRouter.get(
   authorize(STAFF_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    // STAFF_READ_ROLES is broad (any teacher can look up a colleague in the
+    // directory) but salary data is PAYROLL_MANAGE_ROLES-only — strip it
+    // from the response entirely rather than relying on the frontend to
+    // hide fields it already received.
+    const canViewPayroll = PAYROLL_MANAGE_ROLES.includes(req.user!.role as UserRole);
     const staff = await prisma.staff.findFirst({
       where: { id, deleted_at: null },
       include: {
         department: true,
         program: { select: { id: true, name_en: true } },
         user: { select: { role: true, phone: true, email: true, is_active: true, last_login_at: true } },
-        salary_structure: true,
+        salary_structure: canViewPayroll,
         subject_assignments: { include: { subject: true } },
         leave_requests: { include: { leave_type: true }, orderBy: { created_at: "desc" } },
-        payroll_records: { orderBy: [{ year: "desc" }, { month: "desc" }] },
+        payroll_records: canViewPayroll ? { orderBy: [{ year: "desc" }, { month: "desc" }] } : false,
         _count: { select: { documents: true } },
       },
     });

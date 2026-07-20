@@ -16,7 +16,7 @@ import { createInventoryPurchaseJournal, createMaintenanceJournal, createAssetDi
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
 export const assetsRouter = Router();
-assetsRouter.use(authenticate);
+assetsRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 
 // ── Asset Categories ──────────────────────────────────────────────
 

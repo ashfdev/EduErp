@@ -3,10 +3,15 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
+import { ACCOUNTS_MANAGE_ROLES } from "../../lib/roles";
 import { notFound } from "../../lib/errors";
 
 export const accountsReportsRouter = Router();
-accountsReportsRouter.use(authenticate);
+// Every route in this file is a financial report (day-book, trial balance,
+// balance sheet, etc.) — all 8 need the same gate, so applied once here
+// rather than repeated per-route.
+accountsReportsRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 async function accountBalanceAsOf(accountId: string, asOfDate?: Date): Promise<{ debit: number; credit: number }> {
   const [debitAgg, creditAgg] = await Promise.all([

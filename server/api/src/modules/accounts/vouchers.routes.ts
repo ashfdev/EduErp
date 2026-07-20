@@ -18,6 +18,7 @@ vouchersRouter.use(authenticate);
 
 vouchersRouter.get(
   "/",
+  authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
@@ -55,6 +56,7 @@ vouchersRouter.get(
 // would be swallowed as an :id lookup.
 vouchersRouter.get(
   "/export",
+  authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), type: z.string().optional() }).parse(req.query);
     const vouchers = await prisma.voucher.findMany({
@@ -104,6 +106,7 @@ vouchersRouter.get(
 
 vouchersRouter.get(
   "/:id",
+  authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const voucher = await prisma.voucher.findUnique({
@@ -440,6 +443,7 @@ async function computeLedger(accountId: string, fromDate?: Date, toDate?: Date) 
 
 ledgerRouter.get(
   "/:account_id",
+  authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const accountId = reqParam(req, "account_id");
     const query = z.object({ from_date: z.coerce.date().optional(), to_date: z.coerce.date().optional() }).parse(req.query);
@@ -453,6 +457,7 @@ ledgerRouter.get(
 // pattern never matches a two-segment URL.
 ledgerRouter.get(
   "/:account_id/export",
+  authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const accountId = reqParam(req, "account_id");
     const query = z.object({ from_date: z.coerce.date().optional(), to_date: z.coerce.date().optional() }).parse(req.query);

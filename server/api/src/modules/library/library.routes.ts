@@ -100,6 +100,7 @@ libraryRouter.post(
 
 libraryRouter.get(
   "/issues",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ status: z.string().optional(), person_type: z.string().optional(), overdue: z.string().optional() }).parse(req.query);
     const issues = await prisma.bookIssue.findMany({
@@ -117,6 +118,7 @@ libraryRouter.get(
 
 libraryRouter.get(
   "/issues/export",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ status: z.string().optional(), person_type: z.string().optional(), overdue: z.string().optional() }).parse(req.query);
     const issues = await prisma.bookIssue.findMany({
@@ -236,6 +238,7 @@ libraryRouter.post(
 
 libraryRouter.get(
   "/issues/person/:id",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const issues = await prisma.bookIssue.findMany({ where: { person_id: reqParam(req, "id") }, include: { book: true }, orderBy: { issued_at: "desc" } });
     res.json({ success: true, data: issues });
@@ -244,6 +247,7 @@ libraryRouter.get(
 
 libraryRouter.get(
   "/reports/overdue",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const overdue = await prisma.bookIssue.findMany({ where: { status: "ISSUED", due_date: { lt: new Date() } }, include: { book: true }, orderBy: { due_date: "asc" } });
     const withPerson = await Promise.all(
@@ -260,6 +264,7 @@ libraryRouter.get(
 
 libraryRouter.get(
   "/reports/fine-report",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const issues = await prisma.bookIssue.findMany({ where: { fine_amount: { gt: 0 } } });
     const totalFines = issues.reduce((sum, i) => sum + i.fine_amount, 0);

@@ -10,7 +10,7 @@ import { bankAccountSchema, chequeSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const banksRouter = Router();
-banksRouter.use(authenticate);
+banksRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 async function currentBalance(accountId: string): Promise<number> {
   const [debitAgg, creditAgg] = await Promise.all([
@@ -126,7 +126,7 @@ banksRouter.put(
 // ── Cheques (mounted at /api/accounts/cheques, not nested under /banks) ──
 
 export const chequesRouter = Router();
-chequesRouter.use(authenticate);
+chequesRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 chequesRouter.get(
   "/",
@@ -177,7 +177,7 @@ chequesRouter.put(
 // ── TDS / VAT ─────────────────────────────────────────────────────
 
 export const taxRouter = Router();
-taxRouter.use(authenticate);
+taxRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 taxRouter.get(
   "/",

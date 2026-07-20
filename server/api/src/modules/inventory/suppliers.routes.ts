@@ -9,7 +9,7 @@ import { supplierSchema } from "@education-erp/validators";
 import { conflict, notFound } from "../../lib/errors";
 
 export const suppliersRouter = Router();
-suppliersRouter.use(authenticate);
+suppliersRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 
 suppliersRouter.get(
   "/",

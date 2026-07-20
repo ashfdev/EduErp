@@ -18,7 +18,7 @@ import { badRequest, conflict, notFound } from "../../lib/errors";
 const csvBoolean = z.preprocess((v) => v === true || v === "true" || v === "TRUE" || v === "1", z.boolean());
 
 export const accountsRouter = Router();
-accountsRouter.use(authenticate);
+accountsRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 
 // System accounts (is_system=true) are auto-created by the seed and cover
 // the codes every auto-journal/report relies on — never deletable, code

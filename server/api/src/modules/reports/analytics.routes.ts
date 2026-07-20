@@ -9,12 +9,18 @@ import { sendNotification } from "../../services/notification.service";
 import { sendSms } from "../../services/sms.service";
 import { reqParam } from "../../lib/req-param";
 import { notFound, badRequest } from "../../lib/errors";
-import { ANALYTICS_MESSAGE_ROLES } from "../../lib/roles";
+import { ANALYTICS_MESSAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const analyticsRouter = Router();
-analyticsRouter.use(authenticate);
+// Every route below this line lacked any authorize() at all (only
+// `authenticate`), letting a STUDENT/GUARDIAN portal token pull
+// institution-wide dashboards. This dashboard is meant for general staff
+// use (not leadership-only) — STAFF_ONLY_ROLES is the correct floor; the
+// stricter ANALYTICS_MESSAGE_ROLES on the at-risk/messaging routes below
+// still applies on top of this and narrows further for those specific routes.
+analyticsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
 function todayRange() {
   const now = new Date();

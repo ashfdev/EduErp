@@ -3,15 +3,17 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
+import { authorize } from "../../middleware/authorize";
+import { INVENTORY_MANAGE_ROLES } from "../../lib/roles";
 
 export const inventoryReportsRouter = Router();
-inventoryReportsRouter.use(authenticate);
+inventoryReportsRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 
 // Not itself a "report" but the dashboard's stat-card data lives here to
 // keep all read-only inventory aggregates in one file — mounted separately
 // at /api/inventory/dashboard (not under /reports) by index.ts.
 export const inventoryDashboardRouter = Router();
-inventoryDashboardRouter.use(authenticate);
+inventoryDashboardRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 inventoryDashboardRouter.get(
   "/",
   asyncHandler(async (_req, res) => {

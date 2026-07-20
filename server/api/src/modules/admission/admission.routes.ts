@@ -544,6 +544,7 @@ admissionRouter.get(
 admissionRouter.get(
   "/applications",
   authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
@@ -584,6 +585,7 @@ admissionRouter.get(
 admissionRouter.get(
   "/applications/:id",
   authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true } });

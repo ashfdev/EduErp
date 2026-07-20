@@ -5,7 +5,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { EXAM_MANAGE_ROLES } from "../../lib/roles";
+import { EXAM_MANAGE_ROLES, MARK_VIEW_ROLES } from "../../lib/roles";
 import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema, examSessionSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
@@ -23,6 +23,11 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 examsRouter.get(
   "/",
+  // MARK_VIEW_ROLES (not EXAM_MANAGE_ROLES) — apps/teacher's Marks Picker
+  // fetches this directly for CLASS_TEACHER/SUBJECT_TEACHER accounts to
+  // populate the exam dropdown; gating to EXAM_MANAGE_ROLES only would
+  // break that flow.
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
     const exams = await prisma.exam.findMany({
@@ -36,6 +41,7 @@ examsRouter.get(
 
 examsRouter.get(
   "/:id",
+  authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const exam = await prisma.exam.findUnique({
@@ -321,6 +327,7 @@ examsRouter.put(
 // time instead of mixing every class tied to the exam into one pass.
 examsRouter.get(
   "/:id/sessions",
+  authorize(EXAM_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const sessions = await prisma.examSession.findMany({
@@ -414,6 +421,7 @@ examsRouter.post(
 
 examsRouter.get(
   "/:id/seat-plan",
+  authorize(EXAM_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const plans = await prisma.examSeatPlan.findMany({

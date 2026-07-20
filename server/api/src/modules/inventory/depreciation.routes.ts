@@ -9,7 +9,7 @@ import { depreciationRunSchema } from "@education-erp/validators";
 import { createDepreciationJournal } from "../accounts/auto-journal.service";
 
 export const depreciationRouter = Router();
-depreciationRouter.use(authenticate);
+depreciationRouter.use(authenticate, authorize(INVENTORY_MANAGE_ROLES));
 
 // Straight Line Method: annual_dep = purchase_price * (rate / 100), stop
 // once book_value reaches 0 (never depreciate below zero, per CLAUDE.md's

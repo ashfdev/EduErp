@@ -8,7 +8,7 @@ import { PAYROLL_MANAGE_ROLES } from "../../lib/roles";
 import { salaryStructureSchema } from "@education-erp/validators";
 
 export const salaryStructuresRouter = Router();
-salaryStructuresRouter.use(authenticate);
+salaryStructuresRouter.use(authenticate, authorize(PAYROLL_MANAGE_ROLES));
 
 salaryStructuresRouter.get(
   "/",

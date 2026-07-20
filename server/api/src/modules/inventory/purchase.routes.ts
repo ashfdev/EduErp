@@ -17,6 +17,12 @@ import { badRequest, notFound } from "../../lib/errors";
 export const purchaseRouter = Router();
 purchaseRouter.use(authenticate);
 
+// Read routes need to be visible to whoever can approve a requisition too
+// (REQUISITION_APPROVE_ROLES also includes PRINCIPAL/HEAD_OF_DEPT, who
+// aren't in INVENTORY_MANAGE_ROLES) — an approver has to be able to list
+// and open a requisition/PO before they can act on it.
+const INVENTORY_READ_ROLES = [...INVENTORY_MANAGE_ROLES, ...REQUISITION_APPROVE_ROLES];
+
 // ── Requisitions ──────────────────────────────────────────────────
 
 purchaseRouter.post(
@@ -44,6 +50,7 @@ purchaseRouter.post(
 
 purchaseRouter.get(
   "/requisitions",
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ status: z.string().optional() }).parse(req.query);
     const requisitions = await prisma.purchaseRequisition.findMany({
@@ -57,6 +64,7 @@ purchaseRouter.get(
 
 purchaseRouter.get(
   "/requisitions/:id",
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id }, include: { items: { include: { item: true } }, purchase_order: true } });
@@ -137,6 +145,7 @@ purchaseRouter.post(
 
 purchaseRouter.get(
   "/purchase-orders",
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ status: z.string().optional() }).parse(req.query);
     const orders = await prisma.purchaseOrder.findMany({
@@ -150,6 +159,7 @@ purchaseRouter.get(
 
 purchaseRouter.get(
   "/purchase-orders/:id",
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const po = await prisma.purchaseOrder.findUnique({ where: { id }, include: { supplier: true, items: true, grns: { include: { items: true } } } });
@@ -170,6 +180,7 @@ purchaseRouter.put(
 
 purchaseRouter.get(
   "/purchase-orders/:id/grns",
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const grns = await prisma.goodsReceivedNote.findMany({ where: { po_id: id }, include: { items: true } });
