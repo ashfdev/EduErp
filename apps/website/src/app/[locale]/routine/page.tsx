@@ -4,22 +4,27 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchContent } from "@/lib/content-api";
 import type { ClassPicker, RoutineSlotItem } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 const DAY_KEYS = ["daySun", "dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat"] as const;
 
 export default function RoutinePage() {
   const t = useTranslations("routine");
+  const tCommon = useTranslations("common");
   const [classes, setClasses] = useState<ClassPicker[]>([]);
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [groupId, setGroupId] = useState("");
   const [slots, setSlots] = useState<RoutineSlotItem[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const today = new Date().getDay();
   const [day, setDay] = useState(today);
 
   useEffect(() => {
-    fetchContent<ClassPicker[]>("/classes").then((d) => setClasses(d ?? []));
+    // Secondary (class picker population) — degrades to an empty dropdown
+    // rather than blocking the page.
+    fetchContent<ClassPicker[]>("/classes").then((d) => setClasses(d ?? [])).catch(() => {});
   }, []);
 
   const selectedClass = classes.find((c) => c.id === classId);
@@ -28,18 +33,20 @@ export default function RoutinePage() {
     setSectionId("");
     setGroupId("");
     setSlots(null);
+    setLoadError(false);
   }, [classId]);
 
   function loadRoutine() {
     if (!classId) return;
     setLoading(true);
+    setLoadError(false);
     const params: Record<string, string> = { class_id: classId };
     if (sectionId) params.section_id = sectionId;
     if (groupId) params.group_id = groupId;
-    fetchContent<RoutineSlotItem[]>("/routine", params).then((d) => {
-      setSlots(d ?? []);
-      setLoading(false);
-    });
+    fetchContent<RoutineSlotItem[]>("/routine", params)
+      .then((d) => setSlots(d ?? []))
+      .catch(() => setLoadError(true))
+      .finally(() => setLoading(false));
   }
 
   const daySlots = (slots ?? []).filter((s) => s.day_of_week === day).sort((a, b) => a.period_no - b.period_no);
@@ -101,6 +108,12 @@ export default function RoutinePage() {
       >
         {loading ? t("loading") : t("viewRoutine")}
       </button>
+
+      {loadError && (
+        <div className="mt-8">
+          <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={loadRoutine} />
+        </div>
+      )}
 
       {slots !== null && (
         <div className="mt-8">

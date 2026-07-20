@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { DepartmentsResponse, ProgramSummary } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 const DEGREE_LEVELS = ["UNDERGRADUATE", "GRADUATE", "PHD"] as const;
 
@@ -95,15 +96,20 @@ function DegreeLevelGroups({ programs }: { programs: ProgramSummary[] }) {
 
 export default function DepartmentsPage() {
   const t = useTranslations("departments");
-  const [data, setData] = useState<DepartmentsResponse | null>(null);
-
-  useEffect(() => {
-    fetchContent<DepartmentsResponse>("/departments").then(setData);
-  }, []);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<DepartmentsResponse>("/departments");
 
   const departments = data?.departments ?? [];
   const unassigned = data?.unassigned_programs ?? [];
   const isEmpty = !departments.length && !unassigned.length;
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">

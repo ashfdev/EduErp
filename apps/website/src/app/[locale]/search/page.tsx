@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { fetchContent } from "@/lib/content-api";
+import { ErrorState } from "@education-erp/ui";
 
 interface NoticeResult {
   id: string;
@@ -28,17 +29,29 @@ const ACADEMIC_PAGE_KEYS = new Set(["course_curriculum", "grading_system", "acad
 
 export default function SearchPage() {
   const t = useTranslations("search");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
   const searchParams = useSearchParams();
   const q = searchParams.get("q") ?? "";
   const [results, setResults] = useState<SearchResults | null>(null);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  function runSearch() {
     if (!q.trim()) {
       setResults({ notices: [], pages: [] });
+      setError(false);
       return;
     }
-    fetchContent<SearchResults>("/search", { q }).then((d) => setResults(d ?? { notices: [], pages: [] }));
+    setError(false);
+    setResults(null);
+    fetchContent<SearchResults>("/search", { q })
+      .then((d) => setResults(d ?? { notices: [], pages: [] }))
+      .catch(() => setError(true));
+  }
+
+  useEffect(() => {
+    runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   const hasResults = !!(results && (results.notices.length || results.pages.length));
@@ -48,8 +61,9 @@ export default function SearchPage() {
       <h1 className="mb-1 text-2xl font-semibold">{t("title")}</h1>
       <p className="mb-6 text-sm text-gray-500">{t("resultsFor", { q })}</p>
 
-      {results === null && <p className="text-sm text-gray-500">{t("searching")}</p>}
-      {results !== null && !hasResults && <p className="text-sm text-gray-500">{t("noResults")}</p>}
+      {error && <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={runSearch} />}
+      {!error && results === null && <p className="text-sm text-gray-500">{t("searching")}</p>}
+      {!error && results !== null && !hasResults && <p className="text-sm text-gray-500">{t("noResults")}</p>}
 
       {!!results?.notices.length && (
         <section className="mb-8">

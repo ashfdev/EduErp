@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { StaticPageContent } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 const PAGES = [
   { key: "about", labelKey: "navAbout", subheading: "groupInstitution" },
@@ -22,16 +22,8 @@ const PAGES = [
 export default function AboutSlugPage() {
   const { slug } = useParams<{ slug: string }>();
   const t = useTranslations("about");
-  const [page, setPage] = useState<StaticPageContent | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    setNotFound(false);
-    fetchContent<StaticPageContent>(`/pages/${slug}`).then((d) => {
-      if (!d) setNotFound(true);
-      setPage(d);
-    });
-  }, [slug]);
+  const tCommon = useTranslations("common");
+  const { data: page, error, notFound, refetch } = useContent<StaticPageContent>(`/pages/${slug}`);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
@@ -72,6 +64,11 @@ export default function AboutSlugPage() {
         {/* Main Content Area */}
         <div className="flex-1">
           <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm sm:p-10 min-h-[500px]">
+            {error && (
+              <div className="flex h-full items-center justify-center pt-16 pb-20">
+                <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+              </div>
+            )}
             {notFound && (
               <div className="flex h-full flex-col items-center justify-center text-center space-y-4 pt-16 pb-20">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-4xl">

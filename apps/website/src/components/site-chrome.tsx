@@ -47,7 +47,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
   const [institution, setInstitution] = useState<Institution | null>(null);
 
   useEffect(() => {
-    fetchContent<Institution>("/institution").then(setInstitution);
+    fetchContent<Institution>("/institution").then(setInstitution).catch(() => {});
   }, []);
 
   return (

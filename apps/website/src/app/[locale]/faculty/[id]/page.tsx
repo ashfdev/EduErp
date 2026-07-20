@@ -1,31 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { FacultyDetail } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function FacultyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const fromStaff = searchParams.get("from") === "staff";
   const t = useTranslations("faculty");
-  const [member, setMember] = useState<FacultyDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    setNotFound(false);
-    fetchContent<FacultyDetail>(`/faculty/${id}`).then((d) => {
-      if (!d) setNotFound(true);
-      setMember(d);
-    });
-  }, [id]);
+  const tCommon = useTranslations("common");
+  const { data: member, error, notFound, refetch } = useContent<FacultyDetail>(`/faculty/${id}`);
 
   const backHref = fromStaff ? "/staff" : "/faculty";
   const backLabel = fromStaff ? t("backToStaff") : t("backToFaculty");
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   if (notFound) {
     return (

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { Link } from "@/i18n/routing";
+import { ErrorState } from "@education-erp/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,9 +32,12 @@ const STEPS = ["Personal Info", "Guardian Info", "Previous Record", "Subjects", 
 export default function AdmissionApplyPage() {
   const { cycle_id } = useParams<{ cycle_id: string }>();
   const [cycle, setCycle] = useState<CycleDetail | null>(null);
+  const [cycleLoading, setCycleLoading] = useState(true);
+  const [cycleError, setCycleError] = useState(false);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateApplication, setDuplicateApplication] = useState(false);
   const [submitted, setSubmitted] = useState<{ id: string; admission_roll: string; app_fee: number } | null>(null);
   const [paying, setPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -67,16 +72,27 @@ export default function AdmissionApplyPage() {
     }
   }
 
-  useEffect(() => {
+  const loadCycle = useCallback(() => {
+    setCycleLoading(true);
+    setCycleError(false);
     fetch(`${API_URL}/api/admission/public/cycles/${cycle_id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Request failed: ${r.status}`);
+        return r.json();
+      })
       .then((body) => setCycle(body.data ?? null))
-      .catch(() => setCycle(null));
+      .catch(() => setCycleError(true))
+      .finally(() => setCycleLoading(false));
   }, [cycle_id]);
+
+  useEffect(() => {
+    loadCycle();
+  }, [loadCycle]);
 
   async function submit() {
     setSubmitting(true);
     setError(null);
+    setDuplicateApplication(false);
     try {
       const res = await fetch(`${API_URL}/api/admission/apply`, {
         method: "POST",
@@ -103,6 +119,11 @@ export default function AdmissionApplyPage() {
       const body = await res.json();
       if (!res.ok) {
         setError(body.error?.message ?? "Failed to submit application");
+        // A 409 here is specifically the "an application for this cycle
+        // already exists for this guardian phone number" conflict — point
+        // the guardian at the status page instead of leaving them at a
+        // dead-end error with no next step.
+        if (res.status === 409) setDuplicateApplication(true);
         return;
       }
       setSubmitted(body.data);
@@ -155,7 +176,20 @@ export default function AdmissionApplyPage() {
     return true;
   }
 
-  if (!cycle) return <main className="mx-auto max-w-2xl p-8"><p className="text-sm text-gray-600">Loading...</p></main>;
+  if (cycleError) {
+    return (
+      <main className="mx-auto max-w-2xl p-8">
+        <ErrorState
+          title="Couldn't load this admission cycle"
+          description="Something went wrong loading this page. Check your connection and try again."
+          retryLabel="Retry"
+          onRetry={loadCycle}
+        />
+      </main>
+    );
+  }
+
+  if (cycleLoading || !cycle) return <main className="mx-auto max-w-2xl p-8"><p className="text-sm text-gray-600">Loading...</p></main>;
 
   if (submitted) {
     return (
@@ -322,7 +356,20 @@ export default function AdmissionApplyPage() {
         </div>
       )}
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <p>{error}</p>
+          {duplicateApplication && (
+            <p className="mt-2">
+              Already applied?{" "}
+              <Link href="/admission/status" className="font-medium underline">
+                Check your application status
+              </Link>{" "}
+              using your guardian phone number.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 flex justify-between">
         <button disabled={step === 0} onClick={() => setStep((s) => s - 1)} className="rounded-md border px-4 py-2 text-sm disabled:opacity-50">

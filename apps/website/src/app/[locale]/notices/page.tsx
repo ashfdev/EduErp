@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchContent, API_URL } from "@/lib/content-api";
+import { API_URL } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { Notice } from "@/lib/types";
-import { PdfPreviewModal } from "@education-erp/ui";
+import { PdfPreviewModal, ErrorState } from "@education-erp/ui";
 import { markNoticesVisited } from "@/lib/notices-visit";
 
 const TAB_KEYS = ["tabAll", "tabRecent", "tabPublic", "tabStudents", "tabStaff", "tabGuardians"] as const;
@@ -12,14 +13,23 @@ const TAB_FILTER_VALUES = ["All", "Recent", "PUBLIC", "STUDENTS", "STAFF", "GUAR
 
 export default function NoticesPage() {
   const t = useTranslations("notices");
-  const [notices, setNotices] = useState<Notice[]>([]);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<Notice[]>("/notices", { limit: "100" });
+  const notices = data ?? [];
   const [tab, setTab] = useState<(typeof TAB_FILTER_VALUES)[number]>("All");
   const [previewNotice, setPreviewNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
-    fetchContent<Notice[]>("/notices", { limit: "100" }).then((d) => setNotices(d ?? []));
     markNoticesVisited();
   }, []);
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   const filtered = notices.filter((n) => {
     if (tab === "All") return true;

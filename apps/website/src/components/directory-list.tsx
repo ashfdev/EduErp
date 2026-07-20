@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { fetchContent } from "@/lib/content-api";
 import type { FacultyProfile, DepartmentOption } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 interface DirectoryListProps {
   category: "FACULTY" | "STAFF";
@@ -15,25 +16,33 @@ interface DirectoryListProps {
 
 export function DirectoryList({ category, title, subtitle }: DirectoryListProps) {
   const t = useTranslations("faculty");
+  const tCommon = useTranslations("common");
   const [people, setPeople] = useState<FacultyProfile[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState("");
+  const [error, setError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    fetchContent<DepartmentOption[]>("/department-options").then((d) => setDepartments(d ?? []));
+    // Secondary (department filter dropdown) — degrades to an empty
+    // dropdown rather than blocking the directory itself.
+    fetchContent<DepartmentOption[]>("/department-options").then((d) => setDepartments(d ?? [])).catch(() => {});
   }, []);
 
   useEffect(() => {
+    setError(false);
     const timeout = setTimeout(() => {
       fetchContent<FacultyProfile[]>("/faculty", {
         category,
         ...(search && { search }),
         ...(departmentId && { department_id: departmentId }),
-      }).then((d) => setPeople(d ?? []));
+      })
+        .then((d) => setPeople(d ?? []))
+        .catch(() => setError(true));
     }, 250);
     return () => clearTimeout(timeout);
-  }, [category, search, departmentId]);
+  }, [category, search, departmentId, reloadKey]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -60,8 +69,11 @@ export function DirectoryList({ category, title, subtitle }: DirectoryListProps)
         </select>
       </div>
 
-      {!people.length && <p className="text-sm text-gray-500">{t("noResults")}</p>}
-      {!!people.length && (
+      {error && (
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => setReloadKey((k) => k + 1)} />
+      )}
+      {!error && !people.length && <p className="text-sm text-gray-500">{t("noResults")}</p>}
+      {!error && !!people.length && (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>

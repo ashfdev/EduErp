@@ -18,7 +18,10 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchContent<Institution>("/institution").then(setInstitution);
+    // Secondary (sidebar address/phone/email) — the contact form itself
+    // doesn't depend on this, so a failure just leaves the sidebar blank
+    // rather than blocking the page.
+    fetchContent<Institution>("/institution").then(setInstitution).catch(() => {});
   }, []);
 
   async function submit(e: React.FormEvent) {

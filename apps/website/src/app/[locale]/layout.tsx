@@ -19,7 +19,11 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const institution = await fetchContent<Institution>("/institution");
+  // This layout wraps every page on the site — a thrown fetch failure here
+  // (fetchContent now throws instead of resolving to null) would break the
+  // entire site's render if the API is briefly unreachable. Fall back to
+  // null, matching every institution?.field ?? fallback already used below.
+  const institution = await fetchContent<Institution>("/institution").catch(() => null);
   const name = institution?.name_en ?? "Institution Website";
   const description = institution?.established_text ?? institution?.tagline_en ?? `Official website of ${name}`;
 
@@ -49,7 +53,7 @@ export default async function LocaleLayout({
   setRequestLocale(locale);
   const messages = await getMessages();
 
-  const institution = await fetchContent<Institution>("/institution");
+  const institution = await fetchContent<Institution>("/institution").catch(() => null);
 
   const jsonLd = {
     "@context": "https://schema.org",

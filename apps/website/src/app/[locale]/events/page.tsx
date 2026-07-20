@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { EventItem, Institution } from "@/lib/types";
 import { MonthCalendar, eventColor, KNOWN_EVENT_TYPES } from "@/components/month-calendar";
+import { ErrorState } from "@education-erp/ui";
 
 export default function EventsPage() {
   const t = useTranslations("events");
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const tCommon = useTranslations("common");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [workingDays, setWorkingDays] = useState<number[] | null>(null);
@@ -17,12 +19,13 @@ export default function EventsPage() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
 
-  useEffect(() => {
-    fetchContent<EventItem[]>("/events", { limit: "200", ...(typeFilter && { type: typeFilter }) }).then((d) => setEvents(d ?? []));
-  }, [typeFilter]);
+  const { data, error, refetch } = useContent<EventItem[]>("/events", { limit: "200", ...(typeFilter && { type: typeFilter }) });
+  const events = useMemo(() => data ?? [], [data]);
 
   useEffect(() => {
-    fetchContent<Institution>("/institution").then((d) => setWorkingDays(d?.working_days ?? null));
+    // Secondary data (only affects which calendar columns are shaded) —
+    // degrades gracefully to unshaded rather than blocking the page.
+    fetchContent<Institution>("/institution").then((d) => setWorkingDays(d?.working_days ?? null)).catch(() => {});
   }, []);
 
   const eventTypesPresent = useMemo(() => [...new Set(events.map((e) => e.type))].sort(), [events]);
@@ -41,6 +44,14 @@ export default function EventsPage() {
   }
 
   const monthLabel = new Date(cursor.year, cursor.month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">

@@ -19,7 +19,7 @@ export function Footer({ institution }: { institution: Institution | null }) {
   const [links, setLinks] = useState<ImportantLink[]>([]);
 
   useEffect(() => {
-    fetchContent<ImportantLink[]>("/important-links").then((data) => setLinks(data ?? []));
+    fetchContent<ImportantLink[]>("/important-links").then((data) => setLinks(data ?? [])).catch(() => {});
   }, []);
 
   return (

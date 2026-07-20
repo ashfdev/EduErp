@@ -99,12 +99,14 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   // one stored in the visitor's own browser, not a real per-user unread
   // state like the admin/portal/teacher notification bell.
   useEffect(() => {
-    fetchContent<{ created_at: string }[]>("/notices", { limit: "1" }).then((notices) => {
-      const latest = notices?.[0]?.created_at;
-      if (!latest) return;
-      const lastVisit = localStorage.getItem(NOTICES_LAST_VISIT_KEY);
-      if (!lastVisit || new Date(latest) > new Date(lastVisit)) setHasNewNotice(true);
-    });
+    fetchContent<{ created_at: string }[]>("/notices", { limit: "1" })
+      .then((notices) => {
+        const latest = notices?.[0]?.created_at;
+        if (!latest) return;
+        const lastVisit = localStorage.getItem(NOTICES_LAST_VISIT_KEY);
+        if (!lastVisit || new Date(latest) > new Date(lastVisit)) setHasNewNotice(true);
+      })
+      .catch(() => {});
   }, []);
 
   function clearNoticeBadge() {

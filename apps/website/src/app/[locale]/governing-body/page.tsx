@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { GoverningBodyMember } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function GoverningBodyPage() {
   const t = useTranslations("governingBody");
-  const [members, setMembers] = useState<GoverningBodyMember[]>([]);
-
-  useEffect(() => {
-    fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setMembers(d ?? []));
-  }, []);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<GoverningBodyMember[]>("/governing-body");
+  const members = data ?? [];
 
   const groups = [...new Set(members.map((m) => m.group))];
+
+  if (error) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">

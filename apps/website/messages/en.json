@@ -3,7 +3,10 @@
     "loading": "Loading...",
     "language": "Language",
     "readMore": "Read more",
-    "download": "Download"
+    "download": "Download",
+    "loadError": "Couldn't load this",
+    "loadErrorDetail": "Something went wrong loading this content. Check your connection and try again.",
+    "retry": "Retry"
   },
   "nav": {
     "home": "Home",

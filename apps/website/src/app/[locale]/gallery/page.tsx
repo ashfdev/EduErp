@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import Image from "next/image";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { GalleryAlbum } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function GalleryIndexPage() {
   const t = useTranslations("gallery");
-  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<GalleryAlbum[]>("/gallery/albums", { limit: "24" });
+  const albums = data ?? [];
 
-  useEffect(() => {
-    fetchContent<GalleryAlbum[]>("/gallery/albums", { limit: "24" }).then((d) => setAlbums(d ?? []));
-  }, []);
+  if (error) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">

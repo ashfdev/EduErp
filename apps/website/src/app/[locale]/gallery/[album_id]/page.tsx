@@ -1,21 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { GalleryAlbum, GalleryImage } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function GalleryAlbumPage() {
   const { album_id } = useParams<{ album_id: string }>();
   const t = useTranslations("gallery");
-  const [data, setData] = useState<{ album: GalleryAlbum; images: GalleryImage[] } | null>(null);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<{ album: GalleryAlbum; images: GalleryImage[] }>(`/gallery/albums/${album_id}/images`);
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchContent<{ album: GalleryAlbum; images: GalleryImage[] }>(`/gallery/albums/${album_id}/images`).then(setData);
-  }, [album_id]);
+  if (error) {
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   if (!data) return <main className="mx-auto max-w-6xl px-4 py-10"><p className="text-sm text-gray-500">{t("loading")}</p></main>;
 

@@ -294,7 +294,12 @@ admissionRouter.get(
         close_date: c.close_date,
         seat_count: c.seat_count,
         app_fee: c.app_fee,
-        is_open: c.is_open,
+        // is_open is a staff-toggled flag, not deadline-aware on its own —
+        // fold in close_date here so "Apply Now" / the Open badge can never
+        // outlive the real deadline just because staff forgot to flip it
+        // off. The actual close_date enforcement at submission time is
+        // unaffected by this — this only changes what's advertised publicly.
+        is_open: c.is_open && c.close_date >= new Date(),
       })),
     });
   }),

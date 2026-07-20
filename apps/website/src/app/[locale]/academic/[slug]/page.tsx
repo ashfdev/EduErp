@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { StaticPageContent } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 const PAGES = [
   { key: "course_curriculum", labelKey: "navCourseCurriculum" },
@@ -17,16 +17,8 @@ const PAGES = [
 export default function AcademicSlugPage() {
   const { slug } = useParams<{ slug: string }>();
   const t = useTranslations("academic");
-  const [page, setPage] = useState<StaticPageContent | null>(null);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    setNotFound(false);
-    fetchContent<StaticPageContent>(`/pages/${slug}`).then((d) => {
-      if (!d) setNotFound(true);
-      setPage(d);
-    });
-  }, [slug]);
+  const tCommon = useTranslations("common");
+  const { data: page, error, notFound, refetch } = useContent<StaticPageContent>(`/pages/${slug}`);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
@@ -39,6 +31,7 @@ export default function AcademicSlugPage() {
           ))}
         </aside>
         <div className="md:col-span-3">
+          {error && <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />}
           {notFound && <p className="text-sm text-gray-500">{t("notConfigured")}</p>}
           {page && (
             <>

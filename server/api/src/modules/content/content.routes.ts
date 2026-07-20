@@ -322,8 +322,14 @@ contentRouter.get(
   "/admission/open",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("admission-open"), CONTENT_CACHE_TTL_SECONDS, () =>
+      // is_open/is_published are staff-toggled flags — close_date is the
+      // real deadline and is enforced at submission time (admission.routes.ts),
+      // but nothing stopped this public listing from advertising "Apply Now"
+      // past it if staff forgot to flip is_open off. Filtering here too means
+      // a cycle stops being offered the moment its deadline passes, with no
+      // manual step required.
       prisma.admissionCycle.findMany({
-        where: { is_open: true, is_published: true },
+        where: { is_open: true, is_published: true, close_date: { gte: new Date() } },
         include: { class: { select: { name_en: true, name_bn: true } } },
       }),
     );
@@ -549,7 +555,13 @@ contentRouter.get(
   "/jobs",
   asyncHandler(async (_req, res) => {
     const data = await cached(contentCacheKey("jobs"), CONTENT_CACHE_TTL_SECONDS, () =>
-      prisma.jobPosting.findMany({ where: { is_published: true }, orderBy: { created_at: "desc" } }),
+      // deadline is nullable (an open-ended posting has none) — only
+      // exclude a posting once its own deadline has actually passed,
+      // rather than requiring every posting to have one.
+      prisma.jobPosting.findMany({
+        where: { is_published: true, OR: [{ deadline: null }, { deadline: { gte: new Date() } }] },
+        orderBy: { created_at: "desc" },
+      }),
     );
     res.json({ success: true, data });
   }),

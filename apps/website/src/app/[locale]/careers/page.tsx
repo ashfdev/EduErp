@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { JobPosting } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function CareersPage() {
   const t = useTranslations("careers");
-  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<JobPosting[]>("/jobs");
+  const jobs = data ?? [];
 
-  useEffect(() => {
-    fetchContent<JobPosting[]>("/jobs").then((d) => setJobs(d ?? []));
-  }, []);
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">

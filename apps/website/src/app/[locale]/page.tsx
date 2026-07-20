@@ -29,15 +29,21 @@ export default function HomePage() {
   const [faculty, setFaculty] = useState<FacultyMember[]>([]);
 
   useEffect(() => {
-    fetchContent<Institution>("/institution").then(setInstitution);
-    fetchContent<Slider[]>("/sliders").then((d) => setSliders(d ?? []));
-    fetchContent<{ students: number; staff: number }>("/stats").then(setStats);
-    fetchContent<Notice[]>("/notices", { limit: "10" }).then((d) => setNotices(d ?? []));
-    fetchContent<GalleryAlbum[]>("/gallery/albums", { limit: "4" }).then((d) => setAlbums(d ?? []));
-    fetchContent<EventItem[]>("/events", { upcoming: "true", limit: "3" }).then((d) => setEvents(d ?? []));
-    fetchContent<AdmissionCycleSummary[]>("/admission/open").then((d) => setOpenCycles(d ?? []));
-    fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setGoverningBody((d ?? []).slice(0, 4)));
-    fetchContent<FacultyMember[]>("/faculty", { category: "FACULTY" }).then((d) => setFaculty((d ?? []).slice(0, 4)));
+    // Each section below is independently optional (a marketing homepage
+    // mosaic, not one primary content fetch) — a failure in any single one
+    // just leaves that section at its already-empty initial state rather
+    // than blocking the rest of the page. fetchContent throws on failure
+    // now (used to silently resolve to null), so every call needs an
+    // explicit .catch() to avoid an unhandled rejection.
+    fetchContent<Institution>("/institution").then(setInstitution).catch(() => {});
+    fetchContent<Slider[]>("/sliders").then((d) => setSliders(d ?? [])).catch(() => {});
+    fetchContent<{ students: number; staff: number }>("/stats").then(setStats).catch(() => {});
+    fetchContent<Notice[]>("/notices", { limit: "10" }).then((d) => setNotices(d ?? [])).catch(() => {});
+    fetchContent<GalleryAlbum[]>("/gallery/albums", { limit: "4" }).then((d) => setAlbums(d ?? [])).catch(() => {});
+    fetchContent<EventItem[]>("/events", { upcoming: "true", limit: "3" }).then((d) => setEvents(d ?? [])).catch(() => {});
+    fetchContent<AdmissionCycleSummary[]>("/admission/open").then((d) => setOpenCycles(d ?? [])).catch(() => {});
+    fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setGoverningBody((d ?? []).slice(0, 4))).catch(() => {});
+    fetchContent<FacultyMember[]>("/faculty", { category: "FACULTY" }).then((d) => setFaculty((d ?? []).slice(0, 4))).catch(() => {});
   }, []);
 
   useEffect(() => {

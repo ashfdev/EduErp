@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { DownloadItem } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
 
 export default function DownloadsPage() {
   const t = useTranslations("downloads");
-  const [downloads, setDownloads] = useState<DownloadItem[]>([]);
+  const tCommon = useTranslations("common");
+  const { data, error, refetch } = useContent<DownloadItem[]>("/downloads");
+  const downloads = data ?? [];
 
-  useEffect(() => {
-    fetchContent<DownloadItem[]>("/downloads").then((d) => setDownloads(d ?? []));
-  }, []);
+  if (error) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">

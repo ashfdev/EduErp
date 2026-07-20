@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { fetchContent, API_URL } from "@/lib/content-api";
+import { API_URL } from "@/lib/content-api";
+import { useContent } from "@/hooks/use-content";
 import type { JobPosting } from "@/lib/types";
+import { ErrorState } from "@education-erp/ui";
 
 export default function JobDetailPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const t = useTranslations("careers");
-  const [job, setJob] = useState<JobPosting | null>(null);
-  const [jobsLoaded, setJobsLoaded] = useState(false);
+  const tCommon = useTranslations("common");
+  const { data: jobs, loading: jobsLoading, error: jobsError, refetch } = useContent<JobPosting[]>("/jobs");
+  const job = jobs?.find((j) => j.id === job_id) ?? null;
+  const jobsLoaded = !jobsLoading;
 
   const [applicantName, setApplicantName] = useState("");
   const [phone, setPhone] = useState("");
@@ -21,13 +25,6 @@ export default function JobDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-
-  useEffect(() => {
-    fetchContent<JobPosting[]>("/jobs").then((jobs) => {
-      setJob(jobs?.find((j) => j.id === job_id) ?? null);
-      setJobsLoaded(true);
-    });
-  }, [job_id]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -81,6 +78,14 @@ export default function JobDetailPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (jobsError) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-10">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={refetch} />
+      </main>
+    );
   }
 
   if (jobsLoaded && !job) {
