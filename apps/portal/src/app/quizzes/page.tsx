@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
 
 interface QuizRow {
   id: string;
@@ -19,11 +19,21 @@ interface QuizRow {
 function QuizzesContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("quizzes");
-  const { data, isLoading } = useQuery<QuizRow[]>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<QuizRow[]>({
     queryKey: ["portal", "quizzes", activeStudentId],
     queryFn: async () => (await api.get("/api/portal/quizzes", { params: { student_id: activeStudentId } })).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

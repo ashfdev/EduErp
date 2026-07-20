@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 import { BellRing, Pin, Paperclip, ChevronRight, Inbox } from "lucide-react";
 
@@ -21,11 +21,21 @@ interface Notice {
 function NoticesContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("notices");
-  const { data, isLoading } = useQuery<Notice[]>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<Notice[]>({
     queryKey: ["portal", "notices", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/notices`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

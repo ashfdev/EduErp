@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, Label, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState, PdfPreviewModal } from "@education-erp/ui";
+import { Card, CardContent, Badge, Button, Label, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState, ErrorState, PdfPreviewModal } from "@education-erp/ui";
 
 interface DocumentRequestRow {
   id: string;
@@ -30,6 +30,7 @@ function DocumentRequestsContent() {
   const { activeStudentId } = useAuthStore();
   const queryClient = useQueryClient();
   const t = useTranslations("documentRequests");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [docType, setDocType] = useState<"TESTIMONIAL" | "TRANSFER_CERTIFICATE">("TESTIMONIAL");
   const [reason, setReason] = useState("");
@@ -37,10 +38,11 @@ function DocumentRequestsContent() {
   const [previewTitle, setPreviewTitle] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  const { data, isLoading } = useQuery<DocumentRequestRow[]>({
+  const { data, isLoading, isError, refetch } = useQuery<DocumentRequestRow[]>({
     queryKey: ["portal", "document-requests", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/document-requests`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   const createMutation = useMutation({
@@ -64,6 +66,14 @@ function DocumentRequestsContent() {
     setPreviewOpen(true);
     const res = await api.get(`/api/portal/student/${activeStudentId}/document-requests/${requestId}/download`);
     setPreviewUrl(res.data.data.url);
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
   }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;

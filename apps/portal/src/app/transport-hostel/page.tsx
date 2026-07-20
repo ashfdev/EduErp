@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface TransportHostel {
   transport: { route_name: string; fare: number; pickup_stop: string | null } | null;
@@ -16,11 +16,21 @@ interface TransportHostel {
 function TransportHostelContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("transportHostel");
-  const { data, isLoading } = useQuery<TransportHostel>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<TransportHostel>({
     queryKey: ["portal", "transport-hostel", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/transport-hostel`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

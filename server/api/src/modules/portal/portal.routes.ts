@@ -17,6 +17,7 @@ import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
+import { syncOverdueInvoices } from "../fees/invoice-helpers";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { postComplaintMessage } from "../complaints/complaint-message.helper";
@@ -255,6 +256,7 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
+    await syncOverdueInvoices(prisma, id);
     const [invoices, student] = await Promise.all([
       prisma.invoice.findMany({
         where: { student_id: id },

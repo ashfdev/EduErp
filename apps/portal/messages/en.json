@@ -5,7 +5,10 @@
     "logout": "Log out",
     "save": "Save",
     "noticeNotFound": "Notice not found.",
-    "resultNotFound": "Result not found."
+    "resultNotFound": "Result not found.",
+    "loadError": "Couldn't load this",
+    "loadErrorDetail": "Something went wrong loading this page. Check your connection and try again.",
+    "retry": "Retry"
   },
   "nav": {
     "home": "Home",
@@ -181,6 +184,8 @@
     "download": "Download {filename} →",
     "due": "Due {date}",
     "notSubmitted": "Not submitted yet.",
+    "checkingSubmissionStatus": "Checking submission status...",
+    "submissionStatusUnavailable": "Couldn't check submission status — try reloading the page.",
     "submitted": "Submitted: {filename}",
     "grade": "Grade: {grade}",
     "resubmit": "Resubmit",
@@ -219,7 +224,10 @@
     "dayWed": "Wed",
     "dayThu": "Thu",
     "dayFri": "Fri",
-    "daySat": "Sat"
+    "daySat": "Sat",
+    "statusUpcoming": "Upcoming",
+    "statusOngoing": "Ongoing",
+    "statusCompleted": "Completed"
   },
   "subjects": {
     "title": "My {className} Subjects",

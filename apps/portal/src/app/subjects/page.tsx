@@ -6,7 +6,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
 
 interface SubjectRow {
   subject: { id: string; name_en: string; code: string };
@@ -18,11 +18,21 @@ function SubjectsContent() {
   const { activeStudentId } = useAuthStore();
   const { terms } = useInstitution();
   const t = useTranslations("subjects");
-  const { data, isLoading } = useQuery<SubjectRow[]>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<SubjectRow[]>({
     queryKey: ["portal", "subjects", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/subjects`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

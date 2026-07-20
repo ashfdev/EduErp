@@ -7,7 +7,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
-import { Card, CardContent, StatusBadge, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } from "@education-erp/ui";
 import { 
   BookOpen, Bus, FolderOpen, AlertCircle, 
   Users, HelpCircle, FileText, ChevronRight, 
@@ -28,12 +28,22 @@ function HomeContent() {
   const { activeStudentId } = useAuthStore();
   const { terms } = useInstitution();
   const t = useTranslations("home");
+  const tCommon = useTranslations("common");
 
-  const { data, isLoading } = useQuery<Dashboard>({
+  const { data, isLoading, isError, refetch } = useQuery<Dashboard>({
     queryKey: ["portal", "dashboard", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/dashboard`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (

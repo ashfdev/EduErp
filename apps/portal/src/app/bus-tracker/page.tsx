@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
 import type { VehiclePoint } from "./map";
 
 // Leaflet touches `window` at import time — must not run during SSR.
@@ -24,12 +24,22 @@ interface VehicleLocationResponse {
 function BusTrackerContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("busTracker");
-  const { data, isLoading } = useQuery<VehicleLocationResponse>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<VehicleLocationResponse>({
     queryKey: ["portal", "vehicle-location", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/vehicle-location`)).data.data,
     enabled: !!activeStudentId,
     refetchInterval: 15000,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

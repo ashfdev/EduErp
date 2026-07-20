@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface HomeworkItem {
   id: string;
@@ -26,14 +26,24 @@ const TAB_KEY: Record<"pending" | "submitted" | "all", "tabPending" | "tabSubmit
 function HomeworkContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("homework");
+  const tCommon = useTranslations("common");
   const [tab, setTab] = useState<"pending" | "submitted" | "all">("pending");
   const [done, setDone] = useState<string[]>([]);
 
-  const { data, isLoading } = useQuery<HomeworkItem[]>({
+  const { data, isLoading, isError, refetch } = useQuery<HomeworkItem[]>({
     queryKey: ["portal", "homework", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/homework`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

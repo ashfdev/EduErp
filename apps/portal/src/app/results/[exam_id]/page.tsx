@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface ResultDetail {
   exam_id: string;
@@ -23,13 +23,22 @@ function ResultDetailContent() {
   const t = useTranslations("resultDetail");
   const tCommon = useTranslations("common");
 
-  const { data, isLoading } = useQuery<ResultDetail[]>({
+  const { data, isLoading, isError, refetch } = useQuery<ResultDetail[]>({
     queryKey: ["portal", "results", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/results`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   const result = data?.find((r) => r.exam_id === exam_id);
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
   if (!result) return <p className="p-4 text-sm text-gray-500">{tCommon("resultNotFound")}</p>;

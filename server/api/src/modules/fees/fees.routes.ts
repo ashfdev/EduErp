@@ -12,7 +12,7 @@ import { calculateLateFee } from "../../utils/late-fee";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices } from "./invoice-helpers";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
@@ -162,6 +162,7 @@ feesRouter.get(
   authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ student_id: z.string().optional(), status: z.string().optional(), class_id: z.string().optional(), month: z.coerce.number().optional(), year: z.coerce.number().optional() }).parse(req.query);
+    await syncOverdueInvoices(prisma, query.student_id);
     const invoices = await prisma.invoice.findMany({
       where: {
         ...(query.student_id && { student_id: query.student_id }),

@@ -8,6 +8,7 @@ export * from "./components/page-wrapper";
 export * from "./components/page-header";
 export * from "./components/status-badge";
 export * from "./components/empty-state";
+export * from "./components/error-state";
 export * from "./components/loading-spinner";
 export * from "./components/textarea";
 export * from "./components/switch";

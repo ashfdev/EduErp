@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner, PdfPreviewModal } from "@education-erp/ui";
+import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner, ErrorState, PdfPreviewModal } from "@education-erp/ui";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Invoice {
@@ -63,16 +63,18 @@ import { Receipt, Wallet, Banknote, CalendarClock, History, UploadCloud, CheckCi
 function FeesContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("fees");
+  const tCommon = useTranslations("common");
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const pdfPreview = usePdfPreview();
   const [showHistory, setShowHistory] = useState(false);
   const [pendingSlipPaymentId, setPendingSlipPaymentId] = useState<string | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
 
-  const { data: feesData, isLoading, refetch } = useQuery<FeesResponse>({
+  const { data: feesData, isLoading, isError, refetch } = useQuery<FeesResponse>({
     queryKey: ["portal", "fees", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/fees`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
   const data = feesData?.invoices;
   const { data: upcoming } = useQuery<UpcomingDue[]>({
@@ -112,6 +114,14 @@ function FeesContent() {
     },
     onError: () => toast.error(t("slipUploadFailed")),
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

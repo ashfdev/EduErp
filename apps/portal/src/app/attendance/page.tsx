@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface AttendanceRecord {
   date: string;
@@ -26,14 +26,16 @@ const STATUS_STYLES: Record<string, { bg: string, text: string, label: string, i
 function AttendanceContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("attendance");
+  const tCommon = useTranslations("common");
   const [tab, setTab] = useState<"monthly" | "yearly">("monthly");
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
 
-  const { data, isLoading } = useQuery<AttendanceRecord[]>({
+  const { data, isLoading, isError, refetch } = useQuery<AttendanceRecord[]>({
     queryKey: ["portal", "attendance", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/attendance`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   const monthRecords = useMemo(() => (data ?? []).filter((r) => { const d = new Date(r.date); return d.getMonth() === month && d.getFullYear() === year; }), [data, month, year]);
@@ -63,6 +65,14 @@ function AttendanceContent() {
     }
     return [...map.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 12);
   }, [data]);
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

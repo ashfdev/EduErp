@@ -8,7 +8,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
-import { Card, CardContent, StatusBadge, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface ResultSummary {
   exam_id: string;
@@ -34,6 +34,7 @@ function ResultsContent() {
   const { activeStudentId } = useAuthStore();
   const { terms } = useInstitution();
   const t = useTranslations("results");
+  const tCommon = useTranslations("common");
   const [examTypeId, setExamTypeId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
 
@@ -50,7 +51,7 @@ function ResultsContent() {
     enabled: showExamFilters,
   });
 
-  const { data, isLoading } = useQuery<ResultSummary[]>({
+  const { data, isLoading, isError, refetch } = useQuery<ResultSummary[]>({
     queryKey: ["portal", "results", activeStudentId, examTypeId, academicYearId],
     queryFn: async () =>
       (
@@ -59,7 +60,16 @@ function ResultsContent() {
         })
       ).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

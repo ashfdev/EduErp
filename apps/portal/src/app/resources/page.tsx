@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, Badge, Button, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
 
 interface ResourceRow {
   id: string;
@@ -42,9 +42,10 @@ function AssignmentSubmissionBlock({ resourceId, studentId }: { resourceId: stri
   const t = useTranslations("resources");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { data: submission } = useQuery<Submission | null>({
+  const { data: submission, isLoading: submissionLoading, isError: submissionError } = useQuery<Submission | null>({
     queryKey: ["portal", "submission", resourceId, studentId],
     queryFn: async () => (await api.get(`/api/portal/student/${studentId}/resources/${resourceId}/submission`)).data.data,
+    retry: 1,
   });
 
   const submitMutation = useMutation({
@@ -62,14 +63,17 @@ function AssignmentSubmissionBlock({ resourceId, studentId }: { resourceId: stri
 
   return (
     <div className="mt-3 rounded-md border border-dashed p-3">
-      {submission ? (
+      {submissionLoading && <p className="text-xs text-gray-400">{t("checkingSubmissionStatus")}</p>}
+      {submissionError && <p className="text-xs text-destructive">{t("submissionStatusUnavailable")}</p>}
+      {!submissionLoading && !submissionError && submission && (
         <div className="text-sm">
           <p>{t("submitted", { filename: submission.original_filename })} <Badge variant={submission.status === "GRADED" ? "default" : "outline"}>{submission.status}</Badge></p>
           {submission.status === "GRADED" && (
             <p className="mt-1 text-xs text-gray-600">{t("grade", { grade: submission.grade ?? 0 })} {submission.feedback && `· ${submission.feedback}`}</p>
           )}
         </div>
-      ) : (
+      )}
+      {!submissionLoading && !submissionError && !submission && (
         <p className="text-xs text-gray-500">{t("notSubmitted")}</p>
       )}
       <div className="mt-2 flex items-center gap-2">
@@ -85,15 +89,25 @@ function AssignmentSubmissionBlock({ resourceId, studentId }: { resourceId: stri
 function ResourcesContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("resources");
-  const { data, isLoading } = useQuery<ResourceRow[]>({
+  const tCommon = useTranslations("common");
+  const { data, isLoading, isError, refetch } = useQuery<ResourceRow[]>({
     queryKey: ["portal", "resources", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/resources`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   async function download(id: string) {
     const res = await api.get(`/api/portal/student/${activeStudentId}/resources/${id}/download`);
     window.open(res.data.data.url, "_blank");
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
   }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;

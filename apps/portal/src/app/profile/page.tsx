@@ -7,7 +7,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner } from "@education-erp/ui";
+import { Card, CardContent, Button, LoadingSpinner, ErrorState } from "@education-erp/ui";
 
 interface StudentDetail {
   student_uid: string; name_en: string; name_bn: string | null; phone: string | null;
@@ -23,11 +23,13 @@ function ProfileContent() {
   const router = useRouter();
   const { activeStudentId, logout } = useAuthStore();
   const t = useTranslations("profile");
+  const tCommon = useTranslations("common");
 
-  const { data, isLoading } = useQuery<StudentDetail>({
+  const { data, isLoading, isError, refetch } = useQuery<StudentDetail>({
     queryKey: ["portal", "profile", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/profile`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   const logoutMutation = useMutation({
@@ -37,6 +39,14 @@ function ProfileContent() {
       router.replace("/login");
     },
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading || !data) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

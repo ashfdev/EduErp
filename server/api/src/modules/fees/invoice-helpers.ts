@@ -102,3 +102,26 @@ export async function invoiceReadmissionFeeIfConfigured(
   });
   return { created: true };
 }
+
+// InvoiceStatus.OVERDUE exists in the schema and is already relied on by
+// several read-side filters (fee reports, analytics, document generation),
+// but nothing ever transitioned an invoice into it — it was pure dead code,
+// so a due invoice looked identical to one due next month everywhere it was
+// displayed. Lazily synced on read rather than via a scheduled job (no cron
+// infra exists in this codebase yet): call this at the top of any route that
+// shows a student's (or the whole institution's) invoices, before the read
+// query runs. Safe to call unconditionally — every payment-completion path
+// (`payments.routes.ts`, `fees.routes.ts` /collect) already unconditionally
+// recomputes status to PARTIAL/PAID off the current amount_paid regardless
+// of what status was there before, so an invoice that was OVERDUE and then
+// gets paid is never stuck.
+export async function syncOverdueInvoices(tx: Tx, studentId?: string): Promise<void> {
+  await tx.invoice.updateMany({
+    where: {
+      status: { in: ["PENDING", "PARTIAL"] },
+      due_date: { lt: new Date() },
+      ...(studentId && { student_id: studentId }),
+    },
+    data: { status: "OVERDUE" },
+  });
+}

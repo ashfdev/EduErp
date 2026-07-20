@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, Input, Label, Textarea, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState } from "@education-erp/ui";
+import { Card, CardContent, Badge, Button, Input, Label, Textarea, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
 
 interface ComplaintRow {
   id: string;
@@ -30,14 +30,16 @@ interface ComplaintDetail extends ComplaintRow {
 function ComplaintsContent() {
   const queryClient = useQueryClient();
   const t = useTranslations("complaints");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ category: "ACADEMIC", description: "" });
   const [threadId, setThreadId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
 
-  const { data, isLoading } = useQuery<ComplaintRow[]>({
+  const { data, isLoading, isError, refetch } = useQuery<ComplaintRow[]>({
     queryKey: ["portal", "complaints"],
     queryFn: async () => (await api.get("/api/portal/complaints")).data.data,
+    retry: 1,
   });
 
   const { data: thread } = useQuery<ComplaintDetail>({
@@ -68,6 +70,14 @@ function ComplaintsContent() {
       setDraft({ category: "ACADEMIC", description: "" });
     },
   });
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
 

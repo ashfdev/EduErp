@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner, PdfPreviewModal } from "@education-erp/ui";
+import { Card, CardContent, Button, LoadingSpinner, ErrorState, PdfPreviewModal } from "@education-erp/ui";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Clearance {
@@ -33,12 +33,14 @@ function AdmitCardContent() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("admitCard");
+  const tCommon = useTranslations("common");
   const pdfPreview = usePdfPreview();
 
-  const { data, isLoading } = useQuery<Clearance>({
+  const { data, isLoading, isError, refetch } = useQuery<Clearance>({
     queryKey: ["portal", "admit-card-clearance", activeStudentId, exam_id],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/admit-card/${exam_id}/clearance`)).data.data,
     enabled: !!activeStudentId,
+    retry: 1,
   });
 
   async function download() {
@@ -48,6 +50,14 @@ function AdmitCardContent() {
     a.href = url;
     a.download = "admit-card.pdf";
     a.click();
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-[50vh]">
+        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      </div>
+    );
   }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
