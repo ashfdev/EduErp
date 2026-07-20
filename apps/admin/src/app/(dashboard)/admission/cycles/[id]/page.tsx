@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Checkbox, Switch, Label, Textarea } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Cycle {
@@ -129,7 +129,7 @@ export default function AdmissionCycleDetailPage() {
       toast.success("Test schedule saved");
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save"),
   });
 
   const seatPlanMutation = useMutation({
@@ -143,7 +143,7 @@ export default function AdmissionCycleDetailPage() {
       toast.success(`Seat plan generated for ${res.data.data.assigned} candidates${res.data.data.overflow ? ` — ${res.data.data.overflow} could not be seated (over capacity)` : ""}`);
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id, "seat-plan"] });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to generate seat plan"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate seat plan"),
   });
 
   const publishAdmitCardsMutation = useMutation({
@@ -152,7 +152,7 @@ export default function AdmissionCycleDetailPage() {
       toast.success(`Notified ${res.data.data.notified} applicants`);
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to publish"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to publish"),
   });
 
   async function downloadAllAdmitCards() {

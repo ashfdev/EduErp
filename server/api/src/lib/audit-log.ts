@@ -12,6 +12,8 @@ export type AuditAction =
   | "RESULT_PUBLISH"
   | "FEE_WAIVE"
   | "STUDENT_DELETE"
+  | "STUDENT_TRANSFER"
+  | "STUDENT_EXPEL"
   | "ROLE_CHANGE"
   | "TEMPLATE_ACTIVATE"
   | "COURSE_ENROLL"

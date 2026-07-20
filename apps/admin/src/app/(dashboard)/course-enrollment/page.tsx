@@ -3,23 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Badge,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  ConfirmDialog,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StudentRow {
@@ -75,7 +59,7 @@ interface CgpaData {
 const STATUS_OPTIONS = ["ENROLLED", "COMPLETED", "FAILED", "DROPPED", "WITHDRAWN"];
 
 function errMsg(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? fallback;
+  return extractErrorMessage(err) ?? fallback;
 }
 function errCode(err: unknown): string | undefined {
   return (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;

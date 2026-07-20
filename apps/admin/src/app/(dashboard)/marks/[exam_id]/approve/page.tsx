@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useState } from "react";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Switch, Label, Badge, ConfirmDialog, EmptyState } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, EmptyState, Label, PageHeader, PageWrapper, Switch, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface UnitStatus {
@@ -55,7 +55,7 @@ export default function ApproveMarksPage() {
       invalidate();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Approval failed";
+      const message = extractErrorMessage(err) ?? "Approval failed";
       toast.error(message);
     },
   });
@@ -68,7 +68,7 @@ export default function ApproveMarksPage() {
       invalidate();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Publish failed";
+      const message = extractErrorMessage(err) ?? "Publish failed";
       toast.error(message);
     },
   });
@@ -83,7 +83,7 @@ export default function ApproveMarksPage() {
       invalidate();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Publish Whole Campus failed";
+      const message = extractErrorMessage(err) ?? "Publish Whole Campus failed";
       toast.error(message);
     },
     onSettled: () => setConfirmWholeCampus(false),

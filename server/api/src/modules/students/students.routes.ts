@@ -9,7 +9,7 @@ import { authorize } from "../../middleware/authorize";
 import { csvUpload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema } from "@education-erp/validators";
+import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
@@ -582,6 +582,89 @@ studentsRouter.post(
   }),
 );
 
+// Shared by /transfer and /expel — previously TRANSFERRED/EXPELLED existed
+// only as enum values with no route ever able to actually set them (a raw
+// PUT /:id silently drops `status`), so a leaving/expelled student's (and
+// their guardian's, if this was the guardian's only enrolled child) portal
+// login stayed active indefinitely. This is the real fix: a dedicated
+// transition (same discipline as /graduate — always writes a
+// StudentAcademicHistory row, never a bare status edit) that also actually
+// revokes access.
+async function deactivateStudentAndRevokeAccess(
+  id: string,
+  status: "TRANSFERRED" | "EXPELLED",
+  body: { reason?: string | null; effective_date?: Date },
+) {
+  const existing = await prisma.student.findFirst({ where: { id, deleted_at: null }, include: { guardian: true } });
+  if (!existing) throw notFound("Student not found");
+  if (existing.status === "TRANSFERRED" || existing.status === "EXPELLED" || existing.status === "GRADUATED") {
+    throw badRequest(`Student is already ${existing.status.toLowerCase()}`);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    if (existing.current_class_id) {
+      const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
+      if (activeYear) {
+        await tx.studentAcademicHistory.create({
+          data: {
+            student_id: id,
+            academic_year_id: activeYear.id,
+            class_id: existing.current_class_id,
+            section_id: existing.current_section_id,
+            roll_no: existing.current_roll_no,
+            status,
+            notes: body.reason,
+            promoted_at: body.effective_date ?? new Date(),
+          },
+        });
+      }
+    }
+
+    const updated = await tx.student.update({ where: { id }, data: { status } });
+
+    if (existing.user_id) {
+      await tx.user.update({ where: { id: existing.user_id }, data: { is_active: false } });
+    }
+
+    // A guardian with other still-enrolled children must keep their login —
+    // only deactivate it if this was genuinely their last active student.
+    if (existing.guardian?.user_id) {
+      const otherActiveChildren = await tx.student.count({
+        where: { guardian_id: existing.guardian_id, id: { not: id }, deleted_at: null, status: "ACTIVE" },
+      });
+      if (otherActiveChildren === 0) {
+        await tx.user.update({ where: { id: existing.guardian.user_id }, data: { is_active: false } });
+      }
+    }
+
+    return updated;
+  });
+}
+
+studentsRouter.post(
+  "/:id/transfer",
+  authorize(STUDENT_PROMOTE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = deactivateStudentSchema.parse(req.body);
+    const updated = await deactivateStudentAndRevokeAccess(id, "TRANSFERRED", body);
+    await logAudit("STUDENT_TRANSFER", { userId: req.user!.sub, targetType: "Student", targetId: id, metadata: { reason: body.reason }, req });
+    res.json({ success: true, data: updated });
+  }),
+);
+
+studentsRouter.post(
+  "/:id/expel",
+  authorize(STUDENT_PROMOTE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = deactivateStudentSchema.parse(req.body);
+    const updated = await deactivateStudentAndRevokeAccess(id, "EXPELLED", body);
+    await logAudit("STUDENT_EXPEL", { userId: req.user!.sub, targetType: "Student", targetId: id, metadata: { reason: body.reason }, req });
+    res.json({ success: true, data: updated });
+  }),
+);
+
 studentsRouter.post(
   "/bulk-promote",
   authorize(STUDENT_PROMOTE_ROLES),
@@ -728,6 +811,11 @@ studentsRouter.post(
       if (!row.name_en) errors.push("name_en is required");
       if (!row.gender || !["MALE", "FEMALE", "OTHER"].includes(row.gender)) errors.push("gender must be MALE/FEMALE/OTHER");
       if (!row.father_phone || !/^01\d{9}$/.test(row.father_phone)) errors.push("father_phone must be 11 digits starting with 01");
+      // phone is optional (a row without it still imports fine — the
+      // student just won't get their own portal login, only the guardian's,
+      // same as leaving it blank on the manual Add Student form) but must be
+      // valid if present.
+      if (row.phone && !/^01\d{9}$/.test(row.phone)) errors.push("phone must be 11 digits starting with 01");
       if (!row.current_class_id) errors.push("current_class_id is required");
       else if (classesWithGroups.has(row.current_class_id)) {
         if (!row.group_code) errors.push("this class has Groups/Streams defined — group_code is required");
@@ -755,6 +843,13 @@ studentsRouter.post(
             name_en: z.string().min(1),
             name_bn: z.string().optional(),
             gender: z.enum(["MALE", "FEMALE", "OTHER"]),
+            // Optional, and deliberately conditional below — mirrors
+            // admission-enroll's own "only create a student login if a
+            // student phone was actually supplied" behavior exactly.
+            // Previously there was no column for this at all, meaning a
+            // CSV-imported student could NEVER get their own login (only
+            // the guardian's), unlike every other student-creation path.
+            phone: z.string().regex(/^01\d{9}$/).optional(),
             father_name: z.string().optional(),
             father_phone: z.string().regex(/^01\d{9}$/),
             current_class_id: z.string().min(1),
@@ -767,6 +862,7 @@ studentsRouter.post(
 
     const created: string[] = [];
     const failed: { row: number; reason: string }[] = [];
+    let noOwnLoginCount = 0;
 
     // Sequential per-row loop with a bcrypt hash + a queued SMS added per
     // row (for the new guardian login) — fine for a realistic school import
@@ -786,7 +882,7 @@ studentsRouter.post(
         }
 
         const student_uid = await generateStudentUID(row.current_class_id);
-        const { student, guardianLogin } = await prisma.$transaction(async (tx) => {
+        const { student, guardianLogin, studentLogin } = await prisma.$transaction(async (tx) => {
           // Same guardian-dedup shape as the manual single-add path: reuse
           // an existing Guardian row by phone, or find-or-link a login and
           // create a new one.
@@ -803,12 +899,21 @@ studentsRouter.post(
             guardianId = guardian.id;
           }
 
+          // Same conditional-on-phone shape as admission-enroll — a CSV row
+          // with no phone column filled in still creates the student (guardian
+          // access still works), it just has no own login, same as today; a
+          // row that DOES supply a phone now gets one, closing the gap where
+          // this path could never create a student-role login at all.
+          const studentLoginResult = row.phone ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: row.phone, name: row.name_en }) : null;
+
           const s = await tx.student.create({
             data: {
+              user_id: studentLoginResult?.userId,
               student_uid,
               name_en: row.name_en,
               name_bn: row.name_bn,
               gender: row.gender,
+              phone: row.phone,
               guardian_id: guardianId,
               father_name: row.father_name,
               father_phone: row.father_phone,
@@ -819,7 +924,7 @@ studentsRouter.post(
             },
           });
           await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id, [], groupId);
-          return { student: s, guardianLogin: guardianLoginResult };
+          return { student: s, guardianLogin: guardianLoginResult, studentLogin: studentLoginResult };
         });
 
         if (guardianLogin?.tempPassword) {
@@ -829,13 +934,32 @@ studentsRouter.post(
             template_data: { name: row.father_name ?? "Guardian", phone: row.father_phone, password: guardianLogin.tempPassword, portal_url: env.PORTAL_URL ?? "" },
           });
         }
+        if (studentLogin?.tempPassword && row.phone) {
+          await sendNotification({
+            trigger: "PORTAL_LOGIN_CREATED",
+            recipients: [{ name: row.name_en, phone: row.phone }],
+            template_data: { name: row.name_en, phone: row.phone, password: studentLogin.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+          });
+        }
 
         created.push(student.student_uid);
+        if (!row.phone) noOwnLoginCount++;
       } catch (err) {
         failed.push({ row: index + 1, reason: err instanceof Error ? err.message : "Unknown error" });
       }
     }
 
-    res.json({ success: true, data: { created: created.length, failed } });
+    res.json({
+      success: true,
+      data: {
+        created: created.length,
+        failed,
+        // Surfaced explicitly rather than left silent — a row with no phone
+        // column filled in still imports fine, but that student can only be
+        // reached via their guardian's login, not their own, until a phone
+        // is added later (e.g. via Edit Student).
+        no_own_login_count: noOwnLoginCount,
+      },
+    });
   }),
 );

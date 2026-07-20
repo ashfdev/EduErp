@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, ConfirmDialog } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface MarkComponent {
@@ -127,7 +127,7 @@ export default function TeacherMarkEntryGridPage() {
       queryClient.invalidateQueries({ queryKey: ["marks", exam_id, class_id, section_id] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("submitFailed");
+      const message = extractErrorMessage(err) ?? t("submitFailed");
       toast.error(message);
     },
   });

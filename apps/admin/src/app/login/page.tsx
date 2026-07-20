@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Button, Input, Label, Card, CardContent } from "@education-erp/ui";
+import { Button, Input, Label, Card, CardContent, extractErrorMessage, PASSWORD_REQUIREMENTS_HINT, validatePasswordClientSide } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -87,8 +87,8 @@ export default function LoginPage() {
       toast.success(t("otpSent"));
       setForgotState("otp");
       setResendTimer(120);
-    } catch {
-      toast.error(t("otpSendFailed"));
+    } catch (err: unknown) {
+      toast.error(extractErrorMessage(err) ?? t("otpSendFailed"));
     } finally {
       setForgotLoading(false);
     }
@@ -100,14 +100,19 @@ export default function LoginPage() {
       const res = await api.post("/api/auth/verify-otp", { phone: forgotPhone, otp });
       setResetToken(res.data.data.reset_token);
       setForgotState("reset");
-    } catch {
-      toast.error(t("otpInvalid"));
+    } catch (err: unknown) {
+      toast.error(extractErrorMessage(err) ?? t("otpInvalid"));
     } finally {
       setForgotLoading(false);
     }
   }
 
   async function submitReset() {
+    const passwordIssue = validatePasswordClientSide(newPassword);
+    if (passwordIssue) {
+      toast.error(passwordIssue);
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast.error(t("passwordMismatch"));
       return;
@@ -116,8 +121,8 @@ export default function LoginPage() {
     try {
       await api.post("/api/auth/reset-password", { reset_token: resetToken, new_password: newPassword, confirm_password: confirmPassword });
       setForgotState("done");
-    } catch {
-      toast.error(t("resetFailed"));
+    } catch (err: unknown) {
+      toast.error(extractErrorMessage(err) ?? t("resetFailed"));
     } finally {
       setForgotLoading(false);
     }
@@ -263,6 +268,7 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-slate-700">{t("newPassword")}</Label>
                   <Input type="password" className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                  <p className="text-xs text-slate-500">{PASSWORD_REQUIREMENTS_HINT}</p>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs font-bold text-slate-700">{t("confirmPassword")}</Label>

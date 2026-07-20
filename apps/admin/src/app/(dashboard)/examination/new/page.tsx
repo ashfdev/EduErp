@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Checkbox, Tabs, TabsList, TabsTrigger, TabsContent } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Option {
@@ -54,7 +54,7 @@ function CloneExamForm() {
       toast.success("Exam created from template — mark-rule overrides carried over where subject codes matched");
       router.push(`/examination/${res.data.data.id}`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to clone exam"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to clone exam"),
   });
 
   return (

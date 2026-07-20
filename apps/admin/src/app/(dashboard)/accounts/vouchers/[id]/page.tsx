@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge } from "@education-erp/ui";
+import { Button, Card, CardContent, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalEntry {
@@ -43,7 +43,7 @@ export default function VoucherDetailPage() {
       toast.success("Updated");
       queryClient.invalidateQueries({ queryKey: ["accounts", "vouchers", params.id] });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Action failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Action failed"),
   });
 
   if (!voucher) return null;

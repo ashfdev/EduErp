@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { api } from "@/lib/api";
-import { Card, CardContent, Badge, Button, Input, Label, Textarea, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label, LoadingSpinner, Textarea, extractErrorMessage } from "@education-erp/ui";
 
 interface ComplaintRow {
   id: string;
@@ -56,7 +56,7 @@ function ComplaintsContent() {
       queryClient.invalidateQueries({ queryKey: ["portal", "complaints"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("replyFailed");
+      const message = extractErrorMessage(err) ?? t("replyFailed");
       toast.error(message);
     },
   });

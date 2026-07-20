@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Tabs, TabsList, TabsTrigger, TabsContent,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Requisition {
@@ -151,7 +148,7 @@ function PurchaseOrdersTab() {
       setShowGrn(null);
       setGrnQuantities({});
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to record GRN"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record GRN"),
   });
 
   return (

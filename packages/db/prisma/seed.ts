@@ -103,7 +103,7 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   READMISSION: "4013",
 };
 
-const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED"] as const;
+const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
 const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
@@ -134,6 +134,10 @@ const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { b
   PORTAL_LOGIN_CREATED: {
     bn: "{{name}}, আপনার পোর্টাল অ্যাকাউন্ট তৈরি হয়েছে। ফোন: {{phone}}, অস্থায়ী পাসওয়ার্ড: {{password}}। {{portal_url}} এ লগইন করুন।",
     en: "{{name}}, your portal account has been created. Phone: {{phone}}, temporary password: {{password}}. Log in at {{portal_url}}.",
+  },
+  EXAM_SCHEDULED: {
+    bn: "{{student_name}} এর জন্য {{exam_name}} পরীক্ষা {{start_date}} তারিখে শুরু হবে। প্রস্তুতি নিন।",
+    en: "{{exam_name}} for {{student_name}} starts on {{start_date}}. Please prepare accordingly.",
   },
 };
 

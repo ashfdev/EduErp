@@ -3,22 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Switch,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveType {
@@ -69,7 +54,7 @@ export default function LeaveTypesPage() {
       toast.success("Leave type removed");
       queryClient.invalidateQueries({ queryKey: ["hr", "leave-types"] });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to remove leave type"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove leave type"),
   });
 
   return (

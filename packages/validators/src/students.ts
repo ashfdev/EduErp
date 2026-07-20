@@ -62,6 +62,16 @@ export const graduateStudentSchema = z.object({
 });
 export type GraduateStudentInput = z.infer<typeof graduateStudentSchema>;
 
+// Shared by both POST /:id/transfer and POST /:id/expel — same shape, same
+// mechanics (record history, deactivate login), just a different reason a
+// student is leaving. Kept as one schema since the two routes' bodies never
+// need to diverge.
+export const deactivateStudentSchema = z.object({
+  reason: z.string().optional().nullable(),
+  effective_date: z.coerce.date().optional(),
+});
+export type DeactivateStudentInput = z.infer<typeof deactivateStudentSchema>;
+
 export const bulkPromoteSchema = z.object({
   class_id: z.string().min(1),
   section_id: z.string().optional().nullable(),

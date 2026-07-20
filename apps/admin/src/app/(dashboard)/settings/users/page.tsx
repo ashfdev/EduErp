@@ -3,23 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Badge,
-  StatusBadge,
-  Input,
-  Label,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -60,7 +44,7 @@ export default function UsersPage() {
       setForm({ name_en: "", phone: "", email: "", role: "SUBJECT_TEACHER", designation: "", login_password: "" });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      const message = extractErrorMessage(err);
       toast.error(message ?? "Failed to create user");
     },
   });
@@ -80,7 +64,7 @@ export default function UsersPage() {
       closeResetDialog();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      const message = extractErrorMessage(err);
       toast.error(message ?? "Failed to reset password");
     },
   });

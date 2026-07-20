@@ -4,22 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Badge,
-  StatusBadge,
-  EmptyState,
-  SearchInput,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, PageHeader, PageWrapper, SearchInput, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
@@ -228,7 +213,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
       queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to collect payment";
+      const message = extractErrorMessage(err) ?? "Failed to collect payment";
       toast.error(message);
     },
   });

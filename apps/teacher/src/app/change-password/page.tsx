@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button, Input, Label, Card, CardContent } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, extractErrorMessage, PASSWORD_REQUIREMENTS_HINT, validatePasswordClientSide } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -20,6 +20,11 @@ function ChangePasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const passwordIssue = validatePasswordClientSide(newPassword);
+    if (passwordIssue) {
+      setError(passwordIssue);
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setError("New password and confirmation don't match");
       return;
@@ -35,7 +40,7 @@ function ChangePasswordForm() {
       toast.success("Password changed");
       router.replace("/");
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to change password";
+      const message = extractErrorMessage(err) ?? "Failed to change password";
       setError(message);
     } finally {
       setLoading(false);
@@ -61,6 +66,7 @@ function ChangePasswordForm() {
             <div className="space-y-1.5">
               <Label>New password</Label>
               <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+              <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_HINT}</p>
             </div>
             <div className="space-y-1.5">
               <Label>Confirm new password</Label>

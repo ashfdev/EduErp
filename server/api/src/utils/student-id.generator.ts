@@ -13,6 +13,9 @@ export async function generateStudentUID(currentClassId?: string): Promise<strin
   const config = await prisma.studentIdConfig.findUniqueOrThrow({ where: { id: CONFIG_ID } });
 
   let sequence: number;
+  // Only ever set for CLASS scope (see below) — every other scope's output
+  // stays byte-for-byte unchanged.
+  let classSegment: string | undefined;
 
   if (config.sequence_scope === "YEARLY") {
     const yearStart = new Date(new Date().getFullYear(), 0, 1);
@@ -23,6 +26,17 @@ export async function generateStudentUID(currentClassId?: string): Promise<strin
     if (!currentClassId) throw new Error("class_id is required for CLASS-scoped student ID generation");
     const count = await prisma.student.count({ where: { current_class_id: currentClassId } });
     sequence = count + 1;
+    // CRITICAL FIX: the formatted ID previously had no class-identifying
+    // component at all — just PREFIX-YEAR-SEQUENCE — so two different
+    // classes each restarting their own count at 1 produced the identical
+    // ID string, colliding against student_uid's global uniqueness
+    // constraint (confirmed live: class 7's 2nd student collided with
+    // class 6's already-existing ID). Encoding the class's numeric_level
+    // into the ID itself makes CLASS-scoped numbering safe: the visible
+    // "restarts per class" behavior an admin picking this scope actually
+    // wants is preserved, but two classes can now never collide.
+    const klass = await prisma.class.findUnique({ where: { id: currentClassId }, select: { numeric_level: true } });
+    classSegment = String(klass?.numeric_level ?? 0).padStart(2, "0");
   } else {
     const updated = await prisma.studentIdConfig.update({
       where: { id: CONFIG_ID },
@@ -31,7 +45,7 @@ export async function generateStudentUID(currentClassId?: string): Promise<strin
     sequence = updated.current_sequence;
   }
 
-  const uid = formatStudentId({ ...config, year_format: config.year_format === "4" ? "4" : "2" }, sequence);
+  const uid = formatStudentId({ ...config, year_format: config.year_format === "4" ? "4" : "2" }, sequence, new Date(), classSegment);
   await prisma.studentIdConfig.update({ where: { id: CONFIG_ID }, data: { preview_example: uid } });
   return uid;
 }

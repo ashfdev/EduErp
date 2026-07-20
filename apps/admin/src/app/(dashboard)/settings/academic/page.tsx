@@ -3,24 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Button,
-  Badge,
-  Input,
-  Label,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AcademicYear {
@@ -137,7 +120,7 @@ export default function AcademicSettingsPage() {
       setPeriodForm({ ...emptyPeriodForm, period_no: periodForm.period_no + 1 });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to add period";
+      const message = extractErrorMessage(err) ?? "Failed to add period";
       toast.error(message);
     },
   });
@@ -197,7 +180,7 @@ export default function AcademicSettingsPage() {
       setEditingSectionId(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update section";
+      const message = extractErrorMessage(err) ?? "Failed to update section";
       toast.error(message);
     },
   });
@@ -214,7 +197,7 @@ export default function AcademicSettingsPage() {
       setGroupForm(emptyGroupForm);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to add group";
+      const message = extractErrorMessage(err) ?? "Failed to add group";
       toast.error(message);
     },
   });
@@ -233,7 +216,7 @@ export default function AcademicSettingsPage() {
       setEditingGroupId(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update group";
+      const message = extractErrorMessage(err) ?? "Failed to update group";
       toast.error(message);
     },
   });
@@ -245,7 +228,7 @@ export default function AcademicSettingsPage() {
       setEditingGroupId(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to remove group";
+      const message = extractErrorMessage(err) ?? "Failed to remove group";
       toast.error(message);
     },
   });

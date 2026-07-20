@@ -945,6 +945,10 @@ model Exam {
   grading_scale_id     String?
   grading_scale        GradingScale?       @relation(fields: [grading_scale_id], references: [id])
   status               ExamStatus          @default(DRAFT)
+  // Set once the "exam starting soon" reminder job has actually notified
+  // students/guardians for this exam — makes the daily reminder check
+  // idempotent (never re-notify the same exam every day until it starts).
+  reminder_sent_at     DateTime?
   deleted_at           DateTime?
   created_at           DateTime            @default(now())
   updated_at           DateTime            @updatedAt
@@ -2724,6 +2728,7 @@ enum HistoryStatus {
   FAILED
   TRANSFERRED
   GRADUATED
+  EXPELLED
 }
 
 enum PersonType {
@@ -2907,6 +2912,7 @@ enum NotificationTrigger {
   NOTICE
   ADMISSION_CONFIRM
   PORTAL_LOGIN_CREATED
+  EXAM_SCHEDULED
 }
 
 enum InAppNotificationType {
@@ -2921,6 +2927,9 @@ enum InAppNotificationType {
   LEAVE_REJECTED
   NOTICE_PUBLISHED
   ROUTINE_UPDATED
+  FEE_DUE
+  RESULT_PUBLISHED
+  EXAM_SCHEDULED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

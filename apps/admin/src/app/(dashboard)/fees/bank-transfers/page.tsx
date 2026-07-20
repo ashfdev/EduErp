@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState } from "@education-erp/ui";
+import { Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PendingTransfer {
@@ -29,7 +29,7 @@ export default function BankTransfersPage() {
       queryClient.invalidateQueries({ queryKey: ["fees", "bank-transfers", "pending"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to verify payment";
+      const message = extractErrorMessage(err) ?? "Failed to verify payment";
       toast.error(message);
     },
   });

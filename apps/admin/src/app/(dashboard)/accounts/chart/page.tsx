@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, Input, Label, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Account {
@@ -44,7 +44,7 @@ export default function ChartOfAccountsPage() {
       setShowNew(false);
       setForm({ account_group_id: "", code: "", name: "", account_nature: "DEBIT_NORMAL" });
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create account"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create account"),
   });
 
   return (

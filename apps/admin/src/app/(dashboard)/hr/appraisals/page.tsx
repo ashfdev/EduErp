@@ -3,22 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Badge,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Criterion { key: string; label: string; max_score: number }
@@ -111,7 +96,7 @@ export default function AppraisalsPage() {
       setScoreDraft({});
       setComments("");
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to submit"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to submit"),
   });
 
   return (

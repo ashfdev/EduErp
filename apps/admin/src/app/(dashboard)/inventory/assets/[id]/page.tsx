@@ -4,10 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Badge, Tabs, TabsList, TabsTrigger, TabsContent,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, Textarea, EmptyState,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AssetDetail {
@@ -61,7 +58,7 @@ export default function AssetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory", "assets", params.id] });
       setShowDispose(false);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to dispose asset"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to dispose asset"),
   });
 
   if (!asset) return null;

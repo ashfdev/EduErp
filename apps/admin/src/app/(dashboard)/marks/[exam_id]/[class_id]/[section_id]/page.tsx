@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, Badge, SearchInput, ConfirmDialog } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, SearchInput, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -135,7 +135,7 @@ export default function MarkEntryGridPage() {
       queryClient.invalidateQueries({ queryKey: ["marks", exam_id, class_id, section_id] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to submit marks";
+      const message = extractErrorMessage(err) ?? "Failed to submit marks";
       toast.error(message);
     },
   });

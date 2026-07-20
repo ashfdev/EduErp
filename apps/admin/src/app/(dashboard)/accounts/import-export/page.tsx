@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Tabs, TabsList, TabsTrigger, TabsContent, Badge } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ChartPreviewRow {
@@ -58,7 +58,7 @@ function ChartImportExport() {
       setPreview(res.data.data);
       setResult(null);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Preview failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Preview failed"),
   });
 
   const confirmMutation = useMutation({
@@ -82,7 +82,7 @@ function ChartImportExport() {
       setResult(res.data.data);
       toast.success(`Imported ${res.data.data.created} accounts`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Import failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Import failed"),
   });
 
   return (
@@ -184,7 +184,7 @@ function VoucherImportExport() {
       setPreview(res.data.data);
       setResult(null);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Preview failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Preview failed"),
   });
 
   const confirmMutation = useMutation({
@@ -208,7 +208,7 @@ function VoucherImportExport() {
       setResult(res.data.data);
       toast.success(`Imported ${res.data.data.created} vouchers`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Import failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Import failed"),
   });
 
   return (

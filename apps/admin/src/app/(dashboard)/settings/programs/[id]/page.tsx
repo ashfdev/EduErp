@@ -4,23 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  EmptyState,
-  Badge,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  ConfirmDialog,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ProgramRow {
@@ -47,7 +31,7 @@ interface CourseRow {
 }
 
 function errMsg(err: unknown, fallback: string) {
-  return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? fallback;
+  return extractErrorMessage(err) ?? fallback;
 }
 
 export default function ProgramDetailPage() {

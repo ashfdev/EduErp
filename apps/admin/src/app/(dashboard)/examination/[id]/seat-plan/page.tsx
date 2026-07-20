@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Checkbox, StatusBadge, Badge, EmptyState, PdfPreviewModal } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, EmptyState, Input, PageHeader, PageWrapper, PdfPreviewModal, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -170,7 +170,7 @@ function AddSessionForm({ examId, classes }: { examId: string; classes?: ClassOp
       setClassIds(new Set());
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to add session";
+      const message = extractErrorMessage(err) ?? "Failed to add session";
       toast.error(message);
     },
   });
@@ -233,7 +233,7 @@ function SessionCard({ examId, session }: { examId: string; session: ExamSession
       queryClient.invalidateQueries({ queryKey: ["exams", examId, "seat-plan"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Generation failed";
+      const message = extractErrorMessage(err) ?? "Generation failed";
       toast.error(message);
     },
   });

@@ -6,24 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Image from "next/image";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Badge,
-  StatusBadge,
-  EmptyState,
-  Checkbox,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -85,7 +68,7 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
       setBulkSalaryStructureId("");
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to assign salary structure";
+      const message = extractErrorMessage(err) ?? "Failed to assign salary structure";
       toast.error(message);
     },
   });

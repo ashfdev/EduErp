@@ -12,6 +12,15 @@ const CONFIG_ID = "singleton";
 
 studentIdRouter.use(authenticate);
 
+// CLASS scope now inserts a class-identifying segment into the real
+// generated ID (see generateStudentUID) — without a matching placeholder
+// here, this preview would show a shorter format than what actually gets
+// generated for a real student, misleading whoever is configuring it.
+const SAMPLE_CLASS_SEGMENT = "07";
+function sampleClassSegment(sequenceScope: string): string | undefined {
+  return sequenceScope === "CLASS" ? SAMPLE_CLASS_SEGMENT : undefined;
+}
+
 studentIdRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
@@ -25,7 +34,7 @@ studentIdRouter.put(
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     const body = studentIdConfigSchema.parse(req.body);
-    const preview_example = formatStudentId(body, 1);
+    const preview_example = formatStudentId(body, 1, new Date(), sampleClassSegment(body.sequence_scope));
     const config = await prisma.studentIdConfig.update({
       where: { id: CONFIG_ID },
       data: { ...body, preview_example },
@@ -38,7 +47,8 @@ studentIdRouter.post(
   "/preview",
   asyncHandler(async (req, res) => {
     const body = studentIdConfigSchema.parse(req.body);
-    const examples = [1, 2, 3].map((seq) => formatStudentId(body, seq));
+    const classSegment = sampleClassSegment(body.sequence_scope);
+    const examples = [1, 2, 3].map((seq) => formatStudentId(body, seq, new Date(), classSegment));
     res.json({ success: true, data: { preview: examples[0], examples } });
   }),
 );

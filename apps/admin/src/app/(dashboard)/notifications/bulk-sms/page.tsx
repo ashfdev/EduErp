@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Textarea,
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Badge,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -54,7 +51,7 @@ export default function BulkSmsPage() {
   const previewMutation = useMutation({
     mutationFn: () => api.post("/api/notifications/bulk-sms/preview", buildBody()),
     onSuccess: (res) => setPreview(res.data.data),
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Could not resolve recipients"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Could not resolve recipients"),
   });
 
   const sendMutation = useMutation({
@@ -64,7 +61,7 @@ export default function BulkSmsPage() {
       setMessage("");
       setPreview(null);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to send"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to send"),
   });
 
   return (

@@ -3,21 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Label,
-  Input,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -149,7 +135,7 @@ export default function RoutineSettingsPage() {
       setDialogOpen(false);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save slot";
+      const message = extractErrorMessage(err) ?? "Failed to save slot";
       toast.error(message);
     },
   });
@@ -185,7 +171,7 @@ export default function RoutineSettingsPage() {
       }
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to generate routine";
+      const message = extractErrorMessage(err) ?? "Failed to generate routine";
       toast.error(message);
     },
   });

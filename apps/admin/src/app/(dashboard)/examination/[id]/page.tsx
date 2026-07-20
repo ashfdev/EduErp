@@ -5,21 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  ConfirmDialog,
-} from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SubjectConfig {
@@ -116,7 +102,7 @@ export default function ExamDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["exams", id] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to reopen exam";
+      const message = extractErrorMessage(err) ?? "Failed to reopen exam";
       toast.error(message);
     },
   });
@@ -166,7 +152,7 @@ export default function ExamDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["exams", id] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to save components";
+      const message = extractErrorMessage(err) ?? "Failed to save components";
       toast.error(message);
     },
   });

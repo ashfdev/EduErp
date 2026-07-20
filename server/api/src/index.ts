@@ -4,6 +4,7 @@ import { createApp } from "./app";
 import { logger } from "./lib/logger";
 import { loadPermissionsFromDb } from "./lib/permissions";
 import { attachSocketServer } from "./realtime/socket";
+import { registerExamReminderJob } from "./jobs/exam-reminder.job";
 
 const port = env.PORT;
 
@@ -19,6 +20,7 @@ async function start() {
     logger.info(`API listening on http://localhost:${port}`);
   });
   attachSocketServer(httpServer);
+  await registerExamReminderJob();
 }
 
 start().catch((err) => {

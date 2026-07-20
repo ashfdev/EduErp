@@ -4,10 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper, Card, CardContent, Button, Input, Label, Badge, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Textarea, Switch,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StaffDetail {
@@ -100,7 +97,7 @@ export default function StaffDetailPage() {
       setLeaveTypeId(""); setFromDate(""); setToDate(""); setReason("");
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      const message = extractErrorMessage(err);
       toast.error(message ?? "Failed to apply leave");
     },
   });
@@ -177,7 +174,7 @@ export default function StaffDetailPage() {
       setCoreDraft(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      const message = extractErrorMessage(err);
       toast.error(message ?? "Failed to update staff details");
     },
   });
@@ -252,7 +249,7 @@ export default function StaffDetailPage() {
       setDocTitle(""); setDocFile(null); setDocType("CERTIFICATE");
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      const message = extractErrorMessage(err);
       toast.error(message ?? "Failed to upload document");
     },
   });

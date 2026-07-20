@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AssetCategory {
@@ -49,7 +49,7 @@ export default function NewAssetPage() {
       toast.success(`Asset ${res.data.data.asset_uid} created`);
       router.push(`/inventory/assets/${res.data.data.id}`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create asset"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create asset"),
   });
 
   return (

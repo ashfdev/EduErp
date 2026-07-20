@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, Button, LoadingSpinner, EmptyState, ErrorState } from "@education-erp/ui";
+import { Button, Card, CardContent, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 
 interface SlotRow {
   id: string;
@@ -36,7 +36,7 @@ function PtmContent() {
       queryClient.invalidateQueries({ queryKey: ["portal", "ptm-slots"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("bookFailed");
+      const message = extractErrorMessage(err) ?? t("bookFailed");
       toast.error(message);
     },
   });

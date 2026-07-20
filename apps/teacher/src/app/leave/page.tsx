@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveType {
@@ -50,7 +50,7 @@ export default function TeacherLeavePage() {
       queryClient.invalidateQueries({ queryKey: ["hr", "leaves"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("submitFailed");
+      const message = extractErrorMessage(err) ?? t("submitFailed");
       toast.error(message);
     },
   });

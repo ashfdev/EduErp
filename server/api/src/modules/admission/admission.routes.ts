@@ -383,6 +383,7 @@ admissionRouter.post(
 
     const prefix = cycle.name.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "ADM";
     const year = new Date().getFullYear();
+    const rollPrefix = `${prefix}-${year}-`;
 
     // The count-then-format-then-create sequence below is only a starting
     // candidate — two concurrent /apply requests can both pass the "not
@@ -392,11 +393,32 @@ admissionRouter.post(
     // fix, not the count alone. This was very likely the cause of
     // "submission fails or errors out" — a raw 500 on the 2nd of two
     // concurrent submissions, now a clean retry instead.
+    //
+    // The candidate sequence is deliberately derived from the MAX sequence
+    // already used under this exact roll PREFIX (letters+year), scanned
+    // across every cycle — not `count of applications in this cycle` alone.
+    // `admission_roll` is globally unique, but two differently-named cycles
+    // can trivially reduce to the same 3-letter prefix (e.g. "Class 6
+    // Admission" and "Class 7 Admission" both → "CLA") — counting only this
+    // cycle's own applications let a second, unrelated cycle exhaust the
+    // shared prefix's low sequence numbers first, hard-failing every
+    // applicant to whichever cycle filled that shared slot second. Scanning
+    // the real max in use for the prefix (not just this cycle) fixes that
+    // at the root, while keeping admission_roll itself unmodified and still
+    // globally unique (no schema change needed).
     let application: Awaited<ReturnType<typeof prisma.admissionApplication.create>> | undefined;
     let admission_roll = "";
     for (let attempt = 0; attempt < 5; attempt++) {
-      const applicationCount = await prisma.admissionApplication.count({ where: { cycle_id: cycle.id } });
-      admission_roll = `${prefix}-${year}-${String(applicationCount + 1 + attempt).padStart(4, "0")}`;
+      const existingForPrefix = await prisma.admissionApplication.findMany({
+        where: { admission_roll: { startsWith: rollPrefix } },
+        select: { admission_roll: true },
+      });
+      let maxSeq = 0;
+      for (const a of existingForPrefix) {
+        const m = a.admission_roll?.match(/-(\d+)$/);
+        if (m?.[1]) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
+      }
+      admission_roll = `${rollPrefix}${String(maxSeq + 1 + attempt).padStart(4, "0")}`;
       try {
         application = await prisma.admissionApplication.create({
           data: {

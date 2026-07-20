@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Checkbox, StatusBadge, EmptyState,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, RichTextEditor,
-} from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, RichTextEditor, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Notice {
@@ -90,7 +87,7 @@ export default function NoticesPage() {
       resetForm();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create notice";
+      const message = extractErrorMessage(err) ?? "Failed to create notice";
       toast.error(message);
     },
   });

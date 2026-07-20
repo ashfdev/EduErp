@@ -3,23 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Textarea,
-  Badge,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ComplaintRow {
@@ -73,7 +57,7 @@ export default function ComplaintsPage() {
       queryClient.invalidateQueries({ queryKey: ["complaints"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to send reply";
+      const message = extractErrorMessage(err) ?? "Failed to send reply";
       toast.error(message);
     },
   });
@@ -106,7 +90,7 @@ export default function ComplaintsPage() {
       setResolveId(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Only ADMIN/PRINCIPAL can update status";
+      const message = extractErrorMessage(err) ?? "Only ADMIN/PRINCIPAL can update status";
       toast.error(message);
     },
   });

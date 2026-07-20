@@ -20,6 +20,7 @@ const TRIGGER_EMAIL_SUBJECT: Record<NotificationTrigger, string> = {
   NOTICE: "Notice",
   ADMISSION_CONFIRM: "Admission Confirmed",
   PORTAL_LOGIN_CREATED: "Your Portal Account",
+  EXAM_SCHEDULED: "Upcoming Exam",
 };
 
 // Triggers whose template_data contains a secret (a plaintext temporary

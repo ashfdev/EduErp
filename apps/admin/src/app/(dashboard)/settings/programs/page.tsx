@@ -4,22 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  ConfirmDialog,
-} from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -107,7 +92,7 @@ export default function ProgramsPage() {
       resetForm();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? (editingId ? "Failed to update program" : "Failed to create program");
+      const message = extractErrorMessage(err) ?? (editingId ? "Failed to update program" : "Failed to create program");
       toast.error(message);
     },
   });
@@ -119,7 +104,7 @@ export default function ProgramsPage() {
       queryClient.invalidateQueries({ queryKey: ["settings", "programs"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to delete program";
+      const message = extractErrorMessage(err) ?? "Failed to delete program";
       toast.error(message);
     },
   });

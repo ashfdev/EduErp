@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -69,7 +69,7 @@ export default function NewVoucherPage() {
       toast.success(`Voucher ${res.data.data.voucher_no} created`);
       router.push(`/accounts/vouchers/${res.data.data.id}`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to create voucher"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create voucher"),
   });
 
   function updateLine(index: number, patch: Partial<Line>) {

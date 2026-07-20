@@ -5,27 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  Card,
-  CardContent,
-  Badge,
-  StatusBadge,
-  Button,
-  Input,
-  Label,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  PdfPreviewModal,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -117,6 +97,8 @@ export default function StudentProfilePage() {
   const queryClient = useQueryClient();
   const [graduateOpen, setGraduateOpen] = useState(false);
   const [graduationYear, setGraduationYear] = useState(new Date().getFullYear());
+  const [leaveDialog, setLeaveDialog] = useState<"transfer" | "expel" | null>(null);
+  const [leaveReason, setLeaveReason] = useState("");
   const pdfPreview = usePdfPreview();
 
   const { data: profile, isLoading } = useQuery<StudentProfile>({
@@ -132,8 +114,22 @@ export default function StudentProfilePage() {
       setGraduateOpen(false);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to graduate student";
+      const message = extractErrorMessage(err) ?? "Failed to graduate student";
       toast.error(message);
+    },
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: () => api.post(`/api/students/${id}/${leaveDialog}`, { reason: leaveReason || undefined }),
+    onSuccess: () => {
+      toast.success(leaveDialog === "transfer" ? "Student marked as transferred — portal access revoked" : "Student marked as expelled — portal access revoked");
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      setLeaveDialog(null);
+      setLeaveReason("");
+    },
+    onError: (err: unknown) => {
+      toast.error(extractErrorMessage(err) ?? "Failed to update student status");
     },
   });
 
@@ -168,8 +164,12 @@ export default function StudentProfilePage() {
         <Link href={`/students/${id}/edit`}>
           <Button variant="outline">Edit</Button>
         </Link>
-        {personal.status !== "GRADUATED" && (
-          <Button variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>
+        {!["GRADUATED", "TRANSFERRED", "EXPELLED"].includes(personal.status) && (
+          <>
+            <Button variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>
+            <Button variant="outline" onClick={() => setLeaveDialog("transfer")}>Mark as Transferred</Button>
+            <Button variant="destructive" onClick={() => setLeaveDialog("expel")}>Mark as Expelled</Button>
+          </>
         )}
       </div>
 
@@ -183,6 +183,33 @@ export default function StudentProfilePage() {
           <DialogFooter>
             <Button onClick={() => graduateMutation.mutate()} disabled={graduateMutation.isPending}>
               {graduateMutation.isPending ? "Saving..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leaveDialog !== null} onOpenChange={(open) => !open && setLeaveDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Mark {personal.name_en} as {leaveDialog === "transfer" ? "Transferred" : "Expelled"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This revokes the student&apos;s portal login immediately (and their guardian&apos;s too, if this was their only
+            still-enrolled child). This cannot be undone from here — contact IT Admin if this was a mistake.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Reason (optional)</Label>
+            <Textarea value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button
+              variant={leaveDialog === "expel" ? "destructive" : "default"}
+              onClick={() => leaveMutation.mutate()}
+              disabled={leaveMutation.isPending}
+            >
+              {leaveMutation.isPending ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>
         </DialogContent>

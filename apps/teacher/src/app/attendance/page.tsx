@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Input, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface MySection {
@@ -83,7 +83,7 @@ export default function TeacherAttendancePage() {
       refetch();
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("saveFailed");
+      const message = extractErrorMessage(err) ?? t("saveFailed");
       toast.error(message);
     },
   });

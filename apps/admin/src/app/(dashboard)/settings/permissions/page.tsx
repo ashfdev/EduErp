@@ -4,25 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Button,
-  Badge,
-  StatusBadge,
-  Label,
-  Checkbox,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const ROLES = [
@@ -81,7 +63,7 @@ export default function PermissionsPage() {
       setEditingUser(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update role";
+      const message = extractErrorMessage(err) ?? "Failed to update role";
       toast.error(message);
     },
   });
@@ -112,7 +94,7 @@ export default function PermissionsPage() {
       setEditingPermission(null);
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Failed to update permission";
+      const message = extractErrorMessage(err) ?? "Failed to update permission";
       toast.error(message);
     },
   });

@@ -6,6 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { computeClassResults } from "../results/results.routes";
 import { sendNotification } from "../../services/notification.service";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 import { sendSms } from "../../services/sms.service";
 import { reqParam } from "../../lib/req-param";
 import { notFound, badRequest } from "../../lib/errors";
@@ -533,6 +534,18 @@ analyticsRouter.post(
         school_name: institution?.name_en ?? "the institution",
       },
     });
+    // Previously SMS/email-only — a guardian never saw "Fee Due" in their
+    // portal bell even though the same dual-fire pattern already exists for
+    // Notices/Documents/Leave. Fired alongside, not instead of, the SMS above.
+    if (student.guardian?.user_id) {
+      await createInAppNotification({
+        userId: student.guardian.user_id,
+        type: "FEE_DUE",
+        title: `Fee due for ${student.name_en}`,
+        body: `৳${totalDue.toFixed(2)} outstanding`,
+        link: "/fees",
+      });
+    }
     res.json({ success: true, data: result });
   }),
 );

@@ -5,23 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Button,
-  Input,
-  Label,
-  Badge,
-  Checkbox,
-  EmptyState,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -92,7 +76,7 @@ export default function TeacherQuizzesPage() {
       setQOpen(false);
       setQText(""); setQOptions([{ key: "a", text: "" }, { key: "b", text: "" }]); setQCorrect("a"); setQMarks(1);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("questionAddFailed")),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? t("questionAddFailed")),
   });
 
   // Quiz creation

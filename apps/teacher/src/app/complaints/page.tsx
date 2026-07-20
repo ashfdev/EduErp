@@ -6,23 +6,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
 import { api } from "@/lib/api";
-import {
-  PageWrapper,
-  PageHeader,
-  Card,
-  CardContent,
-  Badge,
-  Button,
-  Input,
-  Label,
-  Textarea,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  EmptyState,
-} from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Textarea, extractErrorMessage } from "@education-erp/ui";
 
 interface ComplaintRow {
   id: string;
@@ -79,7 +63,7 @@ function TeacherComplaintsContent() {
       queryClient.invalidateQueries({ queryKey: ["complaints", "mine"] });
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? t("replyFailed");
+      const message = extractErrorMessage(err) ?? t("replyFailed");
       toast.error(message);
     },
   });

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Badge, EmptyState } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PreviewRow {
@@ -12,6 +12,7 @@ interface PreviewRow {
     name_en: string;
     name_bn?: string;
     gender: string;
+    phone?: string;
     father_name?: string;
     father_phone: string;
     current_class_id: string;
@@ -25,7 +26,7 @@ interface ClassOption {
   name_en: string;
 }
 
-const CSV_TEMPLATE = "name_en,name_bn,gender,father_name,father_phone,current_class_id,current_section_id\n";
+const CSV_TEMPLATE = "name_en,name_bn,gender,phone,father_name,father_phone,current_class_id,current_section_id\n";
 
 function downloadTemplate() {
   const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
@@ -41,7 +42,7 @@ export default function BulkImportStudentsPage() {
   const [academicYearId, setAcademicYearId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ total: number; valid: number; preview: PreviewRow[] } | null>(null);
-  const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[]; no_own_login_count: number } | null>(null);
 
   const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
@@ -62,7 +63,7 @@ export default function BulkImportStudentsPage() {
       setPreview(res.data.data);
       setResult(null);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Preview failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Preview failed"),
   });
 
   const confirmMutation = useMutation({
@@ -72,9 +73,9 @@ export default function BulkImportStudentsPage() {
     },
     onSuccess: (res) => {
       setResult(res.data.data);
-      toast.success(`Imported ${res.data.data.created} students — logins created and SMS sent to each guardian`);
+      toast.success(`Imported ${res.data.data.created} students — logins created and SMS sent to each guardian (and to the student too, for rows with a phone)`);
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? "Import failed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Import failed"),
   });
 
   return (
@@ -85,10 +86,15 @@ export default function BulkImportStudentsPage() {
         <CardContent className="space-y-3 pt-6">
           <p className="font-medium">1. Prepare your CSV</p>
           <p className="text-sm text-muted-foreground">
-            Columns: <code className="rounded bg-muted px-1">name_en, name_bn, gender, father_name, father_phone, current_class_id, current_section_id</code>.{" "}
+            Columns: <code className="rounded bg-muted px-1">name_en, name_bn, gender, phone, father_name, father_phone, current_class_id, current_section_id</code>.{" "}
             <code className="rounded bg-muted px-1">gender</code> must be MALE/FEMALE/OTHER, <code className="rounded bg-muted px-1">father_phone</code> must be 11 digits starting with 01.
             <code className="rounded bg-muted px-1">current_class_id</code>/<code className="rounded bg-muted px-1">current_section_id</code> are internal
             IDs, not names — copy them from the reference table below.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <code className="rounded bg-muted px-1">phone</code> is optional — leave it blank to skip creating the student&apos;s own
+            login (their guardian can still access their data). Fill it in (11 digits starting with 01) to give the student their own
+            portal login too, exactly like adding a student one at a time already does.
           </p>
           <Button variant="outline" size="sm" onClick={downloadTemplate}>Download CSV Template</Button>
 
@@ -173,6 +179,13 @@ export default function BulkImportStudentsPage() {
           <CardContent className="space-y-2 pt-6">
             <p className="font-medium">Import Result</p>
             <p className="text-sm">Created: {result.created} — each new student&apos;s guardian received a portal login via SMS.</p>
+            {result.no_own_login_count > 0 && (
+              <p className="text-sm text-amber-600">
+                {result.no_own_login_count} of {result.created} student{result.no_own_login_count === 1 ? "" : "s"} had no <code className="rounded bg-muted px-1">phone</code> in
+                the CSV, so {result.no_own_login_count === 1 ? "that student" : "those students"} can only be reached via their guardian&apos;s
+                login for now — add a phone via Edit Student to give them their own login later.
+              </p>
+            )}
             {!!result.failed.length && (
               <div className="text-sm text-destructive">
                 Failed: {result.failed.length}

@@ -11,6 +11,7 @@ import { submitMarksSchema } from "@education-erp/validators";
 import { calculateGrade } from "../../utils/grading.engine";
 import { computeClassResults } from "../results/results.routes";
 import { sendNotification } from "../../services/notification.service";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { invalidateCacheNamespace } from "../../lib/cache";
@@ -521,6 +522,15 @@ marksRouter.post(
         recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
         template_data: { student_name: p.student.name_en, exam_name: exam?.name ?? "", gpa: p.result.total_gpa.toFixed(2) },
       });
+      // Previously SMS/email-only — "Result Published" never showed up in the
+      // guardian's/student's in-app bell, unlike Notices/Documents/Leave,
+      // which already fire both. Fired for both logins when each exists.
+      const recipientUserIds = [guardian?.user_id, p.student.user_id].filter((v): v is string => !!v);
+      await Promise.all(
+        recipientUserIds.map((userId) =>
+          createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam?.name ?? ""}`, body: `${p.student.name_en} — GPA ${p.result.total_gpa.toFixed(2)}`, link: "/results" }),
+        ),
+      );
     }
 
     res.json({ success: true, data: publication });
@@ -579,6 +589,12 @@ marksRouter.post(
             recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
             template_data: { student_name: p.student.name_en, exam_name: exam.name, gpa: p.result.total_gpa.toFixed(2) },
           });
+          const recipientUserIds = [guardian?.user_id, p.student.user_id].filter((v): v is string => !!v);
+          await Promise.all(
+            recipientUserIds.map((userId) =>
+              createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam.name}`, body: `${p.student.name_en} — GPA ${p.result.total_gpa.toFixed(2)}`, link: "/results" }),
+            ),
+          );
         }
         published.push(unit);
       } catch (err) {

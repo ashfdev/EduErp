@@ -7,7 +7,15 @@ export interface StudentIdFormatInput {
   sequence_digits: number;
 }
 
-export function formatStudentId(config: StudentIdFormatInput, sequence: number, date = new Date()): string {
+// classSegment is only ever passed for CLASS-scoped sequencing (see
+// generateStudentUID) — every other scope leaves it undefined and this
+// function's output is byte-for-byte unchanged from before. It's what
+// actually makes CLASS scope's per-class-restarting sequence numbers safe:
+// without a class-identifying segment in the ID string itself, two
+// different classes each restarting their own count at 1 would produce the
+// identical formatted ID, colliding against student_uid's global
+// uniqueness constraint.
+export function formatStudentId(config: StudentIdFormatInput, sequence: number, date = new Date(), classSegment?: string): string {
   const parts: string[] = [config.prefix];
 
   if (config.include_year) {
@@ -16,6 +24,9 @@ export function formatStudentId(config: StudentIdFormatInput, sequence: number, 
   }
   if (config.include_month) {
     parts.push(String(date.getMonth() + 1).padStart(2, "0"));
+  }
+  if (classSegment) {
+    parts.push(classSegment);
   }
   parts.push(String(sequence).padStart(config.sequence_digits, "0"));
 
