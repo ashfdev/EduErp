@@ -62,6 +62,7 @@ export default function AccountsDashboardPage() {
         action={
           <div className="flex gap-2">
             <Link href="/accounts/chart"><Button variant="outline" size="sm">Chart of Accounts</Button></Link>
+            <Link href="/accounts/receipts"><Button variant="outline" size="sm">Fee Receipts</Button></Link>
             <Link href="/accounts/ledger"><Button variant="outline" size="sm">Ledger</Button></Link>
             <Link href="/accounts/reports"><Button variant="outline" size="sm">Reports</Button></Link>
             <Link href="/accounts/import-export"><Button variant="outline" size="sm">Import / Export</Button></Link>

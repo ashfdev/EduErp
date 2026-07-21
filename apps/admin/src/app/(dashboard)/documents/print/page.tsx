@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 
 interface Option {
   id: string;
@@ -13,14 +15,60 @@ interface Option {
   sections?: { id: string; name: string }[];
 }
 
-type FieldKind = "text" | "select-class" | "select-section" | "select-exam" | "select-year" | "date" | "month" | "year" | "number";
+// Must mirror server/api/src/lib/roles.ts's EXAM_MANAGE_ROLES exactly — a
+// frontend-only mirror driving whether the override UI even renders, not an
+// authorization decision (the real check is server-side in documents.routes.ts).
+const EXAM_MANAGE_ROLES = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
+
+interface ClearanceStatusRow {
+  student_id: string;
+  name: string;
+  student_uid: string;
+  roll_no: string | null;
+  clearance: {
+    accounts: { required: boolean; clear: boolean; due_amount: number };
+    library: { clear: boolean; fine_amount: number };
+    exam_office: { clear: boolean };
+    all_clear: boolean;
+  };
+}
+
+function blockReasons(c: ClearanceStatusRow["clearance"]): string[] {
+  const reasons: string[] = [];
+  if (!c.accounts.clear) reasons.push(`Due ৳${c.accounts.due_amount.toLocaleString()}`);
+  if (!c.library.clear) reasons.push(`Library fine ৳${c.library.fine_amount.toLocaleString()}`);
+  if (!c.exam_office.clear) reasons.push("Exam office not cleared");
+  return reasons;
+}
+
+interface StudentOption {
+  id: string;
+  student_uid: string;
+  name_en: string;
+  current_class?: { name_en: string } | null;
+  current_section?: { name: string } | null;
+}
+
+interface StaffOption {
+  id: string;
+  staff_uid: string;
+  name_en: string;
+  designation: string;
+}
+
+type FieldKind = "text" | "select-class" | "select-section" | "select-exam" | "select-year" | "select-student" | "select-staff" | "date" | "month" | "year" | "number";
 
 interface DocDef {
   key: string;
   title: string;
   description: string;
-  endpoint: (params: Record<string, string>) => string;
+  endpoint?: (params: Record<string, string>) => string;
   fields: { key: string; label: string; kind: FieldKind; required?: boolean }[];
+  // For entries that now have a proper home elsewhere (Fee Receipt, Payslip)
+  // — the sidebar keeps a fallback entry so staff who land here first can
+  // still find their way, but it points them at the real searchable screen
+  // instead of asking for a raw id.
+  redirectTo?: { href: string; label: string };
 }
 
 const DOC_TYPES: DocDef[] = [
@@ -29,7 +77,7 @@ const DOC_TYPES: DocDef[] = [
     title: "Student ID Card",
     description: "Single student ID card (front, 85.6×54mm).",
     endpoint: (p) => `/api/documents/student/${p.student_id}/id-card`,
-    fields: [{ key: "student_id", label: "Student ID (system id)", kind: "text", required: true }],
+    fields: [{ key: "student_id", label: "Student", kind: "select-student", required: true }],
   },
   {
     key: "id-cards-class",
@@ -43,7 +91,7 @@ const DOC_TYPES: DocDef[] = [
     title: "Staff ID Card",
     description: "Single staff ID card.",
     endpoint: (p) => `/api/documents/staff/${p.staff_id}/id-card`,
-    fields: [{ key: "staff_id", label: "Staff ID (system id)", kind: "text", required: true }],
+    fields: [{ key: "staff_id", label: "Staff", kind: "select-staff", required: true }],
   },
   {
     key: "id-cards-all-staff",
@@ -70,7 +118,7 @@ const DOC_TYPES: DocDef[] = [
     endpoint: (p) => `/api/documents/result/${p.exam_id}/marksheet/${p.student_id}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
-      { key: "student_id", label: "Student ID (system id)", kind: "text", required: true },
+      { key: "student_id", label: "Student", kind: "select-student", required: true },
     ],
   },
   {
@@ -90,7 +138,7 @@ const DOC_TYPES: DocDef[] = [
     endpoint: (p) => `/api/documents/result/${p.exam_id}/report-card/${p.student_id}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
-      { key: "student_id", label: "Student ID (system id)", kind: "text", required: true },
+      { key: "student_id", label: "Student", kind: "select-student", required: true },
     ],
   },
   {
@@ -128,14 +176,14 @@ const DOC_TYPES: DocDef[] = [
     title: "Testimonial",
     description: "Character testimonial for a student.",
     endpoint: (p) => `/api/documents/student/${p.student_id}/testimonial`,
-    fields: [{ key: "student_id", label: "Student ID (system id)", kind: "text", required: true }],
+    fields: [{ key: "student_id", label: "Student", kind: "select-student", required: true }],
   },
   {
     key: "transfer-cert",
     title: "Transfer Certificate",
     description: "Formal BD-format transfer certificate.",
     endpoint: (p) => `/api/documents/student/${p.student_id}/transfer-cert`,
-    fields: [{ key: "student_id", label: "Student ID (system id)", kind: "text", required: true }],
+    fields: [{ key: "student_id", label: "Student", kind: "select-student", required: true }],
   },
   {
     key: "daily-register",
@@ -176,8 +224,8 @@ const DOC_TYPES: DocDef[] = [
     key: "fee-receipt",
     title: "Fee Receipt",
     description: "Receipt for a single payment.",
-    endpoint: (p) => `/api/documents/fee/receipt/${p.payment_id}`,
-    fields: [{ key: "payment_id", label: "Payment ID (system id)", kind: "text", required: true }],
+    fields: [],
+    redirectTo: { href: "/accounts/receipts", label: "Go to Fee Receipts" },
   },
   {
     key: "dues-report",
@@ -190,14 +238,16 @@ const DOC_TYPES: DocDef[] = [
     key: "payslip",
     title: "Payslip",
     description: "Salary payslip for a payroll record.",
-    endpoint: (p) => `/api/documents/payroll/payslip/${p.payroll_record_id}`,
-    fields: [{ key: "payroll_record_id", label: "Payroll Record ID (system id)", kind: "text", required: true }],
+    fields: [],
+    redirectTo: { href: "/hr/payroll", label: "Go to Payroll" },
   },
 ];
 
 export default function DocumentPrintCenterPage() {
   const [selectedKey, setSelectedKey] = useState(DOC_TYPES[0]!.key);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [pickerField, setPickerField] = useState<{ key: string; kind: "select-student" | "select-staff" } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -207,6 +257,41 @@ export default function DocumentPrintCenterPage() {
   const sections = classes?.find((c) => c.id === values.class_id)?.sections ?? [];
   const { data: exams } = useQuery<Option[]>({ queryKey: ["exams"], queryFn: async () => (await api.get("/api/exams")).data.data });
 
+  const { user } = useAuthStore();
+  const canOverride = !!user && EXAM_MANAGE_ROLES.includes(user.role);
+  const [overrideSelected, setOverrideSelected] = useState<Set<string>>(new Set());
+  const [overrideReason, setOverrideReason] = useState("");
+
+  const isAdmitCards = doc.key === "admit-cards";
+  const { data: clearanceStatus, isFetching: statusLoading } = useQuery<ClearanceStatusRow[]>({
+    queryKey: ["documents", "admit-cards", "status", values.exam_id, values.class_id, values.section_id],
+    queryFn: async () =>
+      (
+        await api.get(`/api/documents/exam/${values.exam_id}/admit-cards/status`, {
+          params: { class_id: values.class_id, section_id: values.section_id || undefined },
+        })
+      ).data.data,
+    enabled: isAdmitCards && !!values.exam_id && !!values.class_id,
+  });
+  const blockedRows = clearanceStatus?.filter((r) => !r.clearance.all_clear) ?? [];
+
+  // A fresh class/section/exam pick invalidates any prior override
+  // selections — never silently carry an override forward onto a different
+  // roster than the one it was chosen for.
+  useEffect(() => {
+    setOverrideSelected(new Set());
+    setOverrideReason("");
+  }, [values.exam_id, values.class_id, values.section_id]);
+
+  function toggleOverride(studentId: string) {
+    setOverrideSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
+      return next;
+    });
+  }
+
   function setValue(key: string, v: string) {
     setValues((prev) => ({ ...prev, [key]: v }));
   }
@@ -214,6 +299,7 @@ export default function DocumentPrintCenterPage() {
   function selectDoc(key: string) {
     setSelectedKey(key);
     setValues({});
+    setLabels({});
     setError(null);
   }
 
@@ -223,15 +309,18 @@ export default function DocumentPrintCenterPage() {
     setGenerating(true);
     setError(null);
     try {
-      const path = doc.endpoint(values);
+      let path = doc.endpoint!(values);
+      if (isAdmitCards && overrideSelected.size > 0) {
+        path += `&override_student_ids=${encodeURIComponent([...overrideSelected].join(","))}&override_reason=${encodeURIComponent(overrideReason)}`;
+      }
       const res = await api.get(path, { params: { download: "true" }, responseType: "blob" });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement("a");
       a.href = url;
       a.download = `${doc.key}.pdf`;
       a.click();
-    } catch {
-      setError("Failed to generate document — check the required fields and try again.");
+    } catch (err) {
+      setError(extractErrorMessage(err) ?? "Failed to generate document — check the required fields and try again.");
     } finally {
       setGenerating(false);
     }
@@ -261,47 +350,193 @@ export default function DocumentPrintCenterPage() {
                 <p className="text-sm text-muted-foreground">{doc.description}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                {doc.fields.map((f) => (
-                  <div key={f.key} className="space-y-1.5">
-                    <Label>{f.label}</Label>
-                    {f.kind === "select-class" && (
-                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
-                        <option value="">Select...</option>
-                        {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-                      </select>
-                    )}
-                    {f.kind === "select-section" && (
-                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} disabled={!values.class_id}>
-                        <option value="">All Sections</option>
-                        {sections?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    )}
-                    {f.kind === "select-exam" && (
-                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
-                        <option value="">Select...</option>
-                        {exams?.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-                      </select>
-                    )}
-                    {(f.kind === "text" || f.kind === "number") && (
-                      <Input value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />
-                    )}
-                    {f.kind === "date" && <Input type="date" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
-                    {f.kind === "month" && <Input type="number" min={1} max={12} value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
-                    {f.kind === "year" && <Input type="number" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
+              {doc.redirectTo ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    This now has its own searchable screen — find the record there and download directly, no id required.
+                  </p>
+                  <Link href={doc.redirectTo.href}>
+                    <Button>{doc.redirectTo.label}</Button>
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    {doc.fields.map((f) => (
+                      <div key={f.key} className="space-y-1.5">
+                        <Label>{f.label}</Label>
+                        {f.kind === "select-class" && (
+                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
+                            <option value="">Select...</option>
+                            {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                          </select>
+                        )}
+                        {f.kind === "select-section" && (
+                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} disabled={!values.class_id}>
+                            <option value="">All Sections</option>
+                            {sections?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        )}
+                        {f.kind === "select-exam" && (
+                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
+                            <option value="">Select...</option>
+                            {exams?.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                          </select>
+                        )}
+                        {(f.kind === "select-student" || f.kind === "select-staff") && (
+                          <div className="flex items-center gap-2">
+                            {values[f.key] ? (
+                              <>
+                                <span className="flex-1 truncate rounded-md border bg-muted px-3 py-2 text-sm">{labels[f.key]}</span>
+                                <Button type="button" size="sm" variant="outline" onClick={() => setPickerField({ key: f.key, kind: f.kind as "select-student" | "select-staff" })}>
+                                  Change
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" variant="outline" onClick={() => setPickerField({ key: f.key, kind: f.kind as "select-student" | "select-staff" })}>
+                                {f.kind === "select-student" ? "Choose Student…" : "Choose Staff…"}
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {(f.kind === "text" || f.kind === "number") && (
+                          <Input value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />
+                        )}
+                        {f.kind === "date" && <Input type="date" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
+                        {f.kind === "month" && <Input type="number" min={1} max={12} value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
+                        {f.kind === "year" && <Input type="number" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} />}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+                  {isAdmitCards && values.exam_id && values.class_id && (
+                    <div className="space-y-3 rounded-md border p-3">
+                      {statusLoading && <p className="text-sm text-muted-foreground">Checking clearance status...</p>}
+                      {!statusLoading && !!clearanceStatus?.length && (
+                        <>
+                          <p className="text-sm font-medium">
+                            {clearanceStatus.length - blockedRows.length} of {clearanceStatus.length} students cleared
+                            {!!blockedRows.length && ` — ${blockedRows.length} will be skipped`}
+                          </p>
+                          <div className="max-h-64 overflow-y-auto rounded-md border">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                                  {canOverride && !!blockedRows.length && <th className="w-8 p-2"></th>}
+                                  <th className="p-2">Student</th>
+                                  <th className="p-2">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {clearanceStatus.map((r) => (
+                                  <tr key={r.student_id} className="border-b last:border-0">
+                                    {canOverride && !!blockedRows.length && (
+                                      <td className="p-2">
+                                        {!r.clearance.all_clear && (
+                                          <Checkbox checked={overrideSelected.has(r.student_id)} onCheckedChange={() => toggleOverride(r.student_id)} />
+                                        )}
+                                      </td>
+                                    )}
+                                    <td className="p-2">
+                                      {r.name} <span className="text-xs text-muted-foreground">({r.student_uid})</span>
+                                    </td>
+                                    <td className="p-2">
+                                      {r.clearance.all_clear ? (
+                                        <Badge variant="success">Cleared</Badge>
+                                      ) : (
+                                        <Badge variant="destructive" title={blockReasons(r.clearance).join("; ")}>
+                                          {blockReasons(r.clearance).join(", ")}
+                                        </Badge>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {canOverride && !!blockedRows.length && (
+                            <div className="space-y-1.5">
+                              <Label>Override Reason {overrideSelected.size > 0 && "(required)"}</Label>
+                              <Textarea
+                                value={overrideReason}
+                                onChange={(e) => setOverrideReason(e.target.value)}
+                                placeholder="Why are the selected students being allowed to sit despite being blocked? This is recorded against their record."
+                                disabled={overrideSelected.size === 0}
+                              />
+                              {overrideSelected.size > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  {overrideSelected.size} student(s) will be included with this override, permanently recorded on their record.
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
-              <Button disabled={!canGenerate || generating} onClick={download}>
-                {generating ? "Generating..." : "Download PDF"}
-              </Button>
+                  {error && <p className="text-sm text-red-600">{error}</p>}
+
+                  <Button
+                    disabled={!canGenerate || generating || (isAdmitCards && overrideSelected.size > 0 && !overrideReason.trim())}
+                    onClick={download}
+                  >
+                    {generating ? "Generating..." : "Download PDF"}
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
+
+      <RecordPickerDialog<StudentOption>
+        open={pickerField?.kind === "select-student"}
+        onOpenChange={(open) => !open && setPickerField(null)}
+        title="Choose a Student"
+        searchPlaceholder="Search by name or student ID..."
+        getKey={(s) => s.id}
+        fetchResults={async ({ search, page }) => (await api.get("/api/students", { params: { search: search || undefined, page, limit: 10 } })).data}
+        renderRow={(s) => (
+          <div>
+            <p className="font-medium">{s.name_en}</p>
+            <p className="text-xs text-muted-foreground">
+              {s.student_uid}
+              {s.current_class && ` · ${s.current_class.name_en}`}
+              {s.current_section && ` ${s.current_section.name}`}
+            </p>
+          </div>
+        )}
+        onSelect={(s) => {
+          if (!pickerField) return;
+          setValue(pickerField.key, s.id);
+          setLabels((prev) => ({ ...prev, [pickerField.key]: `${s.name_en} (${s.student_uid})` }));
+          setPickerField(null);
+        }}
+      />
+
+      <RecordPickerDialog<StaffOption>
+        open={pickerField?.kind === "select-staff"}
+        onOpenChange={(open) => !open && setPickerField(null)}
+        title="Choose a Staff Member"
+        searchPlaceholder="Search by name or staff ID..."
+        getKey={(s) => s.id}
+        fetchResults={async ({ search, page }) => (await api.get("/api/hr/staff", { params: { search: search || undefined, page, limit: 10 } })).data}
+        renderRow={(s) => (
+          <div>
+            <p className="font-medium">{s.name_en}</p>
+            <p className="text-xs text-muted-foreground">
+              {s.staff_uid} · {s.designation}
+            </p>
+          </div>
+        )}
+        onSelect={(s) => {
+          if (!pickerField) return;
+          setValue(pickerField.key, s.id);
+          setLabels((prev) => ({ ...prev, [pickerField.key]: `${s.name_en} (${s.staff_uid})` }));
+          setPickerField(null);
+        }}
+      />
     </PageWrapper>
   );
 }

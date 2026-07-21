@@ -560,6 +560,7 @@ model Student {
   mark_entries          MarkEntry[]
   invoices              Invoice[]
   exam_seat_plans       ExamSeatPlan[]
+  admit_card_overrides  AdmitCardOverride[]
   transport             StudentTransport?
   hostel_allocations    HostelAllocation[]
   course_enrollments    CourseEnrollment[]
@@ -959,6 +960,7 @@ model Exam {
   result_publications  ResultPublication[]
   quizzes              Quiz[]
   sessions             ExamSession[]
+  admit_card_overrides AdmitCardOverride[]
 
   @@index([academic_year_id])
 }
@@ -1085,6 +1087,29 @@ model ExamSeatPlan {
   exam_office_cleared_at   DateTime?
 
   @@unique([exam_id, student_id])
+}
+
+// The persistent, auditable record of an admit-card clearance override —
+// not just a log line (see AuditAction's "ADMIT_CARD_OVERRIDE" for that),
+// but the actual "this student's due/fine, for this reason, was allowed to
+// sit" record the institution can produce later if questioned. One row per
+// (exam, student) override, written by the batch admit-card generate route
+// in the same request as the matching audit-log entry.
+model AdmitCardOverride {
+  id                      String   @id @default(cuid())
+  exam_id                 String
+  exam                    Exam     @relation(fields: [exam_id], references: [id])
+  student_id              String
+  student                 Student  @relation(fields: [student_id], references: [id])
+  reason                  String   @db.Text
+  overridden_by_id        String
+  overridden_at           DateTime @default(now())
+  due_amount_at_time      Float
+  fine_amount_at_time     Float
+  exam_office_was_cleared Boolean
+  created_at              DateTime @default(now())
+
+  @@index([exam_id, student_id])
 }
 
 model ResultPublication {
@@ -1757,6 +1782,12 @@ model SalaryStructure {
   transport      Float    @default(0)
   pf_percentage  Float    @default(0)
   tds_percentage Float    @default(0)
+  // Pre-selected on the Add Staff form and used as the CSV bulk-import
+  // fallback when a row's salary_structure_name is blank/unmatched — "only
+  // one default" is enforced in application logic (salary.routes.ts), not a
+  // DB constraint, matching this codebase's existing convention for similar
+  // single-active-row flags (e.g. AcademicYear.is_active).
+  is_default     Boolean  @default(false)
   created_at     DateTime @default(now())
   staff          Staff[]
 }
@@ -2959,6 +2990,7 @@ enum InAppNotificationType {
   RESULT_PUBLISHED
   EXAM_SCHEDULED
   JOURNAL_POST_FAILED
+  STAFF_MISSING_SALARY_STRUCTURE
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

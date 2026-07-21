@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -34,6 +34,15 @@ export default function UsersPage() {
   const [credentialModal, setCredentialModal] = useState<{ name: string; phone: string; password: string } | null>(null);
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+
+  const filteredUsers = (users ?? []).filter((u) => {
+    const q = userSearch.trim().toLowerCase();
+    const matchesSearch = !q || u.name_en.toLowerCase().includes(q) || u.phone.includes(q) || u.staff?.staff_uid?.toLowerCase().includes(q);
+    const matchesRole = !roleFilter || u.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/settings/users", { ...form, login_password: form.login_password || undefined }),
@@ -99,7 +108,19 @@ export default function UsersPage() {
       {!users?.length && <EmptyState title="No users yet" />}
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="space-y-3 pt-6">
+          {!!users?.length && (
+            <div className="flex flex-wrap items-center gap-2">
+              <SearchInput placeholder="Search by name, phone, or staff ID..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="max-w-xs" />
+              <select className="rounded-md border px-3 py-2 text-sm" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <option value="">All roles</option>
+                {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+              </select>
+              {(userSearch || roleFilter) && (
+                <span className="text-xs text-muted-foreground">{filteredUsers.length} of {users.length}</span>
+              )}
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
@@ -111,7 +132,10 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users?.map((u) => (
+              {!!users?.length && !filteredUsers.length && (
+                <tr><td colSpan={5} className="p-4 text-center text-sm text-muted-foreground">No users match this search/filter.</td></tr>
+              )}
+              {filteredUsers.map((u) => (
                 <tr key={u.id} className="border-b">
                   <td className="p-2 font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</td>
                   <td className="p-2">{u.phone}</td>

@@ -15,6 +15,11 @@ interface Program {
   id: string;
   name_en: string;
 }
+interface SalaryStructureOption {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
 
 // Must mirror server/api/src/lib/roles.ts's TEACHING_ROLES exactly — kept
 // as a small frontend-only mirror rather than fetched, since it only drives
@@ -35,6 +40,10 @@ export default function NewStaffPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [employmentType, setEmploymentType] = useState("PERMANENT");
+  // null = not yet touched by the user — falls back to whichever structure
+  // is marked default once loaded. An empty string is a deliberate user
+  // choice to clear it (some employment types have no fixed structure yet).
+  const [salaryStructureId, setSalaryStructureId] = useState<string | null>(null);
   const [showOnWebsite, setShowOnWebsite] = useState(false);
   const [createLogin, setCreateLogin] = useState(true);
   const [loginPassword, setLoginPassword] = useState("");
@@ -42,6 +51,9 @@ export default function NewStaffPage() {
 
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
   const { data: programs } = useQuery<Program[]>({ queryKey: ["settings", "programs"], queryFn: async () => (await api.get("/api/settings/programs")).data.data });
+  const { data: salaryStructures } = useQuery<SalaryStructureOption[]>({ queryKey: ["hr", "salary-structures"], queryFn: async () => (await api.get("/api/hr/salary-structures")).data.data });
+  const defaultSalaryStructureId = salaryStructures?.find((s) => s.is_default)?.id ?? "";
+  const effectiveSalaryStructureId = salaryStructureId ?? defaultSalaryStructureId;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -54,6 +66,7 @@ export default function NewStaffPage() {
         phone: phone || undefined,
         email: email || undefined,
         employment_type: employmentType,
+        salary_structure_id: effectiveSalaryStructureId || undefined,
         show_on_website: showOnWebsite,
         create_login: createLogin,
         login_password: createLogin ? loginPassword || undefined : undefined,
@@ -131,6 +144,16 @@ export default function NewStaffPage() {
                 <option value="CONTRACT">Contract</option>
                 <option value="PART_TIME">Part Time</option>
               </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Salary Structure</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={effectiveSalaryStructureId} onChange={(e) => setSalaryStructureId(e.target.value)}>
+                <option value="">None</option>
+                {salaryStructures?.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_default ? " (Default)" : ""}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground">Needed for this staff member to show up in Payroll. Can be set or changed later too.</p>
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={createLogin} onCheckedChange={(v) => setCreateLogin(!!v)} /> Create login account (requires phone) — sends temp password via SMS</label>

@@ -175,6 +175,17 @@ export default function StudentProfilePage() {
         <Link href={`/students/${id}/edit`}>
           <Button variant="outline">Edit</Button>
         </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/student/${id}/id-card`, `IDCard_${personal.student_uid}.pdf`)}>
+            Download ID Card
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/testimonial`, `Testimonial — ${personal.name_en}`)}>
+            Testimonial
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/transfer-cert`, `Transfer Certificate — ${personal.name_en}`)}>
+            Transfer Certificate
+          </Button>
+        </div>
         {!["GRADUATED", "TRANSFERRED", "EXPELLED"].includes(personal.status) && (
           <>
             <Button variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>

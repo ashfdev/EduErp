@@ -56,6 +56,27 @@ libraryRouter.get(
   }),
 );
 
+// Registered before "/books/:id" — Express matches route definitions in
+// order, and both are single-segment patterns under /books, so "/categories"
+// would otherwise be swallowed as an :id lookup (same caution already
+// documented elsewhere in this codebase, e.g. hr/staff.routes.ts's /export
+// route). Book.category is free-text, not an enum/lookup table, so this is
+// the only source of options for a category filter dropdown — deriving them
+// from whatever's on the currently-loaded page would give an incomplete,
+// shifting list once real pagination is in use.
+libraryRouter.get(
+  "/books/categories",
+  asyncHandler(async (_req, res) => {
+    const rows = await prisma.book.findMany({
+      where: { is_active: true },
+      select: { category: true },
+      distinct: ["category"],
+      orderBy: { category: "asc" },
+    });
+    res.json({ success: true, data: rows.map((r) => r.category).filter(Boolean) });
+  }),
+);
+
 libraryRouter.get(
   "/books/:id",
   asyncHandler(async (req, res) => {

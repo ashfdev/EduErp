@@ -43,6 +43,14 @@ export const WEBSITE_CONTENT_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINC
 export const HR_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const LEAVE_APPROVE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const PAYROLL_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
+// Deliberately narrower widening than merging HR_MANAGE_ROLES into
+// PAYROLL_MANAGE_ROLES outright — a Principal who onboards staff can now see
+// the salary-structure *catalog* (names/amounts, closer to a published pay
+// scale) to pick one while adding staff, but still cannot see which named
+// staff member is on which structure (staff.routes.ts's canViewPayroll gate
+// on the joined relation) or call the assignment/write routes — those stay
+// PAYROLL_MANAGE_ROLES-only. Read-only, and only for this one catalog.
+export const PAYROLL_READ_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT", "PRINCIPAL"];
 export const LIBRARY_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "LIBRARIAN"];
 // Reviews/approves student-initiated sensitive-document requests (TC,
 // Testimonial) — the same leadership tier as EXAM_MANAGE_ROLES/

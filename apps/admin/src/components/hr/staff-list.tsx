@@ -24,6 +24,12 @@ interface StaffRow {
   department: { name_en: string } | null;
   user: { role: string } | null;
   _count: { documents: number };
+  // The raw FK, not the joined salary_structure relation — GET /api/hr/staff
+  // uses `include` (not `select`), which always returns every scalar column
+  // of the base model regardless of viewer role, unlike the joined relation
+  // itself (canViewPayroll-gated). Using the scalar here means this badge is
+  // reliable for every viewer, not just PAYROLL_MANAGE_ROLES.
+  salary_structure_id: string | null;
 }
 
 interface SalaryStructureOption {
@@ -176,6 +182,9 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
                       {s._count.documents === 0 && (
                         <Badge variant="warning" className="ml-2">No documents</Badge>
                       )}
+                      {!s.salary_structure_id && (
+                        <Badge variant="warning" className="ml-2">No salary structure</Badge>
+                      )}
                     </td>
                     <td className="p-2">{s.designation}</td>
                     <td className="p-2">{s.department?.name_en ?? "-"}</td>
@@ -202,6 +211,11 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
               <option value="">Select...</option>
               {salaryStructures?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {salaryStructures && salaryStructures.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No salary structures yet. <Link href="/hr/salary-structures" className="text-primary hover:underline">Create one</Link> first.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button onClick={() => bulkAssignMutation.mutate()} disabled={!bulkSalaryStructureId || bulkAssignMutation.isPending}>

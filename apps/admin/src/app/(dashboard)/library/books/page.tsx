@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, SearchInput, Switch } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Book {
@@ -16,10 +16,17 @@ interface Book {
   available: number;
   location: string | null;
 }
+interface BooksResponse {
+  data: Book[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
 
 export default function BookCatalogPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [availableOnly, setAvailableOnly] = useState(false);
+  const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -28,10 +35,28 @@ export default function BookCatalogPage() {
   const [totalCopies, setTotalCopies] = useState(1);
   const [location, setLocation] = useState("");
 
-  const { data: books } = useQuery<Book[]>({
-    queryKey: ["library", "books", search],
-    queryFn: async () => (await api.get("/api/library/books", { params: { search: search || undefined, limit: 100 } })).data.data,
+  const { data: categories } = useQuery<string[]>({
+    queryKey: ["library", "books", "categories"],
+    queryFn: async () => (await api.get("/api/library/books/categories")).data.data,
   });
+
+  const { data: booksResponse } = useQuery<BooksResponse>({
+    queryKey: ["library", "books", search, categoryFilter, availableOnly, page],
+    queryFn: async () =>
+      (
+        await api.get("/api/library/books", {
+          params: {
+            search: search || undefined,
+            category: categoryFilter || undefined,
+            available_only: availableOnly ? "true" : undefined,
+            page,
+            limit: 20,
+          },
+        })
+      ).data,
+  });
+  const books = booksResponse?.data;
+  const meta = booksResponse?.meta;
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/library/books", { title, author, category, isbn: isbn || undefined, total_copies: totalCopies, location: location || undefined }),
@@ -54,7 +79,28 @@ export default function BookCatalogPage() {
   return (
     <PageWrapper>
       <PageHeader title="Book Catalog" breadcrumbs={[{ label: "Library", href: "/library" }, { label: "Books" }]} action={<Button onClick={() => setOpen(true)}>+ Add Book</Button>} />
-      <Input placeholder="Search by title, author, or ISBN..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchInput
+          placeholder="Search by title, author, or ISBN..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="max-w-sm"
+        />
+        <select
+          className="rounded-md border px-3 py-2 text-sm"
+          value={categoryFilter}
+          onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+        >
+          <option value="">All categories</option>
+          {categories?.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={availableOnly} onCheckedChange={(v) => { setAvailableOnly(v); setPage(1); }} />
+          Available only
+        </label>
+        {meta && <span className="text-xs text-muted-foreground">{meta.total} book{meta.total === 1 ? "" : "s"}</span>}
+      </div>
 
       {!books?.length && <EmptyState title="No books found" />}
       {!!books?.length && (
@@ -77,6 +123,14 @@ export default function BookCatalogPage() {
                 ))}
               </tbody>
             </table>
+
+            {meta && meta.totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
+                <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

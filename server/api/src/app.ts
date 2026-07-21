@@ -128,8 +128,21 @@ export function createApp(): Express {
   app.use("/api/devices", devicesRouter);
   app.use("/api/accounts", accountsModuleRouter);
   app.use("/api/inventory", inventoryModuleRouter);
-  app.use("/api/notifications", bulkSmsRouter);
+  // Order matters: notificationCenterRouter first. Its own gate is a bare
+  // authenticate() (any logged-in role), while bulkSmsRouter's is
+  // authorize(BULK_SMS_ROLES) applied via router.use() — that runs on EVERY
+  // request that enters the router, not just requests matching one of its
+  // defined routes. With bulkSmsRouter mounted first, every GUARDIAN/
+  // CLASS_TEACHER/etc. call to plain GET /api/notifications was rejected
+  // with 403 by bulkSmsRouter's blanket role check before Express ever got
+  // to try notificationCenterRouter's unrestricted "/" handler — a real,
+  // previously-live bug (the entire in-app notification bell was broken for
+  // every role except SUPER_ADMIN/ADMIN/PRINCIPAL). Reordering is safe: the
+  // two routers' path sets don't overlap (bulk-sms, bulk-sms/preview vs.
+  // "/", ":id/read", "read-all"), so legitimate bulk-sms traffic still falls
+  // through correctly once notificationCenterRouter finds no matching route.
   app.use("/api/notifications", notificationCenterRouter);
+  app.use("/api/notifications", bulkSmsRouter);
   app.use("/internal", internalRouter);
 
   app.use(errorHandler);

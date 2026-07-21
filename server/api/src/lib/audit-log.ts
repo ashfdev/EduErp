@@ -31,7 +31,8 @@ export type AuditAction =
   | "JOB_APPLICATION_STATUS_CHANGE"
   | "EXAM_REOPENED"
   | "PERMISSION_UPDATE"
-  | "DOCUMENT_REQUEST_REVIEWED";
+  | "DOCUMENT_REQUEST_REVIEWED"
+  | "ADMIT_CARD_OVERRIDE";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

@@ -17,6 +17,7 @@ import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
 import { sendNotification } from "../../services/notification.service";
+import { notifyRoles } from "../../services/in-app-notification.service";
 import { env } from "../../lib/env";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors";
@@ -258,6 +259,7 @@ hrStaffRouter.post(
           qualifications: body.qualifications,
           achievements: body.achievements,
           publications: body.publications as Prisma.InputJsonValue | undefined,
+          salary_structure_id: body.salary_structure_id,
           created_by_id: req.user!.sub,
         },
       });
@@ -270,6 +272,15 @@ hrStaffRouter.post(
         trigger: "PORTAL_LOGIN_CREATED",
         recipients: [{ name: body.name_en, phone: body.phone, email: body.email }],
         template_data: { name: body.name_en, phone: body.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
+      });
+    }
+
+    if (!staff.salary_structure_id) {
+      await notifyRoles(PAYROLL_MANAGE_ROLES, {
+        type: "STAFF_MISSING_SALARY_STRUCTURE",
+        title: `${staff.name_en} has no salary structure`,
+        body: "Assign one so this staff member is included in the next payroll run.",
+        link: `/hr/staff/${staff.id}`,
       });
     }
 
@@ -349,13 +360,24 @@ hrStaffRouter.post(
             email: z.preprocess(emptyToUndefined, z.string().email().optional()),
             gender: z.preprocess(emptyToUndefined, z.enum(["MALE", "FEMALE", "OTHER"]).optional()),
             employment_type: z.preprocess(emptyToUndefined, z.enum(["PERMANENT", "CONTRACT", "PART_TIME"]).optional()),
+            // Name-based, not a raw id — a non-technical CSV author would
+            // never have a salary-structure cuid to paste. Resolved
+            // case-insensitively below, falling back to whichever structure
+            // has is_default: true when blank or unmatched.
+            salary_structure_name: z.preprocess(emptyToUndefined, z.string().optional()),
           }),
         ),
       })
       .parse(req.body);
 
+    const salaryStructures = await prisma.salaryStructure.findMany({ select: { id: true, name: true, is_default: true } });
+    const salaryStructureByName = new Map(salaryStructures.map((s) => [s.name.trim().toLowerCase(), s.id]));
+    const defaultSalaryStructureId = salaryStructures.find((s) => s.is_default)?.id;
+
     const created: string[] = [];
     const failed: { row: number; reason: string }[] = [];
+    const notes: { row: number; note: string }[] = [];
+    let missingSalaryStructureCount = 0;
 
     // Sequential per-row loop — same known-limit reasoning already accepted
     // for the student bulk-import path (fine for a realistic school import,
@@ -365,6 +387,22 @@ hrStaffRouter.post(
       try {
         const existingUser = await prisma.user.findUnique({ where: { phone: row.phone } });
         if (existingUser) throw new Error("a user with this phone number already exists");
+
+        let salaryStructureId = defaultSalaryStructureId;
+        if (row.salary_structure_name) {
+          const matched = salaryStructureByName.get(row.salary_structure_name.trim().toLowerCase());
+          if (matched) {
+            salaryStructureId = matched;
+          } else {
+            notes.push({
+              row: index + 1,
+              note: `salary structure "${row.salary_structure_name}" not found — ${defaultSalaryStructureId ? "assigned the default structure instead" : "no default structure configured, left unassigned"}`,
+            });
+          }
+        } else if (defaultSalaryStructureId) {
+          notes.push({ row: index + 1, note: "no salary_structure_name given — assigned the default structure" });
+        }
+        if (!salaryStructureId) missingSalaryStructureCount += 1;
 
         let tempPassword: string | null = null;
         const staff = await prisma.$transaction(async (tx) => {
@@ -385,6 +423,7 @@ hrStaffRouter.post(
               gender: row.gender,
               employment_type: row.employment_type ?? "PERMANENT",
               joining_date: new Date(),
+              salary_structure_id: salaryStructureId,
               created_by_id: req.user!.sub,
             },
           });
@@ -404,7 +443,18 @@ hrStaffRouter.post(
       }
     }
 
-    res.json({ success: true, data: { created: created.length, failed } });
+    // Batched into one summary notification, not one per row — a large CSV
+    // shouldn't spam Accountant/Admin with individual alerts (see D4).
+    if (missingSalaryStructureCount > 0) {
+      await notifyRoles(PAYROLL_MANAGE_ROLES, {
+        type: "STAFF_MISSING_SALARY_STRUCTURE",
+        title: `${missingSalaryStructureCount} newly-imported staff have no salary structure`,
+        body: "Assign one so they're included in the next payroll run.",
+        link: "/hr/staff",
+      });
+    }
+
+    res.json({ success: true, data: { created: created.length, failed, notes } });
   }),
 );
 

@@ -7,7 +7,7 @@ import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
-import { Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } from "@education-erp/ui";
+import { Badge, Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } from "@education-erp/ui";
 import { 
   BookOpen, Bus, FolderOpen, AlertCircle, 
   Users, HelpCircle, FileText, ChevronRight, 
@@ -99,7 +99,11 @@ function HomeContent() {
           <div className="text-right">
             <p className="mb-1 text-xs font-medium text-white/80">{t("today")}</p>
             <div className="inline-flex rounded-full bg-white/20 px-2.5 py-1 backdrop-blur-sm">
-              <StatusBadge status={data.attendance.today_status} />
+              {data.attendance.today_status === "NOT_MARKED" ? (
+                <Badge variant="outline">{t("attendanceNotMarked")}</Badge>
+              ) : (
+                <StatusBadge status={data.attendance.today_status} />
+              )}
             </div>
           </div>
         </CardContent>
@@ -228,7 +232,11 @@ function HomeContent() {
           <CardContent className="p-0">
             {!data.recent_notices.length && <p className="p-5 text-sm text-muted-foreground">{t("noNotices")}</p>}
             {data.recent_notices.map((n, i) => (
-              <div key={n.id} className={`flex gap-3 p-4 ${i !== data.recent_notices.length - 1 ? 'border-b border-slate-100' : ''}`}>
+              <Link
+                key={n.id}
+                href={`/notices/${n.id}`}
+                className={`flex gap-3 p-4 transition-colors hover:bg-slate-50 ${i !== data.recent_notices.length - 1 ? 'border-b border-slate-100' : ''}`}
+              >
                 <div className="mt-0.5 rounded-full bg-blue-50 p-1.5 text-blue-500">
                   <BellRing className="h-4 w-4" />
                 </div>
@@ -236,7 +244,7 @@ function HomeContent() {
                   <p className="text-sm font-medium text-slate-800 leading-snug">{n.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</p>
                 </div>
-              </div>
+              </Link>
             ))}
           </CardContent>
         </Card>

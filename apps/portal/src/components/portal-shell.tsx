@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from "./protected-route";
 import { PortalNav } from "./portal-nav";
+import { LanguageToggle } from "./language-toggle";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -37,6 +38,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
               <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-sm font-bold text-white">E</div>
             )}
             <span className="line-clamp-2 leading-tight flex-1 text-base font-bold tracking-tight text-white">{institutionName ?? "Education ERP"}</span>
+            <LanguageToggle className="border-slate-700 text-slate-300 hover:bg-slate-800" />
             <NotificationBell
               notifications={notifications}
               unreadCount={unreadCount}
@@ -92,7 +94,8 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 )}
                 <span className="line-clamp-2 leading-tight text-sm font-semibold tracking-tight text-foreground">{institutionName ?? "Education ERP"}</span>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
+                <LanguageToggle />
                 <NotificationBell
                   notifications={notifications}
                   unreadCount={unreadCount}

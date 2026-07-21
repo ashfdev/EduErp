@@ -2,8 +2,9 @@
 
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
+import { cn } from "@education-erp/ui";
 
-export function LanguageToggle() {
+export function LanguageToggle({ className }: { className?: string }) {
   const user = useAuthStore((s) => s.user);
   if (!user) return null;
 
@@ -20,7 +21,7 @@ export function LanguageToggle() {
   }
 
   return (
-    <button onClick={toggle} className="rounded-md border px-2.5 py-1 text-xs" aria-label="Switch language">
+    <button onClick={toggle} className={cn("rounded-md border px-2.5 py-1 text-xs", className)} aria-label="Switch language">
       {next === "BN" ? "বাংলা" : "English"}
     </button>
   );

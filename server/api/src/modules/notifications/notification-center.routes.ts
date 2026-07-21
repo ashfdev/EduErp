@@ -9,8 +9,8 @@ import { notFound } from "../../lib/errors";
 // The personal notification-center feed — works identically for staff,
 // teacher, and portal callers since InAppNotification.user_id is a raw
 // User.id, same convention as Complaint.raised_by_user_id. Mounted at the
-// same /api/notifications prefix as bulk.routes.ts's bulkSmsRouter (no
-// path collision — that router only defines /bulk-sms and /bulk-sms/preview).
+// same /api/notifications prefix as bulk.routes.ts's bulkSmsRouter — must be
+// registered BEFORE it in app.ts, see the comment there for why.
 export const notificationCenterRouter = Router();
 notificationCenterRouter.use(authenticate);
 

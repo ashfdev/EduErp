@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Input, Badge, StatusBadge, EmptyState, extractErrorMessage } from "@education-erp/ui";
@@ -111,7 +112,12 @@ export default function PayrollPage() {
       <PageHeader
         title="Payroll"
         breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Payroll" }]}
-        action={<Button variant="outline" onClick={downloadExcel}>Export Excel</Button>}
+        action={
+          <div className="flex gap-2">
+            <Link href="/hr/salary-structures"><Button variant="outline">Salary Structures</Button></Link>
+            <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
+          </div>
+        }
       />
 
       <div className="flex flex-wrap items-end gap-3">

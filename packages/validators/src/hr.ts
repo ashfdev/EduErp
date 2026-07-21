@@ -33,10 +33,17 @@ export const createStaffSchema = z.object({
   // temp password when create_login is true; set explicitly to choose it
   // instead. Ignored when create_login is false.
   login_password: passwordSchema.optional(),
+  salary_structure_id: z.string().optional().nullable(),
 });
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 
-export const updateStaffSchema = createStaffSchema.partial().omit({ create_login: true, role: true, login_password: true });
+// salary_structure_id deliberately omitted here — creation-time assignment
+// only (HR_MANAGE_ROLES, which includes PRINCIPAL) via createStaffSchema;
+// changing it after creation must go through the dedicated PUT
+// /:id/salary-structure route, which is PAYROLL_MANAGE_ROLES-only (narrower
+// — excludes PRINCIPAL). Letting it through this general update schema would
+// silently let PRINCIPAL bypass that restriction via PUT /:id.
+export const updateStaffSchema = createStaffSchema.partial().omit({ create_login: true, role: true, login_password: true, salary_structure_id: true });
 
 export const staffDocumentSchema = z.object({
   doc_type: z.enum(["CERTIFICATE", "NID", "TIN", "CONTRACT", "OTHER"]),
@@ -69,6 +76,7 @@ export const salaryStructureSchema = z.object({
   transport: z.number().min(0).default(0),
   pf_percentage: z.number().min(0).max(100).default(0),
   tds_percentage: z.number().min(0).max(100).default(0),
+  is_default: z.boolean().default(false),
 });
 
 export const assignSalaryStructureSchema = z.object({

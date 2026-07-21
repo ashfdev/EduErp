@@ -18,6 +18,7 @@ interface PreviewRow {
     email?: string;
     gender?: string;
     employment_type?: string;
+    salary_structure_name?: string;
   };
   valid: boolean;
   errors: string[];
@@ -32,7 +33,7 @@ const STAFF_ROLES = [
   "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER", "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
 ];
 
-const CSV_TEMPLATE = "name_en,name_bn,designation,role,department_id,phone,email,gender,employment_type\n";
+const CSV_TEMPLATE = "name_en,name_bn,designation,role,department_id,phone,email,gender,employment_type,salary_structure_name\n";
 
 function downloadTemplate() {
   const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
@@ -47,7 +48,7 @@ function downloadTemplate() {
 export default function BulkImportStaffPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ total: number; valid: number; preview: PreviewRow[] } | null>(null);
-  const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[] } | null>(null);
+  const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[]; notes: { row: number; note: string }[] } | null>(null);
 
   const { data: departments } = useQuery<DepartmentOption[]>({
     queryKey: ["settings", "departments"],
@@ -87,12 +88,16 @@ export default function BulkImportStaffPage() {
         <CardContent className="space-y-3 pt-6">
           <p className="font-medium">1. Prepare your CSV</p>
           <p className="text-sm text-muted-foreground">
-            Columns: <code className="rounded bg-muted px-1">name_en, name_bn, designation, role, department_id, phone, email, gender, employment_type</code>.{" "}
+            Columns: <code className="rounded bg-muted px-1">name_en, name_bn, designation, role, department_id, phone, email, gender, employment_type, salary_structure_name</code>.{" "}
             <code className="rounded bg-muted px-1">role</code> must be one of: {STAFF_ROLES.join(", ")}.{" "}
             <code className="rounded bg-muted px-1">phone</code> must be 11 digits starting with 01 (used to create each staff member&apos;s own portal login —
             unlike students, this is required for every row, not optional).{" "}
             <code className="rounded bg-muted px-1">department_id</code> is an internal ID, not a name — copy it from the reference table below (optional, only
-            relevant for university-type departments).
+            relevant for university-type departments).{" "}
+            <code className="rounded bg-muted px-1">salary_structure_name</code> is a name, not an ID (e.g. &quot;Senior Teacher Scale&quot;) — matched
+            case-insensitively; leave blank or misspell it and the row falls back to whichever{" "}
+            <a href="/hr/salary-structures" className="text-primary hover:underline">salary structure</a> is marked Default (optional, but needed for a row
+            to show up in Payroll).
           </p>
           <Button variant="outline" size="sm" onClick={downloadTemplate}>Download CSV Template</Button>
 
@@ -173,6 +178,13 @@ export default function BulkImportStaffPage() {
                 Failed: {result.failed.length}
                 <ul className="list-inside list-disc">
                   {result.failed.map((f, i) => <li key={i}>Row {f.row}: {f.reason}</li>)}
+                </ul>
+              </div>
+            )}
+            {!!result.notes?.length && (
+              <div className="text-sm text-amber-700">
+                <ul className="list-inside list-disc">
+                  {result.notes.map((n, i) => <li key={i}>Row {n.row}: {n.note}</li>)}
                 </ul>
               </div>
             )}

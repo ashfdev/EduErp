@@ -37,6 +37,11 @@ interface StaffDetail {
   department: { id: string; name_en: string } | null;
   program: { id: string; name_en: string } | null;
   user: { role: string; phone: string; email: string | null };
+  // Raw FK, present for every viewer regardless of role (include always
+  // returns base-model scalars) — used for the completeness badge below so
+  // it's reliable even for a viewer without PAYROLL_MANAGE_ROLES, unlike the
+  // salary_structure relation itself (only populated for that role tier).
+  salary_structure_id: string | null;
   salary_structure: { id: string; name: string } | null;
   subject_assignments: { id: string; subject: { name_en: string; code: string } }[];
   leave_requests: { id: string; leave_type: { name: string }; from_date: string; to_date: string; status: string; reason: string }[];
@@ -276,6 +281,15 @@ export default function StaffDetailPage() {
     a.click();
   }
 
+  async function downloadIdCard() {
+    const res = await api.get(`/api/documents/staff/${id}/id-card`, { params: { download: "true" }, responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `IDCard_${staff?.staff_uid ?? id}.pdf`;
+    a.click();
+  }
+
   if (!staff) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   return (
@@ -289,12 +303,14 @@ export default function StaffDetailPage() {
             <h1 className="text-xl font-semibold">{staff.name_en}</h1>
             <StatusBadge status={staff.is_active ? "ACTIVE" : "INACTIVE"} />
             {staff._count.documents === 0 && <Badge variant="warning">No documents on file</Badge>}
+            {!staff.salary_structure_id && <Badge variant="warning">No salary structure</Badge>}
           </div>
           <p className="mt-1 font-mono text-sm text-muted-foreground">{staff.staff_uid}</p>
           <p className="text-sm text-muted-foreground">
             {staff.designation} {staff.department && `· ${staff.department.name_en}`} {staff.program && `· ${staff.program.name_en}`}
           </p>
         </div>
+        <Button size="sm" variant="outline" onClick={downloadIdCard}>Download ID Card</Button>
       </div>
 
       <Tabs defaultValue="profile">

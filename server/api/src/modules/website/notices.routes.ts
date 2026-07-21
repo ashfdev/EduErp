@@ -18,22 +18,29 @@ import { createInAppNotification } from "../../services/in-app-notification.serv
 export const noticesRouter = Router();
 noticesRouter.use(authenticate);
 
-async function audienceRecipients(audience: string): Promise<NotificationRecipient[]> {
-  const recipients: NotificationRecipient[] = [];
+// _origin tags which app a recipient actually logs into — needed so the
+// in-app-notification `link` below can point somewhere that actually
+// resolves for that recipient. sendNotification() (SMS/email/push) never
+// reads this extra field, so it's harmless to the existing call site that
+// still passes this same array through unchanged.
+type OriginTaggedRecipient = NotificationRecipient & { _origin: "portal" | "staff" };
+
+async function audienceRecipients(audience: string): Promise<OriginTaggedRecipient[]> {
+  const recipients: OriginTaggedRecipient[] = [];
   if (audience === "STUDENTS" || audience === "ALL") {
     const students = await prisma.student.findMany({
       where: { deleted_at: null, father_phone: { not: null } },
       select: { id: true, name_en: true, father_phone: true, guardian: { select: { user_id: true, email: true } } },
     });
-    recipients.push(...students.map((s) => ({ name: s.name_en, phone: s.father_phone, email: s.guardian?.email, user_id: s.guardian?.user_id, person_id: s.id })));
+    recipients.push(...students.map((s) => ({ name: s.name_en, phone: s.father_phone, email: s.guardian?.email, user_id: s.guardian?.user_id, person_id: s.id, _origin: "portal" as const })));
   }
   if (audience === "GUARDIANS" || audience === "ALL") {
     const guardians = await prisma.guardian.findMany({ select: { id: true, name_en: true, phone: true, email: true, user_id: true } });
-    recipients.push(...guardians.map((g) => ({ name: g.name_en, phone: g.phone, email: g.email, user_id: g.user_id, person_id: g.id })));
+    recipients.push(...guardians.map((g) => ({ name: g.name_en, phone: g.phone, email: g.email, user_id: g.user_id, person_id: g.id, _origin: "portal" as const })));
   }
   if (audience === "STAFF" || audience === "ALL") {
     const staff = await prisma.staff.findMany({ where: { is_active: true, deleted_at: null, phone: { not: null } }, select: { id: true, name_en: true, phone: true, email: true, user_id: true } });
-    recipients.push(...staff.map((s) => ({ name: s.name_en, phone: s.phone, email: s.email, user_id: s.user_id, person_id: s.id })));
+    recipients.push(...staff.map((s) => ({ name: s.name_en, phone: s.phone, email: s.email, user_id: s.user_id, person_id: s.id, _origin: "staff" as const })));
   }
   // Dedup by phone — the same guardian/staff-parent shouldn't get the same notice twice.
   const seen = new Set<string>();
@@ -158,7 +165,18 @@ noticesRouter.post(
     await Promise.all(
       recipients
         .filter((r): r is typeof r & { user_id: string } => !!r.user_id)
-        .map((r) => createInAppNotification({ userId: r.user_id, type: "NOTICE_PUBLISHED", title: notice.title, link: "/notices" })),
+        .map((r) =>
+          createInAppNotification({
+            userId: r.user_id,
+            type: "NOTICE_PUBLISHED",
+            title: notice.title,
+            // Deep-link to the specific notice for portal recipients (a real
+            // page, apps/portal/src/app/notices/[id]/page.tsx). Staff have no
+            // equivalent single-notice page today, only the admin list — link
+            // there instead of guaranteed-404ing on a portal-only route.
+            link: r._origin === "portal" ? `/notices/${notice.id}` : "/website/notices",
+          }),
+        ),
     );
 
     res.json({ success: true, data: notice });

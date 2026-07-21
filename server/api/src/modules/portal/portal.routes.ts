@@ -16,8 +16,8 @@ import { renderDocument, generateQrDataUrl } from "../../services/pdf.service";
 import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
-import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { syncOverdueInvoices } from "../fees/invoice-helpers";
+import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { postComplaintMessage } from "../complaints/complaint-message.helper";
@@ -559,31 +559,6 @@ portalRouter.get(
     res.json({ success: true, data: { route_name: transport.route.name, vehicles } });
   }),
 );
-
-// Clearance gate: accounts due -> library fine -> exam office approval.
-// Accounts is only enforced if FeeRules.block_admit_on_due is set (an
-// existing, previously-dead Settings flag) — library and exam-office are
-// always checked, matching the fixed 3-stage pipeline this was asked for.
-async function checkAdmitCardClearance(studentId: string, examId: string) {
-  const rules = await prisma.feeRules.findUnique({ where: { id: "singleton" } });
-  const invoices = await prisma.invoice.findMany({ where: { student_id: studentId, status: { notIn: ["PAID", "WAIVED"] } } });
-  const dueAmount = invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
-  const accountsRequired = rules?.block_admit_on_due ?? false;
-  const accountsClear = !accountsRequired || dueAmount <= 0;
-
-  const { total_fines } = await computeStudentLibraryFines(studentId);
-  const libraryClear = total_fines <= 0;
-
-  const seatPlan = await prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: studentId } } });
-  const examOfficeClear = seatPlan?.exam_office_cleared ?? false;
-
-  return {
-    accounts: { required: accountsRequired, clear: accountsClear, due_amount: dueAmount },
-    library: { clear: libraryClear, fine_amount: total_fines },
-    exam_office: { clear: examOfficeClear },
-    all_clear: accountsClear && libraryClear && examOfficeClear,
-  };
-}
 
 portalRouter.get(
   "/student/:id/admit-card/:exam_id/clearance",

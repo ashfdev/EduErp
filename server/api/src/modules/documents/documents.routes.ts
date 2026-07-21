@@ -5,8 +5,8 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES } from "../../lib/roles";
-import { badRequest, notFound } from "../../lib/errors";
+import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, EXAM_MANAGE_ROLES } from "../../lib/roles";
+import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
 import { uploadBuffer } from "../../services/storage.service";
@@ -14,6 +14,8 @@ import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { createInAppNotification } from "../../services/in-app-notification.service";
+import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
+import type { UserRole } from "@education-erp/types";
 
 export const documentsRouter = Router();
 // Generates PDFs containing full personal/academic/financial data for any
@@ -226,14 +228,73 @@ documentsRouter.put(
 
 // ───────────────────────── Exam Documents ─────────────────────────
 
+// Preview endpoint — JSON, not a PDF. Lets the Print Center show a real
+// green/red breakdown per student *before* generating anything, so staff
+// know who'll be skipped (and why) instead of finding out only from a
+// silently-shorter PDF. Reuses the same shared clearance gate the batch
+// generate route below now enforces.
+documentsRouter.get(
+  "/exam/:exam_id/admit-cards/status",
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
+
+    const students = await prisma.student.findMany({
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      select: { id: true, name_en: true, student_uid: true, current_roll_no: true },
+      orderBy: { current_roll_no: "asc" },
+    });
+
+    const statuses = await Promise.all(
+      students.map(async (student) => ({
+        student_id: student.id,
+        name: student.name_en,
+        student_uid: student.student_uid,
+        roll_no: student.current_roll_no,
+        clearance: await checkAdmitCardClearance(student.id, examId),
+      })),
+    );
+
+    res.json({ success: true, data: statuses });
+  }),
+);
+
+// Previously performed zero clearance checks — any STAFF_ONLY_ROLES member
+// (even e.g. a Librarian or Transport Manager, via this router's blanket
+// gate) could batch-print an admit card for a student who was blocked on
+// the portal's own self-service download. Now runs every student through
+// the same shared gate the portal enforces; a blocked student is skipped by
+// default (reported via the /status preview above, not silently dropped
+// with no trace), unless explicitly overridden by an EXAM_MANAGE_ROLES
+// caller with a required reason — recorded as a persistent
+// AdmitCardOverride row plus an audit-log entry, not just included quietly.
 documentsRouter.get(
   "/exam/:exam_id/admit-cards",
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
-    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional(), download: z.string().optional() }).parse(req.query);
+    const query = z
+      .object({
+        class_id: z.string().min(1),
+        section_id: z.string().optional(),
+        download: z.string().optional(),
+        override_student_ids: z.string().optional(),
+        override_reason: z.string().optional(),
+      })
+      .parse(req.query);
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
+
+    const overrideStudentIds = new Set(
+      (query.override_student_ids ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    if (overrideStudentIds.size > 0) {
+      if (!query.override_reason?.trim()) throw badRequest("override_reason is required to include a blocked student");
+      if (!EXAM_MANAGE_ROLES.includes(req.user!.role as UserRole)) throw forbidden("Only exam leadership can override a clearance block");
+    }
 
     const students = await prisma.student.findMany({
       where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
@@ -242,11 +303,57 @@ documentsRouter.get(
     });
     if (!students.length) throw badRequest("No students found for the given class/section");
 
+    const included: typeof students = [];
+    const overridden: { student: (typeof students)[number]; clearance: Awaited<ReturnType<typeof checkAdmitCardClearance>> }[] = [];
+    for (const student of students) {
+      const clearance = await checkAdmitCardClearance(student.id, examId);
+      if (clearance.all_clear) {
+        included.push(student);
+      } else if (overrideStudentIds.has(student.id)) {
+        included.push(student);
+        overridden.push({ student, clearance });
+      }
+      // else: silently skipped from this PDF — the /status endpoint above is
+      // where "who and why" gets reported, matching this codebase's existing
+      // skip-and-report (not fail-the-whole-batch) discipline.
+    }
+    if (!included.length) {
+      throw badRequest("No students are currently cleared for an admit card in this class/section — check the status preview, or override specific blocked students if this is a genuine exception.");
+    }
+
+    for (const { student, clearance } of overridden) {
+      const reason = query.override_reason!.trim();
+      await prisma.admitCardOverride.create({
+        data: {
+          exam_id: examId,
+          student_id: student.id,
+          reason,
+          overridden_by_id: req.user!.sub,
+          due_amount_at_time: clearance.accounts.due_amount,
+          fine_amount_at_time: clearance.library.fine_amount,
+          exam_office_was_cleared: clearance.exam_office.clear,
+        },
+      });
+      await logAudit("ADMIT_CARD_OVERRIDE", {
+        userId: req.user!.sub,
+        targetType: "Student",
+        targetId: student.id,
+        metadata: {
+          exam_id: examId,
+          reason,
+          due_amount: clearance.accounts.due_amount,
+          fine_amount: clearance.library.fine_amount,
+          exam_office_was_cleared: clearance.exam_office.clear,
+        },
+        req,
+      });
+    }
+
     const subjectConfigs = await prisma.examSubjectConfig.findMany({ where: { exam_id: examId }, include: { subject: true } });
     const academicYearLabel = await getAcademicYearLabel(exam.academic_year_id);
 
     const dataList = await Promise.all(
-      students.map(async (student) => {
+      included.map(async (student) => {
         const seatPlan = await prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: student.id } } });
         const schedule = subjectConfigs.map((sc) => ({
           date: exam.start_date,

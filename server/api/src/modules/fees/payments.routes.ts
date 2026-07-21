@@ -19,6 +19,58 @@ import type { Payment } from "@education-erp/db";
 
 export const paymentsRouter = Router();
 
+// Searchable fallback list backing the new Fee Receipts screen
+// (accounts/receipts) — the Document Print Center's old raw-payment-id Fee
+// Receipt box pointed here once a proper searchable page existed instead.
+// COMPLETED only: a receipt implies money was actually received (see
+// generateReceiptNo()'s own comment on Payment.receipt_no).
+paymentsRouter.get(
+  "/",
+  authenticate,
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        search: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(req.query);
+
+    const where = {
+      status: "COMPLETED" as const,
+      ...((query.from || query.to) && {
+        paid_at: {
+          ...(query.from && { gte: new Date(query.from) }),
+          ...(query.to && { lte: new Date(query.to) }),
+        },
+      }),
+      ...(query.search && {
+        OR: [
+          { receipt_no: { contains: query.search, mode: "insensitive" as const } },
+          { invoice: { student: { name_en: { contains: query.search, mode: "insensitive" as const } } } },
+          { invoice: { student: { student_uid: { contains: query.search, mode: "insensitive" as const } } } },
+        ],
+      }),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        include: { invoice: { select: { category: true, student: { select: { id: true, name_en: true, student_uid: true } } } } },
+        orderBy: { paid_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.payment.count({ where }),
+    ]);
+
+    res.json({ success: true, data: items, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
+  }),
+);
+
 paymentsRouter.post(
   "/initiate",
   authenticate,
