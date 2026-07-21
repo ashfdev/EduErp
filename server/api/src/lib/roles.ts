@@ -23,6 +23,13 @@ export const STAFF_READ_ROLES: UserRole[] = [
 // sites can never drift apart.
 export const TEACHING_ROLES: UserRole[] = ["CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT"];
 export const ATTENDANCE_MARK_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"];
+// Same membership as ATTENDANCE_MARK_ROLES — the role gate is identical,
+// but subject-wise marking's *ownership* semantics are deliberately
+// stricter (no class-teacher-any-period fallback — see
+// assertSubjectSectionOwnership in subject-attendance.routes.ts), so this
+// stays its own named constant rather than reusing ATTENDANCE_MARK_ROLES
+// directly; a future change to one must not silently affect the other.
+export const SUBJECT_ATTENDANCE_MARK_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "CLASS_TEACHER", "SUBJECT_TEACHER"];
 export const EXAM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 // CLASS_TEACHER is included here too — a person can simultaneously be the
 // homeroom class teacher of one section AND hold a real

@@ -29,3 +29,20 @@ export const markStaffAttendanceSchema = z.object({
   ),
 });
 export type MarkStaffAttendanceInput = z.infer<typeof markStaffAttendanceSchema>;
+
+// Subject-wise (per-period) attendance — deliberately no shift_id/
+// override_reason/class_id: subject/section/period are all resolved
+// server-side from routine_slot_id, never trusted from the client.
+export const markSubjectAttendanceSchema = z.object({
+  routine_slot_id: z.string().min(1),
+  date: z.coerce.date(),
+  records: z
+    .array(
+      z.object({
+        student_id: z.string().min(1),
+        status: attendanceStatusSchema,
+      }),
+    )
+    .min(1),
+});
+export type MarkSubjectAttendanceInput = z.infer<typeof markSubjectAttendanceSchema>;

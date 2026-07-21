@@ -165,8 +165,25 @@ model AttendanceRules {
   count_late_as_absent_after  Int      @default(3)
   sms_on_absent               Boolean  @default(true)
   sms_on_late                 Boolean  @default(false)
+  // Which computation checkPromotionEligibility() uses. Default
+  // DAILY_ATTENDANCE_ONLY deliberately preserves today's exact existing
+  // behavior (the blanket AttendanceRecord calculation) so this migration
+  // doesn't silently change any school's live promotion outcomes on deploy
+  // day — an admin opts into the two new subject-wise modes explicitly.
+  promotion_attendance_mode          PromotionAttendanceMode @default(DAILY_ATTENDANCE_ONLY)
+  // Mode B (EVERY_SUBJECT_MINIMUM) fairness floor — a subject with fewer
+  // than this many recorded SubjectAttendance sessions so far this year is
+  // excluded from the per-subject check entirely, so a brand-new elective
+  // with 1-2 sessions can't single-handedly block a promotion.
+  promotion_min_sessions_per_subject Int                     @default(10)
   created_at                  DateTime @default(now())
   updated_at                  DateTime @updatedAt
+}
+
+enum PromotionAttendanceMode {
+  AVERAGE_ALL_SUBJECTS
+  EVERY_SUBJECT_MINIMUM
+  DAILY_ATTENDANCE_ONLY
 }
 
 model AuthorityConfig {
@@ -340,6 +357,7 @@ model Section {
   created_at       DateTime           @default(now())
   students         Student[]          @relation("CurrentSection")
   attendance       AttendanceRecord[]
+  subject_attendance_records SubjectAttendance[]
   homework         Homework[]
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
@@ -380,6 +398,7 @@ model Subject {
   teaching_resources TeachingResource[]
   questions        Question[]
   quizzes          Quiz[]
+  subject_attendance_records SubjectAttendance[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -561,6 +580,7 @@ model Student {
   invoices              Invoice[]
   exam_seat_plans       ExamSeatPlan[]
   admit_card_overrides  AdmitCardOverride[]
+  subject_attendance_records SubjectAttendance[]
   transport             StudentTransport?
   hostel_allocations    HostelAllocation[]
   course_enrollments    CourseEnrollment[]
@@ -889,6 +909,14 @@ model AttendanceRecord {
   device          Device?          @relation(fields: [device_id], references: [id])
   marked_by_id    String?
   override_reason String?
+  // Both derived from the day's actual DevicePunchLog history (earliest/
+  // latest punch so far), never from trusting a punch's own punch_type
+  // flag as authoritative — real-world device usage isn't reliably
+  // consistent about pressing a distinct check-in/check-out button. Null
+  // for STAFF payroll rows, LEAVE-status rows, and markDefaultAbsentees()
+  // rows, none of which ever have real punch data.
+  check_in_at     DateTime?
+  check_out_at    DateTime?
   created_at      DateTime         @default(now())
   updated_at      DateTime         @updatedAt
 
@@ -920,12 +948,54 @@ model DevicePunchLog {
   device              Device      @relation(fields: [device_id], references: [id])
   device_user_id      String
   punch_at            DateTime
+  // 0=check-in, 1=check-out, 4=break-out, 5=break-in — mirrors RawPunch's
+  // existing convention (services/device/src/connectors/interface.ts).
+  // Nullable: rows synced before this column existed have no recoverable
+  // value and must never be fabricated as 0/check-in.
+  punch_type          Int?
   synced_at           DateTime    @default(now())
   mapped_person_id    String?
   mapped_person_type  PersonType?
   is_processed        Boolean     @default(false)
 
   @@index([device_id, punch_at])
+}
+
+// Real per-(student, subject, period, date) attendance, teacher-marked
+// against the actual RoutineSlot for that period — deliberately a separate
+// table from AttendanceRecord (which stays campus-presence/daily for
+// students and payroll attendance for staff), not a nullable subject_id
+// bolted onto it: AttendanceRecord's real writers never populate period_no
+// today (cardinality ~1 row/student/day), while this table is inherently
+// ~7 rows/student/day, and Device has no section/class tie at all (only a
+// free-text location), so biometric can never write a row here — there's
+// no MANUAL-vs-BIOMETRIC conflict to reconcile, unlike AttendanceRecord.
+model SubjectAttendance {
+  id              String            @id @default(cuid())
+  student_id      String
+  student         Student           @relation(fields: [student_id], references: [id])
+  subject_id      String
+  subject         Subject           @relation(fields: [subject_id], references: [id])
+  section_id      String
+  section         Section           @relation(fields: [section_id], references: [id])
+  // Audit/traceability only — never read back to reconstruct historical
+  // truth, since routines get edited after the fact. Nullable so a later
+  // RoutineSlot deletion (Prisma's implicit SetNull default for an
+  // optional relation) can never corrupt or cascade into already-recorded
+  // attendance.
+  routine_slot_id String?
+  routine_slot    RoutineSlot?      @relation(fields: [routine_slot_id], references: [id])
+  date            DateTime          @db.Date
+  period_no       Int
+  status          AttendanceStatus
+  marked_by_id    String?
+  created_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+
+  @@unique([student_id, subject_id, date, period_no])
+  @@index([section_id, subject_id, date, period_no])
+  @@index([student_id, date])
+  @@index([routine_slot_id])
 }
 
 // ─────────────────────────────────────────────
@@ -2586,6 +2656,7 @@ model RoutineSlot {
   // manually entered/edited ones, so a "regenerate" can safely wipe+replace
   // only what it created and never clobber a human's hand-fix.
   generated   Boolean  @default(false)
+  subject_attendance_records SubjectAttendance[]
 
   // NOTE: this constraint alone does not stop two rows from colliding when
   // section_id is NULL (Postgres treats each NULL as distinct in a unique

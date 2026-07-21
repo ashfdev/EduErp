@@ -18,6 +18,7 @@ import { studentsRouter } from "./modules/students/students.routes";
 import { subjectsRouter } from "./modules/subjects/subjects.routes";
 import { staffRouter } from "./modules/staff/staff.routes";
 import { attendanceRouter } from "./modules/attendance/attendance.routes";
+import { subjectAttendanceRouter } from "./modules/attendance/subject-attendance.routes";
 import { examsRouter } from "./modules/examination/exams.routes";
 import { marksRouter } from "./modules/examination/marks.routes";
 import { resultsRouter } from "./modules/results/results.routes";
@@ -101,6 +102,7 @@ export function createApp(): Express {
   app.use("/api/subjects", subjectsRouter);
   app.use("/api/staff", staffRouter);
   app.use("/api/attendance", attendanceRouter);
+  app.use("/api/attendance/subject-wise", subjectAttendanceRouter);
   app.use("/api/exams", examsRouter);
   app.use("/api/marks", marksRouter);
   app.use("/api/results", resultsRouter);

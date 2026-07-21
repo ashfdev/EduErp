@@ -85,7 +85,6 @@ analyticsRouter.get(
       }),
     ]);
 
-    const totalMarked = studentsPresentToday + studentsAbsentToday;
     const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
 
     res.json({
@@ -97,7 +96,15 @@ analyticsRouter.get(
           new_this_year: studentsNewThisYear,
           today_present: studentsPresentToday,
           today_absent: studentsAbsentToday,
-          today_percentage: totalMarked ? Math.round((studentsPresentToday / totalMarked) * 1000) / 10 : null,
+          // Against studentsActive (currently-enrolled students), not
+          // present+absent — dividing by "however many happen to be marked
+          // so far" made this read ~100% all day regardless of real
+          // coverage (e.g. 53 present / 0 absent = 100% with 3000+
+          // students not yet marked). This version correctly reads low
+          // early in the day and climbs toward the true rate as more
+          // sections get marked, instead of being misleadingly high from
+          // the first attendance row onward.
+          today_percentage: studentsActive ? Math.round((studentsPresentToday / studentsActive) * 1000) / 10 : null,
         },
         staff: { total: staffTotal, active: staffActive, on_leave_today: staffOnLeaveToday, present_today: staffPresentToday },
         finance: {
