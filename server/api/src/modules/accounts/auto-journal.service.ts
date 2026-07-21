@@ -2,6 +2,8 @@ import type { Invoice, Payment, PayrollRecord, Staff } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { logger } from "../../lib/logger";
 import { createVoucher, type JournalEntryInput } from "./voucher-helpers";
+import { notifyRoles } from "../../services/in-app-notification.service";
+import { badRequest, notFound } from "../../lib/errors";
 
 // Every money movement elsewhere in the system MUST create a journal entry
 // here — this is the one place that's allowed to happen. Never bypass this
@@ -13,6 +15,28 @@ import { createVoucher, type JournalEntryInput } from "./voucher-helpers";
 async function getAccountId(code: string): Promise<string> {
   const account = await prisma.account.findUniqueOrThrow({ where: { code } });
   return account.id;
+}
+
+// Previously every catch block below only logged — a failed journal was
+// only ever visible as a log line nobody may be watching, silently
+// desyncing the books. Now every failure is also persisted (a real
+// worklist at GET /api/accounts/journal-failures) and pushed to
+// accountants/admins as an in-app notification, without changing the
+// existing behavior of letting the triggering action (payment, payroll,
+// GRN...) still succeed.
+async function recordJournalFailure(referenceType: string, referenceId: string | undefined, err: unknown): Promise<void> {
+  const message = err instanceof Error ? err.message : String(err);
+  try {
+    await prisma.journalPostingFailure.create({ data: { reference_type: referenceType, reference_id: referenceId, error_message: message } });
+  } catch (writeErr) {
+    logger.error({ writeErr }, "failed to record a journal posting failure — check server logs for the original error");
+  }
+  await notifyRoles(["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"], {
+    type: "JOURNAL_POST_FAILED",
+    title: `Accounting entry failed to post (${referenceType})`,
+    body: message.slice(0, 200),
+    link: "/accounts/journal-failures",
+  });
 }
 
 // appliedToInvoice defaults to the full payment amount (every existing
@@ -51,6 +75,7 @@ export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice
     });
   } catch (err) {
     logger.error({ err, paymentId: payment.id }, "auto-journal: failed to create fee receipt journal");
+    await recordJournalFailure("FEE_PAYMENT", payment.id, err);
   }
 }
 
@@ -81,6 +106,7 @@ export async function createAdvanceCreditConsumptionJournal(payment: Payment, in
     });
   } catch (err) {
     logger.error({ err, paymentId: payment.id }, "auto-journal: failed to create advance credit consumption journal");
+    await recordJournalFailure("FEE_PAYMENT", payment.id, err);
   }
 }
 
@@ -115,6 +141,7 @@ export async function createPayrollJournal(payrollRecord: PayrollRecord, staff: 
     });
   } catch (err) {
     logger.error({ err, payrollRecordId: payrollRecord.id }, "auto-journal: failed to create payroll journal");
+    await recordJournalFailure("PAYROLL", payrollRecord.id, err);
   }
 }
 
@@ -144,6 +171,7 @@ export async function createInventoryPurchaseJournal(params: {
     return voucher.id;
   } catch (err) {
     logger.error({ err, grnId: params.grnId }, "auto-journal: failed to create inventory purchase journal");
+    await recordJournalFailure("INVENTORY_PURCHASE", params.grnId, err);
     return null;
   }
 }
@@ -173,6 +201,7 @@ export async function createDepreciationJournal(period: string, assetAmounts: { 
     return voucher.id;
   } catch (err) {
     logger.error({ err, period }, "auto-journal: failed to create depreciation journal");
+    await recordJournalFailure("DEPRECIATION", period, err);
     return null;
   }
 }
@@ -221,6 +250,7 @@ export async function createAssetDisposalJournal(params: {
     return voucher.id;
   } catch (err) {
     logger.error({ err, assetId: params.assetId }, "auto-journal: failed to create asset disposal journal");
+    await recordJournalFailure("ASSET_DISPOSAL", params.assetId, err);
     return null;
   }
 }
@@ -246,6 +276,51 @@ export async function createMaintenanceJournal(params: { assetId: string; cost: 
     return voucher.id;
   } catch (err) {
     logger.error({ err, assetId: params.assetId }, "auto-journal: failed to create maintenance journal");
+    await recordJournalFailure("ASSET_MAINTENANCE", params.assetId, err);
     return null;
   }
+}
+
+// The actual fix for "no way to correct a posted voucher/payment/payroll
+// entry" — previously the only advice anywhere in this codebase was the
+// /:id/cancel route's own error message ("reverse it with a new voucher
+// instead"), with zero tooling to do that. This is the one place allowed
+// to construct a reversing entry, called by:
+//  - accounts/vouchers.routes.ts POST /:id/reverse (any POSTED voucher)
+//  - fees/payments.routes.ts POST /:id/refund (reverses that payment's
+//    own FEE_PAYMENT-referenced voucher(s), then updates Payment/Invoice)
+//  - hr/payroll.routes.ts POST /:id/void (reverses that record's own
+//    PAYROLL-referenced voucher, then flips PayrollRecord to CANCELLED)
+// Never edits or deletes the original journal entry — real double-entry
+// discipline is an offsetting entry, not a correction in place.
+export async function reverseVoucher(originalVoucherId: string, actorUserId: string | undefined, reason?: string) {
+  const original = await prisma.voucher.findUnique({ where: { id: originalVoucherId }, include: { journal_entries: true } });
+  if (!original) throw notFound("Voucher not found");
+  if (original.status !== "POSTED") throw badRequest("Only a POSTED voucher can be reversed");
+  if (original.reversed_by_voucher_id) throw badRequest("This voucher has already been reversed");
+
+  const flippedEntries: JournalEntryInput[] = original.journal_entries.map((e) => ({
+    debit_account_id: e.credit_account_id,
+    credit_account_id: e.debit_account_id,
+    amount: e.amount,
+    narration: e.narration ? `Reversal: ${e.narration}` : `Reversal of ${original.voucher_no}`,
+  }));
+
+  const reversal = await prisma.$transaction(async (tx) => {
+    const created = await createVoucher(tx, {
+      voucher_type: original.voucher_type,
+      date: new Date(),
+      narration: `Reversal of ${original.voucher_no}${reason ? ` — ${reason}` : ""}`,
+      reference_type: "VOUCHER_REVERSAL",
+      reference_id: original.id,
+      entries: flippedEntries,
+      created_by_id: actorUserId,
+      is_auto: false,
+      auto_post: true,
+    });
+    await tx.voucher.update({ where: { id: original.id }, data: { reversed_by_voucher_id: created.id } });
+    return created;
+  });
+
+  return reversal;
 }

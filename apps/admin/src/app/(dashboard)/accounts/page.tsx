@@ -48,6 +48,11 @@ export default function AccountsDashboardPage() {
 
   const pendingApprovals = vouchers?.filter((v) => v.status === "DRAFT" || v.status === "APPROVED") ?? [];
 
+  const { data: journalFailures } = useQuery<{ id: string }[]>({
+    queryKey: ["accounts", "journal-failures", false],
+    queryFn: async () => (await api.get("/api/accounts/journal-failures", { params: { resolved: "false" } })).data.data,
+  });
+
   return (
     <PageWrapper>
       <PageHeader
@@ -60,6 +65,7 @@ export default function AccountsDashboardPage() {
             <Link href="/accounts/ledger"><Button variant="outline" size="sm">Ledger</Button></Link>
             <Link href="/accounts/reports"><Button variant="outline" size="sm">Reports</Button></Link>
             <Link href="/accounts/import-export"><Button variant="outline" size="sm">Import / Export</Button></Link>
+            <Link href="/accounts/journal-failures"><Button variant="outline" size="sm">Journal Failures{journalFailures?.length ? ` (${journalFailures.length})` : ""}</Button></Link>
             <Link href="/accounts/vouchers/new"><Button size="sm">+ New Voucher</Button></Link>
           </div>
         }

@@ -11,7 +11,8 @@ import { calculatePayrollSchema, updatePayrollSchema, finalizePayrollSchema, mar
 import { workingDaysInMonth } from "../../utils/working-days";
 import { renderDocument } from "../../services/pdf.service";
 import { uploadBuffer } from "../../services/storage.service";
-import { createPayrollJournal } from "../accounts/auto-journal.service";
+import { createPayrollJournal, reverseVoucher } from "../accounts/auto-journal.service";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const payrollRouter = Router();
@@ -250,6 +251,42 @@ payrollRouter.post(
     }
 
     res.json({ success: true, data: { updated: result.count } });
+  }),
+);
+
+// The correction path for a PAID payroll record — previously there was no
+// way to unwind a payroll run once marked PAID (and its journal posted)
+// short of a raw DB edit. Only meaningful for PAID records: a FINALIZED-
+// but-not-yet-PAID record never posted a journal, so it can just be edited
+// directly via the existing PUT /:id instead.
+payrollRouter.post(
+  "/:id/void",
+  authorize(PAYROLL_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ reason: z.string().optional() }).parse(req.body);
+    const record = await prisma.payrollRecord.findUnique({ where: { id } });
+    if (!record) throw notFound("Payroll record not found");
+    if (record.status !== "PAID") throw badRequest("Only a PAID payroll record can be voided");
+
+    const relatedVouchers = await prisma.voucher.findMany({
+      where: { reference_type: "PAYROLL", reference_id: record.id, status: "POSTED", reversed_by_voucher_id: null },
+    });
+    for (const voucher of relatedVouchers) {
+      await reverseVoucher(voucher.id, req.user!.sub, body.reason ?? "Payroll voided");
+    }
+
+    const updated = await prisma.payrollRecord.update({ where: { id }, data: { status: "CANCELLED" } });
+
+    await logAudit("PAYROLL_VOID", {
+      userId: req.user!.sub,
+      targetType: "PayrollRecord",
+      targetId: id,
+      metadata: { vouchers_reversed: relatedVouchers.length, reason: body.reason },
+      req,
+    });
+
+    res.json({ success: true, data: { payroll: updated, vouchers_reversed: relatedVouchers.length } });
   }),
 );
 

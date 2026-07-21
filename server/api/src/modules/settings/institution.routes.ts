@@ -30,7 +30,7 @@ const PROFILE_CACHE_TTL_SECONDS = 60 * 60;
 const TYPE_CASCADE: Record<InstitutionType, Record<string, unknown>> = {
   SCHOOL: { term_class: "Class", term_section: "Section", term_teacher: "Teacher", term_principal: "Headmaster", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
   COLLEGE: { term_class: "Class", term_section: "Section", term_teacher: "Teacher", term_principal: "Principal", has_shifts: true, has_departments: false, has_semesters: false, show_hijri_calendar: false, extra_course_enrollment: false },
-  UNIVERSITY: { term_class: "Semester", term_section: "Batch", term_teacher: "Professor", term_principal: "Vice Chancellor", has_shifts: false, has_departments: true, has_semesters: true, extra_course_enrollment: true },
+  UNIVERSITY: { term_class: "Semester", term_section: "Batch", term_teacher: "Professor", term_principal: "Vice Chancellor", has_shifts: false, has_departments: true, has_semesters: true, show_hijri_calendar: false, extra_course_enrollment: true },
   MADRASAH: { term_class: "Class", term_section: "Section", term_teacher: "Ustaz", term_principal: "Muhtamim", show_hijri_calendar: true, has_shifts: true, has_departments: false, has_semesters: false, extra_course_enrollment: false },
 };
 

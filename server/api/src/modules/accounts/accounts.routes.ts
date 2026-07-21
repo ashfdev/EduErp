@@ -402,3 +402,36 @@ accountsRouter.put(
     res.json({ success: true, message: "Fee account mapping saved" });
   }),
 );
+
+// Real worklist for the failures auto-journal.service.ts now records
+// instead of only logging (see recordJournalFailure) — an accountant can
+// see exactly which Payment/PayrollRecord/GRN/... never got its
+// accounting entry posted, and mark it resolved once fixed (e.g. by
+// configuring a missing FeeAccountMapping and manually re-running the
+// action, or entering a manual correcting voucher).
+accountsRouter.get(
+  "/journal-failures",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ resolved: z.enum(["true", "false"]).optional() }).parse(req.query);
+    const failures = await prisma.journalPostingFailure.findMany({
+      where: query.resolved === undefined ? {} : { resolved_at: query.resolved === "true" ? { not: null } : null },
+      orderBy: { created_at: "desc" },
+      take: 200,
+    });
+    res.json({ success: true, data: failures });
+  }),
+);
+
+accountsRouter.post(
+  "/journal-failures/:id/resolve",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.journalPostingFailure.findUnique({ where: { id } });
+    if (!existing) throw notFound("Journal posting failure not found");
+    const updated = await prisma.journalPostingFailure.update({
+      where: { id },
+      data: { resolved_at: new Date(), resolved_by_id: req.user!.sub },
+    });
+    res.json({ success: true, data: updated });
+  }),
+);

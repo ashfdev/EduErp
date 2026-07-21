@@ -723,8 +723,16 @@ studentsRouter.post(
           data: {
             student_id: studentId,
             academic_year_id: body.new_academic_year_id,
-            class_id: body.class_id,
-            section_id: body.section_id,
+            // Previously used the request body's source class_id/section_id
+            // (the same for every student in the batch) instead of each
+            // student's own actual current class/section — harmless for the
+            // common case (promoting a whole section at once, where they
+            // match), but wrong the moment a batch mixes students from
+            // different starting sections, or one has already drifted from
+            // what the caller assumed.
+            class_id: student.current_class_id ?? body.class_id,
+            section_id: student.current_section_id ?? body.section_id,
+            roll_no: student.current_roll_no,
             status: "PROMOTED",
             promoted_at: new Date(),
           },
@@ -849,7 +857,12 @@ studentsRouter.post(
             // Previously there was no column for this at all, meaning a
             // CSV-imported student could NEVER get their own login (only
             // the guardian's), unlike every other student-creation path.
-            phone: z.string().regex(/^01\d{9}$/).optional(),
+            // A blank CSV cell parses as "" (csv-parse never produces
+            // undefined), which would otherwise fail this field's own
+            // regex check even though it's meant to be optional —
+            // normalize "" to undefined first, live-caught while testing
+            // the identical pattern in the new staff bulk-import.
+            phone: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^01\d{9}$/).optional()),
             father_name: z.string().optional(),
             father_phone: z.string().regex(/^01\d{9}$/),
             current_class_id: z.string().min(1),

@@ -1265,6 +1265,11 @@ model Voucher {
   approved_at       DateTime?
   is_auto           Boolean       @default(false)
   attachment_url    String?
+  // Set once this POSTED voucher has been corrected via a reversing entry
+  // (POST /:id/reverse) — the original entry is never edited or deleted
+  // (real double-entry discipline), this just marks it as superseded and
+  // points at the offsetting voucher that corrected it.
+  reversed_by_voucher_id String? @unique
   deleted_at        DateTime?
   created_at        DateTime      @default(now())
   updated_at        DateTime      @updatedAt
@@ -1291,6 +1296,28 @@ model JournalEntry {
   @@index([voucher_id])
   @@index([debit_account_id])
   @@index([credit_account_id])
+}
+
+// Every auto-journal.service.ts function catches its own errors so a
+// Payment/Invoice/PayrollRecord/Asset/GRN action still succeeds even if its
+// accounting entry fails to post (e.g. a missing FeeAccountMapping) — the
+// business event already happened and blocking it would be worse. But that
+// previously meant the failure was ONLY a log line nobody may be watching,
+// silently desyncing the books with no way for an accountant to even find
+// out. This is the fix: every catch block here also writes a row, so
+// GET /api/accounts/journal-failures gives accountants a real worklist
+// instead of nothing.
+model JournalPostingFailure {
+  id             String    @id @default(cuid())
+  reference_type String // "FEE_PAYMENT", "PAYROLL", "INVENTORY_PURCHASE", "DEPRECIATION", "ASSET_DISPOSAL", "ASSET_MAINTENANCE"
+  reference_id   String?
+  error_message  String    @db.Text
+  resolved_at    DateTime?
+  resolved_by_id String?
+  created_at     DateTime  @default(now())
+
+  @@index([resolved_at])
+  @@index([reference_type, reference_id])
 }
 
 model FinancialYear {
@@ -2854,6 +2881,7 @@ enum PayrollStatus {
   DRAFT
   FINALIZED
   PAID
+  CANCELLED
 }
 
 enum AuthorityRole {
@@ -2930,6 +2958,7 @@ enum InAppNotificationType {
   FEE_DUE
   RESULT_PUBLISHED
   EXAM_SCHEDULED
+  JOURNAL_POST_FAILED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

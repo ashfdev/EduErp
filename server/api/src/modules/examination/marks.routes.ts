@@ -247,6 +247,15 @@ marksRouter.post(
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
     const scale = exam.grading_scale?.ranges ?? [];
 
+    // Fallback bound for the one real edge case where no ExamSubjectConfig
+    // row exists yet (e.g. a subject added to the class after this exam was
+    // created) — previously that meant NO upper bound at all, letting a
+    // teacher submit an unbounded mark. Falls back to the Subject's own
+    // full_marks, matching what POST /api/exams/ already uses as the
+    // default when it creates a config row in the normal case.
+    const subjectsForFallback = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, full_marks: true } });
+    const fullMarksFallbackBySubject = new Map(subjectsForFallback.map((s) => [s.id, s.full_marks]));
+
     const componentConfigs = await prisma.markComponentConfig.findMany({ where: { exam_id: body.exam_id, subject_id: { in: subjectIds } } });
     const componentsBySubject = new Map<string, typeof componentConfigs>();
     for (const c of componentConfigs) {
@@ -300,8 +309,15 @@ marksRouter.post(
       }
 
       const marksTotal = (marksTheory ?? 0) + (entry.marks_practical ?? 0);
-      if (config && marksTotal > config.full_marks_theory + config.full_marks_practical) {
-        throw badRequest(`Marks for subject exceed full marks (${config.full_marks_theory + config.full_marks_practical})`);
+      if (config) {
+        if (marksTotal > config.full_marks_theory + config.full_marks_practical) {
+          throw badRequest(`Marks for subject exceed full marks (${config.full_marks_theory + config.full_marks_practical})`);
+        }
+      } else {
+        const fallbackFullMarks = fullMarksFallbackBySubject.get(entry.subject_id) ?? 100;
+        if (marksTotal > fallbackFullMarks) {
+          throw badRequest(`Marks for subject exceed full marks (${fallbackFullMarks})`);
+        }
       }
 
       const grade = calculateGrade(marksTotal, !!entry.is_absent, scale);
@@ -351,15 +367,24 @@ marksRouter.post(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    // Accepts group_id from either the query string or the body — the
+    // sibling /publish endpoint historically only read it from the body
+    // while this route only read it from the query, a real inconsistency
+    // between two routes doing the conceptually identical "target this
+    // class/group" operation (the shipped frontend already matches each
+    // route's own convention, so this widening is purely defensive against
+    // a future frontend change or a direct API call assuming symmetry).
     const query = z.object({ group_id: z.string().optional() }).parse(req.query);
+    const bodyGroupId = z.object({ group_id: z.string().optional() }).parse(req.body ?? {}).group_id;
+    const groupId = query.group_id ?? bodyGroupId;
 
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
-    await assertGroupIdForApproveOrPublish(classId, query.group_id);
+    await assertGroupIdForApproveOrPublish(classId, groupId);
 
     const subjects = await prisma.subject.findMany({ where: { class_id: classId, is_active: true } });
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, ...(query.group_id && { group_id: query.group_id }) },
+      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
     });
 
     const entries = await prisma.markEntry.findMany({
@@ -391,7 +416,7 @@ marksRouter.post(
       where: { id: { in: entries.map((e) => e.id) } },
       data: { status: "APPROVED", approved_by_id: req.user!.sub, approved_at: new Date() },
     });
-    await logAudit("RESULT_APPROVE", { userId: req.user!.sub, targetType: "Exam", targetId: examId, metadata: { approved: entries.length, group_id: query.group_id ?? null }, req });
+    await logAudit("RESULT_APPROVE", { userId: req.user!.sub, targetType: "Exam", targetId: examId, metadata: { approved: entries.length, group_id: groupId ?? null }, req });
 
     res.json({ success: true, data: { approved: entries.length } });
   }),
@@ -470,12 +495,19 @@ marksRouter.post(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const body = z.object({ is_public: z.boolean().optional(), group_id: z.string().optional() }).parse(req.body);
+    // Same defensive widening as /approve above — accept group_id from
+    // either the body (this route's own historical convention) or the
+    // query string (the sibling /approve route's convention).
+    const queryGroupId = z.object({ group_id: z.string().optional() }).parse(req.query).group_id;
     // "Public on website" defaults ON — staff can already see the result
     // regardless of this flag, so the more common mistake is publishing and
     // assuming the public site updated too, not accidentally exposing it.
     const isPublic = body.is_public ?? true;
-    await assertGroupIdForApproveOrPublish(classId, body.group_id);
-    const groupId = body.group_id ?? null;
+    const groupId = body.group_id ?? queryGroupId ?? null;
+    await assertGroupIdForApproveOrPublish(classId, groupId ?? undefined);
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) throw notFound("Exam not found");
 
     const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: classId, is_active: true } }), groupId);
     const students = await prisma.student.findMany({
@@ -485,6 +517,24 @@ marksRouter.post(
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
     });
     if (unapproved) throw badRequest("All marks must be approved before publishing");
+
+    // The check above only catches an EXISTING non-approved entry — it
+    // can't catch a student who has no entry at all yet (e.g. transferred
+    // into this class/section after Approve already ran, so they have a
+    // fresh StudentSubject enrollment but zero MarkEntry rows). Re-run the
+    // same expectedCount check Approve already does, so a roster change
+    // between Approve and Publish can't let an incomplete result set
+    // publish via a direct API call (the frontend button state already
+    // protects normal usage, but the server must too).
+    const approvedCount = await prisma.markEntry.count({
+      where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: "APPROVED" },
+    });
+    const expectedCount = await prisma.studentSubject.count({
+      where: { student_id: { in: students.map((s) => s.id) }, subject_id: { in: subjects.map((s) => s.id) }, academic_year_id: exam.academic_year_id },
+    });
+    if (approvedCount < expectedCount) {
+      throw badRequest(`Not all marks are approved yet (${approvedCount}/${expectedCount}). Cannot publish.`);
+    }
 
     const publication = await upsertResultPublication(examId, classId, groupId, {
       is_published: true,
@@ -509,7 +559,6 @@ marksRouter.post(
     // a stale "not found" long after the result actually went live.
     await invalidateCacheNamespace("result-lookup");
 
-    const exam = await prisma.exam.findUnique({ where: { id: examId } });
     const perStudent = (await computeClassResults(examId, classId)).filter((p) => (groupId ? p.student.group_id === groupId : true));
     const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
     const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });

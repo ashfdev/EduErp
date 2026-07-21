@@ -796,7 +796,11 @@ admissionRouter.post(
           data: {
             user_id: guardianLoginResult.userId,
             name_en: guardianInfo.father_name ?? guardianInfo.mother_name ?? "Guardian",
-            relation: "FATHER",
+            // Previously always "FATHER" even when only mother_name was
+            // actually supplied — the name would correctly show the
+            // mother's, but the relation field would misleadingly say
+            // father. Only falls back to FATHER when neither is set.
+            relation: guardianInfo.father_name ? "FATHER" : guardianInfo.mother_name ? "MOTHER" : "FATHER",
             phone: guardianInfo.phone,
             email: guardianInfo.email,
             address: guardianInfo.address,
@@ -843,6 +847,15 @@ admissionRouter.post(
         body.group_id,
       );
 
+      // Previously due_date: new Date() — "due today, right now," so both
+      // invoices below showed as OVERDUE within moments of being created.
+      // Every other fee-generation path in this codebase (monthly tuition,
+      // promotion-triggered readmission fees) gives a real forward due date;
+      // this uses the same configured grace period so this one path isn't
+      // the odd one out.
+      const feeRules = await tx.feeRules.findFirst();
+      const admissionInvoiceDueDate = new Date(Date.now() + (feeRules?.grace_period_days ?? 7) * 24 * 60 * 60 * 1000);
+
       if (application.cycle.app_fee > 0) {
         await tx.invoice.create({
           data: {
@@ -852,7 +865,7 @@ admissionRouter.post(
             category: "ADMISSION",
             description: `Admission Fee — ${application.cycle.name}`,
             amount_due: application.cycle.app_fee,
-            due_date: new Date(),
+            due_date: admissionInvoiceDueDate,
             status: "PENDING",
           },
         });
@@ -867,7 +880,7 @@ admissionRouter.post(
             category: "FORM",
             description: `Form Fee — ${application.cycle.name}`,
             amount_due: application.cycle.form_fee,
-            due_date: new Date(),
+            due_date: admissionInvoiceDueDate,
             status: "PENDING",
           },
         });

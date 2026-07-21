@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -61,7 +61,7 @@ interface StudentProfile {
       status: string;
       due_date: string;
       fee_structure?: { frequency: string } | null;
-      payments?: { id: string; receipt_no: string | null; gateway: string; amount: number; paid_at: string | null; notes: string | null }[];
+      payments?: { id: string; receipt_no: string | null; gateway: string; amount: number; paid_at: string | null; notes: string | null; status: string }[];
     }[];
     outstanding_total: number;
     paid_total: number;
@@ -131,6 +131,17 @@ export default function StudentProfilePage() {
     onError: (err: unknown) => {
       toast.error(extractErrorMessage(err) ?? "Failed to update student status");
     },
+  });
+
+  const [refundTarget, setRefundTarget] = useState<{ id: string; amount: number } | null>(null);
+  const refundMutation = useMutation({
+    mutationFn: (paymentId: string) => api.post(`/api/payments/${paymentId}/refund`, {}),
+    onSuccess: () => {
+      toast.success("Payment refunded — invoice and accounting entries updated");
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      setRefundTarget(null);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Refund failed"),
   });
 
   if (isLoading || !profile) {
@@ -214,6 +225,17 @@ export default function StudentProfilePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={refundTarget !== null}
+        onOpenChange={(open) => !open && setRefundTarget(null)}
+        title="Refund this payment?"
+        description={refundTarget ? `Refund ৳${refundTarget.amount}? This reverses its accounting entry and reduces the invoice's paid amount. This cannot be undone from here.` : undefined}
+        confirmLabel="Refund"
+        destructive
+        loading={refundMutation.isPending}
+        onConfirm={() => refundTarget && refundMutation.mutate(refundTarget.id)}
+      />
 
       <Tabs defaultValue="personal">
         <TabsList>
@@ -383,6 +405,7 @@ export default function StudentProfilePage() {
                                   <th className="py-1">Amount</th>
                                   <th className="py-1">Date</th>
                                   <th className="py-1">Notes</th>
+                                  <th className="py-1">Status</th>
                                   <th className="py-1" />
                                 </tr>
                               </thead>
@@ -394,6 +417,7 @@ export default function StudentProfilePage() {
                                     <td className="py-1">৳{p.amount}</td>
                                     <td className="py-1">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
                                     <td className="py-1">{p.notes ?? "—"}</td>
+                                    <td className="py-1">{p.status === "REFUNDED" ? <Badge variant="destructive">Refunded</Badge> : p.status}</td>
                                     <td className="py-1 text-right space-x-2">
                                       <Button
                                         size="sm"
@@ -409,6 +433,11 @@ export default function StudentProfilePage() {
                                       >
                                         Download
                                       </Button>
+                                      {p.status === "COMPLETED" && (
+                                        <Button size="sm" variant="destructive" onClick={() => setRefundTarget({ id: p.id, amount: p.amount })}>
+                                          Refund
+                                        </Button>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}

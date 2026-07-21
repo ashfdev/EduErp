@@ -22,7 +22,7 @@ interface NotificationLog {
 
 const STATUSES = ["QUEUED", "SENT", "FAILED", "SKIPPED"];
 const CHANNELS = ["SMS", "EMAIL", "PUSH"];
-const TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM"];
+const TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED"];
 
 export default function NotificationLogsPage() {
   const [status, setStatus] = useState<string>("");

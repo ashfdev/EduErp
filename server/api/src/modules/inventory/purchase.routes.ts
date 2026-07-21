@@ -218,6 +218,16 @@ purchaseRouter.post(
     for (const receivedItem of body.items) {
       const poItem = po.items.find((i) => i.id === receivedItem.po_item_id);
       if (!poItem) throw badRequest(`PO item ${receivedItem.po_item_id} not found on this purchase order`);
+      // Previously unbounded — a staff member could receive an arbitrary
+      // multiple of what was actually ordered in one GRN, creating that
+      // many extra Asset rows / inflating stock and the accounting entry.
+      // A PO can legitimately be received across several partial GRNs, so
+      // this checks against what's actually still outstanding, not the
+      // item's original ordered quantity.
+      const remaining = poItem.quantity - poItem.received_qty;
+      if (receivedItem.received_qty > remaining) {
+        throw badRequest(`Cannot receive ${receivedItem.received_qty} of "${poItem.description}" — only ${remaining} remain outstanding on this purchase order`);
+      }
       const unitPrice = receivedItem.unit_price ?? poItem.unit_price;
       const lineTotal = receivedItem.received_qty * unitPrice;
       totalAmount += lineTotal;

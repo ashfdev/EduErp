@@ -11,6 +11,8 @@ import { reqParam } from "../../lib/req-param";
 import { ACCOUNTS_MANAGE_ROLES, VOUCHER_APPROVE_ROLES, VOUCHER_POST_ROLES } from "../../lib/roles";
 import { voucherSchema } from "@education-erp/validators";
 import { createVoucher, validateBalance } from "./voucher-helpers";
+import { reverseVoucher } from "./auto-journal.service";
+import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const vouchersRouter = Router();
@@ -356,6 +358,24 @@ vouchersRouter.post(
 
     const voucher = await prisma.voucher.update({ where: { id }, data: { status: "CANCELLED" } });
     res.json({ success: true, data: voucher });
+  }),
+);
+
+// The actual correction path for a POSTED voucher — see reverseVoucher()'s
+// own comment for why this is the only place allowed to do it. Posts a new
+// offsetting voucher immediately (VOUCHER_POST_ROLES, same tier already
+// trusted to post a voucher in the first place) rather than routing through
+// a separate DRAFT->APPROVED step — the correction is only being made
+// because the original mistake is already known and being acted on.
+vouchersRouter.post(
+  "/:id/reverse",
+  authorize(VOUCHER_POST_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ reason: z.string().optional() }).parse(req.body);
+    const reversal = await reverseVoucher(id, req.user!.sub, body.reason);
+    await logAudit("VOUCHER_REVERSE", { userId: req.user!.sub, targetType: "Voucher", targetId: id, metadata: { reversal_voucher_id: reversal.id, reason: body.reason }, req });
+    res.status(201).json({ success: true, data: reversal });
   }),
 );
 

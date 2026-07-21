@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Input, Badge, StatusBadge, EmptyState, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -73,6 +73,17 @@ export default function PayrollPage() {
     },
   });
 
+  const [voidTarget, setVoidTarget] = useState<{ id: string; name: string } | null>(null);
+  const voidMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/api/hr/payroll/${id}/void`, {}),
+    onSuccess: () => {
+      toast.success("Payroll record voided — its accounting entry has been reversed");
+      queryClient.invalidateQueries({ queryKey: ["hr", "payroll", month, year] });
+      setVoidTarget(null);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Void failed"),
+  });
+
   const hasDraft = records?.some((r) => r.status === "DRAFT");
   const hasFinalized = records?.some((r) => r.status === "FINALIZED");
 
@@ -135,7 +146,7 @@ export default function PayrollPage() {
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="p-2"></th><th className="p-2">Staff</th><th className="p-2">Department</th><th className="p-2">Working</th>
-                  <th className="p-2">Present</th><th className="p-2">Gross</th><th className="p-2">Deductions</th><th className="p-2">Net</th><th className="p-2">Status</th><th className="p-2">Payslip</th>
+                  <th className="p-2">Present</th><th className="p-2">Gross</th><th className="p-2">Deductions</th><th className="p-2">Net</th><th className="p-2">Status</th><th className="p-2">Payslip</th><th className="p-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -164,6 +175,13 @@ export default function PayrollPage() {
                     <td className="p-2">
                       {r.status !== "DRAFT" && <button onClick={() => downloadPayslip(r.id)} className="text-primary hover:underline">Download</button>}
                     </td>
+                    <td className="p-2">
+                      {r.status === "PAID" && (
+                        <Button size="sm" variant="destructive" onClick={() => setVoidTarget({ id: r.id, name: r.staff.name_en })}>
+                          Void
+                        </Button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -171,6 +189,17 @@ export default function PayrollPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={voidTarget !== null}
+        onOpenChange={(open) => !open && setVoidTarget(null)}
+        title="Void this payroll record?"
+        description={voidTarget ? `Void ${voidTarget.name}'s payroll for this month? This reverses its accounting entry — use this if it was paid by mistake or the amount was wrong. This cannot be undone from here.` : undefined}
+        confirmLabel="Void"
+        destructive
+        loading={voidMutation.isPending}
+        onConfirm={() => voidTarget && voidMutation.mutate(voidTarget.id)}
+      />
     </PageWrapper>
   );
 }

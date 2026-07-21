@@ -7,7 +7,8 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagicBytes, csvUpload } from "../../middleware/upload";
+import { parse } from "csv-parse/sync";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
@@ -251,6 +252,8 @@ hrStaffRouter.post(
           employment_type: body.employment_type,
           joining_date: body.joining_date ?? new Date(),
           biometric_id: body.biometric_id,
+          max_periods_per_day: body.max_periods_per_day,
+          max_periods_per_week: body.max_periods_per_week,
           show_on_website: body.show_on_website,
           qualifications: body.qualifications,
           achievements: body.achievements,
@@ -273,6 +276,135 @@ hrStaffRouter.post(
     if (body.show_on_website) await triggerRevalidation(["/faculty"]);
 
     res.status(201).json({ success: true, data: { ...staff, temp_password: tempPassword } });
+  }),
+);
+
+// Bulk staff/faculty import — previously the only way to onboard staff was
+// one at a time via POST / above, with no faster legitimate path for
+// onboarding 70-100 staff at once (unlike students, which already have a
+// bulk CSV path). Mirrors students.routes.ts's preview-then-confirm shape
+// exactly: STAFF_ROLE_VALUES excludes STUDENT/GUARDIAN (portal-only roles,
+// never valid here), a login is always created (the entire point of a bulk
+// staff import is giving real staff real access), and each row runs in its
+// own transaction so one bad row doesn't roll back the whole batch.
+const STAFF_ROLE_VALUES = [
+  "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
+  "CLASS_TEACHER", "SUBJECT_TEACHER", "ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER",
+  "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN",
+] as const;
+
+hrStaffRouter.post(
+  "/bulk-import",
+  authorize(HR_MANAGE_ROLES),
+  csvUpload.single("file"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A CSV file is required");
+    const records: Record<string, string>[] = parse(req.file.buffer.toString("utf-8"), { columns: true, skip_empty_lines: true, trim: true });
+
+    const existingPhones = new Set(
+      (
+        await prisma.user.findMany({
+          where: { phone: { in: records.map((r) => r.phone).filter((p): p is string => !!p) } },
+          select: { phone: true },
+        })
+      ).map((u) => u.phone),
+    );
+
+    const preview = records.map((row, index) => {
+      const errors: string[] = [];
+      if (!row.name_en) errors.push("name_en is required");
+      if (!row.designation) errors.push("designation is required");
+      if (!row.role || !(STAFF_ROLE_VALUES as readonly string[]).includes(row.role)) errors.push(`role must be one of: ${STAFF_ROLE_VALUES.join(", ")}`);
+      if (!row.phone || !/^01\d{9}$/.test(row.phone)) errors.push("phone must be 11 digits starting with 01");
+      else if (existingPhones.has(row.phone)) errors.push("a user with this phone number already exists");
+      if (row.gender && !["MALE", "FEMALE", "OTHER"].includes(row.gender)) errors.push("gender must be MALE/FEMALE/OTHER");
+      return { row: index + 1, data: row, valid: errors.length === 0, errors };
+    });
+
+    res.json({ success: true, data: { total: preview.length, valid: preview.filter((p) => p.valid).length, preview } });
+  }),
+);
+
+// A blank CSV cell parses as "" (csv-parse never produces undefined), which
+// would otherwise fail an .email()/.enum() optional field's own format
+// check — the exact same class of opaque "Invalid request body" bug this
+// session's error-message sweep was fixing, just freshly reintroduced by
+// this new endpoint. Normalize "" to undefined before validating.
+const emptyToUndefined = (v: unknown) => (v === "" ? undefined : v);
+
+hrStaffRouter.post(
+  "/bulk-import/confirm",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        rows: z.array(
+          z.object({
+            name_en: z.string().min(1),
+            name_bn: z.preprocess(emptyToUndefined, z.string().optional()),
+            designation: z.string().min(1),
+            role: z.enum(STAFF_ROLE_VALUES),
+            department_id: z.preprocess(emptyToUndefined, z.string().optional()),
+            phone: z.string().regex(/^01\d{9}$/),
+            email: z.preprocess(emptyToUndefined, z.string().email().optional()),
+            gender: z.preprocess(emptyToUndefined, z.enum(["MALE", "FEMALE", "OTHER"]).optional()),
+            employment_type: z.preprocess(emptyToUndefined, z.enum(["PERMANENT", "CONTRACT", "PART_TIME"]).optional()),
+          }),
+        ),
+      })
+      .parse(req.body);
+
+    const created: string[] = [];
+    const failed: { row: number; reason: string }[] = [];
+
+    // Sequential per-row loop — same known-limit reasoning already accepted
+    // for the student bulk-import path (fine for a realistic school import,
+    // tens to low hundreds of rows, not built to guarantee no timeout on a
+    // multi-thousand-row CSV against this synchronous endpoint).
+    for (const [index, row] of body.rows.entries()) {
+      try {
+        const existingUser = await prisma.user.findUnique({ where: { phone: row.phone } });
+        if (existingUser) throw new Error("a user with this phone number already exists");
+
+        let tempPassword: string | null = null;
+        const staff = await prisma.$transaction(async (tx) => {
+          const staff_uid = await generateStaffUid();
+          const login = await createOrLinkPortalLogin(tx, { role: row.role as UserRole, phone: row.phone, name: row.name_en });
+          tempPassword = login.tempPassword;
+
+          return tx.staff.create({
+            data: {
+              user_id: login.userId,
+              staff_uid,
+              name_en: row.name_en,
+              name_bn: row.name_bn,
+              designation: row.designation,
+              department_id: row.department_id,
+              phone: row.phone,
+              email: row.email,
+              gender: row.gender,
+              employment_type: row.employment_type ?? "PERMANENT",
+              joining_date: new Date(),
+              created_by_id: req.user!.sub,
+            },
+          });
+        });
+
+        if (tempPassword) {
+          await sendNotification({
+            trigger: "PORTAL_LOGIN_CREATED",
+            recipients: [{ name: row.name_en, phone: row.phone, email: row.email }],
+            template_data: { name: row.name_en, phone: row.phone, password: tempPassword, portal_url: env.ADMIN_URL ?? "" },
+          });
+        }
+
+        created.push(staff.staff_uid);
+      } catch (err) {
+        failed.push({ row: index + 1, reason: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+
+    res.json({ success: true, data: { created: created.length, failed } });
   }),
 );
 

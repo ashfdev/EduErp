@@ -217,6 +217,41 @@ async function main() {
     create: { id: "shift-day", name: "Day", start_time: "12:30", end_time: "17:30" },
   });
 
+  // Previously a fresh install had zero ShiftPeriod rows for any Shift —
+  // clicking "Generate Routine" for the first time silently produced no
+  // slots at all until an admin discovered they had to configure this
+  // first, with no onboarding prompt telling them so. Seeding a real
+  // default set (matching a typical BD school day) closes that gap.
+  const SHIFT_PERIOD_DEFAULTS: Record<string, { period_no: number; start_time: string; end_time: string; is_break: boolean }[]> = {
+    "shift-morning": [
+      { period_no: 1, start_time: "07:30", end_time: "08:15", is_break: false },
+      { period_no: 2, start_time: "08:15", end_time: "09:00", is_break: false },
+      { period_no: 3, start_time: "09:00", end_time: "09:45", is_break: false },
+      { period_no: 4, start_time: "09:45", end_time: "10:00", is_break: true },
+      { period_no: 5, start_time: "10:00", end_time: "10:45", is_break: false },
+      { period_no: 6, start_time: "10:45", end_time: "11:30", is_break: false },
+      { period_no: 7, start_time: "11:30", end_time: "12:15", is_break: false },
+    ],
+    "shift-day": [
+      { period_no: 1, start_time: "12:30", end_time: "13:15", is_break: false },
+      { period_no: 2, start_time: "13:15", end_time: "14:00", is_break: false },
+      { period_no: 3, start_time: "14:00", end_time: "14:45", is_break: false },
+      { period_no: 4, start_time: "14:45", end_time: "15:00", is_break: true },
+      { period_no: 5, start_time: "15:00", end_time: "15:45", is_break: false },
+      { period_no: 6, start_time: "15:45", end_time: "16:30", is_break: false },
+      { period_no: 7, start_time: "16:30", end_time: "17:15", is_break: false },
+    ],
+  };
+  for (const [shiftId, periods] of Object.entries(SHIFT_PERIOD_DEFAULTS)) {
+    for (const p of periods) {
+      await prisma.shiftPeriod.upsert({
+        where: { shift_id_period_no: { shift_id: shiftId, period_no: p.period_no } },
+        update: {},
+        create: { shift_id: shiftId, period_no: p.period_no, start_time: p.start_time, end_time: p.end_time, is_break: p.is_break },
+      });
+    }
+  }
+
   const classes: Record<number, { id: string }> = {};
   for (const level of [6, 7, 8, 9, 10]) {
     const cls = await prisma.class.upsert({

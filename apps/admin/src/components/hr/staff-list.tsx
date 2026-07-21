@@ -119,6 +119,7 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
               </Button>
             )}
             <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
+            <Button variant="outline" onClick={() => router.push("/hr/staff/bulk-import")}>Bulk Import</Button>
             <Button onClick={() => router.push(`/hr/staff/new?category=${category}`)}>{addLabel}</Button>
           </div>
         }

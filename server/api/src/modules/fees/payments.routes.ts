@@ -9,9 +9,11 @@ import { initiatePaymentSchema } from "@education-erp/validators";
 import { getPaymentAdapter } from "../../services/payment";
 import { getSignedDownloadUrl } from "../../services/storage.service";
 import { sendSms } from "../../services/sms.service";
-import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
+import { createFeeReceiptJournal, reverseVoucher } from "../accounts/auto-journal.service";
 import { generateReceiptNo } from "./fee-number.generator";
 import { reqParam } from "../../lib/req-param";
+import { logAudit } from "../../lib/audit-log";
+import { z } from "zod";
 import { badRequest, notFound } from "../../lib/errors";
 import type { Payment } from "@education-erp/db";
 
@@ -142,5 +144,63 @@ paymentsRouter.post(
 
     const updated = await prisma.payment.update({ where: { id }, data: { status: "FAILED" } });
     res.json({ success: true, data: updated });
+  }),
+);
+
+// The actual correction path for a COMPLETED payment — previously
+// PaymentStatus.REFUNDED was a defined-but-dead enum value with no route
+// anywhere that could ever set it, and no way to unwind the invoice/journal
+// side-effects completePayment() created. Reverses every voucher that was
+// posted referencing this payment (there can legitimately be more than one
+// — e.g. an overpayment that also credited an advance-fees liability),
+// then walks the invoice back to what it would have shown before this
+// payment, recomputing status the same way completePayment() computes it
+// forward.
+paymentsRouter.post(
+  "/:id/refund",
+  authenticate,
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ reason: z.string().optional() }).parse(req.body);
+    const payment = await prisma.payment.findUnique({ where: { id } });
+    if (!payment) throw notFound("Payment not found");
+    if (payment.status !== "COMPLETED") throw badRequest("Only a completed payment can be refunded");
+
+    const relatedVouchers = await prisma.voucher.findMany({
+      where: { reference_type: "FEE_PAYMENT", reference_id: payment.id, status: "POSTED", reversed_by_voucher_id: null },
+    });
+    for (const voucher of relatedVouchers) {
+      await reverseVoucher(voucher.id, req.user!.sub, body.reason ?? "Payment refunded");
+    }
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: payment.invoice_id } });
+    const newAmountPaid = Math.max(0, invoice.amount_paid - payment.amount);
+    const updatedInvoice = await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        amount_paid: newAmountPaid,
+        status:
+          newAmountPaid >= invoice.amount_due + invoice.fine_amount
+            ? "PAID"
+            : newAmountPaid > 0
+              ? "PARTIAL"
+              : invoice.due_date < new Date()
+                ? "OVERDUE"
+                : "PENDING",
+      },
+    });
+
+    const updatedPayment = await prisma.payment.update({ where: { id }, data: { status: "REFUNDED" } });
+
+    await logAudit("PAYMENT_REFUND", {
+      userId: req.user!.sub,
+      targetType: "Payment",
+      targetId: id,
+      metadata: { invoice_id: invoice.id, amount: payment.amount, vouchers_reversed: relatedVouchers.length, reason: body.reason },
+      req,
+    });
+
+    res.json({ success: true, data: { payment: updatedPayment, invoice: updatedInvoice, vouchers_reversed: relatedVouchers.length } });
   }),
 );

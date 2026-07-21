@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalEntry {
@@ -25,12 +27,15 @@ interface VoucherDetail {
   total_amount: number;
   status: string;
   is_auto: boolean;
+  reversed_by_voucher_id: string | null;
   journal_entries: JournalEntry[];
 }
 
 export default function VoucherDetailPage() {
   const params = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [reverseOpen, setReverseOpen] = useState(false);
+  const [reverseReason, setReverseReason] = useState("");
 
   const { data: voucher } = useQuery<VoucherDetail>({
     queryKey: ["accounts", "vouchers", params.id],
@@ -44,6 +49,17 @@ export default function VoucherDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["accounts", "vouchers", params.id] });
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Action failed"),
+  });
+
+  const reverseMutation = useMutation({
+    mutationFn: () => api.post(`/api/accounts/vouchers/${params.id}/reverse`, { reason: reverseReason || undefined }),
+    onSuccess: (res) => {
+      toast.success(`Reversed — new voucher ${res.data.data.voucher_no} posted`);
+      queryClient.invalidateQueries({ queryKey: ["accounts", "vouchers", params.id] });
+      setReverseOpen(false);
+      setReverseReason("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Reversal failed"),
   });
 
   if (!voucher) return null;
@@ -61,9 +77,41 @@ export default function VoucherDetailPage() {
             {voucher.status !== "POSTED" && voucher.status !== "CANCELLED" && (
               <Button size="sm" variant="outline" onClick={() => actionMutation.mutate("cancel")}>Cancel</Button>
             )}
+            {voucher.status === "POSTED" && !voucher.reversed_by_voucher_id && (
+              <Button size="sm" variant="destructive" onClick={() => setReverseOpen(true)}>Reverse (Correct a Mistake)</Button>
+            )}
           </div>
         }
       />
+
+      {voucher.reversed_by_voucher_id && (
+        <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          This voucher has been reversed —{" "}
+          <Link href={`/accounts/vouchers/${voucher.reversed_by_voucher_id}`} className="underline">
+            view the correcting voucher
+          </Link>
+          .
+        </p>
+      )}
+
+      <Dialog open={reverseOpen} onOpenChange={setReverseOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reverse {voucher.voucher_no}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This posts a new voucher with every debit/credit line flipped, correcting this entry without editing or
+            deleting it (the original stays on record). This cannot be undone from here.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Reason (optional)</Label>
+            <Textarea value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => reverseMutation.mutate()} disabled={reverseMutation.isPending}>
+              {reverseMutation.isPending ? "Reversing..." : "Confirm Reversal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="space-y-4 pt-6">
