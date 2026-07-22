@@ -126,6 +126,21 @@ export default function AttendanceRulesPage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="space-y-1.5 pt-6">
+            <Label>Student leave — who must approve?</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" {...register("leave_approval_mode")}>
+              <option value="CLASS_TEACHER_ONLY">Class (homeroom) Teacher only — one decision per request</option>
+              <option value="ALL_SUBJECT_TEACHERS">Every subject teacher whose periods fall within the leave dates</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Decided once per request at submission time — changing this setting never reinterprets a request that
+              is already pending. &quot;Class Teacher only&quot; is a single approve/reject decision; &quot;Every subject
+              teacher&quot; requires each resolved teacher to approve before the request is fully approved, and any
+              single rejection rejects the whole request.
+            </p>
+          </CardContent>
+        </Card>
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
     </PageWrapper>

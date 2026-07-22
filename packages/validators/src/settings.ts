@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuthorityRole, DocumentType, PromotionAttendanceMode, UserRole } from "@education-erp/types";
+import { AuthorityRole, DocumentType, PromotionAttendanceMode, StudentLeaveApprovalMode, UserRole } from "@education-erp/types";
 import { passwordSchema } from "./auth";
 
 export const institutionTypeSchema = z.enum(["SCHOOL", "COLLEGE", "UNIVERSITY", "MADRASAH"]);
@@ -129,6 +129,7 @@ export const attendanceRulesSchema = z.object({
   sms_on_late: z.boolean(),
   promotion_attendance_mode: z.nativeEnum(PromotionAttendanceMode).optional(),
   promotion_min_sessions_per_subject: z.number().int().min(1).optional(),
+  leave_approval_mode: z.nativeEnum(StudentLeaveApprovalMode).optional(),
 });
 export type AttendanceRulesInput = z.infer<typeof attendanceRulesSchema>;
 

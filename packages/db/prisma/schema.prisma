@@ -176,8 +176,18 @@ model AttendanceRules {
   // excluded from the per-subject check entirely, so a brand-new elective
   // with 1-2 sessions can't single-handedly block a promotion.
   promotion_min_sessions_per_subject Int                     @default(10)
+  // Which approval flow a new StudentLeaveRequest goes through (Plan
+  // Thirteen, Phase J) -- default CLASS_TEACHER_ONLY is the simpler/safer
+  // starting behavior (single approver), same "default preserves the
+  // simpler existing pattern" discipline as promotion_attendance_mode above.
+  leave_approval_mode         StudentLeaveApprovalMode @default(CLASS_TEACHER_ONLY)
   created_at                  DateTime @default(now())
   updated_at                  DateTime @updatedAt
+}
+
+enum StudentLeaveApprovalMode {
+  CLASS_TEACHER_ONLY
+  ALL_SUBJECT_TEACHERS
 }
 
 enum PromotionAttendanceMode {
@@ -604,6 +614,7 @@ model Student {
   visitors                Visitor[]
   documents               StudentDocument[]
   waivers                 StudentWaiver[]
+  leave_requests          StudentLeaveRequest[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -894,6 +905,7 @@ model Staff {
   teaching_resources  TeachingResource[]
   ptm_slots           PTMSlot[]
   performance_reviews PerformanceReview[]
+  student_leave_approvals StudentLeaveApproval[]
 
   @@index([department_id])
   @@index([program_id])
@@ -1925,6 +1937,64 @@ model LeaveRequest {
   created_at     DateTime    @default(now())
 
   @@index([staff_id])
+}
+
+// Student-facing leave request (Plan Thirteen, Phase J) -- mirrors
+// LeaveRequest's submit/approve/reject shape above, but student_id +
+// requested_by_user_id (raw User.id -- works whether a STUDENT or GUARDIAN
+// portal login submits it, same convention as Complaint.raised_by_user_id)
+// instead of staff_id. Deliberately no separate StudentLeaveType lookup
+// table (unlike staff LeaveType) -- a student absence reason doesn't carry
+// a balance/paid-status concept the way staff leave does, so a plain
+// free-text reason is enough; a category taxonomy would be unused scope.
+model StudentLeaveRequest {
+  id                    String                 @id @default(cuid())
+  student_id            String
+  student               Student                @relation(fields: [student_id], references: [id])
+  requested_by_user_id  String
+  from_date             DateTime               @db.Date
+  to_date               DateTime               @db.Date
+  reason                String
+  status                StudentLeaveStatus     @default(PENDING)
+  decided_at            DateTime?
+  rejection_reason      String?
+  created_at            DateTime               @default(now())
+  approvals             StudentLeaveApproval[]
+
+  @@index([student_id])
+}
+
+enum StudentLeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PARTIALLY_APPROVED
+}
+
+// Only populated under AttendanceRules.leave_approval_mode =
+// ALL_SUBJECT_TEACHERS -- one row per distinct subject-teacher who has at
+// least one scheduled RoutineSlot period with this student anywhere within
+// the requested date range, confirmed with the owner directly: each such
+// teacher approves ONCE for the whole request, not once per day or once
+// per subject they teach (so no subject_id here -- a teacher covering 2
+// subjects for this student still only approves once).
+model StudentLeaveApproval {
+  id                String                     @id @default(cuid())
+  leave_request_id  String
+  leave_request     StudentLeaveRequest        @relation(fields: [leave_request_id], references: [id])
+  teacher_id        String
+  teacher           Staff                      @relation(fields: [teacher_id], references: [id])
+  status            StudentLeaveApprovalStatus @default(PENDING)
+  decided_at        DateTime?
+  rejection_reason  String?
+
+  @@unique([leave_request_id, teacher_id])
+}
+
+enum StudentLeaveApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model StaffDocument {

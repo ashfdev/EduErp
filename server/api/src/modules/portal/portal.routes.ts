@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PORTAL_ROLES, COMPLAINT_MANAGE_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema } from "@education-erp/validators";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema, applyStudentLeaveSchema } from "@education-erp/validators";
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
@@ -22,7 +22,8 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { postComplaintMessage } from "../complaints/complaint-message.helper";
-import { notifyRoles } from "../../services/in-app-notification.service";
+import { notifyRoles, createInAppNotification } from "../../services/in-app-notification.service";
+import { toUtcDate, resolveRequiredApproverTeacherIds } from "../../lib/student-leave-approvers";
 
 export const portalRouter = Router();
 portalRouter.use(authenticate, authorize(PORTAL_ROLES));
@@ -523,6 +524,73 @@ portalRouter.get(
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
     const requests = await prisma.documentRequest.findMany({ where: { student_id: id }, orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: requests });
+  }),
+);
+
+// Student Leave Request (Plan Thirteen, Phase J) — submit + own-history
+// live here alongside every other "own student data" route; approve/reject
+// live in the staff-facing student-leave.routes.ts module instead (this
+// router is hard-gated to PORTAL_ROLES only).
+portalRouter.post(
+  "/student/:id/leave-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const body = applyStudentLeaveSchema.parse(req.body);
+    const fromDate = toUtcDate(body.from_date);
+    const toDate = toUtcDate(body.to_date);
+    if (toDate < fromDate) throw badRequest("to_date must not be before from_date");
+
+    const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    const mode = rules?.leave_approval_mode ?? "CLASS_TEACHER_ONLY";
+
+    const leave = await prisma.studentLeaveRequest.create({
+      data: { student_id: id, requested_by_user_id: req.user!.sub, from_date: fromDate, to_date: toDate, reason: body.reason },
+    });
+
+    if (mode === "ALL_SUBJECT_TEACHERS") {
+      const teacherIds = await resolveRequiredApproverTeacherIds(prisma, id, fromDate, toDate);
+      if (!teacherIds.length) {
+        // Nothing scheduled for this student in the requested range —
+        // nobody to ask, so there's nothing to gate on.
+        await prisma.studentLeaveRequest.update({ where: { id: leave.id }, data: { status: "APPROVED", decided_at: new Date() } });
+      } else {
+        await prisma.studentLeaveApproval.createMany({ data: teacherIds.map((teacher_id) => ({ leave_request_id: leave.id, teacher_id })) });
+        const teachers = await prisma.staff.findMany({ where: { id: { in: teacherIds } }, select: { user_id: true } });
+        await Promise.all(
+          teachers
+            .filter((t) => t.user_id)
+            .map((t) => createInAppNotification({ userId: t.user_id!, type: "LEAVE_APPLIED", title: "New student leave request needs your approval", link: "/leave-requests" })),
+        );
+      }
+    } else {
+      const section = await prisma.student.findUnique({ where: { id }, select: { current_section: { select: { class_teacher_id: true, class_teacher: { select: { user_id: true } } } } } });
+      const classTeacherUserId = section?.current_section?.class_teacher?.user_id;
+      if (classTeacherUserId) {
+        await createInAppNotification({ userId: classTeacherUserId, type: "LEAVE_APPLIED", title: "New student leave request needs your approval", link: "/leave-requests" });
+      } else {
+        // No class teacher configured for this section — fall back to
+        // leadership rather than letting the request silently never
+        // surface anywhere.
+        await notifyRoles(["SUPER_ADMIN", "ADMIN", "PRINCIPAL"], { type: "LEAVE_APPLIED", title: "New student leave request needs review (no class teacher set)", link: "/leave-requests" });
+      }
+    }
+
+    res.status(201).json({ success: true, data: leave });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/leave-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const requests = await prisma.studentLeaveRequest.findMany({
+      where: { student_id: id },
+      include: { approvals: { include: { teacher: { select: { name_en: true } } } } },
+      orderBy: { created_at: "desc" },
+    });
     res.json({ success: true, data: requests });
   }),
 );

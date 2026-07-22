@@ -33,6 +33,7 @@ import { libraryRouter } from "./modules/library/library.routes";
 import { transportRouter } from "./modules/transport/transport.routes";
 import { hostelRouter } from "./modules/hostel/hostel.routes";
 import { gatePassRouter } from "./modules/gatepass/gatepass.routes";
+import { studentLeaveRouter } from "./modules/student-leave/student-leave.routes";
 import { analyticsRouter } from "./modules/reports/analytics.routes";
 import { portalRouter } from "./modules/portal/portal.routes";
 import { teacherRouter } from "./modules/teacher/teacher.routes";
@@ -118,6 +119,7 @@ export function createApp(): Express {
   app.use("/api/transport", transportRouter);
   app.use("/api/hostel", hostelRouter);
   app.use("/api/gatepass", gatePassRouter);
+  app.use("/api/student-leave", studentLeaveRouter);
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/teacher", teacherRouter);

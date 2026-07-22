@@ -14,6 +14,7 @@
     "resources": "Resources",
     "quizzes": "Quizzes",
     "ptm": "PTM",
+    "studentLeave": "Leave Requests",
     "leave": "Leave",
     "complaints": "Complaints",
     "profile": "Profile"
@@ -254,6 +255,22 @@
     "typeHandout": "Handout",
     "typeAssignment": "Assignment",
     "typeOther": "Other"
+  },
+  "studentLeave": {
+    "title": "Student Leave Requests",
+    "subtitle": "Review and decide on student leave requests awaiting your approval",
+    "classTeacherTab": "As Class Teacher ({count})",
+    "subjectTeacherTab": "As Subject Teacher ({count})",
+    "noPending": "No pending leave requests",
+    "yourApprovalOnly": "Your approval only — other subject teachers decide separately",
+    "approve": "Approve",
+    "reject": "Reject",
+    "rejecting": "Rejecting...",
+    "rejectTitle": "Reject Leave Request",
+    "rejectionReasonLabel": "Reason for rejection",
+    "approved": "Leave request approved",
+    "rejected": "Leave request rejected",
+    "actionFailed": "Action failed"
   },
   "complaints": {
     "title": "Complaints",

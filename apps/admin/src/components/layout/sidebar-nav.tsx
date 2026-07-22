@@ -9,7 +9,7 @@ import {
   ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
-  Settings, ChevronDown, DoorOpen, type LucideIcon,
+  Settings, ChevronDown, DoorOpen, CalendarClock, type LucideIcon,
 } from "lucide-react";
 
 interface NavItem {
@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/alumni", key: "alumni", icon: GraduationCap },
       { href: "/complaints", key: "complaints", icon: AlertCircle },
       { href: "/document-requests", key: "documentRequests", icon: FileText },
+      { href: "/student-leave", key: "studentLeaveRequests", icon: CalendarClock },
     ],
   },
   {
