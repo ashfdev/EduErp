@@ -6,8 +6,37 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useState } from "react";
 import { TeacherShell } from "@/components/teacher-shell";
-import { Badge, Button, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Input, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
+
+interface WeekScheduleSlot {
+  id: string;
+  day_of_week: number;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+  class: { id: string; name_en: string };
+  section: { id: string; name: string } | null;
+  subject: { id: string; name_en: string } | null;
+  group: { id: string; name_en: string } | null;
+}
+
+// Matches RoutineSlot.day_of_week's convention (0=Sunday). Parsed manually
+// via Date.UTC() rather than `new Date(dateStr)` — this server/client pair
+// runs in Bangladesh time (UTC+6), and while a plain "YYYY-MM-DD" string
+// happens to be safe here (UTC midnight + 6h never crosses back a local
+// day), computing it explicitly avoids relying on that coincidence and
+// matches the Date.UTC() convention already established elsewhere in this
+// feature (subject-attendance.routes.ts).
+function dayOfWeekFor(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1)).getUTCDay();
+}
+
+function todayLocalDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 interface RosterStudent {
   id: string;
@@ -48,6 +77,13 @@ export default function SubjectAttendancePage() {
   const date = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
   const queryClient = useQueryClient();
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [pickerDate, setPickerDate] = useState(todayLocalDateString());
+
+  const { data: weekSchedule } = useQuery<WeekScheduleSlot[]>({
+    queryKey: ["teacher", "schedule", "week"],
+    queryFn: async () => (await api.get("/api/teacher/schedule/week")).data.data,
+    enabled: !routineSlotId,
+  });
 
   const { data, isError, error } = useQuery<RosterResponse>({
     queryKey: ["attendance", "subject-wise", "roster", routineSlotId, date],
@@ -77,14 +113,53 @@ export default function SubjectAttendancePage() {
   });
 
   if (!routineSlotId) {
+    const pickerDayOfWeek = dayOfWeekFor(pickerDate);
+    const daySlots = (weekSchedule ?? [])
+      .filter((s) => s.day_of_week === pickerDayOfWeek && s.subject !== null && s.section !== null)
+      .sort((a, b) => a.period_no - b.period_no);
+
     return (
       <TeacherShell>
         <PageWrapper>
-          <PageHeader title="Subject Attendance" />
-          <p className="text-sm text-muted-foreground">
-            Open this from a specific period on{" "}
-            <Link href="/" className="text-primary hover:underline">My Classes Today</Link>.
-          </p>
+          <PageHeader
+            title="Subject Attendance"
+            subtitle="Pick a date to see your periods that day, then mark attendance for any of them — including a period you missed on a past date."
+          />
+          <div className="flex items-center gap-3">
+            <Input type="date" value={pickerDate} onChange={(e) => setPickerDate(e.target.value)} className="w-48" />
+          </div>
+
+          {!daySlots.length && (
+            <p className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-muted-foreground">
+              You have no scheduled periods on this date.
+            </p>
+          )}
+
+          {!!daySlots.length && (
+            <div className="space-y-2">
+              {daySlots.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/attendance/subject?routine_slot_id=${s.id}&date=${pickerDate}`}
+                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                      <span className="text-[10px] font-bold uppercase">Period</span>
+                      <span className="text-base font-black leading-none">{s.period_no}</span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">{s.subject?.name_en}</p>
+                      <p className="text-sm text-slate-500">
+                        {s.class.name_en}{s.section ? ` • Section ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">{s.start_time}–{s.end_time}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </PageWrapper>
       </TeacherShell>
     );

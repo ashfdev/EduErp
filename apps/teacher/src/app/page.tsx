@@ -6,7 +6,7 @@ import { TeacherShell } from "@/components/teacher-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, CardContent, EmptyState, Badge } from "@education-erp/ui";
-import { CalendarCheck, BookOpen, Target, Plane, Clock, ArrowRight, Activity } from "lucide-react";
+import { CalendarCheck, ClipboardList, BookOpen, Target, Plane, Clock, ArrowRight, Activity } from "lucide-react";
 import Link from "next/link";
 
 interface ScheduleSlot {
@@ -84,9 +84,9 @@ export default function TeacherHomePage() {
         </div>
         
         <div className="relative z-10 flex gap-3">
-          <Link href="/attendance" className="flex items-center gap-2 rounded-xl bg-white/20 backdrop-blur-md px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/30 transition-all border border-white/10">
-            <CalendarCheck className="h-4 w-4" />
-            Attendance
+          <Link href="/attendance/subject" className="flex items-center gap-2 rounded-xl bg-white/20 backdrop-blur-md px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/30 transition-all border border-white/10">
+            <ClipboardList className="h-4 w-4" />
+            Subject Attendance
           </Link>
         </div>
       </div>
@@ -181,7 +181,8 @@ export default function TeacherHomePage() {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { href: "/attendance", icon: CalendarCheck, label: "Attendance", color: "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-100" },
+                { href: "/attendance/subject", icon: ClipboardList, label: "Subject Attendance", color: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100" },
+                { href: "/attendance", icon: CalendarCheck, label: "Daily Attendance", color: "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-100" },
                 { href: "/marks", icon: BookOpen, label: "Marks Entry", color: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100" },
                 { href: "/quizzes", icon: Target, label: "New Quiz", color: "bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-100" },
                 { href: "/leave", icon: Plane, label: "Apply Leave", color: "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-100" },

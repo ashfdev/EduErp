@@ -8,7 +8,8 @@
   },
   "nav": {
     "home": "Home",
-    "attendance": "Attendance",
+    "attendance": "Daily Attendance",
+    "attendanceSubject": "Subject Attendance",
     "marks": "Marks",
     "resources": "Resources",
     "quizzes": "Quizzes",
@@ -55,8 +56,8 @@
     }
   },
   "attendance": {
-    "title": "Attendance",
-    "subtitle": "Mark attendance for your assigned classes",
+    "title": "Daily Attendance",
+    "subtitle": "Whole-section campus attendance for the day (not subject-wise — use Subject Attendance in the sidebar for that)",
     "selectClassSection": "Select Class/Section...",
     "notAssigned": "You are not assigned to any class/section yet.",
     "total": "Total: {count}",
