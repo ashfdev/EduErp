@@ -338,6 +338,7 @@ model Class {
   ptm_slots        PTMSlot[]
   academic_histories StudentAcademicHistory[]
   exam_session_classes ExamSessionClass[]
+  visitors         Visitor[]
 
   @@index([academic_year_id])
   @@index([program_id])
@@ -362,6 +363,7 @@ model Section {
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
   academic_histories StudentAcademicHistory[]
+  visitors         Visitor[]
 
   @@index([class_id])
 }
@@ -591,6 +593,7 @@ model Student {
   assignment_submissions AssignmentSubmission[]
   quiz_attempts          QuizAttempt[]
   document_requests      DocumentRequest[]
+  visitors                Visitor[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -2319,6 +2322,42 @@ model HostelVisitor {
   created_at   DateTime  @default(now())
 
   @@index([student_id])
+}
+
+// General campus Gate Pass (Plan Thirteen, Phase H) — deliberately a
+// separate model from HostelVisitor above, not a merge/generalization of
+// it. HostelVisitor stays exactly as-is (hostel-resident visits only,
+// reachable only from the Hostel module); this one is campus-wide and not
+// tied to any single module. student_id/class_id/section_id are all
+// optional since a vendor/official visit isn't tied to a specific student.
+model Visitor {
+  id            String      @id @default(cuid())
+  visitor_name  String
+  phone         String
+  visitor_type  VisitorType
+  relation_type String?
+  relation      String?
+  student_id    String?
+  student       Student?    @relation(fields: [student_id], references: [id])
+  class_id      String?
+  class         Class?      @relation(fields: [class_id], references: [id])
+  section_id    String?
+  section       Section?    @relation(fields: [section_id], references: [id])
+  reason        String
+  in_time       DateTime    @default(now())
+  out_time      DateTime?
+  approved_by_id String?
+  created_at    DateTime    @default(now())
+
+  @@index([student_id])
+  @@index([in_time])
+}
+
+enum VisitorType {
+  GUARDIAN
+  VENDOR
+  OFFICIAL
+  OTHER
 }
 
 // ─────────────────────────────────────────────

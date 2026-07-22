@@ -9,7 +9,7 @@ import {
   ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
-  Settings, ChevronDown, type LucideIcon,
+  Settings, ChevronDown, DoorOpen, type LucideIcon,
 } from "lucide-react";
 
 interface NavItem {
@@ -75,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/library", key: "library", icon: Library },
       { href: "/transport", key: "transport", icon: Bus },
       { href: "/hostel", key: "hostel", icon: Home },
+      { href: "/gatepass", key: "gatePass", icon: DoorOpen },
     ],
   },
   {

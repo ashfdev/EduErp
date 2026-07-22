@@ -29,6 +29,7 @@
     "library": "Library",
     "transport": "Transport",
     "hostel": "Hostel",
+    "gatePass": "Gate Pass",
     "reports": "Reports",
     "bulkSms": "Bulk SMS",
     "settings": "Settings"
