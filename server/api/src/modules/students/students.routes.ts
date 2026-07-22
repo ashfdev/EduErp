@@ -240,6 +240,9 @@ studentsRouter.get(
     const presentCount = student.attendance.filter((a) => a.status === "PRESENT").length;
     const absentCount = student.attendance.filter((a) => a.status === "ABSENT").length;
     const lateCount = student.attendance.filter((a) => a.status === "LATE").length;
+    // student.attendance is already ordered date desc, so [0] is the most
+    // recent campus-presence record (entry/exit, Plan Twelve Phase 5).
+    const mostRecentAttendance = student.attendance[0] ?? null;
 
     const outstandingTotal = student.invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
     const paidTotal = student.invoices.reduce((sum, inv) => sum + inv.amount_paid, 0);
@@ -300,6 +303,9 @@ studentsRouter.get(
             late: lateCount,
             percentage: student.attendance.length ? Math.round((presentCount / student.attendance.length) * 1000) / 10 : null,
           },
+          most_recent: mostRecentAttendance
+            ? { date: mostRecentAttendance.date, check_in_at: mostRecentAttendance.check_in_at, check_out_at: mostRecentAttendance.check_out_at }
+            : null,
         },
         results: student.mark_entries,
         fees: {

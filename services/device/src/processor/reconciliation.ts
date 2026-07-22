@@ -13,7 +13,12 @@ export async function reconcileUnprocessedPunches(): Promise<{ retried: number; 
   let resolved = 0;
 
   for (const log of unprocessed) {
-    const result = await processPunch({ device_id: log.device_id, device_user_id: log.device_user_id, punch_at: log.punch_at, punch_type: 0 });
+    // Read the actually-stored punch_type instead of hardcoding 0/check-in —
+    // fabricating a value here would misaudit every reconciled punch as a
+    // check-in regardless of what it really was, once punch_type is
+    // actually captured (Plan Twelve, Phase 5). Falls back to 0 only for
+    // rows synced before that column existed (genuinely unrecoverable).
+    const result = await processPunch({ device_id: log.device_id, device_user_id: log.device_user_id, punch_at: log.punch_at, punch_type: log.punch_type ?? 0 });
     if (result.status !== "unmapped" && result.status !== "skipped") resolved++;
   }
 
@@ -26,12 +31,18 @@ export async function reconcileUnprocessedPunches(): Promise<{ retried: number; 
 // "system-default-absent" job. Idempotent: only creates where none exists.
 export async function markDefaultAbsentees(): Promise<{ created: number }> {
   const today = new Date();
-  const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  // Date.UTC(), not a local-time constructor — this service (like server/api)
+  // runs in Bangladesh time (UTC+6), and a locally-constructed midnight Date
+  // serializes to the *previous* UTC calendar day once Prisma sends it to a
+  // @db.Date column (confirmed empirically while building subject-wise
+  // attendance — see subject-attendance.routes.ts's identical comment).
+  const dayStart = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  const dayEnd = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 1));
 
   // Fridays are the standard BD weekly holiday — same convention already
-  // applied for working-day math elsewhere in this codebase.
-  if (dayStart.getDay() === 5) return { created: 0 };
+  // applied for working-day math elsewhere in this codebase. getUTCDay(),
+  // matching how dayStart itself is now UTC-anchored.
+  if (dayStart.getUTCDay() === 5) return { created: 0 };
 
   const students = await prisma.student.findMany({ where: { deleted_at: null, status: "ACTIVE" }, select: { id: true } });
   const existingRecords = await prisma.attendanceRecord.findMany({

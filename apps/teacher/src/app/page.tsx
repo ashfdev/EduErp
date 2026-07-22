@@ -23,6 +23,16 @@ interface ScheduleSlot {
 
 type SlotStatus = "upcoming" | "ongoing" | "completed" | "missed";
 
+// Local calendar date as YYYY-MM-DD (never toISOString(), which forces UTC
+// and can land on the wrong day near a UTC-day boundary for a non-UTC
+// timezone like Bangladesh's UTC+6) — this is what the "Mark Attendance"
+// link's date param needs to match what the teacher actually means by
+// "today."
+function todayLocalDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // "Missed" only applies to a slot that's actually over with no attendance on
 // record — a still-upcoming or currently-running class is never mislabeled
 // as missed just because the day hasn't caught up to it yet.
@@ -148,7 +158,7 @@ export default function TeacherHomePage() {
                           {s.start_time} - {s.end_time}
                         </div>
                         {status !== "completed" && (
-                          <Link href={`/attendance?class=${s.class.name_en}&section=${s.section?.name}`} className="text-xs font-bold text-primary hover:underline mt-2 hidden sm:block">
+                          <Link href={`/attendance/subject?routine_slot_id=${s.id}&date=${todayLocalDateString()}`} className="text-xs font-bold text-primary hover:underline mt-2 hidden sm:block">
                             Mark Attendance
                           </Link>
                         )}

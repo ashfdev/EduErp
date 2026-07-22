@@ -100,6 +100,32 @@ export default function AttendanceRulesPage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="space-y-4 pt-6">
+            <div className="space-y-1.5">
+              <Label>Promotion eligibility — which attendance counts?</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" {...register("promotion_attendance_mode")}>
+                <option value="DAILY_ATTENDANCE_ONLY">Daily/homeroom attendance only (today&apos;s existing rule)</option>
+                <option value="AVERAGE_ALL_SUBJECTS">Average across all subjects</option>
+                <option value="EVERY_SUBJECT_MINIMUM">Every subject must individually meet the minimum</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Controls how attendance is checked when deciding if a student can be promoted. &quot;Daily/homeroom&quot;
+                uses the same calculation this system has always used; the other two use real per-subject attendance
+                (once teachers are marking it) — average pools every subject together, while &quot;every subject&quot; blocks
+                promotion if any single subject falls below the minimum.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Minimum sessions before a subject counts (Every Subject mode)</Label>
+              <Input type="number" min={1} {...register("promotion_min_sessions_per_subject", { valueAsNumber: true })} />
+              <p className="text-xs text-muted-foreground">
+                A subject with fewer recorded sessions than this so far this year is skipped in the &quot;every subject&quot;
+                check — so a brand-new elective with only 1-2 classes so far can&apos;t block a promotion.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
     </PageWrapper>

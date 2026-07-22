@@ -6,6 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, EXAM_MANAGE_ROLES } from "../../lib/roles";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
@@ -478,8 +479,12 @@ documentsRouter.get(
     const studentId = reqParam(req, "student_id");
     const base = await buildMarksheetData(examId, studentId);
 
-    const attendanceTotal = await prisma.attendanceRecord.count({ where: { person_id: studentId, person_type: "STUDENT" } });
-    const attendancePresent = await prisma.attendanceRecord.count({ where: { person_id: studentId, person_type: "STUDENT", status: "PRESENT" } });
+    // Real subject-wise attendance (Plan Twelve), scoped to the exam's own
+    // academic year — the old blanket AttendanceRecord count was neither
+    // subject-wise nor scoped to any year at all.
+    const exam = await prisma.exam.findUnique({ where: { id: examId }, include: { academic_year: true } });
+    const dateRange = exam ? { gte: exam.academic_year.start_date, lte: exam.academic_year.end_date } : undefined;
+    const attendanceSummary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
 
     const pdf = await renderDocument("REPORT_CARD", {
       student: base.student,
@@ -488,10 +493,10 @@ documentsRouter.get(
       subjects: base.subjects.map((s) => ({ ...s, remark: "" })),
       conduct_grade: "A",
       attendance: {
-        total_days: attendanceTotal,
-        present: attendancePresent,
-        absent: attendanceTotal - attendancePresent,
-        percentage: attendanceTotal ? Math.round((attendancePresent / attendanceTotal) * 1000) / 10 : 0,
+        total_days: attendanceSummary.overall.total,
+        present: attendanceSummary.overall.present,
+        absent: attendanceSummary.overall.total - attendanceSummary.overall.present,
+        percentage: attendanceSummary.overall.total ? attendanceSummary.overall.percentage : 0,
       },
       overall_remarks: base.has_failed ? "Needs improvement" : "Good performance",
     } as unknown as Record<string, unknown>);

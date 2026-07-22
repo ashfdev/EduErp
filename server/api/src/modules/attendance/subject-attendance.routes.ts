@@ -4,10 +4,12 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { SUBJECT_ATTENDANCE_MARK_ROLES } from "../../lib/roles";
+import { SUBJECT_ATTENDANCE_MARK_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { markSubjectAttendanceSchema } from "@education-erp/validators";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { hasSubjectTeacherAssignment } from "../../lib/subject-teacher-assignment";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { reqParam } from "../../lib/req-param";
 
 // Strict, no class-teacher-any-period fallback — confirmed directly with
 // the product owner (Plan Twelve, decision #2): only a staff member with a
@@ -167,5 +169,42 @@ subjectAttendanceRouter.post(
     }
 
     res.json({ success: true, data: { saved: body.records.length } });
+  }),
+);
+
+// Staff-facing per-subject breakdown for one student — same shared util the
+// portal's own version uses (server/api/src/modules/portal/portal.routes.ts
+// GET /student/:id/subject-attendance), so the two never drift apart.
+subjectAttendanceRouter.get(
+  "/student/:id/summary",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "id");
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+
+    let dateRange: { gte: Date; lte: Date } | undefined;
+    if (query.academic_year_id) {
+      const year = await prisma.academicYear.findUnique({ where: { id: query.academic_year_id } });
+      if (!year) throw notFound("Academic year not found");
+      dateRange = { gte: year.start_date, lte: year.end_date };
+    } else {
+      const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+      dateRange = activeYear ? { gte: activeYear.start_date, lte: activeYear.end_date } : undefined;
+    }
+
+    const summary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
+    const subjectIds = summary.subjects.map((s) => s.subject_id);
+    const subjects = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, name_en: true } });
+    const nameById = new Map(subjects.map((s) => [s.id, s.name_en]));
+
+    res.json({
+      success: true,
+      data: {
+        overall: summary.overall,
+        subjects: summary.subjects
+          .map((s) => ({ subject_id: s.subject_id, subject_name_en: nameById.get(s.subject_id) ?? "Unknown", present: s.present, total: s.total, percentage: s.percentage }))
+          .sort((a, b) => a.subject_name_en.localeCompare(b.subject_name_en)),
+      },
+    });
   }),
 );

@@ -12,6 +12,10 @@ interface AttendanceRecord {
   date: string;
   status: string;
 }
+interface SubjectAttendanceSummary {
+  overall: { present: number; total: number; percentage: number };
+  subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[];
+}
 
 import { ChevronLeft, ChevronRight, CalendarDays, CheckCircle2, XCircle, Clock, AlertCircle, type LucideIcon } from "lucide-react";
 
@@ -27,7 +31,7 @@ function AttendanceContent() {
   const { activeStudentId } = useAuthStore();
   const t = useTranslations("attendance");
   const tCommon = useTranslations("common");
-  const [tab, setTab] = useState<"monthly" | "yearly">("monthly");
+  const [tab, setTab] = useState<"monthly" | "yearly" | "subjects">("monthly");
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
 
@@ -36,6 +40,16 @@ function AttendanceContent() {
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/attendance`)).data.data,
     enabled: !!activeStudentId,
     retry: 1,
+  });
+
+  // Real subject-wise attendance — "how attendance is actually taken" is
+  // still the classic daily calendar above (that's what a teacher marks
+  // today); this is the newer, class-period-level breakdown, shown as its
+  // own tab rather than replacing the calendar.
+  const { data: subjectSummary } = useQuery<SubjectAttendanceSummary>({
+    queryKey: ["portal", "subject-attendance", activeStudentId],
+    queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/subject-attendance`)).data.data,
+    enabled: !!activeStudentId && tab === "subjects",
   });
 
   const monthRecords = useMemo(() => (data ?? []).filter((r) => { const d = new Date(r.date); return d.getMonth() === month && d.getFullYear() === year; }), [data, month, year]);
@@ -94,6 +108,9 @@ function AttendanceContent() {
           </button>
           <button onClick={() => setTab("yearly")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "yearly" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
             {t("yearly")}
+          </button>
+          <button onClick={() => setTab("subjects")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "subjects" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+            By Subject
           </button>
         </div>
       </div>
@@ -233,6 +250,43 @@ function AttendanceContent() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {tab === "subjects" && (
+        <div className="space-y-4">
+          {!subjectSummary && <div className="flex justify-center p-8"><LoadingSpinner /></div>}
+          {subjectSummary && !subjectSummary.subjects.length && (
+            <p className="rounded-2xl border border-dashed bg-slate-50 p-8 text-center text-slate-500">
+              No subject-wise attendance recorded yet this year.
+            </p>
+          )}
+          {subjectSummary && !!subjectSummary.subjects.length && (
+            <>
+              <Card className="border-0 shadow-sm bg-gradient-to-br from-primary to-indigo-600 text-white">
+                <CardContent className="flex items-center justify-between p-6">
+                  <div>
+                    <p className="text-sm font-medium text-white/80">Overall (this year, all subjects)</p>
+                    <p className="mt-1 text-4xl font-bold">{subjectSummary.overall.percentage}%</p>
+                  </div>
+                  <p className="text-sm text-white/80">{subjectSummary.overall.present} / {subjectSummary.overall.total} sessions</p>
+                </CardContent>
+              </Card>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {subjectSummary.subjects.map((s) => (
+                  <Card key={s.subject_id} className="border-0 shadow-sm">
+                    <CardContent className="flex items-center justify-between p-4">
+                      <div>
+                        <p className="font-bold text-slate-800">{s.subject_name_en}</p>
+                        <p className="text-xs text-slate-500">{s.present} / {s.total} sessions</p>
+                      </div>
+                      <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

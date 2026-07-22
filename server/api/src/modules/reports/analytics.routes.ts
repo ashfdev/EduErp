@@ -11,6 +11,7 @@ import { sendSms } from "../../services/sms.service";
 import { reqParam } from "../../lib/req-param";
 import { notFound, badRequest } from "../../lib/errors";
 import { ANALYTICS_MESSAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -250,16 +251,16 @@ interface RiskResult {
 // Shared by the list route and the message-draft route (Phase 64) so a
 // guardian's draft message always reflects the exact same numbers the
 // admin saw in the list, computed once, not two slightly-different ways.
+// Attendance percentage is now real subject-wise data (Plan Twelve), passed
+// in already-computed via the shared, batched computeSubjectWiseAttendance
+// util — this function no longer queries attendance itself, so callers
+// must batch that lookup once for the whole roster, not per student.
 async function computeStudentRisk(
   s: { id: string; name_en: string; student_uid: string; father_phone: string | null; current_class: { name_en: string } | null; current_section: { name: string } | null },
   minAttendance: number,
+  attendancePct: number | null,
 ): Promise<RiskResult | null> {
   const now = new Date();
-  const [present, total] = await Promise.all([
-    prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT", status: "PRESENT" } }),
-    prisma.attendanceRecord.count({ where: { person_id: s.id, person_type: "STUDENT" } }),
-  ]);
-  const attendancePct = total ? (present / total) * 100 : null;
 
   const overdueInvoices = await prisma.invoice.findMany({ where: { student_id: s.id, status: { notIn: ["PAID", "WAIVED"] }, due_date: { lt: now } } });
   const maxDaysOverdue = overdueInvoices.reduce((max, inv) => Math.max(max, Math.floor((now.getTime() - inv.due_date.getTime()) / (1000 * 60 * 60 * 24))), 0);
@@ -305,9 +306,16 @@ analyticsRouter.get(
     const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     const minAttendance = rules?.min_attendance_percentage ?? 75;
 
+    // One batched query for the whole roster, not one per student — see
+    // computeSubjectWiseAttendance's own comment on why this matters now
+    // that attendance data is ~7x the row volume it used to be.
+    const attendanceByStudent = await computeSubjectWiseAttendance(prisma, students.map((s) => s.id));
+
     const results: RiskResult[] = [];
     for (const s of students) {
-      const risk = await computeStudentRisk(s, minAttendance);
+      const summary = attendanceByStudent.get(s.id)!;
+      const attendancePct = summary.overall.total > 0 ? summary.overall.percentage : null;
+      const risk = await computeStudentRisk(s, minAttendance, attendancePct);
       if (risk) results.push(risk);
     }
 
@@ -329,7 +337,9 @@ analyticsRouter.get(
 
     const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     const minAttendance = rules?.min_attendance_percentage ?? 75;
-    const risk = await computeStudentRisk(student, minAttendance);
+    const summary = (await computeSubjectWiseAttendance(prisma, [studentId])).get(studentId)!;
+    const attendancePct = summary.overall.total > 0 ? summary.overall.percentage : null;
+    const risk = await computeStudentRisk(student, minAttendance, attendancePct);
     if (!risk) throw badRequest("This student is not currently flagged as at-risk");
 
     const reasons: string[] = [];

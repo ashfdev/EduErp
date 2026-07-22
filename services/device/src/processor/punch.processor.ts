@@ -49,7 +49,7 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
   const log = existing
     ? existing
     : await prisma.devicePunchLog.create({
-        data: { device_id: raw.device_id, device_user_id: raw.device_user_id, punch_at: raw.punch_at },
+        data: { device_id: raw.device_id, device_user_id: raw.device_user_id, punch_at: raw.punch_at, punch_type: raw.punch_type },
       });
 
   if (!student && !staff) {
@@ -79,29 +79,61 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
 
   // 4. Write attendance — find-then-write since shift_id is nullable and
   // Prisma's compound-unique upsert() shorthand rejects null members.
-  const dayStart = new Date(raw.punch_at.getFullYear(), raw.punch_at.getMonth(), raw.punch_at.getDate());
+  // Date.UTC(), not a local-time constructor — this service runs in
+  // Bangladesh time (UTC+6), and a locally-constructed midnight Date
+  // serializes to the *previous* UTC calendar day once Prisma sends it to a
+  // @db.Date column (confirmed empirically while building subject-wise
+  // attendance elsewhere in this codebase).
+  const dayStart = new Date(Date.UTC(raw.punch_at.getFullYear(), raw.punch_at.getMonth(), raw.punch_at.getDate()));
+  const dayEnd = new Date(Date.UTC(raw.punch_at.getFullYear(), raw.punch_at.getMonth(), raw.punch_at.getDate() + 1));
   const existingAttendance = await prisma.attendanceRecord.findFirst({
     where: { person_id: personId, person_type: personType, date: dayStart, shift_id: shiftId, period_no: null },
   });
 
+  let attendanceId: string;
   if (existingAttendance) {
+    attendanceId = existingAttendance.id;
     if (existingAttendance.source === "MANUAL") {
       await prisma.attendanceRecord.update({
         where: { id: existingAttendance.id },
         data: { status, source: "BIOMETRIC", device_id: raw.device_id },
       });
     }
-    // A BIOMETRIC-sourced record for the same slot is left as-is — first
-    // punch of the day wins for status purposes.
+    // A BIOMETRIC-sourced record for the same slot has its status left as-is
+    // — first punch of the day wins for PRESENT/LATE purposes. check_in_at/
+    // check_out_at still get refreshed below regardless (entry/exit is
+    // purely additive, never re-decides status).
   } else {
-    await prisma.attendanceRecord.create({
+    const created = await prisma.attendanceRecord.create({
       data: { person_id: personId, person_type: personType, date: dayStart, shift_id: shiftId, status, source: "BIOMETRIC", device_id: raw.device_id },
     });
+    attendanceId = created.id;
   }
 
+  // Mark this punch resolved before deriving entry/exit, so it's included
+  // in the aggregate below.
   await prisma.devicePunchLog.update({
     where: { id: log.id },
     data: { mapped_person_id: personId, mapped_person_type: personType, is_processed: true },
+  });
+
+  // Entry/exit — always a fresh MIN/MAX over the day's full punch history so
+  // far, never an incremental compare against only the previously-stored
+  // value. reconcileUnprocessedPunches() retrying punches out of arrival
+  // order is a real, already-handled scenario in this system; an
+  // incremental approach would corrupt the result the first time a
+  // late-arriving-but-chronologically-earlier punch gets reconciled. Never
+  // branch on punch_type's value here — only chronological first/last punch
+  // decide check-in/check-out, since real-world device usage isn't reliably
+  // consistent about which button was actually pressed.
+  const range = await prisma.devicePunchLog.aggregate({
+    where: { mapped_person_id: personId, mapped_person_type: personType, punch_at: { gte: dayStart, lt: dayEnd } },
+    _min: { punch_at: true },
+    _max: { punch_at: true },
+  });
+  await prisma.attendanceRecord.update({
+    where: { id: attendanceId },
+    data: { check_in_at: range._min.punch_at, check_out_at: range._max.punch_at },
   });
 
   // 5. Notify the core API for any live UI (Socket.io) to pick up. Best

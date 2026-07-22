@@ -34,34 +34,34 @@ teacherRouter.get(
       orderBy: { period_no: "asc" },
     });
 
-    // Lets the frontend show a real "attendance already marked" vs. "missed"
-    // status per class instead of treating every past-end-time slot the same
-    // — attendance here is taken once per section per day (no period_no), so
-    // one groupBy across today's distinct sections covers every slot.
-    const sectionIds = [...new Set(slots.map((s) => s.section_id).filter((id): id is string => !!id))];
-    const markedSectionIds = sectionIds.length
-      ? await prisma.attendanceRecord
-          .groupBy({ by: ["section_id"], where: { section_id: { in: sectionIds }, person_type: "STUDENT", date: { gte: startOfDay(), lt: endOfDay() } } })
-          .then((rows) => new Set(rows.map((r) => r.section_id)))
+    // Real per-period marked status, not a per-section-per-day blanket check
+    // — marking one period must never show every other period (different
+    // subjects, same section) as "done" too. Date.UTC(), not a local-time
+    // Date: this server runs in Bangladesh time (UTC+6), and a
+    // locally-constructed midnight Date serializes to the *previous* UTC
+    // calendar day once it hits a @db.Date column comparison (confirmed
+    // empirically while building subject-attendance.routes.ts).
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const validSlots = slots.filter((s) => s.subject_id && s.section_id);
+    const markedKeys = validSlots.length
+      ? await prisma.subjectAttendance
+          .findMany({
+            where: { date: todayUtc, OR: validSlots.map((s) => ({ subject_id: s.subject_id!, section_id: s.section_id!, period_no: s.period_no })) },
+            select: { subject_id: true, section_id: true, period_no: true },
+          })
+          .then((rows) => new Set(rows.map((r) => `${r.subject_id}:${r.section_id}:${r.period_no}`)))
       : new Set<string>();
 
     res.json({
       success: true,
-      data: slots.map((s) => ({ ...s, attendance_marked: s.section_id ? markedSectionIds.has(s.section_id) : false })),
+      data: slots.map((s) => ({
+        ...s,
+        attendance_marked: !!(s.subject_id && s.section_id) && markedKeys.has(`${s.subject_id}:${s.section_id}:${s.period_no}`),
+      })),
     });
   }),
 );
-
-function startOfDay(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-function endOfDay(): Date {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
 
 teacherRouter.get(
   "/schedule/week",

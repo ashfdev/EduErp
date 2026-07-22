@@ -47,7 +47,10 @@ interface StudentProfile {
     }[];
   };
   subjects: { subject_id: string; subject_name_en: string; subject_code: string; is_compulsory: boolean; is_inherited: boolean; assigned_teacher: { name_en: string } | null }[];
-  attendance: { current_year_summary: { total_days: number; present: number; absent: number; late: number; percentage: number | null } };
+  attendance: {
+    current_year_summary: { total_days: number; present: number; absent: number; late: number; percentage: number | null };
+    most_recent: { date: string; check_in_at: string | null; check_out_at: string | null } | null;
+  };
   results: { id: string; exam: { name: string }; subject: { name_en: string }; marks_total?: number | null; grade_letter?: string | null }[];
   fees: {
     invoices: {
@@ -100,6 +103,11 @@ export default function StudentProfilePage() {
   const [leaveDialog, setLeaveDialog] = useState<"transfer" | "expel" | null>(null);
   const [leaveReason, setLeaveReason] = useState("");
   const pdfPreview = usePdfPreview();
+
+  const { data: subjectAttendance } = useQuery<{ overall: { present: number; total: number; percentage: number }; subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[] }>({
+    queryKey: ["students", id, "subject-attendance"],
+    queryFn: async () => (await api.get(`/api/attendance/subject-wise/student/${id}/summary`)).data.data,
+  });
 
   const { data: profile, isLoading } = useQuery<StudentProfile>({
     queryKey: ["students", id],
@@ -342,6 +350,42 @@ export default function StudentProfilePage() {
               <div><p className="text-2xl font-semibold">{attendance.current_year_summary.percentage ?? "—"}%</p><p className="text-xs text-muted-foreground">Attendance</p></div>
             </CardContent>
           </Card>
+          {attendance.most_recent && (attendance.most_recent.check_in_at || attendance.most_recent.check_out_at) && (
+            <Card className="mt-4">
+              <CardContent className="pt-6">
+                <p className="mb-2 text-sm font-medium">Most Recent Campus Entry/Exit — {new Date(attendance.most_recent.date).toLocaleDateString()}</p>
+                <div className="flex gap-6 text-sm">
+                  <span>In: <span className="font-semibold">{attendance.most_recent.check_in_at ? new Date(attendance.most_recent.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</span></span>
+                  <span>Out: <span className="font-semibold">{attendance.most_recent.check_out_at ? new Date(attendance.most_recent.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</span></span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {subjectAttendance && !!subjectAttendance.subjects.length && (
+            <Card className="mt-4">
+              <CardContent className="pt-6">
+                <p className="mb-3 text-sm font-medium">Subject-Wise Attendance (this year)</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="p-2">Subject</th>
+                      <th className="p-2">Sessions</th>
+                      <th className="p-2">Attendance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subjectAttendance.subjects.map((s) => (
+                      <tr key={s.subject_id} className="border-b last:border-0">
+                        <td className="p-2">{s.subject_name_en}</td>
+                        <td className="p-2">{s.present} / {s.total}</td>
+                        <td className={`p-2 font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="results">

@@ -6,10 +6,11 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { ATTENDANCE_MARK_ROLES } from "../../lib/roles";
+import { ATTENDANCE_MARK_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { markAttendanceSchema, markStaffAttendanceSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
 // actually attached to — either as the section's class teacher, or via a
@@ -41,6 +42,14 @@ async function assertSectionOwnership(userId: string, role: string, sectionId: s
 
 export const attendanceRouter = Router();
 attendanceRouter.use(authenticate);
+// Every GET route below previously had no role gate at all beyond
+// authenticate — any authenticated token, including a STUDENT/GUARDIAN
+// portal login, could call the institution-wide defaulters list, the bulk
+// attendance Excel export, or any section's daily register directly.
+// STAFF_ONLY_ROLES is a superset of ATTENDANCE_MARK_ROLES (the two POST
+// routes' own narrower gate), so this floor doesn't change who can already
+// mark attendance.
+attendanceRouter.use(authorize(STAFF_ONLY_ROLES));
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -281,14 +290,18 @@ attendanceRouter.get(
       select: { id: true, name_en: true, student_uid: true, father_phone: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } },
     });
 
+    // Real subject-wise attendance (Plan Twelve), one batched query for the
+    // whole roster instead of a per-student findMany().filter() loop —
+    // subject-wise data is ~7x the row volume the old blanket
+    // AttendanceRecord had, so the old pattern would only get worse here.
+    const attendanceByStudent = await computeSubjectWiseAttendance(prisma, students.map((s) => s.id));
+
     const results = [];
     for (const s of students) {
-      const records = await prisma.attendanceRecord.findMany({ where: { person_id: s.id, person_type: "STUDENT" } });
-      if (!records.length) continue;
-      const present = records.filter((r) => r.status === "PRESENT").length;
-      const percentage = (present / records.length) * 100;
-      if (percentage < threshold) {
-        results.push({ ...s, attendance_percentage: Math.round(percentage * 10) / 10, total_days: records.length, present_days: present });
+      const summary = attendanceByStudent.get(s.id)!;
+      if (!summary.overall.total) continue;
+      if (summary.overall.percentage < threshold) {
+        results.push({ ...s, attendance_percentage: summary.overall.percentage, total_days: summary.overall.total, present_days: summary.overall.present });
       }
     }
 

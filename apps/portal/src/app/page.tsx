@@ -16,7 +16,7 @@ import {
 
 interface Dashboard {
   student: { name: string; uid: string; class?: string; section?: string; roll?: string; photo: string | null };
-  attendance: { today_status: string; this_month_percentage: number | null };
+  attendance: { today_status: string; this_month_percentage: number | null; check_in_at: string | null; check_out_at: string | null };
   upcoming_exams: { id: string; name: string; start_date: string | null }[];
   recent_results: { exam_name: string; gpa: number; grade: string }[];
   fee_dues: { total_outstanding: number; next_due_date: string | null; next_due_amount: number | null };
@@ -105,6 +105,13 @@ function HomeContent() {
                 <StatusBadge status={data.attendance.today_status} />
               )}
             </div>
+            {(data.attendance.check_in_at || data.attendance.check_out_at) && (
+              <p className="mt-1 text-[11px] text-white/80">
+                {data.attendance.check_in_at && `In ${new Date(data.attendance.check_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                {data.attendance.check_in_at && data.attendance.check_out_at && " · "}
+                {data.attendance.check_out_at && `Out ${new Date(data.attendance.check_out_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

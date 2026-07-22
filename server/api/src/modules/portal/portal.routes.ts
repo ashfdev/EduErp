@@ -18,6 +18,7 @@ import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/uploa
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { syncOverdueInvoices } from "../fees/invoice-helpers";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { postComplaintMessage } from "../complaints/complaint-message.helper";
@@ -150,6 +151,8 @@ async function buildStudentDashboard(id: string) {
       attendance: {
         today_status: todayRecord?.status ?? "NOT_MARKED",
         this_month_percentage: monthRecords.length ? Math.round((monthPresent / monthRecords.length) * 1000) / 10 : null,
+        check_in_at: todayRecord?.check_in_at ?? null,
+        check_out_at: todayRecord?.check_out_at ?? null,
       },
       upcoming_exams: upcomingExams.map((e) => ({ id: e.id, name: e.name, start_date: e.start_date })),
       recent_results: recentResults,
@@ -166,6 +169,35 @@ portalRouter.get(
     await assertAccess(req.user!.sub, req.user!.role, id);
     const records = await prisma.attendanceRecord.findMany({ where: { person_id: id, person_type: "STUDENT" }, orderBy: { date: "desc" }, take: 400 });
     res.json({ success: true, data: records });
+  }),
+);
+
+// Real per-subject attendance breakdown (Plan Twelve) — the direct answer
+// to "ei subject e attendance koto percentage" (what % attendance in this
+// subject), which didn't exist anywhere in the system before this.
+portalRouter.get(
+  "/student/:id/subject-attendance",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    const dateRange = activeYear ? { gte: activeYear.start_date, lte: activeYear.end_date } : undefined;
+    const summary = (await computeSubjectWiseAttendance(prisma, [id], dateRange)).get(id)!;
+
+    const subjectIds = summary.subjects.map((s) => s.subject_id);
+    const subjects = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, name_en: true } });
+    const nameById = new Map(subjects.map((s) => [s.id, s.name_en]));
+
+    res.json({
+      success: true,
+      data: {
+        overall: summary.overall,
+        subjects: summary.subjects
+          .map((s) => ({ subject_id: s.subject_id, subject_name_en: nameById.get(s.subject_id) ?? "Unknown", present: s.present, total: s.total, percentage: s.percentage }))
+          .sort((a, b) => a.subject_name_en.localeCompare(b.subject_name_en)),
+      },
+    });
   }),
 );
 
