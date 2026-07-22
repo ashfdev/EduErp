@@ -3,6 +3,7 @@ import { Badge } from "./badge";
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "success" | "warning" | "outline"> = {
   ACTIVE: "success",
   APPROVED: "success",
+  PRESENT: "success",
   PAID: "success",
   COMPLETED: "success",
   PUBLISHED: "success",

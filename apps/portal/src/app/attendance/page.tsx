@@ -16,8 +16,13 @@ interface SubjectAttendanceSummary {
   overall: { present: number; total: number; percentage: number };
   subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[];
 }
+interface SubjectHistoryEntry {
+  date: string;
+  period_no: number;
+  status: string;
+}
 
-import { ChevronLeft, ChevronRight, CalendarDays, CheckCircle2, XCircle, Clock, AlertCircle, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, CheckCircle2, XCircle, Clock, AlertCircle, type LucideIcon } from "lucide-react";
 
 const STATUS_STYLES: Record<string, { bg: string, text: string, label: string, icon: LucideIcon }> = {
   PRESENT: { bg: "bg-emerald-100", text: "text-emerald-700", label: "Present", icon: CheckCircle2 },
@@ -34,6 +39,7 @@ function AttendanceContent() {
   const [tab, setTab] = useState<"monthly" | "yearly" | "subjects">("monthly");
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
+  const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery<AttendanceRecord[]>({
     queryKey: ["portal", "attendance", activeStudentId],
@@ -50,6 +56,12 @@ function AttendanceContent() {
     queryKey: ["portal", "subject-attendance", activeStudentId],
     queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/subject-attendance`)).data.data,
     enabled: !!activeStudentId && tab === "subjects",
+  });
+
+  const { data: subjectHistory, isLoading: historyLoading } = useQuery<SubjectHistoryEntry[]>({
+    queryKey: ["portal", "subject-attendance-history", activeStudentId, expandedSubjectId],
+    queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/subject-attendance/${expandedSubjectId}/history`)).data.data,
+    enabled: !!activeStudentId && !!expandedSubjectId,
   });
 
   const monthRecords = useMemo(() => (data ?? []).filter((r) => { const d = new Date(r.date); return d.getMonth() === month && d.getFullYear() === year; }), [data, month, year]);
@@ -273,17 +285,52 @@ function AttendanceContent() {
                 </CardContent>
               </Card>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {subjectSummary.subjects.map((s) => (
-                  <Card key={s.subject_id} className="border-0 shadow-sm">
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div>
-                        <p className="font-bold text-slate-800">{s.subject_name_en}</p>
-                        <p className="text-xs text-slate-500">{s.present} / {s.total} sessions</p>
-                      </div>
-                      <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
-                    </CardContent>
-                  </Card>
-                ))}
+                {subjectSummary.subjects.map((s) => {
+                  const isOpen = expandedSubjectId === s.subject_id;
+                  return (
+                    <Card key={s.subject_id} className="border-0 shadow-sm overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSubjectId(isOpen ? null : s.subject_id)}
+                        className="flex w-full items-center justify-between p-4 text-left"
+                      >
+                        <div>
+                          <p className="font-bold text-slate-800">{s.subject_name_en}</p>
+                          <p className="text-xs text-slate-500">{s.present} / {s.total} sessions</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
+                          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+                          {historyLoading && <div className="flex justify-center py-4"><LoadingSpinner /></div>}
+                          {!historyLoading && !subjectHistory?.length && (
+                            <p className="py-2 text-center text-xs text-slate-500">No sessions recorded yet.</p>
+                          )}
+                          {!historyLoading && !!subjectHistory?.length && (
+                            <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                              {subjectHistory.map((h, i) => {
+                                const style = STATUS_STYLES[h.status];
+                                return (
+                                  <div key={`${h.date}-${h.period_no}-${i}`} className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs">
+                                    <span className="font-medium text-slate-600">
+                                      {new Date(h.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Period {h.period_no}
+                                    </span>
+                                    <span className={`rounded-full px-2 py-0.5 font-bold ${style ? `${style.bg} ${style.text}` : "bg-slate-100 text-slate-600"}`}>
+                                      {style?.label ?? h.status}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             </>
           )}

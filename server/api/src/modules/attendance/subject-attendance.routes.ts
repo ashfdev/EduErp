@@ -208,3 +208,38 @@ subjectAttendanceRouter.get(
     });
   }),
 );
+
+// Day-by-day record for one subject — lazily called only when a staff
+// member expands a subject on the student profile, same reasoning as the
+// portal's equivalent route (never pull a whole year's per-date rows for
+// every subject up front).
+subjectAttendanceRouter.get(
+  "/student/:id/subject/:subject_id/history",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "id");
+    const subjectId = reqParam(req, "subject_id");
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+
+    let dateRange: { gte: Date; lte: Date } | undefined;
+    if (query.academic_year_id) {
+      const year = await prisma.academicYear.findUnique({ where: { id: query.academic_year_id } });
+      if (!year) throw notFound("Academic year not found");
+      dateRange = { gte: year.start_date, lte: year.end_date };
+    } else {
+      const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+      dateRange = activeYear ? { gte: activeYear.start_date, lte: activeYear.end_date } : undefined;
+    }
+
+    const records = await prisma.subjectAttendance.findMany({
+      where: { student_id: studentId, subject_id: subjectId, ...(dateRange ? { date: dateRange } : {}) },
+      select: { date: true, period_no: true, status: true },
+      orderBy: { date: "desc" },
+    });
+
+    res.json({
+      success: true,
+      data: records.map((r) => ({ date: r.date.toISOString().slice(0, 10), period_no: r.period_no, status: r.status })),
+    });
+  }),
+);

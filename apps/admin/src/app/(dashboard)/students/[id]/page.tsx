@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -107,6 +108,13 @@ export default function StudentProfilePage() {
   const { data: subjectAttendance } = useQuery<{ overall: { present: number; total: number; percentage: number }; subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[] }>({
     queryKey: ["students", id, "subject-attendance"],
     queryFn: async () => (await api.get(`/api/attendance/subject-wise/student/${id}/summary`)).data.data,
+  });
+
+  const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
+  const { data: subjectHistory, isLoading: subjectHistoryLoading } = useQuery<{ date: string; period_no: number; status: string }[]>({
+    queryKey: ["students", id, "subject-attendance-history", expandedSubjectId],
+    queryFn: async () => (await api.get(`/api/attendance/subject-wise/student/${id}/subject/${expandedSubjectId}/history`)).data.data,
+    enabled: !!expandedSubjectId,
   });
 
   const { data: profile, isLoading } = useQuery<StudentProfile>({
@@ -374,13 +382,48 @@ export default function StudentProfilePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {subjectAttendance.subjects.map((s) => (
-                      <tr key={s.subject_id} className="border-b last:border-0">
-                        <td className="p-2">{s.subject_name_en}</td>
-                        <td className="p-2">{s.present} / {s.total}</td>
-                        <td className={`p-2 font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</td>
-                      </tr>
-                    ))}
+                    {subjectAttendance.subjects.map((s) => {
+                      const isOpen = expandedSubjectId === s.subject_id;
+                      return (
+                        <Fragment key={s.subject_id}>
+                          <tr
+                            className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
+                            onClick={() => setExpandedSubjectId(isOpen ? null : s.subject_id)}
+                          >
+                            <td className="p-2">
+                              <span className="inline-flex items-center gap-1.5">
+                                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                                {s.subject_name_en}
+                              </span>
+                            </td>
+                            <td className="p-2">{s.present} / {s.total}</td>
+                            <td className={`p-2 font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</td>
+                          </tr>
+                          {isOpen && (
+                            <tr key={`${s.subject_id}-detail`} className="border-b bg-muted/20 last:border-0">
+                              <td colSpan={3} className="p-3">
+                                {subjectHistoryLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+                                {!subjectHistoryLoading && !subjectHistory?.length && (
+                                  <p className="text-xs text-muted-foreground">No sessions recorded yet.</p>
+                                )}
+                                {!subjectHistoryLoading && !!subjectHistory?.length && (
+                                  <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                                    {subjectHistory.map((h, i) => (
+                                      <div key={`${h.date}-${h.period_no}-${i}`} className="flex items-center justify-between rounded bg-background px-2.5 py-1 text-xs">
+                                        <span className="text-muted-foreground">
+                                          {new Date(h.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Period {h.period_no}
+                                        </span>
+                                        <StatusBadge status={h.status} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </CardContent>

@@ -201,6 +201,36 @@ portalRouter.get(
   }),
 );
 
+// Day-by-day record for one subject — deliberately a separate, lazily-called
+// route rather than folded into the summary above, so opening the summary
+// never pulls a whole year's worth of per-date rows for every subject up
+// front; only the one subject a parent/student actually expands gets its
+// date list fetched.
+portalRouter.get(
+  "/student/:id/subject-attendance/:subject_id/history",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const subjectId = reqParam(req, "subject_id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    const records = await prisma.subjectAttendance.findMany({
+      where: {
+        student_id: id,
+        subject_id: subjectId,
+        ...(activeYear ? { date: { gte: activeYear.start_date, lte: activeYear.end_date } } : {}),
+      },
+      select: { date: true, period_no: true, status: true },
+      orderBy: { date: "desc" },
+    });
+
+    res.json({
+      success: true,
+      data: records.map((r) => ({ date: r.date.toISOString().slice(0, 10), period_no: r.period_no, status: r.status })),
+    });
+  }),
+);
+
 portalRouter.get(
   "/student/:id/results",
   asyncHandler(async (req, res) => {
