@@ -33,6 +33,16 @@
     "bulkSms": "বাল্ক এসএমএস",
     "settings": "সেটিংস"
   },
+  "navGroups": {
+    "academic": "একাডেমিক",
+    "students": "শিক্ষার্থী",
+    "admission": "ভর্তি",
+    "finance": "অর্থ",
+    "hrStaff": "এইচআর ও কর্মী",
+    "campus": "ক্যাম্পাস",
+    "communication": "যোগাযোগ",
+    "system": "সিস্টেম"
+  },
   "login": {
     "poweredBy": "Powered by AshDevs",
     "staffLogin": "স্টাফ লগইন",
@@ -131,6 +141,7 @@
     "allPrograms": "সকল প্রোগ্রাম",
     "allStatus": "সকল অবস্থা",
     "allGender": "সকল লিঙ্গ",
+    "allSessions": "সকল সেশন",
     "statusActive": "সক্রিয়",
     "statusInactive": "নিষ্ক্রিয়",
     "statusTransferred": "স্থানান্তরিত",
@@ -148,6 +159,7 @@
     "colGuardianPhone": "অভিভাবকের ফোন",
     "colStatus": "অবস্থা",
     "view": "দেখুন",
+    "edit": "সম্পাদনা",
     "previous": "পূর্ববর্তী",
     "next": "পরবর্তী",
     "pageOf": "পৃষ্ঠা {page} এর মধ্যে {totalPages}"

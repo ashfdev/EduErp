@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuthStore } from "@/stores/auth-store";
@@ -11,47 +10,14 @@ import { Button, NotificationBell } from "@education-erp/ui";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useInstitution } from "@/hooks/use-institution";
 import { useNotifications } from "@/hooks/use-notifications";
-import {
-  LayoutDashboard, Users, GraduationCap, AlertCircle, FileText,
-  ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
-  Wallet, Calculator, Package, UserPlus, Printer, Globe,
-  Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
-  Settings, LogOut, Search
-} from "lucide-react";
-
-const NAV_ITEMS = [
-  { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
-  { href: "/students", key: "students", icon: Users },
-  { href: "/alumni", key: "alumni", icon: GraduationCap },
-  { href: "/complaints", key: "complaints", icon: AlertCircle },
-  { href: "/document-requests", key: "documentRequests", icon: FileText },
-  { href: "/attendance/mark", key: "attendance", icon: ClipboardCheck },
-  { href: "/examination", key: "examination", icon: FileSpreadsheet },
-  { href: "/marks", key: "marks", icon: Edit3 },
-  { href: "/results", key: "results", icon: Award },
-  { href: "/course-enrollment", key: "courseEnrollment", icon: BookOpen },
-  { href: "/fees", key: "fees", icon: Wallet },
-  { href: "/accounts", key: "accounts", icon: Calculator },
-  { href: "/inventory", key: "inventory", icon: Package },
-  { href: "/admission", key: "admission", icon: UserPlus },
-  { href: "/documents/print", key: "documents", icon: Printer },
-  { href: "/website", key: "website", icon: Globe },
-  { href: "/hr", key: "hr", icon: Briefcase },
-  { href: "/library", key: "library", icon: Library },
-  { href: "/transport", key: "transport", icon: Bus },
-  { href: "/hostel", key: "hostel", icon: Home },
-  { href: "/reports", key: "reports", icon: BarChart3 },
-  { href: "/notifications/bulk-sms", key: "bulkSms", icon: MessageSquare },
-  { href: "/settings/institution", key: "settings", icon: Settings },
-] as const;
+import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { LogOut, Search } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { user, refreshToken, logout } = useAuthStore();
   const { institutionName, logoUrl } = useInstitution();
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
-  const t = useTranslations("nav");
   const tCommon = useTranslations("common");
   const [headerSearch, setHeaderSearch] = useState("");
 
@@ -81,26 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           
           <div className="flex-1 overflow-y-auto px-4 py-6">
-            <nav className="flex flex-col gap-1 text-sm font-medium">
-              {NAV_ITEMS.map((item) => {
-                const isActive = pathname.startsWith(item.href);
-                const Icon = item.icon;
-                return (
-                  <Link 
-                    key={item.href} 
-                    href={item.href} 
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 ${
-                      isActive 
-                        ? "bg-primary text-white shadow-md shadow-primary/25" 
-                        : "text-slate-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {t(item.key)}
-                  </Link>
-                );
-              })}
-            </nav>
+            <SidebarNav />
           </div>
 
           {/* User Profile Widget */}

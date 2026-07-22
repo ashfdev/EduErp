@@ -61,10 +61,28 @@ studentsRouter.get(
         // for university too, layered alongside these, not replaced).
         program_id: z.string().optional(),
         department_id: z.string().optional(),
+        // New "Session" filter (Plan Thirteen, Phase D) — didn't exist on
+        // this route before; resolved via the student's current Class's
+        // own academic_year_id, same relation-hop pattern already used for
+        // program_id/department_id above.
+        academic_year_id: z.string().optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(20),
       })
       .parse(req.query);
+
+    // Merged into one object rather than 3 separate `current_class: {...}`
+    // spread entries — object-literal key collisions mean only the LAST
+    // `current_class` spread would otherwise survive, silently dropping
+    // whichever of program_id/department_id/academic_year_id came first
+    // whenever more than one was supplied together (a real pre-existing bug
+    // for the program_id+department_id combo, worse now that a 3rd filter
+    // is being added — fixed here, not just avoided for the new one).
+    const currentClassFilter = {
+      ...(query.program_id && { program_id: query.program_id }),
+      ...(query.department_id && { program: { department_id: query.department_id } }),
+      ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
+    };
 
     const where = {
       deleted_at: null,
@@ -73,8 +91,7 @@ studentsRouter.get(
       ...(query.group_id && { group_id: query.group_id }),
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
-      ...(query.program_id && { current_class: { program_id: query.program_id } }),
-      ...(query.department_id && { current_class: { program: { department_id: query.department_id } } }),
+      ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
       ...(query.search && {
         OR: [
           { name_en: { contains: query.search, mode: "insensitive" as const } },
@@ -116,8 +133,21 @@ studentsRouter.get(
         group_id: z.string().optional(),
         status: z.string().optional(),
         gender: z.string().optional(),
+        // Matches GET / exactly — the frontend already sends both in the
+        // same filterParams object to this route and the list route, so an
+        // export was previously silently ignoring a university admin's
+        // Department/Program filter (Plan Thirteen, Phase D fix).
+        program_id: z.string().optional(),
+        department_id: z.string().optional(),
       })
       .parse(req.query);
+
+    // Same collision fix as GET / — merge into one current_class filter
+    // object instead of two separate spread entries with the same key.
+    const currentClassFilter = {
+      ...(query.program_id && { program_id: query.program_id }),
+      ...(query.department_id && { program: { department_id: query.department_id } }),
+    };
 
     const where = {
       deleted_at: null,
@@ -126,6 +156,7 @@ studentsRouter.get(
       ...(query.group_id && { group_id: query.group_id }),
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
+      ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
       ...(query.search && {
         OR: [
           { name_en: { contains: query.search, mode: "insensitive" as const } },

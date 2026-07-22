@@ -29,7 +29,10 @@
     --input: 214 32% 91%;
     --ring: 239 84% 67%;
     
-    --radius: 1rem; /* Soft but professional */
+    /* Aligned with apps/admin's density, not apps/portal's — the teacher
+       app is also a staff-facing, data-heavy, all-day-use surface (Plan
+       Thirteen, Phase B), unlike the occasional-use student/guardian portal. */
+    --radius: 0.5rem;
   }
 }
 

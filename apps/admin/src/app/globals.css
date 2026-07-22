@@ -21,7 +21,11 @@
     --border: 214 32% 91%;
     --input: 214 32% 91%;
     --ring: 217 91% 43%;
-    --radius: 0.75rem;
+    /* Deliberately tighter than the other 3 apps (portal 1.25rem, teacher/
+       website ~1rem) — the admin panel is the dense, data-heavy, all-day
+       staff surface (Plan Thirteen, Phase B), while portal/website stay
+       softer/roomier for occasional, less-technical users. */
+    --radius: 0.5rem;
   }
 }
 

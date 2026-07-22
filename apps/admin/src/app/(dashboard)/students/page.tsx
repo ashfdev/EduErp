@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import {
+  PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@education-erp/ui";
+import { MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
@@ -37,6 +43,10 @@ interface DepartmentOption {
   id: string;
   name_en: string;
 }
+interface AcademicYearOption {
+  id: string;
+  label: string;
+}
 
 export default function StudentsPage() {
   const t = useTranslations("students");
@@ -52,11 +62,16 @@ export default function StudentsPage() {
   const [gender, setGender] = useState<string>("");
   const [programId, setProgramId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");
+  const [academicYearId, setAcademicYearId] = useState<string>("");
   const [page, setPage] = useState(1);
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const { data: academicYears } = useQuery<AcademicYearOption[]>({
+    queryKey: ["settings", "academic-years"],
+    queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
   const { data: programs } = useQuery<ProgramOption[]>({
     queryKey: ["settings", "programs"],
@@ -80,6 +95,7 @@ export default function StudentsPage() {
     gender: gender || undefined,
     program_id: isUniversity ? programId || undefined : undefined,
     department_id: isUniversity ? departmentId || undefined : undefined,
+    academic_year_id: academicYearId || undefined,
   };
 
   const { data } = useQuery({
@@ -124,6 +140,14 @@ export default function StudentsPage() {
 
       <div className="flex flex-wrap gap-3">
         <Input placeholder={t("searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+
+        <Select value={academicYearId || "all"} onValueChange={(v) => setAcademicYearId(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-40"><SelectValue placeholder={t("allSessions")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allSessions")}</SelectItem>
+            {academicYears?.map((y) => <SelectItem key={y.id} value={y.id}>{y.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
 
         {isUniversity && (
           <>
@@ -196,40 +220,62 @@ export default function StudentsPage() {
       {!students.length && <EmptyState title={t("noStudentsFound")} description={t("noStudentsHint")} />}
 
       <Card>
-        <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">{t("colUid")}</th>
-                <th className="p-2">{t("colName")}</th>
-                <th className="p-2">{terms.term_class} / {terms.term_section}</th>
-                <th className="p-2">{t("colRoll")}</th>
-                <th className="p-2">{t("colGuardianPhone")}</th>
-                <th className="p-2">{t("colStatus")}</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
+        <CardContent className="pt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10"></TableHead>
+                <TableHead>{t("colUid")}</TableHead>
+                <TableHead>{t("colName")}</TableHead>
+                <TableHead>{terms.term_class} / {terms.term_section}</TableHead>
+                <TableHead>{t("colRoll")}</TableHead>
+                <TableHead>{t("colGuardianPhone")}</TableHead>
+                <TableHead>{t("colStatus")}</TableHead>
+                <TableHead className="w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {students.map((s) => (
-                <tr key={s.id} className="border-b hover:bg-accent/40">
-                  <td className="p-2 font-mono text-xs">{s.student_uid}</td>
-                  <td className="p-2">
+                <TableRow key={s.id}>
+                  <TableCell>
+                    {s.photo_url ? (
+                      <img src={s.photo_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                        {s.name_en.charAt(0)}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-[11px]">{s.student_uid}</TableCell>
+                  <TableCell>
                     <div className="font-medium">{s.name_en}</div>
-                    {s.name_bn && <div className="text-xs text-muted-foreground">{s.name_bn}</div>}
-                  </td>
-                  <td className="p-2">{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</td>
-                  <td className="p-2">{s.current_roll_no ?? "—"}</td>
-                  <td className="p-2">{s.guardian?.phone ?? "—"}</td>
-                  <td className="p-2"><StatusBadge status={s.status} /></td>
-                  <td className="p-2">
-                    <Link href={`/students/${s.id}`} className="text-primary hover:underline">
-                      {t("view")}
-                    </Link>
-                  </td>
-                </tr>
+                    {s.name_bn && <div className="text-[11px] text-muted-foreground">{s.name_bn}</div>}
+                  </TableCell>
+                  <TableCell>{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</TableCell>
+                  <TableCell>{s.current_roll_no ?? "—"}</TableCell>
+                  <TableCell>{s.guardian?.phone ?? "—"}</TableCell>
+                  <TableCell><StatusBadge status={s.status} /></TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/students/${s.id}`}>{t("view")}</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/students/${s.id}/edit`}>{t("edit")}</Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
 
           {meta && meta.totalPages > 1 && (
             <div className="mt-4 flex items-center justify-between">

@@ -33,6 +33,16 @@
     "bulkSms": "Bulk SMS",
     "settings": "Settings"
   },
+  "navGroups": {
+    "academic": "Academic",
+    "students": "Students",
+    "admission": "Admission",
+    "finance": "Finance",
+    "hrStaff": "HR & Staff",
+    "campus": "Campus",
+    "communication": "Communication",
+    "system": "System"
+  },
   "login": {
     "poweredBy": "Powered by AshDevs",
     "staffLogin": "Staff Login",
@@ -131,6 +141,7 @@
     "allPrograms": "All Programs",
     "allStatus": "All Status",
     "allGender": "All Gender",
+    "allSessions": "All Sessions",
     "statusActive": "Active",
     "statusInactive": "Inactive",
     "statusTransferred": "Transferred",
@@ -148,6 +159,7 @@
     "colGuardianPhone": "Guardian Phone",
     "colStatus": "Status",
     "view": "View",
+    "edit": "Edit",
     "previous": "Previous",
     "next": "Next",
     "pageOf": "Page {page} of {totalPages}"

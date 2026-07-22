@@ -160,7 +160,16 @@ attendanceRouter.post(
   authorize(ATTENDANCE_MARK_ROLES),
   asyncHandler(async (req, res) => {
     const body = markStaffAttendanceSchema.parse(req.body);
-    const date = startOfDay(body.date);
+    // Date.UTC(), not the shared startOfDay() above (a known, previously-
+    // flagged local-time Date bug elsewhere in this file, deliberately not
+    // touched here — that function has 5 other call sites including the
+    // actively-used student daily-attendance marking route, too much blast
+    // radius to fix as a drive-by). Scoped fix: this one route now stores
+    // under the correct calendar day, matching the new /staff/daily-summary
+    // GET route's own Date.UTC()-based query — without this, a manual mark
+    // silently saved under yesterday's date and never showed up today.
+    const d = body.date;
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
 
     let saved = 0;
     for (const record of body.records) {
@@ -190,6 +199,108 @@ attendanceRouter.post(
     }
 
     res.json({ success: true, data: { saved } });
+  }),
+);
+
+// Employee Attendance admin page (Plan Thirteen, Phase E) — a pure read/
+// aggregation endpoint. The underlying data is already correctly populated
+// today, either by /staff/mark above or by the biometric punch pipeline
+// (services/device/src/processor/punch.processor.ts resolves a punch to a
+// Staff row via Staff.biometric_id using the exact same code path as
+// students, including deriving check_in_at/check_out_at) — this route does
+// not write any attendance data itself.
+attendanceRouter.get(
+  "/staff/daily-summary",
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        date: z.coerce.date(),
+        position: z.string().optional(),
+        status: z.string().optional(),
+      })
+      .parse(req.query);
+
+    // Date.UTC(), not startOfDay() above (which still uses a local-time Date
+    // constructor) — this server runs in Bangladesh time (UTC+6), and a
+    // locally-constructed midnight Date shifts back one calendar day once
+    // compared against a @db.Date column. New code in this file uses the
+    // correct pattern; startOfDay() itself is left as a known, previously-
+    // flagged, out-of-scope pre-existing issue in this file.
+    const d = query.date;
+    const dayStart = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayEnd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+    const dayOfWeek = dayStart.getUTCDay();
+
+    const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    const workingDays = (rules?.working_days as number[] | null) ?? [0, 1, 2, 3, 4, 6];
+    const isWorkingDay = workingDays.includes(dayOfWeek);
+
+    const staff = await prisma.staff.findMany({
+      where: { deleted_at: null, is_active: true, ...(query.position && { designation: query.position }) },
+      select: { id: true, name_en: true, designation: true },
+      orderBy: { name_en: "asc" },
+    });
+    const staffIds = staff.map((s) => s.id);
+
+    const [records, punchGroups] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: { person_id: { in: staffIds }, person_type: "STAFF", date: dayStart },
+        include: { shift: { select: { start_time: true, end_time: true } } },
+      }),
+      prisma.devicePunchLog.groupBy({
+        by: ["mapped_person_id"],
+        where: { mapped_person_id: { in: staffIds }, mapped_person_type: "STAFF", punch_at: { gte: dayStart, lt: dayEnd } },
+        _count: { _all: true },
+      }),
+    ]);
+    const recordByStaff = new Map(records.map((r) => [r.person_id, r]));
+    const punchCountByStaff = new Map(punchGroups.map((g) => [g.mapped_person_id, g._count._all]));
+
+    function computeWorkingHours(checkIn: Date | null, checkOut: Date | null): number | null {
+      if (!checkIn || !checkOut) return null;
+      return Math.round(((checkOut.getTime() - checkIn.getTime()) / 3_600_000) * 100) / 100;
+    }
+
+    function computeOvertime(checkOut: Date | null, shiftEndTime: string | undefined): number {
+      if (!checkOut || !shiftEndTime) return 0;
+      const [h, m] = shiftEndTime.split(":").map(Number);
+      const shiftEnd = new Date(checkOut);
+      shiftEnd.setHours(h ?? 0, m ?? 0, 0, 0);
+      const diffHours = (checkOut.getTime() - shiftEnd.getTime()) / 3_600_000;
+      return diffHours > 0 ? Math.round(diffHours * 100) / 100 : 0;
+    }
+
+    const rows = staff.map((s) => {
+      const record = recordByStaff.get(s.id) ?? null;
+      const rowStatus = !isWorkingDay ? "WEEKEND" : record ? record.status : "UNMARKED";
+      return {
+        staff_id: s.id,
+        name: s.name_en,
+        designation: s.designation,
+        shift_start_time: record?.shift?.start_time ?? null,
+        shift_end_time: record?.shift?.end_time ?? null,
+        check_in_at: record?.check_in_at ?? null,
+        check_out_at: record?.check_out_at ?? null,
+        working_hours: computeWorkingHours(record?.check_in_at ?? null, record?.check_out_at ?? null),
+        overtime_hours: computeOvertime(record?.check_out_at ?? null, record?.shift?.end_time),
+        status: rowStatus,
+        punch_count: punchCountByStaff.get(s.id) ?? 0,
+      };
+    });
+
+    const filteredRows = query.status ? rows.filter((r) => r.status === query.status) : rows;
+
+    const summary = {
+      total: staff.length,
+      present: rows.filter((r) => r.status === "PRESENT").length,
+      late: rows.filter((r) => r.status === "LATE").length,
+      absent: rows.filter((r) => r.status === "ABSENT").length,
+      on_leave: rows.filter((r) => r.status === "LEAVE").length,
+      weekend: rows.filter((r) => r.status === "WEEKEND").length,
+      unmarked: rows.filter((r) => r.status === "UNMARKED").length,
+    };
+
+    res.json({ success: true, data: { date: dayStart.toISOString().slice(0, 10), is_working_day: isWorkingDay, summary, rows: filteredRows } });
   }),
 );
 
