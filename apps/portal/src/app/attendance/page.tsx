@@ -14,7 +14,7 @@ interface AttendanceRecord {
 }
 interface SubjectAttendanceSummary {
   overall: { present: number; total: number; percentage: number };
-  subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[];
+  subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number | null }[];
 }
 interface SubjectHistoryEntry {
   date: string;
@@ -270,7 +270,7 @@ function AttendanceContent() {
           {!subjectSummary && <div className="flex justify-center p-8"><LoadingSpinner /></div>}
           {subjectSummary && !subjectSummary.subjects.length && (
             <p className="rounded-2xl border border-dashed bg-slate-50 p-8 text-center text-slate-500">
-              No subject-wise attendance recorded yet this year.
+              No subjects found for this student this year.
             </p>
           )}
           {subjectSummary && !!subjectSummary.subjects.length && (
@@ -296,10 +296,16 @@ function AttendanceContent() {
                       >
                         <div>
                           <p className="font-bold text-slate-800">{s.subject_name_en}</p>
-                          <p className="text-xs text-slate-500">{s.present} / {s.total} sessions</p>
+                          <p className="text-xs text-slate-500">
+                            {s.percentage === null ? "No attendance recorded yet" : `${s.present} / ${s.total} sessions`}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
+                          {s.percentage === null ? (
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">No data</span>
+                          ) : (
+                            <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
+                          )}
                           <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                         </div>
                       </button>

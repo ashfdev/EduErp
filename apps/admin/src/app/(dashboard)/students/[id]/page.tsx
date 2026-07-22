@@ -105,7 +105,7 @@ export default function StudentProfilePage() {
   const [leaveReason, setLeaveReason] = useState("");
   const pdfPreview = usePdfPreview();
 
-  const { data: subjectAttendance } = useQuery<{ overall: { present: number; total: number; percentage: number }; subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number }[] }>({
+  const { data: subjectAttendance } = useQuery<{ overall: { present: number; total: number; percentage: number }; subjects: { subject_id: string; subject_name_en: string; present: number; total: number; percentage: number | null }[] }>({
     queryKey: ["students", id, "subject-attendance"],
     queryFn: async () => (await api.get(`/api/attendance/subject-wise/student/${id}/summary`)).data.data,
   });
@@ -396,8 +396,14 @@ export default function StudentProfilePage() {
                                 {s.subject_name_en}
                               </span>
                             </td>
-                            <td className="p-2">{s.present} / {s.total}</td>
-                            <td className={`p-2 font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</td>
+                            <td className="p-2">{s.percentage === null ? "—" : `${s.present} / ${s.total}`}</td>
+                            <td className="p-2">
+                              {s.percentage === null ? (
+                                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">No attendance recorded yet</span>
+                              ) : (
+                                <span className={`font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</span>
+                              )}
+                            </td>
                           </tr>
                           {isOpen && (
                             <tr key={`${s.subject_id}-detail`} className="border-b bg-muted/20 last:border-0">

@@ -183,26 +183,46 @@ subjectAttendanceRouter.get(
     const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
 
     let dateRange: { gte: Date; lte: Date } | undefined;
+    let yearId: string | undefined;
     if (query.academic_year_id) {
       const year = await prisma.academicYear.findUnique({ where: { id: query.academic_year_id } });
       if (!year) throw notFound("Academic year not found");
       dateRange = { gte: year.start_date, lte: year.end_date };
+      yearId = year.id;
     } else {
       const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
       dateRange = activeYear ? { gte: activeYear.start_date, lte: activeYear.end_date } : undefined;
+      yearId = activeYear?.id;
     }
 
     const summary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
-    const subjectIds = summary.subjects.map((s) => s.subject_id);
-    const subjects = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, name_en: true } });
-    const nameById = new Map(subjects.map((s) => [s.id, s.name_en]));
+    const byId = new Map(summary.subjects.map((s) => [s.subject_id, s]));
+
+    // Every subject the student is actually enrolled in for this year shows
+    // up here, not just ones with at least one recorded session — mirrors
+    // the portal's equivalent route (server/api/src/modules/portal/
+    // portal.routes.ts GET /student/:id/subject-attendance) so the two
+    // never drift apart.
+    const enrolled = await prisma.studentSubject.findMany({
+      where: { student_id: studentId, ...(yearId ? { academic_year_id: yearId } : {}) },
+      include: { subject: { select: { id: true, name_en: true } } },
+    });
 
     res.json({
       success: true,
       data: {
         overall: summary.overall,
-        subjects: summary.subjects
-          .map((s) => ({ subject_id: s.subject_id, subject_name_en: nameById.get(s.subject_id) ?? "Unknown", present: s.present, total: s.total, percentage: s.percentage }))
+        subjects: enrolled
+          .map((es) => {
+            const s = byId.get(es.subject_id);
+            return {
+              subject_id: es.subject_id,
+              subject_name_en: es.subject.name_en,
+              present: s?.present ?? 0,
+              total: s?.total ?? 0,
+              percentage: s ? s.percentage : null,
+            };
+          })
           .sort((a, b) => a.subject_name_en.localeCompare(b.subject_name_en)),
       },
     });

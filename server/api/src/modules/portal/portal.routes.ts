@@ -184,17 +184,32 @@ portalRouter.get(
     const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
     const dateRange = activeYear ? { gte: activeYear.start_date, lte: activeYear.end_date } : undefined;
     const summary = (await computeSubjectWiseAttendance(prisma, [id], dateRange)).get(id)!;
+    const byId = new Map(summary.subjects.map((s) => [s.subject_id, s]));
 
-    const subjectIds = summary.subjects.map((s) => s.subject_id);
-    const subjects = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, name_en: true } });
-    const nameById = new Map(subjects.map((s) => [s.id, s.name_en]));
+    // Every subject the student is actually enrolled in this year shows up
+    // here, not just ones with at least one recorded session — a subject a
+    // teacher hasn't marked yet must read as "no attendance recorded", not
+    // silently disappear from the list.
+    const enrolled = await prisma.studentSubject.findMany({
+      where: { student_id: id, ...(activeYear ? { academic_year_id: activeYear.id } : {}) },
+      include: { subject: { select: { id: true, name_en: true } } },
+    });
 
     res.json({
       success: true,
       data: {
         overall: summary.overall,
-        subjects: summary.subjects
-          .map((s) => ({ subject_id: s.subject_id, subject_name_en: nameById.get(s.subject_id) ?? "Unknown", present: s.present, total: s.total, percentage: s.percentage }))
+        subjects: enrolled
+          .map((es) => {
+            const s = byId.get(es.subject_id);
+            return {
+              subject_id: es.subject_id,
+              subject_name_en: es.subject.name_en,
+              present: s?.present ?? 0,
+              total: s?.total ?? 0,
+              percentage: s ? s.percentage : null,
+            };
+          })
           .sort((a, b) => a.subject_name_en.localeCompare(b.subject_name_en)),
       },
     });
