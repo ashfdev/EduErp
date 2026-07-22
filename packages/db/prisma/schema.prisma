@@ -1318,6 +1318,30 @@ model StudentWaiver {
   @@index([student_id])
 }
 
+// One row per bulk/manual invoice-generation event (Plan Thirteen, Phase G
+// -- "Fee Generations log") -- previously only transient {created,
+// skipped_duplicates} counts were returned and nothing was ever persisted.
+model InvoiceGenerationRun {
+  id             String   @id @default(cuid())
+  run_by_id      String
+  run_at         DateTime @default(now())
+  trigger        InvoiceGenerationTrigger
+  created_count  Int
+  skipped_count  Int
+  academic_year_id String?
+  month          Int?
+  year           Int?
+
+  @@index([run_at])
+}
+
+enum InvoiceGenerationTrigger {
+  MANUAL
+  BULK_MONTHLY
+  PROMOTION
+  ADMISSION
+}
+
 // One row per invoice a waiver actually discounted -- traced per-invoice
 // rather than opaquely mutating Invoice.amount_due, since the Student-wise
 // Waivers report (Phase G) needs this trail.

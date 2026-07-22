@@ -127,6 +127,10 @@ feesRouter.post(
       created++;
     }
 
+    await prisma.invoiceGenerationRun.create({
+      data: { run_by_id: req.user!.sub, trigger: "MANUAL", created_count: created, skipped_count: skipped, academic_year_id: structure.academic_year_id, month: body.month, year: body.year },
+    });
+
     res.json({ success: true, data: { created, skipped_duplicates: skipped } });
   }),
 );
@@ -155,6 +159,10 @@ feesRouter.post(
         else skipped++;
       }
     }
+
+    await prisma.invoiceGenerationRun.create({
+      data: { run_by_id: req.user!.sub, trigger: "BULK_MONTHLY", created_count: created, skipped_count: skipped, academic_year_id: body.academic_year_id, month: body.month, year: body.year },
+    });
 
     res.json({ success: true, data: { created, skipped_duplicates: skipped } });
   }),
@@ -576,5 +584,99 @@ feesRouter.get(
     res.setHeader("Content-Disposition", `attachment; filename="Fee_Collection_${query.from.toISOString().slice(0, 10)}_${query.to.toISOString().slice(0, 10)}.xlsx"`);
     await workbook.xlsx.write(res);
     res.end();
+  }),
+);
+
+feesRouter.get(
+  "/reports/student-wise-due",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ student_id: z.string().min(1) }).parse(req.query);
+    const invoices = await prisma.invoice.findMany({
+      where: { student_id: query.student_id, status: { notIn: ["PAID", "WAIVED"] } },
+      orderBy: { due_date: "asc" },
+    });
+    const total_due = invoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
+    res.json({ success: true, data: { total_due: Math.round(total_due * 100) / 100, invoices } });
+  }),
+);
+
+// Class-wise Summary + Student-wise Summary (Plan Thirteen, Phase G) --
+// both new aggregation queries, no existing precedent to reuse beyond the
+// query shape already used in /reports/dues above.
+feesRouter.get(
+  "/reports/class-wise-summary",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ academic_year_id: z.string().min(1) }).parse(req.query);
+    const invoices = await prisma.invoice.findMany({
+      where: { academic_year_id: query.academic_year_id },
+      select: { amount_due: true, amount_paid: true, status: true, student: { select: { current_class_id: true, current_class: { select: { name_en: true } } } } },
+    });
+
+    const byClass = new Map<string, { class_name: string; generated: number; collected: number; due: number }>();
+    for (const inv of invoices) {
+      const classId = inv.student.current_class_id ?? "unassigned";
+      const className = inv.student.current_class?.name_en ?? "Unassigned";
+      const entry = byClass.get(classId) ?? { class_name: className, generated: 0, collected: 0, due: 0 };
+      entry.generated += inv.amount_due;
+      entry.collected += inv.amount_paid;
+      if (inv.status !== "WAIVED") entry.due += Math.max(0, inv.amount_due - inv.amount_paid);
+      byClass.set(classId, entry);
+    }
+
+    res.json({ success: true, data: [...byClass.entries()].map(([class_id, v]) => ({ class_id, ...v })) });
+  }),
+);
+
+feesRouter.get(
+  "/reports/student-wise-summary",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ academic_year_id: z.string().min(1), class_id: z.string().optional() }).parse(req.query);
+    const invoices = await prisma.invoice.findMany({
+      where: { academic_year_id: query.academic_year_id, ...(query.class_id && { student: { current_class_id: query.class_id } }) },
+      select: { amount_due: true, amount_paid: true, status: true, student_id: true, student: { select: { name_en: true, student_uid: true } } },
+    });
+
+    const byStudent = new Map<string, { name_en: string; student_uid: string; generated: number; collected: number; due: number }>();
+    for (const inv of invoices) {
+      const entry = byStudent.get(inv.student_id) ?? { name_en: inv.student.name_en, student_uid: inv.student.student_uid, generated: 0, collected: 0, due: 0 };
+      entry.generated += inv.amount_due;
+      entry.collected += inv.amount_paid;
+      if (inv.status !== "WAIVED") entry.due += Math.max(0, inv.amount_due - inv.amount_paid);
+      byStudent.set(inv.student_id, entry);
+    }
+
+    res.json({ success: true, data: [...byStudent.entries()].map(([student_id, v]) => ({ student_id, ...v })) });
+  }),
+);
+
+feesRouter.get(
+  "/reports/generation-log",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (_req, res) => {
+    const runs = await prisma.invoiceGenerationRun.findMany({ orderBy: { run_at: "desc" }, take: 100 });
+    res.json({ success: true, data: runs });
+  }),
+);
+
+// Reads from Phase F's InvoiceWaiverApplication trail — hard-blocked on
+// that phase landing first (it did).
+feesRouter.get(
+  "/reports/waivers",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ student_id: z.string().optional() }).parse(req.query);
+    const applications = await prisma.invoiceWaiverApplication.findMany({
+      where: query.student_id ? { invoice: { student_id: query.student_id } } : undefined,
+      include: {
+        invoice: { select: { id: true, invoice_no: true, description: true, category: true, student: { select: { name_en: true, student_uid: true } } } },
+        student_waiver: { include: { waiver_type: { select: { name: true } } } },
+      },
+      orderBy: { applied_at: "desc" },
+      take: 200,
+    });
+    res.json({ success: true, data: applications });
   }),
 );
