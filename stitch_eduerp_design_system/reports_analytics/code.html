@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp - Reports &amp; Analytics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#727785",
+                        "primary": "#004cab",
+                        "inverse-primary": "#afc6ff",
+                        "surface-container": "#e5eeff",
+                        "secondary": "#545c83",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#5456e1",
+                        "surface-container-low": "#eff4ff",
+                        "inverse-surface": "#213145",
+                        "on-secondary-fixed-variant": "#3d456a",
+                        "surface-container-highest": "#d3e4fe",
+                        "error": "#ba1a1a",
+                        "background": "#f8f9ff",
+                        "tertiary": "#3a3ac8",
+                        "primary-fixed-dim": "#afc6ff",
+                        "on-primary-fixed": "#001a43",
+                        "on-tertiary-fixed": "#07006c",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#eaf1ff",
+                        "warning-container": "#FEF3C7",
+                        "surface-card": "#FFFFFF",
+                        "secondary-container": "#cad2ff",
+                        "surface-container-high": "#dce9ff",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "on-background": "#0b1c30",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary-fixed": "#10193c",
+                        "primary-fixed": "#d9e2ff",
+                        "primary-container": "#0963d8",
+                        "secondary-fixed": "#dde1ff",
+                        "on-primary-fixed-variant": "#004398",
+                        "surface": "#f8f9ff",
+                        "secondary-fixed-dim": "#bcc4f1",
+                        "border-subtle": "#E2E8F0",
+                        "surface-container-lowest": "#ffffff",
+                        "status-success": "#10B981",
+                        "status-warning": "#F59E0B",
+                        "tertiary-fixed": "#e1e0ff",
+                        "success-container": "#D1FAE5",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-secondary": "#ffffff",
+                        "surface-canvas": "#F8FAFC",
+                        "status-error": "#EF4444",
+                        "on-primary-container": "#e2e8ff",
+                        "on-secondary-container": "#515980",
+                        "surface-variant": "#d3e4fe",
+                        "outline-variant": "#c2c6d6",
+                        "on-surface-variant": "#424754",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "surface-dim": "#cbdbf5",
+                        "on-tertiary-container": "#e9e6ff",
+                        "surface-tint": "#0059c6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "topbar-height": "64px",
+                        "gutter": "16px",
+                        "sidebar-width": "256px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "helper-text": ["Inter"],
+                        "headline-md-mobile": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-base": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-sm": ["Inter"],
+                        "body-medium": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "helper-text": ["12px", { "lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "headline-md-mobile": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "body-medium": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #F8FAFC;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-body-base text-body-base text-on-surface antialiased lg:flex">
+<!-- SideNavBar (Desktop) -->
+<aside class="hidden lg:flex flex-col h-full fixed left-0 top-0 h-full w-[256px] bg-[#0B1437] shadow-sm z-50">
+<div class="flex items-center gap-4 px-6 py-8 border-b border-white/10">
+<div class="h-10 w-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-inner">
+<img alt="Institution Logo" class="h-8 w-8 object-contain" data-alt="A stylized, modern, abstract geometric logo for an educational institution. The design is sleek, using minimal lines and curves to suggest growth and intelligence. The primary color is a deep, trustworthy navy blue with bright cyan accents. The background is a stark, clean white to emphasize the logo's structure and corporate modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzT9cVmbED5r8VdGqLzRMYIMuxx7eCrvT1oY8rDT7wGpZj7V26kGSISxPrX7-i7L1p1mtdoNhFuKXdbd3EHCVWsGsagN3X0HnYqORPXzVGN313Qn87GgoOVeAyr93ruFnsQhvwM7anVyTytIqWnwQl6CrkJ7Hy0iw9cF_Cr0EGggod3YDxTM6qOZzAzlRzB5AgJZpcevotBNmF0M4jSefixoNW6VBfNEaFg1w_6GKBFdC_wNRIHg1Q"/>
+</div>
+<div>
+<h1 class="text-headline-md font-headline-md text-white m-0 leading-none">EduErp</h1>
+<p class="font-helper-text text-helper-text text-white/60 mt-1">Institutional Intelligence</p>
+</div>
+</div>
+<nav class="flex-1 overflow-y-auto py-4 font-body-medium text-body-medium">
+<ul class="flex flex-col gap-1 px-2">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+                        Administration
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">group</span>
+                        Students
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">school</span>
+                        Faculty
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+                        Academics
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+                        Attendance
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">quiz</span>
+                        Examinations
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-white border-l-4 border-primary bg-white/10 rounded-r-lg shadow-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assessment</span>
+                        Reports
+                    </a>
+</li>
+<li class="mt-8 border-t border-white/10 pt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 lg:ml-[256px] min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="sticky top-0 z-40 w-full bg-surface-container-lowest border-b border-border-subtle shadow-sm flex justify-between items-center h-[64px] px-margin-mobile lg:px-margin-desktop ml-auto">
+<div class="flex items-center gap-4 lg:hidden">
+<span class="material-symbols-outlined text-primary text-2xl">menu</span>
+<span class="text-title-sm font-title-sm font-bold text-primary">EduErp</span>
+</div>
+<div class="hidden lg:flex items-center flex-1 max-w-md ml-4">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full h-9 pl-9 pr-4 rounded-full border border-border-subtle bg-surface-bright focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none font-body-medium text-body-medium transition-all" placeholder="Search reports..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors scale-95 active:scale-90 text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors scale-95 active:scale-90 text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="ml-2 h-8 w-8 rounded-full bg-secondary-container overflow-hidden border border-border-subtle cursor-pointer">
+<img alt="Administrator Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a school administrator in a modern office setting. The lighting is bright and evenly distributed, highlighting a friendly, confident expression. The background is slightly blurred but suggests a high-end corporate or academic environment. The color palette focuses on crisp whites, soft greys, and subtle navy accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_gv2wcqbDhL35e11LzeWivHwWKrbhwcIz_dst7cF7tSh7146slvVCbabqj1lA5QrhwIY60A7SK4-M98f0x5_zwl2fAqg7j_vyORCz_zE-G_BIqZHcczpBG57CGozdZABJxxqUlIWZrIyR-W-mj9ye-ZOf1fHxpCRWBH2xkQ2_S-Q4DV2lQt2HvCJA-FuN7GrNgGMIGwwfbsX4DY22Ua_z66oT9xbGkSm5n0cAvzMsncZ-zcu6ris2"/>
+</div>
+</div>
+</header>
+<!-- Workspace / Content -->
+<div class="flex-1 p-margin-mobile lg:p-margin-desktop max-w-7xl mx-auto w-full">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Institutional Analytics</h2>
+<p class="font-body-medium text-body-medium text-on-surface-variant mt-1">Overview of key performance indicators for Fall Semester 2024</p>
+</div>
+<div class="flex gap-3 w-full md:w-auto">
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-surface-container-lowest border border-border-subtle rounded-lg text-on-surface font-body-medium text-body-medium hover:bg-surface-container-low transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">calendar_month</span>
+                        This Term
+                        <span class="material-symbols-outlined text-[18px]">arrow_drop_down</span>
+</button>
+<button class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#0963D8] text-white rounded-lg font-body-medium text-body-medium hover:bg-primary-container/90 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- KPIs -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<!-- KPI 1 -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] relative overflow-hidden group">
+<div class="absolute -right-6 -top-6 text-primary/5 group-hover:text-primary/10 transition-colors pointer-events-none">
+<span class="material-symbols-outlined text-[120px]">group</span>
+</div>
+<div class="flex items-center gap-3 mb-2">
+<div class="h-8 w-8 rounded-full bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-sm">groups</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant tracking-wider uppercase">Total Enrollment</span>
+</div>
+<div class="flex items-end gap-3">
+<h3 class="font-display-lg text-display-lg text-on-surface">12,450</h3>
+<span class="flex items-center text-status-success font-body-medium text-body-medium mb-1 bg-success-container/50 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+                            4.2%
+                        </span>
+</div>
+<p class="font-helper-text text-helper-text text-on-surface-variant mt-2">vs. previous academic year</p>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] relative overflow-hidden group">
+<div class="absolute -right-6 -top-6 text-status-success/5 group-hover:text-status-success/10 transition-colors pointer-events-none">
+<span class="material-symbols-outlined text-[120px]">account_balance_wallet</span>
+</div>
+<div class="flex items-center gap-3 mb-2">
+<div class="h-8 w-8 rounded-full bg-success-container/30 flex items-center justify-center text-status-success">
+<span class="material-symbols-outlined text-sm">payments</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant tracking-wider uppercase">Fee Collection</span>
+</div>
+<div class="flex items-end gap-3">
+<h3 class="font-display-lg text-display-lg text-on-surface">$4.2M</h3>
+<span class="flex items-center text-status-success font-body-medium text-body-medium mb-1 bg-success-container/50 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+                            8.1%
+                        </span>
+</div>
+<p class="font-helper-text text-helper-text text-on-surface-variant mt-2">94% of total projected revenue</p>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] relative overflow-hidden group">
+<div class="absolute -right-6 -top-6 text-tertiary/5 group-hover:text-tertiary/10 transition-colors pointer-events-none">
+<span class="material-symbols-outlined text-[120px]">workspace_premium</span>
+</div>
+<div class="flex items-center gap-3 mb-2">
+<div class="h-8 w-8 rounded-full bg-tertiary-container/10 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-sm">school</span>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant tracking-wider uppercase">Avg. Academic Perf.</span>
+</div>
+<div class="flex items-end gap-3">
+<h3 class="font-display-lg text-display-lg text-on-surface">3.42</h3>
+<span class="flex items-center text-on-surface-variant font-body-medium text-body-medium mb-1 bg-surface-container-high px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">horizontal_rule</span>
+                            0.0%
+                        </span>
+</div>
+<p class="font-helper-text text-helper-text text-on-surface-variant mt-2">Cumulative GPA across all departments</p>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-2 py-2 bg-surface-container-lowest border-t border-border-subtle z-50 rounded-t-xl shadow-lg transition-all duration-200">
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 active:bg-surface-container-high rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1">dashboard</span>
+<span class="font-label-caps text-label-caps text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 active:bg-surface-container-high rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1">group</span>
+<span class="font-label-caps text-label-caps text-[10px]">Students</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 active:bg-surface-container-high rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1">calendar_month</span>
+<span class="font-label-caps text-label-caps text-[10px]">Attendance</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl p-1 w-16 h-14" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label-caps text-label-caps text-[10px]">Reports</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 active:bg-surface-container-high rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1">more_horiz</span>
+<span class="font-label-caps text-label-caps text-[10px]">More</span>
+</a>
+</nav>
+</body></html>

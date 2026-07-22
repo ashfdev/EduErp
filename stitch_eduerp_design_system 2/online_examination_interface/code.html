@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp - Online Examination</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#3a3ac8",
+                        "on-secondary-fixed": "#10193c",
+                        "on-primary-fixed": "#001a43",
+                        "secondary-container": "#cad2ff",
+                        "on-surface-variant": "#424754",
+                        "primary-fixed-dim": "#afc6ff",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-secondary-container": "#515980",
+                        "warning-container": "#FEF3C7",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-tint": "#0059c6",
+                        "background": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-canvas": "#F8FAFC",
+                        "secondary": "#545c83",
+                        "on-error-container": "#93000a",
+                        "surface-container-low": "#eff4ff",
+                        "surface-card": "#FFFFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary-container": "#e9e6ff",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary-container": "#5456e1",
+                        "on-secondary-fixed-variant": "#3d456a",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "surface-dim": "#cbdbf5",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-fixed-variant": "#004398",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#e5eeff",
+                        "primary": "#004cab",
+                        "outline-variant": "#c2c6d6",
+                        "error": "#ba1a1a",
+                        "status-success": "#10B981",
+                        "on-primary-container": "#e2e8ff",
+                        "surface": "#f8f9ff",
+                        "success-container": "#D1FAE5",
+                        "surface-variant": "#d3e4fe",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "inverse-primary": "#afc6ff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "outline": "#727785",
+                        "border-subtle": "#E2E8F0",
+                        "secondary-fixed-dim": "#bcc4f1",
+                        "on-background": "#0b1c30",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#dde1ff",
+                        "primary-container": "#0963d8",
+                        "status-error": "#EF4444",
+                        "on-surface": "#0b1c30",
+                        "status-warning": "#F59E0B",
+                        "on-tertiary-fixed": "#07006c",
+                        "primary-fixed": "#d9e2ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "margin-desktop": "24px",
+                        "topbar-height": "64px",
+                        "margin-mobile": "16px",
+                        "unit": "4px",
+                        "sidebar-width": "256px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "body-base": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "title-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-medium": ["Inter"],
+                        "helper-text": ["Inter"],
+                        "headline-md-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-medium": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500" }],
+                        "helper-text": ["12px", { "lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "headline-md-mobile": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface-canvas min-h-screen text-on-surface antialiased flex flex-col">
+<!-- Top Navigation (Focus Mode) -->
+<header class="bg-surface-card h-topbar-height sticky top-0 w-full border-b border-border-subtle shadow-sm z-50">
+<div class="flex justify-between items-center px-6 w-full max-w-7xl mx-auto h-full">
+<!-- Brand -->
+<div class="flex items-center gap-3">
+<img alt="EduErp Logo" class="h-8 w-8 object-contain rounded-md" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9Ltfpw9VanwcH6y8ymHSNP5t67G4pbXTLW4V4JFpoljP7ljXLt_FbGQHILwkbzUIeum8JhU-MOFPYk4_9cbcxuEbrOVpR6zKNSe3ZPPI1utzf1x4cxU5u_f5BDKfitodwI1ysmYGU_L3qy0C2Sxaq0WYbLFn0BuWn3le95rxlpGC-V2Uyx-O1KQ95YeEmyXNenNeip98iANbGOR7LLzKwGO7094K-zd3KnVLEpE9rjxQl4pz8xQ3E"/>
+<span class="font-headline-md text-headline-md font-black text-on-surface">EduErp</span>
+</div>
+<!-- Timer & Actions -->
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-error-container/20 text-status-error px-4 py-2 rounded-lg border border-error-container">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">timer</span>
+<span class="font-title-sm text-title-sm font-bold tabular-nums">01:45:30</span>
+</div>
+<button class="bg-primary-container text-white px-6 py-2 rounded-lg font-title-sm text-title-sm hover:bg-primary transition-colors duration-200">
+                    Submit Exam
+                </button>
+</div>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="flex-grow w-full max-w-7xl mx-auto p-margin-desktop grid grid-cols-1 md:grid-cols-12 gap-margin-desktop">
+<!-- Left Column: Question Area -->
+<div class="md:col-span-8 lg:col-span-9 flex flex-col gap-6">
+<!-- Question Header -->
+<div class="bg-surface-card rounded-xl p-6 border border-border-subtle shadow-sm">
+<div class="flex justify-between items-start mb-6">
+<div class="flex flex-col gap-1">
+<span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Question 4 of 50</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">Advanced Data Structures</h2>
+</div>
+<span class="bg-surface-container-low text-primary px-3 py-1 rounded-full font-body-medium text-body-medium border border-primary-fixed-dim">
+                        2 Points
+                    </span>
+</div>
+<!-- Question Content -->
+<div class="prose max-w-none mb-8">
+<p class="font-body-base text-body-base text-on-surface leading-relaxed text-lg">
+                        In a balanced binary search tree (like an AVL tree), what is the time complexity of the worst-case scenario for searching a specific element, where 'n' represents the number of nodes in the tree?
+                    </p>
+<div class="mt-4 bg-surface-container-lowest p-4 rounded-lg border border-border-subtle font-mono text-sm text-on-surface-variant">
+                        // Consider standard implementations<br/>
+                        Node* search(Node* root, int key) {<br/>
+                          if (root == NULL || root-&gt;key == key)<br/>
+                            return root;<br/>
+                          if (root-&gt;key &lt; key)<br/>
+                            return search(root-&gt;right, key);<br/>
+                          return search(root-&gt;left, key);<br/>
+                        }
+                    </div>
+</div>
+<!-- Multiple Choice Options -->
+<div class="flex flex-col gap-3">
+<!-- Option A (Unselected) -->
+<label class="group relative flex items-center p-4 border border-border-subtle rounded-lg cursor-pointer hover:bg-surface-container-low hover:border-primary-fixed-dim transition-all duration-200">
+<input class="absolute opacity-0" name="q4" type="radio"/>
+<div class="flex items-center gap-4 w-full">
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center group-hover:border-primary-container">
+<div class="w-3 h-3 rounded-full bg-primary-container opacity-0 scale-50 transition-all duration-200"></div>
+</div>
+<span class="font-body-medium text-body-medium text-on-surface w-full">O(n)</span>
+</div>
+</label>
+<!-- Option B (Selected) -->
+<label class="group relative flex items-center p-4 border-2 border-primary-container bg-surface-container-low rounded-lg cursor-pointer transition-all duration-200">
+<input checked="" class="absolute opacity-0" name="q4" type="radio"/>
+<div class="flex items-center gap-4 w-full">
+<div class="w-6 h-6 rounded-full border-2 border-primary-container flex items-center justify-center">
+<div class="w-3 h-3 rounded-full bg-primary-container opacity-100 scale-100 transition-all duration-200"></div>
+</div>
+<span class="font-body-medium text-body-medium text-on-surface w-full">O(log n)</span>
+</div>
+</label>
+<!-- Option C (Unselected) -->
+<label class="group relative flex items-center p-4 border border-border-subtle rounded-lg cursor-pointer hover:bg-surface-container-low hover:border-primary-fixed-dim transition-all duration-200">
+<input class="absolute opacity-0" name="q4" type="radio"/>
+<div class="flex items-center gap-4 w-full">
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center group-hover:border-primary-container">
+<div class="w-3 h-3 rounded-full bg-primary-container opacity-0 scale-50 transition-all duration-200"></div>
+</div>
+<span class="font-body-medium text-body-medium text-on-surface w-full">O(n log n)</span>
+</div>
+</label>
+<!-- Option D (Unselected) -->
+<label class="group relative flex items-center p-4 border border-border-subtle rounded-lg cursor-pointer hover:bg-surface-container-low hover:border-primary-fixed-dim transition-all duration-200">
+<input class="absolute opacity-0" name="q4" type="radio"/>
+<div class="flex items-center gap-4 w-full">
+<div class="w-6 h-6 rounded-full border-2 border-outline flex items-center justify-center group-hover:border-primary-container">
+<div class="w-3 h-3 rounded-full bg-primary-container opacity-0 scale-50 transition-all duration-200"></div>
+</div>
+<span class="font-body-medium text-body-medium text-on-surface w-full">O(1)</span>
+</div>
+</label>
+</div>
+</div>
+<!-- Navigation Controls -->
+<div class="flex justify-between items-center bg-surface-card rounded-xl p-4 border border-border-subtle shadow-sm">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-low text-on-surface-variant hover:bg-surface-dim transition-colors border border-border-subtle">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+<span class="font-title-sm text-title-sm">Previous</span>
+</button>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">flag</span>
+<span class="font-title-sm text-title-sm">Mark for Review</span>
+</button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-low text-primary hover:bg-surface-dim transition-colors border border-border-subtle">
+<span class="material-symbols-outlined text-[20px]">bookmark</span>
+<span class="font-title-sm text-title-sm">Save &amp; Next</span>
+</button>
+</div>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary-container transition-colors shadow-sm">
+<span class="font-title-sm text-title-sm">Next</span>
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Right Column: Navigation Grid -->
+<div class="md:col-span-4 lg:col-span-3">
+<div class="bg-surface-card rounded-xl border border-border-subtle shadow-sm sticky top-[88px] flex flex-col h-[calc(100vh-112px)]">
+<!-- Grid Header -->
+<div class="p-4 border-b border-border-subtle shrink-0">
+<h3 class="font-title-sm text-title-sm text-on-surface mb-3">Question Navigator</h3>
+<!-- Legend -->
+<div class="grid grid-cols-2 gap-2 font-helper-text text-helper-text text-on-surface-variant">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-sm bg-status-success"></div>
+<span>Answered</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-sm bg-surface-container-low border border-border-subtle"></div>
+<span>Not Visited</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-sm bg-status-warning"></div>
+<span>Marked</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-sm bg-primary border-2 border-primary-container"></div>
+<span>Current</span>
+</div>
+</div>
+</div>
+<!-- Grid Body (Scrollable) -->
+<div class="p-4 overflow-y-auto flex-grow custom-scrollbar">
+<div class="grid grid-cols-5 gap-2">
+<!-- Questions 1-3 (Answered) -->
+<button class="w-10 h-10 rounded-md bg-status-success text-white font-body-medium text-body-medium flex items-center justify-center hover:opacity-90 transition-opacity">1</button>
+<button class="w-10 h-10 rounded-md bg-status-success text-white font-body-medium text-body-medium flex items-center justify-center hover:opacity-90 transition-opacity">2</button>
+<button class="w-10 h-10 rounded-md bg-status-success text-white font-body-medium text-body-medium flex items-center justify-center hover:opacity-90 transition-opacity">3</button>
+<!-- Question 4 (Current) -->
+<button class="w-10 h-10 rounded-md bg-primary text-white font-body-medium text-body-medium flex items-center justify-center border-2 border-primary-container shadow-[0_0_0_2px_rgba(9,99,216,0.3)]">4</button>
+<!-- Question 5 (Marked for Review) -->
+<button class="w-10 h-10 rounded-md bg-status-warning text-white font-body-medium text-body-medium flex items-center justify-center hover:opacity-90 transition-opacity relative">
+                            5
+                            <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-status-error border border-white"></span>
+</button>
+<!-- Questions 6-50 (Not Visited) -->
+<script>
+                            for(let i=6; i<=50; i++) {
+                                document.write(`<button class="w-10 h-10 rounded-md bg-surface-container-lowest border border-border-subtle text-on-surface-variant font-body-medium text-body-medium flex items-center justify-center hover:bg-surface-container-low transition-colors">${i}</button>`);
+                            }
+                        </script>
+</div>
+</div>
+</div>
+</div>
+</main>
+<style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #E2E8F0;
+            border-radius: 20px;
+        }
+        /* Radio button inner circle styling logic is handled by standard tailwind classes in the HTML */
+    </style>
+</body></html>

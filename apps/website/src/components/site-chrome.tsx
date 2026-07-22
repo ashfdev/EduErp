@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { fetchContent } from "@/lib/content-api";
-import type { Institution } from "@/lib/types";
+import type { Institution, Notice } from "@/lib/types";
 import { Navbar } from "./navbar";
 import { Footer } from "./footer";
+import { Megaphone } from "lucide-react";
+import { Link } from "@/i18n/routing";
 
 // globals.css defines --primary/--secondary as shadcn-style raw HSL triplets
 // ("H S% L%"), consumed as hsl(var(--primary)) by every bg-primary/
@@ -45,9 +47,11 @@ function hexToHslTriplet(hex: string): string {
 
 export function SiteChrome({ children }: { children: React.ReactNode }) {
   const [institution, setInstitution] = useState<Institution | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
 
   useEffect(() => {
     fetchContent<Institution>("/institution").then(setInstitution).catch(() => {});
+    fetchContent<Notice[]>("/notices", { limit: "10" }).then((d) => setNotices(d ?? [])).catch(() => {});
   }, []);
 
   return (
@@ -60,6 +64,18 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
         } as React.CSSProperties
       }
     >
+      {notices.length > 0 && (
+        <div className="bg-primary text-primary-foreground overflow-hidden py-2 text-sm font-medium">
+          <div className="flex animate-ticker gap-12 whitespace-nowrap px-4 hover:[animation-play-state:paused]">
+            {[...notices, ...notices].map((n, i) => (
+              <Link key={`${n.id}-${i}`} href="/notices" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                {n.is_pinned ? <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">Pinned</span> : <Megaphone className="h-3 w-3" />}
+                {n.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
       <Navbar institution={institution} />
       <main className="flex-1">{children}</main>
       <Footer institution={institution} />

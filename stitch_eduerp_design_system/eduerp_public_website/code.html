@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp - Institutional Excellence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "error": "#ba1a1a",
+                            "on-secondary": "#ffffff",
+                            "error-container": "#FEE2E2",
+                            "primary": "#004cab",
+                            "outline-variant": "#c2c6d6",
+                            "tertiary": "#3a3ac8",
+                            "tertiary-fixed-dim": "#c0c1ff",
+                            "surface-bright": "#f8f9ff",
+                            "on-tertiary": "#ffffff",
+                            "outline": "#727785",
+                            "background": "#f8f9ff",
+                            "tertiary-container": "#5456e1",
+                            "surface-container": "#e5eeff",
+                            "surface-card": "#FFFFFF",
+                            "success-container": "#D1FAE5",
+                            "on-tertiary-fixed": "#07006c",
+                            "on-secondary-fixed-variant": "#3d456a",
+                            "on-background": "#0b1c30",
+                            "surface": "#f8f9ff",
+                            "on-primary-fixed-variant": "#004398",
+                            "on-primary": "#ffffff",
+                            "status-success": "#10B981",
+                            "primary-container": "#0963d8",
+                            "surface-canvas": "#F8FAFC",
+                            "on-primary-fixed": "#001a43",
+                            "border-subtle": "#E2E8F0",
+                            "inverse-surface": "#213145",
+                            "tertiary-fixed": "#e1e0ff",
+                            "secondary-fixed": "#dde1ff",
+                            "surface-variant": "#d3e4fe",
+                            "primary-fixed-dim": "#afc6ff",
+                            "on-error-container": "#93000a",
+                            "surface-dim": "#cbdbf5",
+                            "on-secondary-fixed": "#10193c",
+                            "warning-container": "#FEF3C7",
+                            "status-warning": "#F59E0B",
+                            "on-surface": "#0b1c30",
+                            "secondary-container": "#cad2ff",
+                            "surface-container-low": "#eff4ff",
+                            "surface-container-highest": "#d3e4fe",
+                            "inverse-primary": "#afc6ff",
+                            "primary-fixed": "#d9e2ff",
+                            "on-tertiary-fixed-variant": "#2f2ebe",
+                            "on-tertiary-container": "#e9e6ff",
+                            "surface-container-high": "#dce9ff",
+                            "on-primary-container": "#e2e8ff",
+                            "surface-container-lowest": "#ffffff",
+                            "surface-tint": "#0059c6",
+                            "on-surface-variant": "#424754",
+                            "secondary-fixed-dim": "#bcc4f1",
+                            "inverse-on-surface": "#eaf1ff",
+                            "on-error": "#ffffff",
+                            "status-error": "#EF4444",
+                            "on-secondary-container": "#515980",
+                            "secondary": "#545c83"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "topbar-height": "64px",
+                            "sidebar-width": "256px",
+                            "margin-mobile": "16px",
+                            "unit": "4px",
+                            "margin-desktop": "24px",
+                            "gutter": "16px"
+                    },
+                    "fontFamily": {
+                            "display-lg": ["Inter"],
+                            "helper-text": ["Inter"],
+                            "body-base": ["Inter"],
+                            "title-sm": ["Inter"],
+                            "headline-md-mobile": ["Inter"],
+                            "headline-md": ["Inter"],
+                            "body-medium": ["Inter"],
+                            "label-caps": ["Inter"]
+                    },
+                    "fontSize": {
+                            "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "helper-text": ["12px", {"lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400"}],
+                            "body-base": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}],
+                            "title-sm": ["18px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600"}],
+                            "headline-md-mobile": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "body-medium": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500"}],
+                            "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .nav-link { position: relative; }
+        .nav-link::after {
+            content: ''; position: absolute; width: 0; height: 2px; bottom: -4px; left: 0;
+            background-color: #004cab; transition: width 0.3s ease;
+        }
+        .nav-link:hover::after { width: 100%; }
+        
+        .bento-card {
+            background: #ffffff;
+            border: 1px solid #E2E8F0;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -1px rgba(15, 23, 42, 0.03);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .bento-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+        }
+        
+        @keyframes ticker {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .notice-ticker {
+            display: inline-block;
+            white-space: nowrap;
+            animation: ticker 25s linear infinite;
+        }
+        .notice-ticker:hover {
+            animation-play-state: paused;
+        }
+    </style>
+</head>
+<body class="text-on-background flex flex-col min-h-screen">
+<!-- Latest Notices Ticker -->
+<div class="bg-primary text-on-primary py-2 px-margin-desktop overflow-hidden border-b border-primary-container relative">
+<div class="absolute left-0 top-0 bottom-0 bg-primary z-10 px-margin-desktop flex items-center shadow-[10px_0_10px_-5px_rgba(0,76,171,1)]">
+<span class="font-label-caps text-label-caps tracking-widest uppercase">Latest Notices:</span>
+</div>
+<div class="whitespace-nowrap overflow-hidden pl-32">
+<div class="notice-ticker font-body-base text-body-base flex items-center gap-8">
+<span>🚀 Admissions for Fall 2024 are now open. Apply before June 30th!</span>
+<span>📅 Annual Science Fair scheduled for May 15th.</span>
+<span>🏆 Congratulations to the Debate Team for winning the Regionals!</span>
+<span>📝 End of semester exams begin on December 10th. Check the portal for details.</span>
+</div>
+</div>
+</div>
+<!-- Minimal Public TopNav -->
+<nav class="sticky top-0 z-50 bg-surface-container-lowest/90 backdrop-blur-md border-b border-border-subtle h-topbar-height flex items-center px-margin-desktop justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="account_balance">account_balance</span>
+<span class="font-display-lg text-display-lg text-primary tracking-tight">EduErp</span>
+</div>
+<div class="hidden lg:flex items-center gap-8">
+<a class="nav-link font-body-medium text-body-medium text-on-surface-variant hover:text-primary transition-colors" href="#programs">Programs</a>
+<a class="nav-link font-body-medium text-body-medium text-on-surface-variant hover:text-primary transition-colors" href="#admissions">Admissions</a>
+<a class="nav-link font-body-medium text-body-medium text-on-surface-variant hover:text-primary transition-colors" href="#about">About Us</a>
+<a class="nav-link font-body-medium text-body-medium text-on-surface-variant hover:text-primary transition-colors" href="#gallery">Gallery</a>
+<a class="nav-link font-body-medium text-body-medium text-on-surface-variant hover:text-primary transition-colors" href="#contact">Contact</a>
+</div>
+<div class="flex items-center gap-4">
+<a class="font-body-medium text-body-medium text-on-surface-variant hover:text-primary hidden md:block" href="/login">Admin Login</a>
+<button class="bg-primary-container text-on-primary px-4 py-2 rounded-lg font-body-medium text-body-medium hover:bg-primary transition-colors shadow-sm">
+                Apply Now
+            </button>
+</div>
+</nav>
+<main class="flex-grow">
+<!-- Hero Section -->
+<section class="relative pt-24 pb-24 px-margin-desktop md:px-12 lg:px-24 overflow-hidden flex flex-col items-center text-center bg-gradient-to-b from-surface-container to-background">
+<div class="max-w-4xl z-10">
+<span class="inline-block py-1 px-3 rounded-full bg-primary-fixed text-on-primary-fixed-variant font-label-caps text-label-caps mb-6">Excellence in Education Management</span>
+<h1 class="font-display-lg text-display-lg md:text-5xl lg:text-6xl text-on-background mb-6 leading-tight">Empowering the Next Generation of <span class="text-primary">Leaders</span></h1>
+<p class="font-body-base text-body-base md:text-lg text-on-surface-variant mb-10 max-w-2xl mx-auto">
+                    EduErp provides a meticulously structured, world-class educational environment. We transform complex learning journeys into clear, actionable paths for student success.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4 justify-center">
+<button class="bg-primary-container text-on-primary px-8 py-3 rounded-lg font-title-sm text-title-sm hover:bg-primary transition-all shadow-md flex items-center justify-center gap-2">
+                        Explore Programs <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+<button class="bg-surface-card border border-border-subtle text-on-surface px-8 py-3 rounded-lg font-title-sm text-title-sm hover:bg-surface-container-low transition-all shadow-sm">
+                        Schedule a Tour
+                    </button>
+</div>
+</div>
+<!-- Abstract decorative elements -->
+<div class="absolute top-20 left-10 w-64 h-64 bg-primary-fixed-dim rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
+<div class="absolute top-40 right-10 w-72 h-72 bg-tertiary-fixed-dim rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
+</section>
+<!-- Principal's Message Section -->
+<section class="py-16 px-margin-desktop max-w-7xl mx-auto" id="about">
+<div class="bg-surface-card rounded-2xl border border-border-subtle overflow-hidden flex flex-col md:flex-row shadow-sm">
+<div class="md:w-1/3 bg-surface-container-low p-8 flex flex-col items-center justify-center text-center border-b md:border-b-0 md:border-r border-border-subtle">
+<div class="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-surface-lowest">
+<img alt="Principal Portrait" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBaxgokVEYCWnJSB22M5PAK98XPpT8te4Fswz4TTiLbQdNJCLDDLB7tEVDrwrkbSgdxvPBPGMw5WwN0rUUOLrz1ChG89Bjm_8t6_VGvsC3ELgoY9HvcaFFKSfEKtWbFIjE_uqnFg7zNy-1GZA_DRIcjTM2cP3bdilP47o31_tKvTnKBCL6w42i8zvRVsMZF9uApOntQG5A4WaYrOqA1pP0nPn-TJUO82LwFOIdFhiemOHWEkC0yogB9"/>
+</div>
+<h3 class="font-title-sm text-title-sm text-on-background">Dr. Sarah Jenkins</h3>
+<p class="font-body-base text-body-base text-primary">Principal, EduErp Academy</p>
+</div>
+<div class="md:w-2/3 p-8 md:p-12 flex flex-col justify-center">
+<div class="mb-4 text-tertiary opacity-50">
+<span class="material-symbols-outlined text-4xl" data-icon="format_quote">format_quote</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-4">A Message from the Principal</h2>
+<p class="font-body-base text-body-base text-on-surface-variant mb-4 leading-relaxed">
+                        "Welcome to EduErp Academy. Our mission is to cultivate not just academic excellence, but to develop well-rounded individuals ready to face the complexities of the modern world. We believe in providing a nurturing yet challenging environment where every student can discover their passion and reach their full potential."
+                    </p>
+<p class="font-body-base text-body-base text-on-surface-variant leading-relaxed">
+                        "Through innovative teaching methods, a dedicated faculty, and a strong community partnership, we are shaping the leaders, thinkers, and creators of tomorrow. I invite you to explore our programs and join us on this incredible educational journey."
+                    </p>
+</div>
+</div>
+</section>
+<!-- Bento Grid: Programs & Stats -->
+<section class="py-16 px-margin-desktop max-w-7xl mx-auto" id="programs">
+<div class="mb-12">
+<h2 class="font-headline-md text-headline-md text-on-background mb-2">Our Academic Ecosystem</h2>
+<p class="font-body-base text-body-base text-on-surface-variant max-w-2xl">A comprehensive approach to education, integrating advanced curriculum with robust institutional support.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[250px]">
+<!-- Featured Program -->
+<div class="bento-card md:col-span-2 md:row-span-2 p-8 relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-t from-inverse-surface/90 to-transparent z-10 flex flex-col justify-end p-8">
+<span class="bg-primary text-on-primary text-xs font-bold px-2 py-1 rounded w-fit mb-3">STEM Focus</span>
+<h3 class="font-headline-md text-headline-md text-surface-lowest text-white mb-2">Advanced Sciences &amp; Technology</h3>
+<p class="font-body-base text-body-base text-surface-variant max-w-md">Preparing students for the challenges of tomorrow with state-of-the-art laboratories and industry-aligned curriculum.</p>
+</div>
+<img alt="Science Lab" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Students in a modern, brightly lit science laboratory wearing safety goggles, examining a complex chemistry experiment. Professional corporate academic style, clean white lighting, conveying focus and advanced learning." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKzC3r9Re1u5coZDr7vZfwVlWXHkYJJyDKEZM2zA3vXewjFvD8RFQ_m7iekNH1YCm6k-MrK0ZqiLw0LFe-GLzSEb8Z96S52QB9EY4oD8djUZdqYpQbMAxp-uljH66Lpn8wAVryfRlCrnlg92kiJDuCDEB5fh6hKTqAt7Y0zlfWx50jnNGD1oXyhPbcNq28S7buyz_gnCsHehTp8QQk3ORJrl0558WeilxaB_SACPWLv6jMkVzclBUj"/>
+</div>
+<!-- Stat Card 1 -->
+<div class="bento-card p-6 flex flex-col justify-center items-center text-center bg-surface-container-low">
+<span class="material-symbols-outlined text-4xl text-primary mb-2" data-icon="school">school</span>
+<h4 class="font-display-lg text-display-lg text-on-background">98%</h4>
+<p class="font-body-medium text-body-medium text-on-surface-variant">College Acceptance Rate</p>
+</div>
+<!-- Stat Card 2 -->
+<div class="bento-card p-6 flex flex-col justify-center items-center text-center bg-surface-container-low">
+<span class="material-symbols-outlined text-4xl text-tertiary mb-2" data-icon="groups">groups</span>
+<h4 class="font-display-lg text-display-lg text-on-background">15:1</h4>
+<p class="font-body-medium text-body-medium text-on-surface-variant">Student-Teacher Ratio</p>
+</div>
+<!-- Arts Program -->
+<div class="bento-card p-6 flex flex-col justify-between">
+<div>
+<span class="material-symbols-outlined text-3xl text-primary mb-4" data-icon="palette">palette</span>
+<h3 class="font-title-sm text-title-sm text-on-background mb-2">Creative Arts</h3>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">Fostering creativity through comprehensive visual and performing arts programs.</p>
+</div>
+<a class="font-body-medium text-body-medium text-primary hover:underline mt-4 inline-flex items-center gap-1" href="#">Learn more <span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span></a>
+</div>
+<!-- Humanities Program -->
+<div class="bento-card p-6 flex flex-col justify-between">
+<div>
+<span class="material-symbols-outlined text-3xl text-primary mb-4" data-icon="menu_book">menu_book</span>
+<h3 class="font-title-sm text-title-sm text-on-background mb-2">Humanities</h3>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">Developing critical thinking and global awareness through literature and history.</p>
+</div>
+<a class="font-body-medium text-body-medium text-primary hover:underline mt-4 inline-flex items-center gap-1" href="#">Learn more <span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span></a>
+</div>
+<!-- Athletics Program -->
+<div class="bento-card p-6 flex flex-col justify-between bg-primary-fixed">
+<div>
+<span class="material-symbols-outlined text-3xl text-on-primary-fixed-variant mb-4" data-icon="sports_basketball">sports_basketball</span>
+<h3 class="font-title-sm text-title-sm text-on-primary-fixed mb-2">Athletics</h3>
+<p class="font-body-base text-body-base text-on-primary-fixed-variant text-sm">Building teamwork and physical resilience across 20+ varsity sports.</p>
+</div>
+<a class="font-body-medium text-body-medium text-on-primary-fixed-variant hover:underline mt-4 inline-flex items-center gap-1" href="#">Learn more <span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span></a>
+</div>
+</div>
+</section>
+<!-- Featured Gallery Preview -->
+<section class="py-16 px-margin-desktop max-w-7xl mx-auto" id="gallery">
+<div class="mb-8 flex justify-between items-end">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-2">Campus Life</h2>
+<p class="font-body-base text-body-base text-on-surface-variant max-w-2xl">Glimpses into our vibrant student community and world-class facilities.</p>
+</div>
+<a class="hidden sm:flex font-body-medium text-body-medium text-primary hover:underline items-center gap-1" href="#">View Full Gallery <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="rounded-xl overflow-hidden aspect-square">
+<img alt="Students in library" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCY9rp9pVUqwUvPTVoG7IA9vyX8crtDTrlROjeIsQYRDqq3PA73VjccawAPtGdHCr_4S7FPRWuUoMGH04kkUT-RIhrH0kAuQf582ahPkau4-WB-CQuzUp36SAvyjmo-H3YSBQYpxi8R60hQVqHktj9KuI_M5KNWA2mTA4ZDA_XFRGyTe-XIeSq7cfyCMfZSsQWwSHK2gKAev5lK9waPphQh-d7AFp2010-kmmeYxCpMNakepDomW95H"/>
+</div>
+<div class="rounded-xl overflow-hidden aspect-square">
+<img alt="Sports event" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGAVh42E6luI5n_3DP_2_QPqrc81f5jVuyh4Is_THMkXzbMwq1Zt-fRWeusRizaknvVl9qSs4A15d56LLmZJPY-TghAfNJhU9P_1C_Q51SjZlaSv-w5g5aqOHkG9XhPfsTrEYsG0o3WDhzgi6HqrveXispIqQyRf-ofX9efKGNVMncF2sSfdm7UkkavU4L6m6MPyKyeR-0b3BNQYLpL1esSI7rSM87UuEPl9ZJXcvTpZ9JRuzr5yGW"/>
+</div>
+<div class="rounded-xl overflow-hidden aspect-square">
+<img alt="Graduation ceremony" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAszx39ZosWAGuxnnpxsGZKuKZeTfcqxD_t3nVugeyWiJ3VYjmtkKJxeMYkikZihTDzY_Z92LLc-jIvylTvYX2iFqasWoAfR8dr_pPa189bBF1HGdcvR8YfUhP2gqnriwBsAbtgcEZ-VMwabM4tVuYWD9G0YltSuJT14UYAgKh1SCGh2QA_o-lp8khmbL2xNPrLPto1PMshdM9pxV2E8eHm2hiJ-badIL0BJV86lDeBdarSP1LPjCD4"/>
+</div>
+<div class="rounded-xl overflow-hidden aspect-square">
+<img alt="Art class" class="w-full h-full object-cover hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEvRKTZCR-G6G8XyQ-91jchMO9KPHLcW21sYxIuLQ_echWAptljpRnSlJ-UZtoX4bUXbAnrF6Y12DKBq3RyquJFQAFi7yo4wLHcKG_5UxznEOKsW-lRfMZIRNOX6cdbvun_5t79mcWso5tj67mmOh4n_lQQQiJdioMsd9bw91qKVXxk2zZ4pWg5wp255GTYJ9bJkDs2OC7CE7nokU3JOGu1DbBJJF_Bct1QEQTv4xfEMiA0hxZZBQm"/>
+</div>
+</div>
+<div class="mt-6 text-center sm:hidden">
+<a class="font-body-medium text-body-medium text-primary hover:underline inline-flex items-center gap-1" href="#">View Full Gallery <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+</section>
+</main>
+<!-- Updated Footer -->
+<footer class="bg-inverse-surface text-inverse-on-surface pt-16 pb-8 px-margin-desktop mt-auto border-t-4 border-primary">
+<div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 mb-12">
+<div class="lg:col-span-2">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary-fixed text-3xl" data-icon="account_balance">account_balance</span>
+<span class="font-display-lg text-title-sm text-surface-lowest tracking-tight">EduErp</span>
+</div>
+<p class="font-body-base text-body-base text-surface-variant mb-6 pr-4">
+                    Providing a meticulously structured, world-class educational environment for the next generation of leaders.
+                </p>
+<div class="flex gap-4">
+<a class="text-surface-variant hover:text-primary-fixed transition-colors" href="#"><span class="material-symbols-outlined" data-icon="facebook">facebook</span></a>
+<a class="text-surface-variant hover:text-primary-fixed transition-colors" href="#"><span class="material-symbols-outlined" data-icon="language">language</span></a>
+<a class="text-surface-variant hover:text-primary-fixed transition-colors" href="#"><span class="material-symbols-outlined" data-icon="mail">mail</span></a>
+</div>
+</div>
+<div>
+<h4 class="font-title-sm text-title-sm text-surface-lowest mb-4">Quick Links</h4>
+<ul class="space-y-3 font-body-base text-body-base text-surface-variant">
+<li><a class="hover:text-primary-fixed transition-colors" href="#programs">Programs &amp; Academics</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#admissions">Admissions Info</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#about">About Us</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#gallery">Campus Gallery</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Careers</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-title-sm text-title-sm text-surface-lowest mb-4">Admissions</h4>
+<ul class="space-y-3 font-body-base text-body-base text-surface-variant">
+<li><a class="hover:text-primary-fixed transition-colors" href="#">How to Apply</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Tuition &amp; Fees</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Financial Aid</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Important Dates</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Schedule a Visit</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-title-sm text-title-sm text-surface-lowest mb-4">Portals</h4>
+<ul class="space-y-3 font-body-base text-body-base text-surface-variant">
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Student Portal</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Parent Portal</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Faculty Webmail</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="#">Alumni Network</a></li>
+<li><a class="hover:text-primary-fixed transition-colors" href="/login">Admin Login</a></li>
+</ul>
+</div>
+<div id="contact">
+<h4 class="font-title-sm text-title-sm text-surface-lowest mb-4">Contact Us</h4>
+<ul class="space-y-3 font-body-base text-body-base text-surface-variant">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-sm mt-1" data-icon="location_on">location_on</span>
+<span>123 Education Blvd,<br/>Academic City, AC 12345</span>
+</li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="phone">phone</span>
+<span>+1 (555) 123-4567</span>
+</li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="email">email</span>
+<span>info@eduerp.edu</span>
+</li>
+</ul>
+</div>
+</div>
+<div class="max-w-7xl mx-auto pt-8 border-t border-on-surface-variant/30 flex flex-col md:flex-row justify-between items-center gap-4 font-body-base text-body-base text-surface-variant text-sm">
+<p>© 2024 EduErp Institution. All rights reserved.</p>
+<div class="flex gap-6">
+<a class="hover:text-surface-lowest transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-surface-lowest transition-colors" href="#">Terms of Service</a>
+<a class="hover:text-surface-lowest transition-colors" href="#">Accessibility</a>
+</div>
+</div>
+</footer>
+</body></html>

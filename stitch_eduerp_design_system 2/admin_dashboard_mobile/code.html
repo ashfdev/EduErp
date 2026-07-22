@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp Admin Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error": "#ba1a1a",
+                      "on-secondary": "#ffffff",
+                      "error-container": "#FEE2E2",
+                      "primary": "#004cab",
+                      "outline-variant": "#c2c6d6",
+                      "tertiary": "#3a3ac8",
+                      "tertiary-fixed-dim": "#c0c1ff",
+                      "surface-bright": "#f8f9ff",
+                      "on-tertiary": "#ffffff",
+                      "outline": "#727785",
+                      "background": "#f8f9ff",
+                      "tertiary-container": "#5456e1",
+                      "surface-container": "#e5eeff",
+                      "surface-card": "#FFFFFF",
+                      "success-container": "#D1FAE5",
+                      "on-tertiary-fixed": "#07006c",
+                      "on-secondary-fixed-variant": "#3d456a",
+                      "on-background": "#0b1c30",
+                      "surface": "#f8f9ff",
+                      "on-primary-fixed-variant": "#004398",
+                      "on-primary": "#ffffff",
+                      "status-success": "#10B981",
+                      "primary-container": "#0963d8",
+                      "surface-canvas": "#F8FAFC",
+                      "on-primary-fixed": "#001a43",
+                      "border-subtle": "#E2E8F0",
+                      "inverse-surface": "#213145",
+                      "tertiary-fixed": "#e1e0ff",
+                      "secondary-fixed": "#dde1ff",
+                      "surface-variant": "#d3e4fe",
+                      "primary-fixed-dim": "#afc6ff",
+                      "on-error-container": "#93000a",
+                      "surface-dim": "#cbdbf5",
+                      "on-secondary-fixed": "#10193c",
+                      "warning-container": "#FEF3C7",
+                      "status-warning": "#F59E0B",
+                      "on-surface": "#0b1c30",
+                      "secondary-container": "#cad2ff",
+                      "surface-container-low": "#eff4ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "inverse-primary": "#afc6ff",
+                      "primary-fixed": "#d9e2ff",
+                      "on-tertiary-fixed-variant": "#2f2ebe",
+                      "on-tertiary-container": "#e9e6ff",
+                      "surface-container-high": "#dce9ff",
+                      "on-primary-container": "#e2e8ff",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-tint": "#0059c6",
+                      "on-surface-variant": "#424754",
+                      "secondary-fixed-dim": "#bcc4f1",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-error": "#ffffff",
+                      "status-error": "#EF4444",
+                      "on-secondary-container": "#515980",
+                      "secondary": "#545c83"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "topbar-height": "64px",
+                      "sidebar-width": "256px",
+                      "margin-mobile": "16px",
+                      "unit": "4px",
+                      "margin-desktop": "24px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "helper-text": [
+                              "Inter"
+                      ],
+                      "body-base": [
+                              "Inter"
+                      ],
+                      "title-sm": [
+                              "Inter"
+                      ],
+                      "headline-md-mobile": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-medium": [
+                              "Inter"
+                      ],
+                      "label-caps": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "helper-text": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-base": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "letterSpacing": "0",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md-mobile": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-medium": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-caps": [
+                              "11px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #F8FAFC;
+        }
+    </style>
+</head>
+<body class="font-body-base text-body-base text-on-surface bg-surface-canvas antialiased overflow-x-hidden w-full h-full">
+<!-- Top App Bar (Mobile) -->
+<header class="sticky top-0 z-40 w-full border-b border-border-subtle bg-surface-container-lowest shadow-sm h-topbar-height px-margin-mobile flex justify-between items-center md:hidden">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center font-bold">E</div>
+<span class="text-headline-md-mobile font-headline-md-mobile font-black text-on-background">EduErp</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors focus-within:ring-2 focus-within:ring-primary/20 p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-border-subtle">
+<img alt="Administrator Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a school administrator in a bright, modern office setting. The person is smiling gently, wearing business casual attire. The lighting is soft and even, highlighting a friendly yet authoritative demeanor. The overall aesthetic is clean, corporate, and modern, fitting an educational administration context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBAWVCGzLCgm-9BM0gz2zSaWrTeWs1efhP6WZsnqw1JZnih_F8vbDL1SxpfngG83H2WjzaDg_Khl2GE7JcICSjegNULjL2K53rvABqu4ttB9HLbkzufQXSi8sNTQKzQ4mF_-YQiM1ZMFF9P-DOA6f5hnxawVUxD184DNt_wZh9PGwzgnPZrA4efLAY7SEx5gw8-tEt8tGK6jwgBG5zWwG75gvebIi-_PwYk4ivHN7dkZZgp6au5Bgia"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas (Mobile optimized) -->
+<main class="w-full max-w-7xl mx-auto px-margin-mobile py-6 flex flex-col gap-6 mb-20 md:hidden">
+<!-- Welcome Section -->
+<div>
+<h1 class="text-headline-md-mobile font-headline-md-mobile text-on-surface mb-1">Good Morning, Admin</h1>
+<p class="text-body-base font-body-base text-on-surface-variant">Here is your institution's overview for today.</p>
+</div>
+<!-- Key Metrics Bento Grid -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Total Students -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-on-surface-variant">TOTAL STUDENTS</span>
+<span class="material-symbols-outlined text-primary" data-icon="group">group</span>
+</div>
+<div>
+<span class="text-display-lg font-display-lg text-on-surface">3,245</span>
+<div class="flex items-center gap-1 text-status-success mt-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="trending_up">trending_up</span>
+<span class="text-helper-text font-helper-text">+2.4%</span>
+</div>
+</div>
+</div>
+<!-- Active Faculty -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-on-surface-variant">FACULTY</span>
+<span class="material-symbols-outlined text-primary" data-icon="person_4">person_4</span>
+</div>
+<div>
+<span class="text-display-lg font-display-lg text-on-surface">182</span>
+<div class="flex items-center gap-1 text-on-surface-variant mt-1">
+<span class="text-helper-text font-helper-text">98% present</span>
+</div>
+</div>
+</div>
+<!-- Active Courses -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-on-surface-variant">COURSES</span>
+<span class="material-symbols-outlined text-primary" data-icon="menu_book">menu_book</span>
+</div>
+<div>
+<span class="text-display-lg font-display-lg text-on-surface">450</span>
+<div class="flex items-center gap-1 text-status-success mt-1">
+<span class="text-helper-text font-helper-text">Active Sem</span>
+</div>
+</div>
+</div>
+<!-- Revenue / Fees -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-4 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col justify-between h-32">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-on-surface-variant">FEE COLLECTION</span>
+<span class="material-symbols-outlined text-primary" data-icon="payments">payments</span>
+</div>
+<div>
+<span class="text-display-lg font-display-lg text-on-surface">82%</span>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 mt-2">
+<div class="bg-primary-container h-1.5 rounded-full" style="width: 82%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Needs Attention (Notifications) -->
+<section class="mt-4">
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-title-sm font-title-sm text-on-surface">Needs Attention</h2>
+<button class="text-primary text-body-medium font-body-medium hover:underline">View All</button>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Alert Card 1 -->
+<div class="bg-error-container border border-error/20 rounded-xl p-4 flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full bg-error/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+</div>
+<div>
+<h3 class="text-body-medium font-body-medium text-on-error-container">Low Attendance Alert</h3>
+<p class="text-helper-text font-helper-text text-on-surface-variant mt-1">Grade 10-A has dropped below 85% attendance average this week.</p>
+<button class="mt-2 text-helper-text font-helper-text text-error font-semibold hover:underline">Review Details</button>
+</div>
+</div>
+<!-- Alert Card 2 -->
+<div class="bg-warning-container border border-status-warning/20 rounded-xl p-4 flex gap-4 items-start">
+<div class="w-10 h-10 rounded-full bg-status-warning/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-status-warning" data-icon="schedule">schedule</span>
+</div>
+<div>
+<h3 class="text-body-medium font-body-medium text-on-surface">Pending Approvals</h3>
+<p class="text-helper-text font-helper-text text-on-surface-variant mt-1">12 leave requests from faculty require your approval.</p>
+<button class="mt-2 text-helper-text font-helper-text text-status-warning font-semibold hover:underline">Action Now</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Quick Actions -->
+<section class="mt-4">
+<h2 class="text-title-sm font-title-sm text-on-surface mb-4">Quick Actions</h2>
+<div class="flex gap-3 overflow-x-auto pb-4 snap-x">
+<button class="snap-start shrink-0 flex flex-col items-center justify-center gap-2 bg-surface-card border border-border-subtle rounded-xl w-24 h-24 shadow-sm hover:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+</div>
+<span class="text-helper-text font-helper-text font-medium">Admission</span>
+</button>
+<button class="snap-start shrink-0 flex flex-col items-center justify-center gap-2 bg-surface-card border border-border-subtle rounded-xl w-24 h-24 shadow-sm hover:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="campaign">campaign</span>
+</div>
+<span class="text-helper-text font-helper-text font-medium">Notice</span>
+</button>
+<button class="snap-start shrink-0 flex flex-col items-center justify-center gap-2 bg-surface-card border border-border-subtle rounded-xl w-24 h-24 shadow-sm hover:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="mail">mail</span>
+</div>
+<span class="text-helper-text font-helper-text font-medium">Message</span>
+</button>
+<button class="snap-start shrink-0 flex flex-col items-center justify-center gap-2 bg-surface-card border border-border-subtle rounded-xl w-24 h-24 shadow-sm hover:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</div>
+<span class="text-helper-text font-helper-text font-medium">Report</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Bar (Mobile) -->
+<nav class="fixed bottom-0 w-full bg-surface-container-lowest border-t border-border-subtle shadow-[0_-1px_3px_0_rgba(15,23,42,0.05)] z-50 md:hidden pb-safe">
+<div class="flex justify-around items-center h-16">
+<!-- Active: Dashboard -->
+<a class="flex flex-col items-center gap-1 text-primary w-full py-2" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="dashboard" data-weight="fill" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-[10px] font-medium leading-none">Dashboard</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-primary transition-colors w-full py-2" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="group">group</span>
+<span class="text-[10px] font-medium leading-none">Students</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-primary transition-colors w-full py-2" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="school">school</span>
+<span class="text-[10px] font-medium leading-none">Academic</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant hover:text-primary transition-colors w-full py-2" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="menu">menu</span>
+<span class="text-[10px] font-medium leading-none">More</span>
+</a>
+</div>
+</nav>
+<style>
+        /* Simple safe area padding for modern mobile browsers */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+    </style>
+</body></html>

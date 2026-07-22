@@ -6,7 +6,7 @@ import { Link } from "@/i18n/routing";
 import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 import type { Institution } from "@/lib/types";
-import { MapPin, Phone, Mail, ChevronRight, Facebook, Youtube, ExternalLink } from "lucide-react";
+import { MapPin, Phone, Mail, ChevronRight, Facebook, Youtube, ExternalLink, Landmark } from "lucide-react";
 
 interface ImportantLink {
   id: string;
@@ -30,11 +30,11 @@ export function Footer({ institution }: { institution: Institution | null }) {
         <div className="flex flex-col space-y-6 lg:col-span-1 items-center text-center sm:items-start sm:text-left lg:items-center lg:text-center">
           <div className="flex flex-col items-center">
             {institution?.logo_url ? (
-              <div className="mb-4 h-20 w-20 overflow-hidden rounded-full bg-white p-1 shadow-sm ring-1 ring-blue-200">
+              <div className="mb-4 h-20 w-20 overflow-hidden rounded-full bg-white p-1 shadow-sm ring-1 ring-primary/20">
                 <Image src={institution.logo_url} alt="Logo" width={80} height={80} className="h-full w-full object-contain" />
               </div>
             ) : (
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-3xl ring-1 ring-blue-200">
+              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-3xl ring-1 ring-primary/20">
                 🏫
               </div>
             )}
@@ -132,6 +132,14 @@ export function Footer({ institution }: { institution: Institution | null }) {
                   <Mail className="h-4 w-4" />
                 </div>
                 <span className="font-medium text-slate-300">{institution.email_primary}</span>
+              </li>
+            )}
+            {institution?.eiin && (
+              <li className="flex items-center">
+                <div className="rounded-full bg-slate-800 p-1.5 text-slate-400 mr-3 shrink-0">
+                  <Landmark className="h-4 w-4" />
+                </div>
+                <span className="font-medium text-slate-300">{t("eiinLabel")} {institution.eiin}</span>
               </li>
             )}
           </ul>

@@ -3,6 +3,19 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Deterministic placeholder photography for demo content — picsum.photos
+// returns the same image for the same seed key every time, so re-running
+// this script (or just reloading the site) never causes photos to shuffle.
+// apps/website/next.config.mjs allowlists picsum.photos in image
+// remotePatterns specifically so these render via next/image in local dev;
+// a real institution replaces every one of these via admin uploads.
+function picsum(key: string, width: number, height: number): string {
+  return `https://picsum.photos/seed/${key}/${width}/${height}`;
+}
+function pravatar(key: string, size: number): string {
+  return `https://i.pravatar.cc/${size}?u=${key}`;
+}
+
 const BD_BOARD_RANGES = [
   { min_marks: 80, max_marks: 100, grade_letter: "A+", grade_point: 5.0, remarks: "Excellent", display_order: 1 },
   { min_marks: 70, max_marks: 79.99, grade_letter: "A", grade_point: 4.0, remarks: "Very Good", display_order: 2 },
@@ -165,9 +178,30 @@ const DEMO_STUDENTS = [
 ];
 
 async function main() {
+  const INSTITUTION_PROFILE_CONTENT = {
+    address: "Agrabad Access Road, Double Mooring, Chattogram, Bangladesh",
+    phone_primary: "+8801711223344",
+    email_primary: "info@alhumairaschool.edu.bd",
+    facebook_url: "https://facebook.com/alhumairaschool",
+    youtube_url: "https://youtube.com/@alhumairaschool",
+    founded_year: 2010,
+    established_text:
+      "Established in 2010, Alhumaira Model School & College has served the Chattogram community for over a decade with a blend of academic rigor and moral education.",
+    mission_text:
+      "To provide quality, values-based education that nurtures every student's intellectual, moral, and physical development, preparing them to be responsible citizens and lifelong learners.",
+    vision_text:
+      "To be a leading center of academic and moral excellence, producing graduates who lead with knowledge, integrity, and compassion.",
+    principal_name: "Mohammad Aminul Islam",
+    principal_designation: "Principal",
+  };
   await prisma.institutionProfile.upsert({
     where: { id: "singleton" },
-    update: {},
+    // `type` is deliberately excluded from `update` — the live institution's
+    // type was changed to MADRASAH via the admin panel after this seed's
+    // original SCHOOL default, and reseeding must never clobber an
+    // admin-made change back to the seed's initial value. Same reasoning
+    // for eiin/name_en/board/primary_color, which the seed never revises.
+    update: INSTITUTION_PROFILE_CONTENT,
     create: {
       id: "singleton",
       name_en: "Alhumaira Model School & College",
@@ -176,6 +210,7 @@ async function main() {
       eiin: "123456",
       board: "Chittagong",
       primary_color: "#1a3c4a",
+      ...INSTITUTION_PROFILE_CONTENT,
     },
   });
 
@@ -491,31 +526,151 @@ async function main() {
   });
 
   const staffPasswordHash = await bcrypt.hash("Test@1234", 10);
+  // Public /faculty vs /staff split is derived from User.role at query time
+  // (TEACHING_ROLES = CLASS_TEACHER/SUBJECT_TEACHER/HEAD_OF_DEPT → Faculty,
+  // everything else → Staff — see server/api/src/lib/roles.ts), so the mix
+  // of roles below is what actually determines which directory each person
+  // shows up in, not any field on Staff itself. `show_on_website: true` is
+  // required on top of that for a Staff row to appear publicly at all.
   const demoStaffUsers = [
-    { phone: "01700000001", name_en: "Principal", role: "PRINCIPAL" as const },
-    { phone: "01700000002", name_en: "Exam Controller", role: "EXAM_CONTROLLER" as const },
-    { phone: "01700000003", name_en: "Accountant", role: "ACCOUNTANT" as const },
-    { phone: "01700000004", name_en: "Class Teacher One", role: "CLASS_TEACHER" as const },
-    { phone: "01700000005", name_en: "Subject Teacher One", role: "SUBJECT_TEACHER" as const },
+    {
+      phone: "01700000001", name_en: "Mohammad Aminul Islam", name_bn: "মোহাম্মদ আমিনুল ইসলাম", role: "PRINCIPAL" as const,
+      designation: "Principal", photo_key: "staff-principal",
+      qualifications: "M.A. in Islamic Studies, University of Chittagong; B.Ed.",
+      achievements: "Recipient of the District Best Headteacher Award, 2022.",
+      public_contact_email: "principal@alhumairaschool.edu.bd",
+      public_office_location: "Admin Building, Room 101",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000002", name_en: "Shahida Begum", name_bn: "শাহিদা বেগম", role: "EXAM_CONTROLLER" as const,
+      designation: "Exam Controller", photo_key: "staff-exam-controller",
+      qualifications: "M.Sc. in Mathematics, University of Chittagong",
+      achievements: null as string | null,
+      public_contact_email: "examcontroller@alhumairaschool.edu.bd",
+      public_office_location: "Admin Building, Room 104",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000003", name_en: "Kamrul Hasan", name_bn: "কামরুল হাসান", role: "ACCOUNTANT" as const,
+      designation: "Accountant", photo_key: "staff-accountant",
+      qualifications: "B.Com (Hons), M.Com in Accounting, University of Chittagong",
+      achievements: null as string | null,
+      public_contact_email: "accounts@alhumairaschool.edu.bd",
+      public_office_location: "Admin Building, Room 106",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000004", name_en: "Nasrin Sultana", name_bn: "নাসরিন সুলতানা", role: "CLASS_TEACHER" as const,
+      designation: "Senior Class Teacher, Class 9", photo_key: "staff-class-teacher-1",
+      qualifications: "M.A. in Bangla Literature, B.Ed.",
+      achievements: "Best Class Teacher Award, 2024.",
+      public_contact_email: "nasrin.sultana@alhumairaschool.edu.bd",
+      public_office_location: "Academic Building, Staff Room 2",
+      publications: [{ title: "Teaching Bangla Grammar Effectively", url: "https://example.com/articles/bangla-grammar" }],
+    },
+    {
+      phone: "01700000005", name_en: "Md. Tarequl Islam", name_bn: "মোঃ তারেকুল ইসলাম", role: "SUBJECT_TEACHER" as const,
+      designation: "Senior Subject Teacher, English", photo_key: "staff-subject-teacher-1",
+      qualifications: "M.A. in English Literature, University of Dhaka",
+      achievements: null as string | null,
+      public_contact_email: "tarequl.islam@alhumairaschool.edu.bd",
+      public_office_location: "Academic Building, Staff Room 3",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000006", name_en: "Farida Yasmin", name_bn: "ফরিদা ইয়াসমিন", role: "HEAD_OF_DEPT" as const,
+      designation: "Head of Department, Science", photo_key: "staff-head-of-dept",
+      qualifications: "M.Sc. in Physics, Bangladesh University of Engineering and Technology",
+      achievements: "Published researcher in secondary science pedagogy.",
+      public_contact_email: "farida.yasmin@alhumairaschool.edu.bd",
+      public_office_location: "Science Building, Room 12",
+      publications: [{ title: "Hands-on Physics for Secondary Students", url: "https://example.com/articles/hands-on-physics" }],
+    },
+    {
+      phone: "01700000007", name_en: "Md. Rafiqul Alam", name_bn: "মোঃ রফিকুল আলম", role: "SUBJECT_TEACHER" as const,
+      designation: "Subject Teacher, Mathematics", photo_key: "staff-subject-teacher-2",
+      qualifications: "M.Sc. in Mathematics, University of Chittagong",
+      achievements: null as string | null,
+      public_contact_email: "rafiqul.alam@alhumairaschool.edu.bd",
+      public_office_location: "Academic Building, Staff Room 3",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000008", name_en: "Sultana Razia", name_bn: "সুলতানা রাজিয়া", role: "LIBRARIAN" as const,
+      designation: "Librarian", photo_key: "staff-librarian",
+      qualifications: "M.A. in Library & Information Science, University of Dhaka",
+      achievements: null as string | null,
+      public_contact_email: "library@alhumairaschool.edu.bd",
+      public_office_location: "Library Building",
+      publications: null as { title: string; url: string }[] | null,
+    },
+    {
+      phone: "01700000009", name_en: "Md. Jashim Uddin", name_bn: "মোঃ জসিম উদ্দীন", role: "TRANSPORT_MANAGER" as const,
+      designation: "Transport Manager", photo_key: "staff-transport-manager",
+      qualifications: "B.A., Diploma in Fleet Management",
+      achievements: null as string | null,
+      public_contact_email: "transport@alhumairaschool.edu.bd",
+      public_office_location: "Transport Office",
+      publications: null as { title: string; url: string }[] | null,
+    },
   ];
+  const staffIdByPhone: Record<string, string> = {};
   for (const u of demoStaffUsers) {
     const user = await prisma.user.upsert({
       where: { phone: u.phone },
-      update: {},
-      create: { name_en: u.name_en, role: u.role, phone: u.phone, password_hash: staffPasswordHash },
+      update: { name_en: u.name_en, name_bn: u.name_bn },
+      create: { name_en: u.name_en, name_bn: u.name_bn, role: u.role, phone: u.phone, password_hash: staffPasswordHash },
     });
-    await prisma.staff.upsert({
+    const staffFields = {
+      name_en: u.name_en,
+      name_bn: u.name_bn,
+      designation: u.designation,
+      photo_url: pravatar(u.photo_key, 300),
+      qualifications: u.qualifications,
+      achievements: u.achievements,
+      publications: u.publications ?? undefined,
+      public_contact_email: u.public_contact_email,
+      public_office_location: u.public_office_location,
+      show_on_website: true,
+    };
+    const staff = await prisma.staff.upsert({
       where: { user_id: user.id },
-      update: {},
+      update: staffFields,
       create: {
         user_id: user.id,
         staff_uid: `STAFF-26-${u.phone.slice(-4)}`,
-        name_en: u.name_en,
-        designation: u.role.replace(/_/g, " "),
         phone: u.phone,
         employment_type: "PERMANENT",
         joining_date: new Date("2026-01-01"),
+        ...staffFields,
       },
+    });
+    staffIdByPhone[u.phone] = staff.id;
+  }
+
+  // Subject-teacher assignments for the active academic year so the public
+  // faculty directory's "Subjects Taught" field isn't empty. section_id is
+  // left null (school-wide assignment) since these are demo/placeholder
+  // links, not tied to a specific section's real timetable.
+  const SUBJECT_ASSIGNMENTS: { phone: string; subjectId: string }[] = [
+    { phone: "01700000004", subjectId: "subject-9-BAN1" },
+    { phone: "01700000005", subjectId: "subject-9-ENG1" },
+    { phone: "01700000005", subjectId: "subject-10-ENG1" },
+    { phone: "01700000006", subjectId: "subject-9-PHY" },
+    { phone: "01700000007", subjectId: "subject-9-MATH" },
+    { phone: "01700000007", subjectId: "subject-10-MATH" },
+  ];
+  for (const a of SUBJECT_ASSIGNMENTS) {
+    // Prisma's compound-unique WhereUniqueInput can't be queried with a
+    // literal `null` for the nullable section_id member of
+    // @@unique([subject_id, section_id, academic_year_id]) — so this
+    // school-wide (section_id: null) assignment is upserted on a
+    // deterministic id instead of that compound key.
+    await prisma.subjectTeacherAssignment.upsert({
+      where: { id: `assignment-${a.subjectId}-${a.phone}` },
+      update: { staff_id: staffIdByPhone[a.phone]! },
+      create: { id: `assignment-${a.subjectId}-${a.phone}`, subject_id: a.subjectId, section_id: null, academic_year_id: academicYear.id, staff_id: staffIdByPhone[a.phone]! },
     });
   }
 
@@ -681,6 +836,385 @@ async function main() {
         create: { role: role as never, permission_id: permission.id },
       });
     }
+  }
+
+  // ── Public website content ──
+  // Everything below backs GET /api/content/* (server/api/src/modules/content),
+  // which apps/website reads read-only. Before this block every one of these
+  // endpoints legitimately returned an empty array — the redesigned public
+  // pages had nothing to render. Ids are deterministic so `update` (not just
+  // `create`) is populated too, meaning edits here actually take effect on
+  // a reseed instead of being a one-time-only insert.
+
+  const SLIDERS = [
+    {
+      id: "slider-welcome",
+      image_url: picsum("hero-welcome", 1600, 700),
+      title: "Welcome to Alhumaira Model School & College",
+      subtitle: "Nurturing knowledge, character, and community since 2010.",
+      btn_text: "Learn More",
+      btn_link: "/about",
+      display_order: 1,
+    },
+    {
+      id: "slider-admission",
+      image_url: picsum("hero-admission", 1600, 700),
+      title: "Admissions Open for 2026-2027",
+      subtitle: "Limited seats available across Classes 6 to 10 — apply today.",
+      btn_text: "Apply Now",
+      btn_link: "/admission",
+      display_order: 2,
+    },
+    {
+      id: "slider-campus",
+      image_url: picsum("hero-campus", 1600, 700),
+      title: "A Campus Built for Learning",
+      subtitle: "Modern classrooms, science labs, and a library that inspires curiosity.",
+      btn_text: "Explore Facilities",
+      btn_link: "/about/facilities",
+      display_order: 3,
+    },
+  ];
+  for (const { id, ...data } of SLIDERS) {
+    await prisma.sliderImage.upsert({ where: { id }, update: data, create: { id, ...data } });
+  }
+
+  const NOTICES = [
+    {
+      id: "notice-admission-2026",
+      title: "Admission for 2026-2027 Academic Year Now Open",
+      body: "<p>Alhumaira Model School &amp; College invites applications for Classes 6 to 10 for the 2026-2027 academic year. Interested guardians may apply online through the Admission section of this website.</p>",
+      audience: "PUBLIC" as const,
+      is_pinned: true,
+      publish_at: new Date("2026-06-01"),
+    },
+    {
+      id: "notice-half-yearly-routine",
+      title: "Half-Yearly Examination Routine Published",
+      body: "<p>The routine for the Half-Yearly Examination 2026 has been published. All students are advised to check the Events section for exact dates.</p>",
+      audience: "STUDENTS" as const,
+      is_pinned: true,
+      publish_at: new Date("2026-07-05"),
+    },
+    {
+      id: "notice-fee-due",
+      title: "July Tuition Fee Due Notice",
+      body: "<p>Guardians are requested to clear July's tuition fee by the 10th of the month to avoid late fees. Payment can be made through the Guardian Portal.</p>",
+      audience: "GUARDIANS" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-07-10"),
+    },
+    {
+      id: "notice-pta-meeting",
+      title: "Parent-Teacher Meeting Scheduled for Class 9 & 10",
+      body: "<p>A Parent-Teacher Meeting for Class 9 and 10 guardians will be held to discuss the upcoming Half-Yearly Examination and student progress.</p>",
+      audience: "GUARDIANS" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-07-18"),
+    },
+    {
+      id: "notice-science-fair",
+      title: "Annual Science Fair 2026 — Registration Open",
+      body: "<p>Students interested in showcasing a science project at this year's Science Fair may register with their class teacher by the end of the month.</p>",
+      audience: "STUDENTS" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-07-15"),
+    },
+    {
+      id: "notice-staff-meeting",
+      title: "Monthly Staff Meeting — July 2026",
+      body: "<p>All teaching and non-teaching staff are requested to attend the monthly coordination meeting in the Admin Building conference room.</p>",
+      audience: "STAFF" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-07-20"),
+    },
+    {
+      id: "notice-library-hours",
+      title: "Revised Library Hours for Exam Season",
+      body: "<p>The library will remain open until 5:00 PM on weekdays during the examination season to support student revision.</p>",
+      audience: "STUDENTS" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-07-12"),
+    },
+    {
+      id: "notice-sports-day",
+      title: "Annual Sports Day 2026 — Save the Date",
+      body: "<p>This year's Annual Sports Day will be held on the main campus ground. Interhouse event registration begins next week.</p>",
+      audience: "PUBLIC" as const,
+      is_pinned: true,
+      publish_at: new Date("2026-07-01"),
+    },
+    {
+      id: "notice-eid-holiday",
+      title: "Eid-ul-Adha Holiday Notice",
+      body: "<p>The institution will remain closed for Eid-ul-Adha. Classes resume as per the regular routine after the holiday.</p>",
+      audience: "PUBLIC" as const,
+      is_pinned: false,
+      publish_at: new Date("2026-05-20"),
+    },
+  ];
+  for (const { id, ...data } of NOTICES) {
+    await prisma.notice.upsert({
+      where: { id },
+      update: { ...data, is_published: true, is_public_website: true },
+      create: { id, ...data, is_published: true, is_public_website: true },
+    });
+  }
+
+  const GALLERY_ALBUMS: { id: string; name: string; date: string; imageKeys: string[] }[] = [
+    { id: "album-campus", name: "Our Campus", date: "2026-01-15", imageKeys: ["campus-1", "campus-2", "campus-3", "campus-4"] },
+    { id: "album-sports-day", name: "Annual Sports Day 2026", date: "2026-02-20", imageKeys: ["sports-1", "sports-2", "sports-3", "sports-4", "sports-5"] },
+    { id: "album-science-fair", name: "Science Fair 2026", date: "2026-03-10", imageKeys: ["sciencefair-1", "sciencefair-2", "sciencefair-3"] },
+    { id: "album-cultural-program", name: "Cultural Program — Pohela Boishakh", date: "2026-04-14", imageKeys: ["cultural-1", "cultural-2", "cultural-3", "cultural-4"] },
+  ];
+  for (const a of GALLERY_ALBUMS) {
+    const album = await prisma.galleryAlbum.upsert({
+      where: { id: a.id },
+      update: { name: a.name, date: new Date(a.date), cover_url: picsum(a.imageKeys[0]!, 800, 600), is_public: true },
+      create: { id: a.id, name: a.name, date: new Date(a.date), cover_url: picsum(a.imageKeys[0]!, 800, 600), is_public: true },
+    });
+    for (const [index, key] of a.imageKeys.entries()) {
+      await prisma.galleryImage.upsert({
+        where: { id: `${a.id}-img-${index + 1}` },
+        update: { image_url: picsum(key, 800, 600), display_order: index },
+        create: { id: `${a.id}-img-${index + 1}`, album_id: album.id, image_url: picsum(key, 800, 600), display_order: index },
+      });
+    }
+  }
+
+  const DOWNLOADS = [
+    { id: "download-syllabus-9-10", title: "Class 9-10 Syllabus 2026", category: "SYLLABUS" as const },
+    { id: "download-exam-schedule-half-yearly", title: "Half-Yearly Exam Schedule 2026", category: "EXAM_SCHEDULE" as const },
+    { id: "download-class-routine-morning", title: "Class Routine — Morning Shift 2026", category: "CLASS_ROUTINE" as const },
+    { id: "download-academic-calendar-2026", title: "Academic Calendar 2026", category: "ACADEMIC_CALENDAR" as const },
+    { id: "download-admission-form", title: "Student Admission Form", category: "FORMS" as const },
+    { id: "download-library-circular", title: "Circular: Library Rules 2026", category: "CIRCULARS" as const },
+  ];
+  for (const { id, ...data } of DOWNLOADS) {
+    // No real files back these seed rows — file_url points at a stable
+    // public sample PDF so the "Download" button resolves to *something*
+    // rather than a dead link. An admin uploads the real document later.
+    const file_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf";
+    const file_name = `${data.title.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}.pdf`;
+    await prisma.download.upsert({
+      where: { id },
+      update: { ...data, file_url, file_name, is_public: true },
+      create: { id, ...data, file_url, file_name, is_public: true },
+    });
+  }
+
+  const STATIC_PAGES: { page_key: string; title_en: string; content_en: string }[] = [
+    {
+      page_key: "history",
+      title_en: "Our History",
+      content_en:
+        "<p>Alhumaira Model School &amp; College was founded in 2010 by a group of educators and community leaders in Chattogram who shared a vision of accessible, values-based education.</p>" +
+        "<p>Starting with a single building and a handful of classes, the institution has grown steadily over the years — expanding its campus, adding science and computer laboratories, and building a reputation for strong academic results across the Chittagong Board.</p>" +
+        "<p>Today, the institution serves students from Class 6 through Class 10, guided by the same founding principle: that every student deserves an education that develops both mind and character.</p>",
+    },
+    {
+      page_key: "mission_vision",
+      title_en: "Mission &amp; Vision",
+      content_en:
+        "<h2>Our Mission</h2><p>To provide quality, values-based education that nurtures every student's intellectual, moral, and physical development, preparing them to be responsible citizens and lifelong learners.</p>" +
+        "<h2>Our Vision</h2><p>To be a leading center of academic and moral excellence, producing graduates who lead with knowledge, integrity, and compassion.</p>",
+    },
+    {
+      page_key: "facilities",
+      title_en: "Facilities",
+      content_en:
+        "<p>Our campus is built to support well-rounded learning:</p><ul>" +
+        "<li>Modern science laboratory for Physics, Chemistry, and Biology practicals</li>" +
+        "<li>Computer laboratory with internet access for ICT classes</li>" +
+        "<li>A well-stocked library open through the school day</li>" +
+        "<li>A dedicated sports ground for physical education and inter-house competitions</li>" +
+        "<li>A prayer room (Musalla) for daily Zuhr prayer</li>" +
+        "<li>CCTV-monitored campus for student safety</li>" +
+        "</ul>",
+    },
+    {
+      page_key: "achievements",
+      title_en: "Achievements",
+      content_en:
+        "<p>A few highlights from recent years:</p><ul>" +
+        "<li>100% pass rate in the SSC Examination for three consecutive years</li>" +
+        "<li>District-level champion, Inter-School Science Fair, 2025</li>" +
+        "<li>Runner-up, Divisional Debate Competition, 2024</li>" +
+        "<li>Principal awarded District Best Headteacher, 2022</li>" +
+        "</ul>",
+    },
+    {
+      page_key: "admission_info",
+      title_en: "Admission Information",
+      content_en:
+        "<p>Admission to Alhumaira Model School &amp; College follows a simple process: complete the online application, sit for a short admission assessment, and submit the required documents upon confirmation.</p>" +
+        "<p>Seats are limited and offered on a first-come, first-assessed basis for each class. See the Admission page for currently open cycles, seat counts, and fees.</p>",
+    },
+    {
+      page_key: "principal_message",
+      title_en: "Principal's Message",
+      content_en:
+        "<p>Dear students, parents, and guardians,</p>" +
+        "<p>It is my privilege to welcome you to Alhumaira Model School &amp; College. We believe that every child carries unique potential, and our role as educators is to nurture that potential with patience, discipline, and care.</p>" +
+        "<p>Our teachers are committed not only to academic excellence but to building character — honesty, responsibility, and respect for others. I invite you to be part of our growing community.</p>" +
+        "<p>With warm regards,<br/>Mohammad Aminul Islam<br/>Principal</p>",
+    },
+    {
+      page_key: "vice_principal_message",
+      title_en: "Vice Principal's Message",
+      content_en:
+        "<p>Welcome to our school. As Vice Principal, I work closely with our teaching staff every day to ensure that classroom instruction stays both rigorous and genuinely supportive of each student's pace of learning.</p>" +
+        "<p>We encourage open communication between guardians and teachers — your involvement makes a real difference in your child's progress.</p>",
+    },
+    {
+      page_key: "chairman_message",
+      title_en: "Chairman's Message",
+      content_en:
+        "<p>On behalf of the Governing Body, I am proud of how far this institution has come since 2010. Our committee remains committed to investing in better facilities, fair fee structures, and the long-term academic reputation of this school.</p>" +
+        "<p>We thank every guardian and student for placing their trust in us.</p><p>— Alhaj Md. Abdul Kader, Chairman</p>",
+    },
+    {
+      page_key: "course_curriculum",
+      title_en: "Course Curriculum",
+      content_en:
+        "<p>Classes 6 to 8 follow the National Curriculum and Textbook Board (NCTB) syllabus with compulsory subjects across Bangla, English, Mathematics, Science, and Bangladesh &amp; Global Studies.</p>" +
+        "<p>Classes 9 and 10 follow the Science group curriculum under the Chittagong Education Board, with Physics, Chemistry, Higher Mathematics, and Biology offered alongside the compulsory subjects, leading to the SSC Examination.</p>",
+    },
+    {
+      page_key: "grading_system",
+      title_en: "Grading System",
+      content_en:
+        "<p>We follow the standard Bangladesh Board grading scale (GPA 5.00):</p><ul>" +
+        "<li>80–100 marks: A+ (GPA 5.00) — Excellent</li>" +
+        "<li>70–79: A (GPA 4.00) — Very Good</li>" +
+        "<li>60–69: A- (GPA 3.50) — Good</li>" +
+        "<li>50–59: B (GPA 3.00) — Above Average</li>" +
+        "<li>40–49: C (GPA 2.00) — Average</li>" +
+        "<li>33–39: D (GPA 1.00) — Pass</li>" +
+        "<li>Below 33: F (GPA 0.00) — Fail</li>" +
+        "</ul>",
+    },
+    {
+      page_key: "academic_regulations",
+      title_en: "Academic Regulations",
+      content_en:
+        "<p>Students are required to maintain at least 75% attendance to sit for the annual examination. Promotion to the next class depends on passing all compulsory subjects in the Annual Final Examination.</p>" +
+        "<p>Three examinations are held each academic year: a Class Test, a Half-Yearly Examination, and the Annual Final Examination, weighted 10%, 30%, and 60% respectively toward the final result.</p>",
+    },
+    {
+      page_key: "policies",
+      title_en: "School Policies",
+      content_en:
+        "<p>Students are expected to wear the prescribed uniform on all school days and maintain discipline both on and off campus. Mobile phones are not permitted inside the classroom without prior teacher permission.</p>" +
+        "<p>Homework is assigned daily and reviewed by subject teachers; guardians are encouraged to review their child's homework diary regularly.</p>",
+    },
+  ];
+  for (const p of STATIC_PAGES) {
+    await prisma.staticPage.upsert({
+      where: { page_key: p.page_key },
+      update: { title_en: p.title_en, content_en: p.content_en, is_published: true },
+      create: { page_key: p.page_key, title_en: p.title_en, content_en: p.content_en, is_published: true },
+    });
+  }
+
+  const GOVERNING_BODY = [
+    { id: "gov-chairman", name: "Alhaj Md. Abdul Kader", designation: "Chairman", group: "Executive Committee", display_order: 1, bio: "Founding chairman of the Governing Body, serving since 2010." },
+    { id: "gov-vice-chairman", name: "Mahmuda Khatun", designation: "Vice Chairman", group: "Executive Committee", display_order: 2, bio: "Local education activist and long-time supporter of the institution." },
+    { id: "gov-secretary", name: "Md. Nurul Amin", designation: "Secretary", group: "Executive Committee", display_order: 3, bio: "Manages governing body correspondence and record-keeping." },
+    { id: "gov-member-1", name: "Rashida Sultana", designation: "Member", group: "General Members", display_order: 4, bio: "Guardian representative on the Governing Body." },
+    { id: "gov-member-2", name: "Md. Habibur Rahman", designation: "Member", group: "General Members", display_order: 5, bio: "Local businessman and community representative." },
+    { id: "gov-member-3", name: "Ayesha Siddika", designation: "Member", group: "General Members", display_order: 6, bio: "Retired educator and community representative." },
+  ];
+  for (const { id, name, ...data } of GOVERNING_BODY) {
+    const photo_url = pravatar(id, 300);
+    await prisma.governingBodyMember.upsert({
+      where: { id },
+      update: { name, ...data, photo_url, is_active: true },
+      create: { id, name, ...data, photo_url, is_active: true },
+    });
+  }
+
+  const EVENTS = [
+    { id: "event-half-yearly-exam", name: "Half-Yearly Examination Starts", type: "EXAM", date_from: "2026-08-03", date_to: "2026-08-15" },
+    { id: "event-national-mourning-day", name: "National Mourning Day", type: "HOLIDAY", date_from: "2026-08-15", date_to: null },
+    { id: "event-sports-day", name: "Annual Sports Day", type: "GENERAL", date_from: "2026-08-25", date_to: null },
+    { id: "event-pta-meeting", name: "Parent-Teacher Meeting", type: "MEETING", date_from: "2026-07-30", date_to: null },
+    { id: "event-admission-test", name: "Admission Test for New Session", type: "ADMISSION", date_from: "2026-07-28", date_to: null },
+    { id: "event-science-fair", name: "Science Fair 2026", type: "GENERAL", date_from: "2026-03-10", date_to: null },
+    { id: "event-independence-day", name: "Independence Day Celebration", type: "HOLIDAY", date_from: "2026-03-26", date_to: null },
+    { id: "event-staff-workshop", name: "Staff Development Workshop", type: "MEETING", date_from: "2026-06-15", date_to: null },
+  ];
+  for (const { id, date_from, date_to, ...data } of EVENTS) {
+    const dates = { date_from: new Date(date_from), date_to: date_to ? new Date(date_to) : null };
+    await prisma.event.upsert({
+      where: { id },
+      update: { ...data, ...dates, is_public: true },
+      create: { id, ...data, ...dates, is_public: true },
+    });
+  }
+
+  const ADMISSION_CYCLES = [
+    { id: "admission-cycle-class6", class_id: "class-6", name: "Class 6 Admission 2026-2027", open_date: "2026-06-01", close_date: "2026-08-31", seat_count: 60, app_fee: 500, form_fee: 1000 },
+    { id: "admission-cycle-class9", class_id: "class-9", name: "Class 9 Admission 2026-2027", open_date: "2026-06-15", close_date: "2026-09-15", seat_count: 40, app_fee: 500, form_fee: 1000 },
+  ];
+  for (const { id, open_date, close_date, ...data } of ADMISSION_CYCLES) {
+    const dates = { open_date: new Date(open_date), close_date: new Date(close_date) };
+    await prisma.admissionCycle.upsert({
+      where: { id },
+      update: { ...data, ...dates, academic_year_id: academicYear.id, is_open: true, is_published: true },
+      create: { id, ...data, ...dates, academic_year_id: academicYear.id, is_open: true, is_published: true },
+    });
+  }
+
+  const JOB_POSTINGS = [
+    {
+      id: "job-subject-teacher-physics",
+      title: "Subject Teacher — Physics",
+      department: "Science",
+      description: "We are looking for an experienced Physics teacher for Classes 9-10 (Science group), starting the 2026-2027 academic year.",
+      requirements: "M.Sc. in Physics with B.Ed.; minimum 2 years of teaching experience preferred.",
+      deadline: "2026-08-31",
+    },
+    {
+      id: "job-accountant-part-time",
+      title: "Accountant (Part-Time)",
+      department: "Accounts",
+      description: "Seeking a part-time accountant to assist with fee collection records and monthly reporting.",
+      requirements: "B.Com or equivalent; familiarity with basic accounting software.",
+      deadline: "2026-08-15",
+    },
+    {
+      id: "job-librarian",
+      title: "Librarian",
+      department: "Library",
+      description: "Manage the school library, assist students with resources, and maintain the book catalog.",
+      requirements: "Degree in Library & Information Science preferred.",
+      deadline: "2026-08-20",
+    },
+  ];
+  for (const { id, deadline, ...data } of JOB_POSTINGS) {
+    await prisma.jobPosting.upsert({
+      where: { id },
+      update: { ...data, deadline: new Date(deadline), is_published: true },
+      create: { id, ...data, deadline: new Date(deadline), is_published: true },
+    });
+  }
+
+  const IMPORTANT_LINKS = [
+    { id: "link-moedu", title: "Ministry of Education, Bangladesh", url: "https://moedu.gov.bd", display_order: 1 },
+    { id: "link-ctg-board", title: "Chittagong Education Board", url: "http://www.bise-ctg.gov.bd", display_order: 2 },
+    { id: "link-eboard-results", title: "Education Board Results", url: "http://www.educationboardresults.gov.bd", display_order: 3 },
+    { id: "link-banbeis", title: "BANBEIS", url: "http://www.banbeis.gov.bd", display_order: 4 },
+    { id: "link-nctb", title: "National Curriculum & Textbook Board", url: "http://www.nctb.gov.bd", display_order: 5 },
+    { id: "link-ntrca", title: "Teacher's Registration & Certification Authority", url: "http://ntrca.gov.bd", display_order: 6 },
+    { id: "link-dshe", title: "Directorate of Secondary and Higher Education", url: "http://dshe.gov.bd", display_order: 7 },
+  ];
+  for (const { id, ...data } of IMPORTANT_LINKS) {
+    await prisma.importantLink.upsert({
+      where: { id },
+      update: { ...data, is_active: true },
+      create: { id, ...data, is_active: true },
+    });
   }
 
   console.log("Seed complete.");

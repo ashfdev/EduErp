@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>About Us &amp; Gallery - EduErp</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "on-tertiary-fixed-variant": "#2f2ebe",
+                      "tertiary-container": "#5456e1",
+                      "surface-container-highest": "#d3e4fe",
+                      "surface-card": "#FFFFFF",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed-dim": "#afc6ff",
+                      "status-warning": "#F59E0B",
+                      "on-surface-variant": "#424754",
+                      "surface-bright": "#f8f9ff",
+                      "surface": "#f8f9ff",
+                      "surface-canvas": "#F8FAFC",
+                      "error": "#ba1a1a",
+                      "primary-fixed": "#d9e2ff",
+                      "tertiary-fixed-dim": "#c0c1ff",
+                      "surface-container-low": "#eff4ff",
+                      "on-surface": "#0b1c30",
+                      "warning-container": "#FEF3C7",
+                      "inverse-surface": "#213145",
+                      "background": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#3d456a",
+                      "on-secondary": "#ffffff",
+                      "on-primary-container": "#e2e8ff",
+                      "on-primary-fixed-variant": "#004398",
+                      "outline": "#727785",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#545c83",
+                      "outline-variant": "#c2c6d6",
+                      "on-primary": "#ffffff",
+                      "on-secondary-container": "#515980",
+                      "surface-variant": "#d3e4fe",
+                      "surface-tint": "#0059c6",
+                      "tertiary-fixed": "#e1e0ff",
+                      "on-secondary-fixed": "#10193c",
+                      "status-success": "#10B981",
+                      "primary": "#004cab",
+                      "surface-dim": "#cbdbf5",
+                      "success-container": "#D1FAE5",
+                      "primary-container": "#0963d8",
+                      "tertiary": "#3a3ac8",
+                      "on-error-container": "#93000a",
+                      "inverse-primary": "#afc6ff",
+                      "surface-container": "#e5eeff",
+                      "secondary-fixed-dim": "#bcc4f1",
+                      "border-subtle": "#E2E8F0",
+                      "secondary-container": "#cad2ff",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-container-high": "#dce9ff",
+                      "on-tertiary-fixed": "#07006c",
+                      "on-tertiary-container": "#e9e6ff",
+                      "on-error": "#ffffff",
+                      "on-primary-fixed": "#001a43",
+                      "status-error": "#EF4444",
+                      "secondary-fixed": "#dde1ff",
+                      "on-background": "#0b1c30"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "topbar-height": "64px",
+                      "sidebar-width": "256px",
+                      "margin-desktop": "24px",
+                      "unit": "4px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "body-base": ["Inter"],
+                      "headline-md-mobile": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "title-sm": ["Inter"],
+                      "label-caps": ["Inter"],
+                      "body-medium": ["Inter"],
+                      "helper-text": ["Inter"],
+                      "headline-md": ["Inter"]
+              },
+              "fontSize": {
+                      "body-base": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}],
+                      "headline-md-mobile": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "title-sm": ["18px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600"}],
+                      "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "body-medium": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500"}],
+                      "helper-text": ["12px", {"lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-surface-canvas text-on-surface font-body-base min-h-screen flex flex-col md:flex-row pb-16 md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-surface-card dark:bg-surface-container-highest h-topbar-height sticky top-0 w-full border-b border-border-subtle shadow-sm z-40 hidden md:flex">
+<div class="flex justify-between items-center px-6 w-full max-w-7xl mx-auto">
+<!-- Search left -->
+<div class="flex items-center gap-4 flex-1">
+<span class="font-headline-md text-headline-md font-black text-on-surface mr-8">EduErp</span>
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 h-9 border border-border-subtle rounded text-body-base focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all" placeholder="Search..." type="text"/>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 p-2 rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 p-2 rounded-full hover:bg-surface-container">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full border border-border-subtle object-cover cursor-pointer" data-alt="A professional headshot of a smiling school administrator in a bright, modern office setting. Light mode, corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhdvVM3EjuQF3kyOYVAWdyKBrM9gRiWJ92_VeyIQAdxKWmivhjWI95axABSHEHfsKAo_GhS9CqSXntDfkHKhknRJZLAFkb3glwVXy1tVU7ALjADrFMD-DvXeIuudj-ADz4lsdaLVqaFHUuGg4WkCNc56-vQOqzF-WZE3dEims1K4Us_Kuhqo3lVMHsamFQ_KIZMx3MRzz4lVrKYf8kt-75CfweTFchfJg5k1ODmulhA9TmAzsGpYtJ"/>
+</div>
+</div>
+</header>
+<!-- Mobile Header -->
+<header class="bg-surface-card h-14 sticky top-0 w-full border-b border-border-subtle shadow-sm z-40 md:hidden flex justify-between items-center px-4">
+<span class="font-headline-md-mobile text-headline-md-mobile font-bold text-on-surface">EduErp</span>
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full border border-border-subtle object-cover" data-alt="A professional headshot of a smiling school administrator in a bright, modern office setting. Light mode, corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBA45-N2xZDMkAzNSOe_Nu2AZJYn3Xlm_Ifn7dr0EhUapRGM4ktzSvZExfLeApzDhqVGzUincC5juLS2wauC6tpkSGpXglSBDkRqe-ZtLkQZat4-QjroJTyEi1AtG_bQlDa-Tsfga6NrVkMKrwqOXL0KiqD2AnwoBud3t0VUlXA_3anRjbRrtoPwwvSLz4ucCCUPjhYxruLJoqvMYzxZTJz3R7t0FbQ9VPeE68uDKSc90qftBl_QxIH"/>
+</header>
+<!-- SideNavBar (Desktop) -->
+<nav class="bg-[#0B1437] w-sidebar-width h-screen fixed left-0 top-0 shadow-md flex flex-col hidden md:flex z-50">
+<div class="p-6">
+<h1 class="text-headline-md font-headline-md font-bold text-white">EduErp</h1>
+<p class="text-on-surface-variant font-label-caps text-label-caps mt-1 text-white/70">Admin Portal</p>
+</div>
+<div class="flex-1 overflow-y-auto mt-4 px-2 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-white border-l-4 border-primary bg-white/10 transition-colors rounded-r-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+                Academics
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+                Students
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="person_add">person_add</span>
+                Admissions
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+                Exams
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+                Assignments
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+                Reports
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium mt-4" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+</div>
+<div class="p-4 mt-auto">
+<button class="w-full bg-white/10 text-white py-2 rounded-lg font-body-medium hover:bg-white/20 transition-colors mb-4">Help Center</button>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-lg font-body-medium" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-sidebar-width w-full max-w-7xl mx-auto p-margin-mobile md:p-margin-desktop space-y-6">
+<!-- Page Header -->
+<div>
+<h1 class="font-headline-md-mobile text-headline-md-mobile md:font-display-lg md:text-display-lg text-on-surface mb-2">About Us</h1>
+<p class="text-on-surface-variant font-body-base">Learn about our vision, mission, and the community that makes EduErp special.</p>
+</div>
+<!-- Vision / Mission Stack (Mobile Optimized) -->
+<div class="flex flex-col gap-4">
+<div class="bg-surface-card rounded-lg border border-border-subtle p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+<div class="w-12 h-12 rounded-full bg-primary-container/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-2xl">visibility</span>
+</div>
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface mb-1">Our Vision</h2>
+<p class="text-on-surface-variant text-body-base leading-relaxed">To empower educational institutions with seamless administrative infrastructure, fostering environments where educators can focus entirely on student success rather than operational friction.</p>
+</div>
+</div>
+<div class="bg-surface-card rounded-lg border border-border-subtle p-6 shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+<div class="w-12 h-12 rounded-full bg-success-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-status-success text-2xl">flag</span>
+</div>
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface mb-1">Our Mission</h2>
+<p class="text-on-surface-variant text-body-base leading-relaxed">Delivering reliable, secure, and intuitive management software that brings clarity and calm to the complex data ecosystems of modern schools.</p>
+</div>
+</div>
+</div>
+<!-- Principal's Message (Full Width) -->
+<section class="bg-primary text-on-primary rounded-xl overflow-hidden relative shadow-md my-8">
+<div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 100% 100%, #ffffff 0, transparent 50%);"></div>
+<div class="p-6 md:p-8 relative z-10 flex flex-col md:flex-row gap-6 items-center">
+<img class="w-32 h-32 md:w-48 md:h-48 rounded-full border-4 border-white/20 object-cover shrink-0 shadow-lg" data-alt="A formal portrait of a confident school principal, wearing modern business attire, standing against a blurred background of a brightly lit school hallway." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDHhKg10v9wDRhGG0pTnV2iU5BjnJYwi-uk8d6Ql7K0tat7aVASkuTNz4uUrYBvSOGAPqtL9kjBIvdkrEuX-qN4l9FhGdhsJn1tpXs5sRcXtj5fdqY2WFufdb4O7KhmH1AwIwvf3mFZdQ0OHs1vLtGd3DKQ9ZvqD1ucY9-pPyB0ZF3KMAPFet5dWI-MA5BRxAenitU8WNtIm1mA1npgKbLbS9EadmnD8-tFdMJCTvyRv7f4SD13xY-"/>
+<div class="text-center md:text-left">
+<span class="material-symbols-outlined text-4xl text-white/30 mb-2 block">format_quote</span>
+<p class="font-body-medium text-lg leading-relaxed mb-4">"Trust and structure are the foundations of effective education. Our goal is to provide the invisible yet robust framework that allows the true magic of learning to take center stage."</p>
+<div class="font-title-sm text-title-sm">Dr. Eleanor Sterling</div>
+<div class="font-label-caps text-label-caps text-white/80 mt-1">Head of Institution</div>
+</div>
+</div>
+</section>
+<!-- Touch-Optimized Photo Gallery -->
+<section>
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-title-sm text-title-sm text-on-surface">Campus Gallery</h2>
+<button class="text-primary font-body-medium text-sm hover:underline">View All</button>
+</div>
+<!-- Horizontal scroll on mobile, grid on desktop -->
+<div class="flex overflow-x-auto hide-scrollbar gap-4 pb-4 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:pb-0">
+<!-- Gallery Item 1 -->
+<div class="w-64 md:w-auto shrink-0 bg-surface-card border border-border-subtle rounded-lg overflow-hidden shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] group cursor-pointer">
+<div class="h-40 w-full relative overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A modern, sunlit school library with students sitting at sleek desks studying. High-key lighting, organized and structured environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYjIqlJtvPj7GBKump8wTwKQCNM_Jt6oUCjqDNlihn-09Z0tfGf1y4hAkslVuEKRJWwhQ-aL2IJvksSApNLd2KVyapMYAfBRTmf8C-4s4zz1cStd77kP7nX6vpHSeEY1NGAihafD4MJgjN0Q41r6jef1aQ8D9lXUzwqliqCm2SIIV3Y6tYLniUYHvYJEUWHeg7Aby1UDxJs456X_LS_iYjLr5zSyVEiosAQmM2DuwGVzeVPQuoPsiR"/>
+</div>
+<div class="p-3">
+<h3 class="font-body-medium text-on-surface text-sm">Main Library</h3>
+<p class="font-helper-text text-helper-text text-on-surface-variant">Study spaces</p>
+</div>
+</div>
+<!-- Gallery Item 2 -->
+<div class="w-64 md:w-auto shrink-0 bg-surface-card border border-border-subtle rounded-lg overflow-hidden shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] group cursor-pointer">
+<div class="h-40 w-full relative overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A state-of-the-art science laboratory in a high school, featuring clean white countertops and modern equipment. Bright, clinical, and orderly." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3YrhBzHDCl73azGWL7d4pDwNE-cERxMzhIgOrejhMSOcfvSmm-QzMtHwNuG5tI2p9Wv4aSTleMdM8tq8PctvEuar8WkoZyDERhf8CI530FJEjFC6yv7SdxjTFqpLZ49k6V1TbVVdPMfTeM_yHnBGjTlr4rzg3rQm07NejUnlBDb6asxfP7pcDbLTZHfhKh1wg8Ug0LK2MCMgOT9PsSBhss7Zzbq9C1-AwxQ-hVkuHlxFGIMHawbWT"/>
+</div>
+<div class="p-3">
+<h3 class="font-body-medium text-on-surface text-sm">Science Wing</h3>
+<p class="font-helper-text text-helper-text text-on-surface-variant">Laboratories</p>
+</div>
+</div>
+<!-- Gallery Item 3 -->
+<div class="w-64 md:w-auto shrink-0 bg-surface-card border border-border-subtle rounded-lg overflow-hidden shadow-[0_1px_3px_0_rgba(15,23,42,0.05)] group cursor-pointer">
+<div class="h-40 w-full relative overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="An expansive, green outdoor campus quad with modern brick buildings in the background. Sunny day, clear blue sky, evoking a sense of calm and structure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBeK0N6HowaY66rNcD8WucPwYKffFDY5Q9jz83yJXvEELn9hlq4FUL98focIkOoCvXatQW4BuctFKxr7Uwr33uQiu3yiThMDs4axzPIzv4BH_Qis3oTN7-wtzoa9lxW1OVCTxkPSjdHYGuisM_vn-dcm2eJEDrLo-FzJZKVb3ziJdq2aNEmP0cAJ7tWbzWeQ3HRyw-9cJbtXCh7rNlIu9Js6Mg1yqapF00T8X9FCkkf-XeM2DyR453"/>
+</div>
+<div class="p-3">
+<h3 class="font-body-medium text-on-surface text-sm">Campus Quad</h3>
+<p class="font-helper-text text-helper-text text-on-surface-variant">Outdoor spaces</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="bg-surface dark:bg-surface-container-low fixed bottom-0 w-full z-50 md:hidden border-t border-border-subtle shadow-lg pb-safe">
+<div class="flex justify-around items-center h-16 px-2">
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 scale-95 duration-100 active:bg-secondary-container rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container/10 rounded-xl p-2 scale-95 duration-100 active:bg-secondary-container" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="school" style="font-variation-settings: 'FILL' 1;">school</span>
+<span class="font-label-caps text-label-caps font-bold">Academics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 scale-95 duration-100 active:bg-secondary-container rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="quiz">quiz</span>
+<span class="font-label-caps text-label-caps">Exams</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 scale-95 duration-100 active:bg-secondary-container rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="mail">mail</span>
+<span class="font-label-caps text-label-caps">Inbox</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 scale-95 duration-100 active:bg-secondary-container rounded-xl" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-caps text-label-caps">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

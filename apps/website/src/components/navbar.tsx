@@ -106,7 +106,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
         const lastVisit = localStorage.getItem(NOTICES_LAST_VISIT_KEY);
         if (!lastVisit || new Date(latest) > new Date(lastVisit)) setHasNewNotice(true);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   function clearNoticeBadge() {
@@ -142,10 +142,9 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   ];
 
   return (
-    <header 
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        scrolled ? "bg-blue-50/95 backdrop-blur-md shadow-md border-b border-blue-200" : "bg-blue-100 border-b border-blue-200"
-      }`}
+    <header
+      className={`sticky top-0 z-50 w-full transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-slate-200 ${scrolled ? "shadow-md" : ""
+        }`}
     >
       {/* Top Bar removed as per user request */}
 
@@ -174,42 +173,56 @@ export function Navbar({ institution }: { institution: Institution | null }) {
 
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center gap-1">
-          <Link href="/" className="px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
+          <Link
+            href="/"
+            className={`px-3 py-2 text-sm font-semibold transition-colors rounded-full hover:bg-primary hover:text-white ${pathname === "/" ? "text-primary hover:text-white" : "text-slate-600"
+              }`}
+          >
             {t("home")}
           </Link>
-          {groups.map((g) => (
-            <div key={g.key} className="group/dropdown relative">
-              <button className="relative flex items-center gap-1 px-3 py-2 text-sm font-semibold text-slate-600 hover:text-primary transition-colors rounded-md hover:bg-slate-50">
-                {t(g.key)}
-                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180" />
-                {g.key === "notices" && hasNewNotice && (
-                  <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
-                )}
-              </button>
+          {groups.map((g) => {
+            const groupActive = g.children.some((c) => pathname === c.href || pathname.startsWith(`${c.href}/`));
+            return (
+              <div key={g.key} className="group/dropdown relative">
+                <button
+                  className={`relative flex items-center gap-1 px-3 py-2 text-sm font-semibold transition-colors rounded-full hover:bg-primary hover:text-white ${groupActive ? "text-primary hover:text-white" : "text-slate-600"
+                    }`}
+                >
+                  {t(g.key)}
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180" />
+                  {g.key === "notices" && hasNewNotice && (
+                    <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
+                  )}
+                </button>
 
-              {/* Dropdown Menu */}
-              <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
-                <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
-                  {g.children.map((c, i) => (
-                    <div key={c.href}>
-                      {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
-                        <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100" : ""}`}>
-                          {tAbout(c.subheading)}
-                        </p>
-                      )}
-                      <Link
-                        href={c.href}
-                        onClick={g.key === "notices" ? clearNoticeBadge : undefined}
-                        className="block rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors"
-                      >
-                        {label(c)}
-                      </Link>
-                    </div>
-                  ))}
+                {/* Dropdown Menu */}
+                <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
+                  <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
+                    {g.children.map((c, i) => {
+                      const childActive = pathname === c.href || pathname.startsWith(`${c.href}/`);
+                      return (
+                        <div key={c.href}>
+                          {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
+                            <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100" : ""}`}>
+                              {tAbout(c.subheading)}
+                            </p>
+                          )}
+                          <Link
+                            href={c.href}
+                            onClick={g.key === "notices" ? clearNoticeBadge : undefined}
+                            className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${childActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-primary"
+                              }`}
+                          >
+                            {label(c)}
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Actions */}
@@ -240,15 +253,15 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onBlur={() => !searchQuery && setSearchOpen(false)}
                 placeholder={tSearch("placeholder")}
-                className="h-9 w-48 rounded-full border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                className="h-9 w-48 rounded-full border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               />
             </form>
           ) : (
-            <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)} className="text-slate-600 hover:text-blue-600 rounded-full border-slate-300 bg-white shadow-sm hover:border-blue-300" aria-label={tSearch("title")}>
+            <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)} className="text-slate-600 hover:text-primary rounded-full border-slate-300 bg-white shadow-sm hover:border-primary/30" aria-label={tSearch("title")}>
               <Search className="h-4 w-4" />
             </Button>
           )}
-          <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0">
+          <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all font-semibold">
             <a href={portalUrl} target="_blank" rel="noreferrer">
               <UserCircle2 className="mr-2 h-4 w-4" />
               {t("portalLogin")}
@@ -257,9 +270,9 @@ export function Navbar({ institution }: { institution: Institution | null }) {
         </div>
 
         {/* Mobile Toggle */}
-        <button 
-          className="lg:hidden p-2 -mr-2 text-slate-600 hover:bg-slate-50 rounded-md" 
-          onClick={() => setOpen(!open)} 
+        <button
+          className="lg:hidden p-2 -mr-2 text-slate-600 hover:bg-slate-50 rounded-md"
+          onClick={() => setOpen(!open)}
           aria-label="Toggle menu"
         >
           {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -273,7 +286,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
             <Link href="/" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
               {t("home")}
             </Link>
-            
+
             {groups.map((g) => (
               <div key={g.key} className="border-b border-slate-50 last:border-0">
                 <button
@@ -286,7 +299,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                   </span>
                   <ChevronDown className={`h-4 w-4 transition-transform ${mobileGroupOpen === g.key ? "rotate-180 text-primary" : "text-slate-400"}`} />
                 </button>
-                
+
                 {mobileGroupOpen === g.key && (
                   <div className="mb-2 ml-4 flex flex-col space-y-1 border-l-2 border-slate-100 pl-4 py-1">
                     {g.children.map((c, i) => (
@@ -312,7 +325,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 )}
               </div>
             ))}
-            
+
             <div className="mt-6 pt-6 border-t flex flex-col gap-3">
               <Button asChild className="w-full rounded-xl justify-center h-12 text-base">
                 <a href={portalUrl} target="_blank" rel="noreferrer">

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp - Support &amp; Help Center</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#727785",
+                        "primary": "#004cab",
+                        "inverse-primary": "#afc6ff",
+                        "surface-container": "#e5eeff",
+                        "secondary": "#545c83",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#5456e1",
+                        "surface-container-low": "#eff4ff",
+                        "inverse-surface": "#213145",
+                        "on-secondary-fixed-variant": "#3d456a",
+                        "surface-container-highest": "#d3e4fe",
+                        "error": "#ba1a1a",
+                        "background": "#f8f9ff",
+                        "tertiary": "#3a3ac8",
+                        "primary-fixed-dim": "#afc6ff",
+                        "on-primary-fixed": "#001a43",
+                        "on-tertiary-fixed": "#07006c",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#eaf1ff",
+                        "warning-container": "#FEF3C7",
+                        "surface-card": "#FFFFFF",
+                        "secondary-container": "#cad2ff",
+                        "surface-container-high": "#dce9ff",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "on-background": "#0b1c30",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary-fixed": "#10193c",
+                        "primary-fixed": "#d9e2ff",
+                        "primary-container": "#0963d8",
+                        "secondary-fixed": "#dde1ff",
+                        "on-primary-fixed-variant": "#004398",
+                        "surface": "#f8f9ff",
+                        "secondary-fixed-dim": "#bcc4f1",
+                        "border-subtle": "#E2E8F0",
+                        "surface-container-lowest": "#ffffff",
+                        "status-success": "#10B981",
+                        "status-warning": "#F59E0B",
+                        "tertiary-fixed": "#e1e0ff",
+                        "success-container": "#D1FAE5",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-secondary": "#ffffff",
+                        "surface-canvas": "#F8FAFC",
+                        "status-error": "#EF4444",
+                        "on-primary-container": "#e2e8ff",
+                        "on-secondary-container": "#515980",
+                        "surface-variant": "#d3e4fe",
+                        "outline-variant": "#c2c6d6",
+                        "on-surface-variant": "#424754",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "surface-dim": "#cbdbf5",
+                        "on-tertiary-container": "#e9e6ff",
+                        "surface-tint": "#0059c6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "topbar-height": "64px",
+                        "gutter": "16px",
+                        "sidebar-width": "256px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "24px"
+                    },
+                    "fontFamily": {
+                        "helper-text": ["Inter"],
+                        "headline-md-mobile": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-base": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "title-sm": ["Inter"],
+                        "body-medium": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "helper-text": ["12px", { "lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "headline-md-mobile": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "body-medium": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface-canvas h-full flex flex-col md:flex-row antialiased text-on-surface">
+<!-- Desktop Side Navigation (Shell Context: Yes - App Ecosystem) -->
+<nav class="hidden lg:flex flex-col h-full bg-[#0B1437] fixed left-0 top-0 w-[256px] shadow-sm z-50">
+<div class="p-6">
+<h1 class="text-headline-md font-headline-md text-white flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+                EduErp
+            </h1>
+<p class="text-helper-text font-helper-text text-outline-variant/70 mt-1">Institutional Intelligence</p>
+</div>
+<div class="flex-1 overflow-y-auto py-4">
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-body-medium text-body-medium">Administration</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-medium text-body-medium">Students</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+<span class="font-body-medium text-body-medium">Faculty</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-body-medium text-body-medium">Academics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-body-medium text-body-medium">Attendance</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+<span class="font-body-medium text-body-medium">Examinations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-outline-variant/70 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+<span class="font-body-medium text-body-medium">Reports</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-white border-l-4 border-primary bg-white/10 hover:bg-white/5 hover:text-white transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-medium text-body-medium">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col lg:ml-sidebar-width min-h-screen">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-40 w-full flex justify-between items-center h-[64px] px-margin-desktop bg-surface-container-lowest border-b border-border-subtle shadow-sm">
+<div class="flex-1 flex items-center">
+<div class="relative w-full max-w-md hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full h-9 pl-10 pr-4 rounded bg-surface border border-border-subtle text-body-medium font-body-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Search resources, FAQs..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-primary font-bold border-b-2 border-primary hover:text-primary transition-colors scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<img alt="Administrator Profile" class="w-8 h-8 rounded-full border border-border-subtle object-cover" data-alt="A small circular profile picture of an administrator, featuring a professional individual in business casual attire against a solid light blue background, well-lit and corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVzLPgxdfcB1ci-V8ebLt0nqiyoClBTREARNcLOQ79rbgJUGERsMJWcoUlNtc-jdz8brmYJ0OBUFyR7FnMkzvqy-ub4PGXJInBe-4zeE5f5xb6tt1yySeEUFIidlNZtnqz69wy-7gYaAPVHPjZw1U5q3DZp8wEhW0RFs7F0wivdGAgtJEs2H04uWAIOvuWu2MM_7-cW29UzffWwM-ZSb46O1JlL3DePlQbaF7f4C91TUQ0Er0WnPXp"/>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 p-margin-mobile md:p-margin-desktop overflow-y-auto w-full max-w-7xl mx-auto space-y-8">
+<!-- Hero Section with Prominent Search -->
+<section class="bg-primary-container text-white rounded-xl p-8 md:p-12 relative overflow-hidden flex flex-col items-center justify-center text-center shadow-sm">
+<div class="relative z-10 w-full max-w-2xl space-y-6">
+<h2 class="text-display-lg font-display-lg">How can we help you today?</h2>
+<p class="text-title-sm font-title-sm text-white/90">Search our knowledge base or browse categories below.</p>
+<div class="relative w-full mt-6">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl" data-icon="search">search</span>
+<input class="w-full h-14 pl-12 pr-4 rounded-lg bg-surface-card border-none text-on-surface text-body-base font-body-base shadow-lg focus:outline-none focus:ring-2 focus:ring-inverse-primary transition-all" placeholder="e.g., 'Reset student password', 'Generate attendance report'" type="text"/>
+</div>
+</div>
+<!-- Abstract decorative shapes for background -->
+<div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+<div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-tertiary-container/20 rounded-full blur-3xl pointer-events-none"></div>
+</section>
+<!-- Grid Layout for Content -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Left Column: Categories & FAQs -->
+<div class="md:col-span-8 space-y-6">
+<!-- Quick Links / Popular Categories (Bento Style) -->
+<section>
+<h3 class="text-title-sm font-title-sm text-on-surface mb-4">Browse by Category</h3>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<a class="group bg-surface-card border border-border-subtle rounded-lg p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-4" href="#">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+</div>
+<div>
+<h4 class="text-body-medium font-body-medium text-on-surface mb-1">Student Management</h4>
+<p class="text-helper-text font-helper-text text-on-surface-variant line-clamp-2">Enrollment, profiles, disciplinary records, and parent communication.</p>
+</div>
+</a>
+<a class="group bg-surface-card border border-border-subtle rounded-lg p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-4" href="#">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+</div>
+<div>
+<h4 class="text-body-medium font-body-medium text-on-surface mb-1">Academics &amp; Grading</h4>
+<p class="text-helper-text font-helper-text text-on-surface-variant line-clamp-2">Curriculum setup, gradebooks, transcripts, and term management.</p>
+</div>
+</a>
+<a class="group bg-surface-card border border-border-subtle rounded-lg p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-4" href="#">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+</div>
+<div>
+<h4 class="text-body-medium font-body-medium text-on-surface mb-1">Attendance Tracking</h4>
+<p class="text-helper-text font-helper-text text-on-surface-variant line-clamp-2">Daily logs, leave requests, automated alerts, and summaries.</p>
+</div>
+</a>
+<a class="group bg-surface-card border border-border-subtle rounded-lg p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-start gap-4" href="#">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 flex items-center justify-center text-primary group-hover:bg-primary-container group-hover:text-white transition-colors">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+</div>
+<div>
+<h4 class="text-body-medium font-body-medium text-on-surface mb-1">Reports &amp; Analytics</h4>
+<p class="text-helper-text font-helper-text text-on-surface-variant line-clamp-2">Custom report generation, dashboard widgets, and data exports.</p>
+</div>
+</a>
+</div>
+</section>
+<!-- Promoted FAQs -->
+<section class="bg-surface-card border border-border-subtle rounded-xl p-6 shadow-sm">
+<h3 class="text-title-sm font-title-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-status-warning" data-icon="star">star</span>
+                            Frequently Asked Questions
+                        </h3>
+<div class="space-y-4">
+<!-- FAQ Item 1 -->
+<details class="group border-b border-border-subtle pb-4 [&amp;_summary::-webkit-details-marker]:hidden">
+<summary class="flex items-center justify-between cursor-pointer text-body-medium font-body-medium text-on-surface hover:text-primary transition-colors">
+<span>How do I bulk import student data?</span>
+<span class="material-symbols-outlined text-outline-variant group-open:rotate-180 transition-transform" data-icon="expand_more">expand_more</span>
+</summary>
+<div class="mt-3 text-body-base font-body-base text-on-surface-variant pl-4 border-l-2 border-border-subtle">
+                                    Navigate to Students &gt; Import. Download the CSV template, fill in the required fields (marked with an asterisk), and upload the file. Ensure dates are in YYYY-MM-DD format.
+                                </div>
+</details>
+<!-- FAQ Item 2 -->
+<details class="group border-b border-border-subtle pb-4 [&amp;_summary::-webkit-details-marker]:hidden">
+<summary class="flex items-center justify-between cursor-pointer text-body-medium font-body-medium text-on-surface hover:text-primary transition-colors">
+<span>Why aren't attendance notifications sending to parents?</span>
+<span class="material-symbols-outlined text-outline-variant group-open:rotate-180 transition-transform" data-icon="expand_more">expand_more</span>
+</summary>
+<div class="mt-3 text-body-base font-body-base text-on-surface-variant pl-4 border-l-2 border-border-subtle">
+                                    Check if SMS/Email integration is configured in Settings &gt; Integrations. Also, verify that the parent's contact information is complete and marked as 'Primary Contact' in the student's profile.
+                                </div>
+</details>
+<!-- FAQ Item 3 -->
+<details class="group pb-2 [&amp;_summary::-webkit-details-marker]:hidden">
+<summary class="flex items-center justify-between cursor-pointer text-body-medium font-body-medium text-on-surface hover:text-primary transition-colors">
+<span>How do I lock grades for a completed term?</span>
+<span class="material-symbols-outlined text-outline-variant group-open:rotate-180 transition-transform" data-icon="expand_more">expand_more</span>
+</summary>
+<div class="mt-3 text-body-base font-body-base text-on-surface-variant pl-4 border-l-2 border-border-subtle">
+                                    Go to Academics &gt; Term Management. Select the term and click the 'Lock Grades' action button. This requires Administrator privileges and cannot be undone without contacting higher support.
+                                </div>
+</details>
+</div>
+</section>
+</div>
+<!-- Right Column: Support Ticket & Contact -->
+<div class="md:col-span-4 space-y-6">
+<!-- Submit Ticket Widget -->
+<div class="bg-surface-card border border-border-subtle rounded-xl p-6 shadow-sm">
+<div class="flex items-center gap-3 mb-4 border-b border-border-subtle pb-4">
+<div class="w-10 h-10 rounded bg-tertiary-container/10 flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined" data-icon="support_agent">support_agent</span>
+</div>
+<div>
+<h3 class="text-title-sm font-title-sm text-on-surface">Contact Support</h3>
+<p class="text-helper-text font-helper-text text-on-surface-variant">Submit a new ticket</p>
+</div>
+</div>
+<form class="space-y-4">
+<div>
+<label class="block text-label-caps font-label-caps text-on-surface-variant mb-1 uppercase">Issue Type</label>
+<select class="w-full h-9 rounded bg-surface border border-border-subtle text-body-base font-body-base text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+<option>Technical Error / Bug</option>
+<option>Feature Request</option>
+<option>Billing Question</option>
+<option>Account Access</option>
+</select>
+</div>
+<div>
+<label class="block text-label-caps font-label-caps text-on-surface-variant mb-1 uppercase">Subject</label>
+<input class="w-full h-9 px-3 rounded bg-surface border border-border-subtle text-body-base font-body-base text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Brief summary" type="text"/>
+</div>
+<div>
+<label class="block text-label-caps font-label-caps text-on-surface-variant mb-1 uppercase">Description</label>
+<textarea class="w-full p-3 rounded bg-surface border border-border-subtle text-body-base font-body-base text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" placeholder="Provide details..." rows="4"></textarea>
+</div>
+<button class="w-full h-10 bg-[#0963D8] hover:bg-primary-container/90 text-white font-body-medium text-body-medium rounded-lg transition-colors flex items-center justify-center gap-2" type="button">
+<span class="material-symbols-outlined text-sm" data-icon="send">send</span>
+                                Submit Ticket
+                            </button>
+</form>
+</div>
+<!-- Documentation Link -->
+<a class="block bg-surface border border-border-subtle rounded-xl p-6 shadow-sm hover:border-primary/50 transition-colors group" href="#">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-body-medium font-body-medium text-on-surface group-hover:text-primary transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+                                Full Documentation
+                            </h3>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-primary group-hover:translate-x-1 transition-all" data-icon="arrow_forward">arrow_forward</span>
+</div>
+<p class="text-helper-text font-helper-text text-on-surface-variant">Access detailed guides, API documentation, and release notes.</p>
+</a>
+</div>
+</div>
+</main>
+</div>
+<!-- Mobile Bottom Navigation (Shell Context: App Ecosystem) -->
+<nav class="lg:hidden fixed bottom-0 left-0 w-full flex justify-around items-center px-2 py-2 bg-surface-container-lowest border-t border-border-subtle shadow-lg z-50 rounded-t-xl pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors p-1" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors p-1" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-caps text-label-caps mt-1">Students</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors p-1" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="font-label-caps text-label-caps mt-1">Attendance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-colors p-1" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-label-caps text-label-caps mt-1">Reports</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl p-1 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span>
+<span class="font-label-caps text-label-caps mt-1">More</span>
+</a>
+</nav>
+</body></html>

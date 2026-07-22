@@ -13,6 +13,11 @@ const nextConfig = {
       { protocol: "https", hostname: "*.blob.core.windows.net" },
       // Local-disk upload fallback (dev/no-Azure-configured)
       { protocol: "http", hostname: "localhost", port: "4000" },
+      // Deterministic placeholder photos used by packages/db/prisma/seed.ts
+      // demo content (sliders, staff/faculty photos, gallery, governing
+      // body) — real institutions never point live content at this host.
+      { protocol: "https", hostname: "picsum.photos" },
+      { protocol: "https", hostname: "i.pravatar.cc" },
     ],
   },
 };

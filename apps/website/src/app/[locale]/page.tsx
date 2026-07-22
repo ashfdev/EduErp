@@ -6,14 +6,18 @@ import { Link } from "@/i18n/routing";
 import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
 import { NoticeBoardWidget } from "@/components/notice-board-widget";
-import type { Institution, Slider, Notice, GalleryAlbum, EventItem, AdmissionCycleSummary, GoverningBodyMember, FacultyMember } from "@/lib/types";
+import type { Institution, Slider, Notice, GalleryAlbum, EventItem, AdmissionCycleSummary, GoverningBodyMember, FacultyMember, StaticPageContent } from "@/lib/types";
 import {
   Users, UserCheck, CalendarDays, BookOpen,
   ChevronRight, Megaphone, ArrowRight, Image as ImageIcon,
-  GraduationCap, Download, MapPin, Building2, MessageSquare,
+  GraduationCap, Download, MapPin, Building2, MessageSquare, Quote,
   type LucideIcon
 } from "lucide-react";
 import { Button } from "@education-erp/ui";
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
 
 export default function HomePage() {
   const t = useTranslations("home");
@@ -27,6 +31,7 @@ export default function HomePage() {
   const [openCycles, setOpenCycles] = useState<AdmissionCycleSummary[]>([]);
   const [governingBody, setGoverningBody] = useState<GoverningBodyMember[]>([]);
   const [faculty, setFaculty] = useState<FacultyMember[]>([]);
+  const [principalMessage, setPrincipalMessage] = useState<StaticPageContent | null>(null);
 
   useEffect(() => {
     // Each section below is independently optional (a marketing homepage
@@ -35,15 +40,16 @@ export default function HomePage() {
     // than blocking the rest of the page. fetchContent throws on failure
     // now (used to silently resolve to null), so every call needs an
     // explicit .catch() to avoid an unhandled rejection.
-    fetchContent<Institution>("/institution").then(setInstitution).catch(() => {});
-    fetchContent<Slider[]>("/sliders").then((d) => setSliders(d ?? [])).catch(() => {});
-    fetchContent<{ students: number; staff: number }>("/stats").then(setStats).catch(() => {});
-    fetchContent<Notice[]>("/notices", { limit: "10" }).then((d) => setNotices(d ?? [])).catch(() => {});
-    fetchContent<GalleryAlbum[]>("/gallery/albums", { limit: "4" }).then((d) => setAlbums(d ?? [])).catch(() => {});
-    fetchContent<EventItem[]>("/events", { upcoming: "true", limit: "3" }).then((d) => setEvents(d ?? [])).catch(() => {});
-    fetchContent<AdmissionCycleSummary[]>("/admission/open").then((d) => setOpenCycles(d ?? [])).catch(() => {});
-    fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setGoverningBody((d ?? []).slice(0, 4))).catch(() => {});
-    fetchContent<FacultyMember[]>("/faculty", { category: "FACULTY" }).then((d) => setFaculty((d ?? []).slice(0, 4))).catch(() => {});
+    fetchContent<Institution>("/institution").then(setInstitution).catch(() => { });
+    fetchContent<Slider[]>("/sliders").then((d) => setSliders(d ?? [])).catch(() => { });
+    fetchContent<{ students: number; staff: number }>("/stats").then(setStats).catch(() => { });
+    fetchContent<Notice[]>("/notices", { limit: "10" }).then((d) => setNotices(d ?? [])).catch(() => { });
+    fetchContent<GalleryAlbum[]>("/gallery/albums", { limit: "4" }).then((d) => setAlbums(d ?? [])).catch(() => { });
+    fetchContent<EventItem[]>("/events", { upcoming: "true", limit: "3" }).then((d) => setEvents(d ?? [])).catch(() => { });
+    fetchContent<AdmissionCycleSummary[]>("/admission/open").then((d) => setOpenCycles(d ?? [])).catch(() => { });
+    fetchContent<GoverningBodyMember[]>("/governing-body").then((d) => setGoverningBody((d ?? []).slice(0, 4))).catch(() => { });
+    fetchContent<FacultyMember[]>("/faculty", { category: "FACULTY" }).then((d) => setFaculty((d ?? []).slice(0, 4))).catch(() => { });
+    fetchContent<StaticPageContent>("/pages/principal_message").then(setPrincipalMessage).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -63,19 +69,6 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-slate-50 pb-20">
-      {/* Notice Ticker */}
-      {notices.length > 0 && (
-        <div className="bg-primary text-primary-foreground overflow-hidden py-2 text-sm font-medium">
-          <div className="flex animate-[ticker_40s_linear_infinite] gap-12 whitespace-nowrap px-4 hover:[animation-play-state:paused]">
-            {[...notices, ...notices].map((n, i) => (
-              <Link key={`${n.id}-${i}`} href="/notices" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                {n.is_pinned ? <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">Pinned</span> : <Megaphone className="h-3 w-3" />}
-                {n.title}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Hero Slider */}
       {sliders.length > 0 ? (
@@ -102,10 +95,10 @@ export default function HomePage() {
           {sliders.length > 1 && (
             <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-3 z-10">
               {sliders.map((_, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => setSlideIndex(i)} 
-                  className={`h-2.5 rounded-full transition-all duration-300 ${i === slideIndex ? "w-8 bg-primary" : "w-2.5 bg-white/50 hover:bg-white/80"}`} 
+                <button
+                  key={i}
+                  onClick={() => setSlideIndex(i)}
+                  className={`h-2.5 rounded-full transition-all duration-300 ${i === slideIndex ? "w-8 bg-primary" : "w-2.5 bg-white/50 hover:bg-white/80"}`}
                   aria-label={`Go to slide ${i + 1}`}
                 />
               ))}
@@ -113,18 +106,31 @@ export default function HomePage() {
           )}
         </section>
       ) : (
-        <section className="relative flex h-[350px] sm:h-[450px] items-center justify-center bg-slate-900 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-secondary/90 z-0" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 z-0" />
-          <div className="relative z-10 text-center px-4">
-            <h2 className="text-3xl sm:text-5xl font-extrabold text-white drop-shadow-md mb-4">{institution?.name_en ?? t("welcome")}</h2>
+        <section className="relative flex h-[380px] sm:h-[480px] items-center justify-center bg-slate-900 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-secondary z-0" />
+          <div
+            className="absolute inset-0 z-0 opacity-[0.15]"
+            style={{
+              backgroundImage:
+                "radial-gradient(rgba(255,255,255,0.6) 1.5px, transparent 1.5px)",
+              backgroundSize: "28px 28px",
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/50 via-transparent to-transparent z-0" />
+          <div className="relative z-10 text-center px-4 max-w-3xl">
+            {institution?.logo_url && (
+              <div className="mx-auto mb-6 h-24 w-24 overflow-hidden rounded-full bg-white p-1.5 shadow-xl ring-4 ring-white/20">
+                <Image src={institution.logo_url} alt="" width={96} height={96} className="h-full w-full rounded-full object-contain" />
+              </div>
+            )}
+            <h2 className="text-3xl sm:text-5xl font-extrabold text-white drop-shadow-md mb-4 tracking-tight">{institution?.name_en ?? t("welcome")}</h2>
             {institution?.tagline_en && <p className="text-lg sm:text-xl text-white/90 font-medium">{institution.tagline_en}</p>}
           </div>
         </section>
       )}
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        
+
         {/* Quick Stats - Pulled up overlapping the hero */}
         <section className="relative -mt-16 sm:-mt-24 mb-16 grid grid-cols-2 gap-4 md:grid-cols-4 z-20">
           <StatCard icon={Users} label={t("students")} value={stats?.students ?? "-"} color="text-blue-600" />
@@ -136,23 +142,25 @@ export default function HomePage() {
         {/* Admission Banner */}
         {openCycles.length > 0 && (
           <section className="mb-16">
-            {openCycles.map((c) => (
-              <div key={c.id} className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-secondary p-8 sm:p-10 shadow-lg text-white flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div className="absolute -right-20 -top-20 opacity-10 blur-2xl">
-                  <GraduationCap className="h-64 w-64" />
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {openCycles.map((c) => (
+                <div key={c.id} className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-secondary p-8 sm:p-10 shadow-lg text-white flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div className="absolute -right-20 -top-20 opacity-10 blur-2xl">
+                    <GraduationCap className="h-64 w-64" />
+                  </div>
+                  <div className="relative z-10 text-center sm:text-left">
+                    <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider mb-3 backdrop-blur-md">Admissions Open</span>
+                    <h3 className="text-2xl sm:text-3xl font-bold mb-2">{t("admissionOpen", { className: c.class.name_en })}</h3>
+                    <p className="text-primary-foreground/90 font-medium">
+                      {t("seatsCloses", { seats: c.seat_count, date: new Date(c.close_date).toLocaleDateString() })}
+                    </p>
+                  </div>
+                  <Button asChild variant="secondary" size="lg" className="relative z-10 shrink-0 rounded-full font-bold px-8 shadow-xl">
+                    <Link href={`/admission/${c.id}`}>{t("applyNow")}</Link>
+                  </Button>
                 </div>
-                <div className="relative z-10 text-center sm:text-left">
-                  <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider mb-3 backdrop-blur-md">Admissions Open</span>
-                  <h3 className="text-2xl sm:text-3xl font-bold mb-2">{t("admissionOpen", { className: c.class.name_en })}</h3>
-                  <p className="text-primary-foreground/90 font-medium">
-                    {t("seatsCloses", { seats: c.seat_count, date: new Date(c.close_date).toLocaleDateString() })}
-                  </p>
-                </div>
-                <Button asChild variant="secondary" size="lg" className="relative z-10 shrink-0 rounded-full font-bold px-8 shadow-xl">
-                  <Link href={`/admission/${c.id}`}>{t("applyNow")}</Link>
-                </Button>
-              </div>
-            ))}
+              ))}
+            </div>
           </section>
         )}
 
@@ -181,12 +189,20 @@ export default function HomePage() {
               {t("principalsMessage")}
             </h2>
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm relative overflow-hidden group flex-1">
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-primary to-secondary"></div>
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -z-0 transition-transform group-hover:scale-110"></div>
               <div className="relative z-10 h-full flex flex-col">
-                <p className="font-bold text-lg text-slate-800">{institution?.principal_name ?? t("principalFallback")}</p>
-                <p className="text-sm font-medium text-primary mb-4">{institution?.principal_designation}</p>
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-md">
+                    <Quote className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg text-slate-800 leading-tight">{institution?.principal_name ?? t("principalFallback")}</p>
+                    <p className="text-sm font-medium text-primary">{institution?.principal_designation}</p>
+                  </div>
+                </div>
                 <p className="line-clamp-4 text-sm leading-relaxed text-slate-600 mb-4 italic flex-1">
-                  &ldquo;{institution?.mission_text ?? t("welcomeMessage")}&rdquo;
+                  &ldquo;{principalMessage?.content_en ? stripHtml(principalMessage.content_en) : (institution?.mission_text ?? t("welcomeMessage"))}&rdquo;
                 </p>
                 <Link href="/about/principal_message" className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 mt-auto">
                   {t("readMore")} <ChevronRight className="ml-1 h-4 w-4" />
@@ -217,7 +233,7 @@ export default function HomePage() {
 
         {/* Governing Body & Teachers */}
         {(governingBody.length > 0 || faculty.length > 0) && (
-          <div className="grid grid-cols-1 gap-12 mb-20 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-12 mb-20 lg:grid-cols-2 items-start">
             {governingBody.length > 0 && (
               <section className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -229,13 +245,20 @@ export default function HomePage() {
                     <Link href="/governing-body">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   {governingBody.map((m) => (
-                    <div key={m.id} className="w-24 text-center">
-                      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-                        {m.photo_url && <Image src={m.photo_url} alt={m.name} width={64} height={64} className="h-full w-full object-cover" />}
+                    <div key={m.id} className="group rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
+                      <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200 group-hover:ring-primary/30 transition-all">
+                        {m.photo_url ? (
+                          <Image src={m.photo_url} alt={m.name} width={64} height={64} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-primary/40">
+                            <Users className="h-7 w-7" />
+                          </div>
+                        )}
                       </div>
-                      <p className="mt-2 truncate text-xs font-bold text-slate-700">{m.name}</p>
+                      <p className="line-clamp-2 text-xs font-bold text-slate-800">{m.name}</p>
+                      <p className="line-clamp-2 text-[11px] text-slate-500">{m.designation}</p>
                     </div>
                   ))}
                 </div>
@@ -253,14 +276,21 @@ export default function HomePage() {
                     <Link href="/faculty">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-4">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   {faculty.map((f) => (
-                    <div key={f.id} className="w-24 text-center">
-                      <div className="mx-auto h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-                        {f.photo_url && <Image src={f.photo_url} alt={f.name_en} width={64} height={64} className="h-full w-full object-cover" />}
+                    <Link key={f.id} href={`/faculty/${f.id}`} className="group rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm transition-all hover:-translate-y-1 hover:shadow-md hover:border-primary/30">
+                      <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200 group-hover:ring-primary/30 transition-all">
+                        {f.photo_url ? (
+                          <Image src={f.photo_url} alt={f.name_en} width={64} height={64} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-primary/40">
+                            <GraduationCap className="h-7 w-7" />
+                          </div>
+                        )}
                       </div>
-                      <p className="mt-2 truncate text-xs font-bold text-slate-700">{f.name_en}</p>
-                    </div>
+                      <p className="line-clamp-2 text-xs font-bold text-slate-800">{f.name_en}</p>
+                      <p className="line-clamp-2 text-[11px] text-slate-500">{f.designation}</p>
+                    </Link>
                   ))}
                 </div>
               </section>
@@ -269,7 +299,7 @@ export default function HomePage() {
         )}
 
         {/* Gallery & Events */}
-        <div className={`grid grid-cols-1 gap-12 mb-20 ${albums.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1 max-w-4xl mx-auto"}`}>
+        <div className={`grid grid-cols-1 gap-12 mb-20 items-start ${albums.length > 0 ? "lg:grid-cols-2" : "lg:grid-cols-1 max-w-4xl mx-auto"}`}>
           {/* Gallery Preview */}
           {albums.length > 0 && (
             <section className="space-y-6">
@@ -284,9 +314,9 @@ export default function HomePage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {albums.map((a, i) => (
-                  <Link 
-                    key={a.id} 
-                    href={`/gallery/${a.id}`} 
+                  <Link
+                    key={a.id}
+                    href={`/gallery/${a.id}`}
                     className={`group relative block overflow-hidden rounded-2xl bg-slate-100 ${i === 0 ? "col-span-2 aspect-[21/9]" : "aspect-[4/3]"}`}
                   >
                     {a.cover_url && (

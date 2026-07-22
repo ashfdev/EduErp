@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduErp - Assignment Submission</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary": "#3a3ac8",
+                        "on-secondary-fixed": "#10193c",
+                        "on-primary-fixed": "#001a43",
+                        "secondary-container": "#cad2ff",
+                        "on-surface-variant": "#424754",
+                        "primary-fixed-dim": "#afc6ff",
+                        "tertiary-fixed-dim": "#c0c1ff",
+                        "on-secondary-container": "#515980",
+                        "warning-container": "#FEF3C7",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-tint": "#0059c6",
+                        "background": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-canvas": "#F8FAFC",
+                        "secondary": "#545c83",
+                        "on-error-container": "#93000a",
+                        "surface-container-low": "#eff4ff",
+                        "surface-card": "#FFFFFF",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary-container": "#e9e6ff",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary-container": "#5456e1",
+                        "on-secondary-fixed-variant": "#3d456a",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "surface-dim": "#cbdbf5",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-fixed-variant": "#004398",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#e5eeff",
+                        "primary": "#004cab",
+                        "outline-variant": "#c2c6d6",
+                        "error": "#ba1a1a",
+                        "status-success": "#10B981",
+                        "on-primary-container": "#e2e8ff",
+                        "surface": "#f8f9ff",
+                        "success-container": "#D1FAE5",
+                        "surface-variant": "#d3e4fe",
+                        "on-tertiary-fixed-variant": "#2f2ebe",
+                        "inverse-primary": "#afc6ff",
+                        "tertiary-fixed": "#e1e0ff",
+                        "outline": "#727785",
+                        "border-subtle": "#E2E8F0",
+                        "secondary-fixed-dim": "#bcc4f1",
+                        "on-background": "#0b1c30",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#dde1ff",
+                        "primary-container": "#0963d8",
+                        "status-error": "#EF4444",
+                        "on-surface": "#0b1c30",
+                        "status-warning": "#F59E0B",
+                        "on-tertiary-fixed": "#07006c",
+                        "primary-fixed": "#d9e2ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "margin-desktop": "24px",
+                        "topbar-height": "64px",
+                        "margin-mobile": "16px",
+                        "unit": "4px",
+                        "sidebar-width": "256px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "body-base": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "title-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-medium": ["Inter"],
+                        "helper-text": ["Inter"],
+                        "headline-md-mobile": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "body-medium": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "500" }],
+                        "helper-text": ["12px", { "lineHeight": "16px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "headline-md-mobile": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .drag-active {
+            border-color: #0963d8;
+            background-color: #f8f9ff;
+        }
+    </style>
+</head>
+<body class="bg-surface-canvas text-on-surface font-body-base min-h-screen">
+<!-- TopAppBar -->
+<header class="h-topbar-height sticky top-0 w-full bg-surface-card border-b border-border-subtle shadow-sm z-40 hidden md:block">
+<div class="flex justify-between items-center px-6 w-full max-w-7xl mx-auto h-full">
+<div class="flex items-center gap-4">
+<img alt="EduErp" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9Ltfpw9VanwcH6y8ymHSNP5t67G4pbXTLW4V4JFpoljP7ljXLt_FbGQHILwkbzUIeum8JhU-MOFPYk4_9cbcxuEbrOVpR6zKNSe3ZPPI1utzf1x4cxU5u_f5BDKfitodwI1ysmYGU_L3qy0C2Sxaq0WYbLFn0BuWn3le95rxlpGC-V2Uyx-O1KQ95YeEmyXNenNeip98iANbGOR7LLzKwGO7094K-zd3KnVLEpE9rjxQl4pz8xQ3E"/>
+<span class="font-headline-md text-headline-md font-black text-on-surface">EduErp</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="h-9 pl-9 pr-4 rounded-md border border-border-subtle bg-surface-card focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-base w-64 transition-all" placeholder="Search..." type="text"/>
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 rounded-full hover:bg-surface">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:opacity-70 rounded-full hover:bg-surface">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden bg-primary-container flex items-center justify-center text-on-primary">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A professional headshot of an adult student in a modern educational setting, well-lit, shallow depth of field, conveying a sense of focus and academic dedication. The lighting is soft and natural, emphasizing a trustworthy and organized persona appropriate for a modern institutional dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBEcO2g3PmaX2oD64D4nHzrlPKlRo1Asyx2YJA1BAfS0nhM0NgCK5HHdQDK-H_7icmxp0BdJv9XHcA_vWkD73fWnBTHvZ-2cntTcDEphGkdU5G59uvOAeTo9JqRvx00yDItnnfDcdpOvWOZJ8WRqPKkqUmhRpWeyi2Y3dBWTWVrErAbXJpuuUxH9nh1hqHHzvShuLO5v_T5lw-pku4cffZDF-niMBYlyZFOKY_xNfEYx40v3tkxXbJK"/>
+</div>
+</div>
+</div>
+</header>
+<div class="flex h-[calc(100vh-64px)] overflow-hidden">
+<!-- SideNavBar -->
+<nav class="w-sidebar-width h-full fixed left-0 top-topbar-height bg-[#0B1437] shadow-md flex-col z-30 hidden md:flex">
+<div class="flex-1 overflow-y-auto py-4">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-base text-body-base">Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-base text-body-base">Students</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">school</span>
+<span class="font-body-base text-body-base">Academics</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">person_add</span>
+<span class="font-body-base text-body-base">Admissions</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">quiz</span>
+<span class="font-body-base text-body-base">Exams</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-white border-l-4 border-primary bg-white/10 transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+<span class="font-body-base text-body-base">Assignments</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-body-base text-body-base">Reports</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-base text-body-base">Settings</span>
+</a>
+</li>
+</ul>
+</div>
+<div class="mt-auto border-t border-white/10 p-4">
+<a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-white hover:bg-white/5 transition-colors rounded-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-base text-body-base">Logout</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Workspace -->
+<main class="flex-1 md:ml-sidebar-width overflow-y-auto bg-surface-canvas p-margin-mobile md:p-margin-desktop w-full max-w-7xl mx-auto pb-24 md:pb-8">
+<!-- Breadcrumbs & Header -->
+<div class="mb-8">
+<div class="flex items-center gap-2 text-on-surface-variant font-helper-text text-helper-text mb-2">
+<a class="hover:text-primary transition-colors" href="#">Academics</a>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<a class="hover:text-primary transition-colors" href="#">Computer Science 101</a>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+<span class="text-on-surface">Final Project Submission</span>
+</div>
+<div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-2">Data Structures Final Project</h1>
+<div class="flex items-center gap-4 flex-wrap">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-light-gold bg-warning-container text-status-warning font-label-caps text-label-caps">
+<span class="material-symbols-outlined text-sm mr-1">schedule</span> PENDING SUBMISSION
+                            </span>
+<span class="text-on-surface-variant font-body-medium text-body-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">calendar_today</span> Due: Oct 24, 11:59 PM
+                            </span>
+<span class="text-on-surface-variant font-body-medium text-body-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">military_tech</span> 100 Points Possible
+                            </span>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Left Column: Details & Instructions -->
+<div class="lg:col-span-1 flex flex-col gap-6">
+<!-- Instructions Card -->
+<div class="bg-surface-card rounded-xl border border-border-subtle shadow-sm p-6">
+<h2 class="font-title-sm text-title-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">menu_book</span>
+                            Instructions
+                        </h2>
+<div class="prose prose-sm text-on-surface-variant space-y-3 font-body-base text-body-base">
+<p>Implement a balanced binary search tree (AVL or Red-Black) to manage a large dataset of student records. Your submission must include:</p>
+<ul class="list-disc pl-5 space-y-1">
+<li>Source code files (`.java` or `.py`)</li>
+<li>A brief report (`.pdf`) explaining your balancing logic and time complexity analysis.</li>
+<li>Test cases used to verify your implementation.</li>
+</ul>
+<p class="text-status-error font-medium mt-4">Late submissions will incur a 10% penalty per day.</p>
+</div>
+<!-- Attachments -->
+<div class="mt-6">
+<h3 class="font-label-caps text-label-caps text-on-surface-variant mb-3 uppercase">Reference Materials</h3>
+<div class="space-y-2">
+<a class="flex items-center p-3 rounded-lg border border-border-subtle hover:bg-surface transition-colors group" href="#">
+<span class="material-symbols-outlined text-status-error mr-3 group-hover:scale-110 transition-transform">picture_as_pdf</span>
+<div class="flex-1">
+<p class="font-body-medium text-body-medium text-on-surface line-clamp-1">Project_Requirements_v2.pdf</p>
+<p class="font-helper-text text-helper-text text-on-surface-variant">2.4 MB</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+<a class="flex items-center p-3 rounded-lg border border-border-subtle hover:bg-surface transition-colors group" href="#">
+<span class="material-symbols-outlined text-tertiary mr-3 group-hover:scale-110 transition-transform">code</span>
+<div class="flex-1">
+<p class="font-body-medium text-body-medium text-on-surface line-clamp-1">starter_code.zip</p>
+<p class="font-helper-text text-helper-text text-on-surface-variant">15 KB</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Rubric Card -->
+<div class="bg-surface-card rounded-xl border border-border-subtle shadow-sm p-6">
+<h2 class="font-title-sm text-title-sm text-on-surface mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">fact_check</span>
+                            Rubric
+                        </h2>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-medium text-body-medium text-on-surface">Implementation Correctness</span>
+<span class="font-label-caps text-label-caps text-primary">40 pts</span>
+</div>
+<div class="w-full bg-surface rounded-full h-1.5">
+<div class="bg-border-subtle h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-medium text-body-medium text-on-surface">Time Complexity</span>
+<span class="font-label-caps text-label-caps text-primary">30 pts</span>
+</div>
+<div class="w-full bg-surface rounded-full h-1.5">
+<div class="bg-border-subtle h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-medium text-body-medium text-on-surface">Code Quality &amp; Comments</span>
+<span class="font-label-caps text-label-caps text-primary">15 pts</span>
+</div>
+<div class="w-full bg-surface rounded-full h-1.5">
+<div class="bg-border-subtle h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-medium text-body-medium text-on-surface">Analysis Report</span>
+<span class="font-label-caps text-label-caps text-primary">15 pts</span>
+</div>
+<div class="w-full bg-surface rounded-full h-1.5">
+<div class="bg-border-subtle h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Submission Area -->
+<div class="lg:col-span-2 flex flex-col gap-6">
+<!-- File Upload Bento -->
+<div class="bg-surface-card rounded-xl border border-border-subtle shadow-sm overflow-hidden flex flex-col">
+<div class="p-6 border-b border-border-subtle bg-surface-canvas/50">
+<h2 class="font-title-sm text-title-sm text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">upload_file</span>
+                                Submit Work
+                            </h2>
+</div>
+<div class="p-6 flex-1 flex flex-col gap-6">
+<!-- Text Entry -->
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">Text Submission (Optional)</label>
+<div class="border border-border-subtle rounded-md overflow-hidden focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<div class="bg-surface border-b border-border-subtle p-2 flex gap-2 items-center">
+<button class="p-1 rounded hover:bg-border-subtle text-on-surface-variant"><span class="material-symbols-outlined text-sm">format_bold</span></button>
+<button class="p-1 rounded hover:bg-border-subtle text-on-surface-variant"><span class="material-symbols-outlined text-sm">format_italic</span></button>
+<button class="p-1 rounded hover:bg-border-subtle text-on-surface-variant"><span class="material-symbols-outlined text-sm">format_list_bulleted</span></button>
+<div class="w-px h-4 bg-border-subtle mx-1"></div>
+<button class="p-1 rounded hover:bg-border-subtle text-on-surface-variant"><span class="material-symbols-outlined text-sm">link</span></button>
+</div>
+<textarea class="w-full p-3 border-none focus:ring-0 text-body-base bg-surface-card resize-none" placeholder="Add comments or paste code snippets here..." rows="4"></textarea>
+</div>
+</div>
+<!-- Drag & Drop Zone -->
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase">File Attachments</label>
+<div class="border-2 border-dashed border-border-subtle rounded-xl p-8 text-center hover:bg-surface-canvas hover:border-primary transition-all cursor-pointer group" id="dropzone">
+<div class="w-16 h-16 rounded-full bg-primary-container/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-3xl text-primary">cloud_upload</span>
+</div>
+<h3 class="font-body-medium text-body-medium text-on-surface mb-1">Drag &amp; drop files here</h3>
+<p class="font-helper-text text-helper-text text-on-surface-variant mb-4">or click to browse your computer</p>
+<p class="font-label-caps text-label-caps text-on-surface-variant opacity-70">MAX FILE SIZE: 50MB. ACCEPTED: .ZIP, .PDF, .JAVA, .PY</p>
+<input class="hidden" id="fileInput" multiple="" type="file"/>
+</div>
+<!-- Uploaded Files List (Simulated state) -->
+<div class="mt-4 space-y-2 hidden" id="fileList">
+<!-- Files would appear here via JS -->
+</div>
+</div>
+</div>
+<div class="p-6 border-t border-border-subtle bg-surface-canvas/50 flex justify-end gap-3">
+<button class="px-4 py-2 rounded-md bg-border-subtle text-on-surface font-body-medium text-body-medium hover:bg-outline-variant transition-colors">
+                                Save Draft
+                            </button>
+<button class="px-6 py-2 rounded-md bg-primary-container text-white font-body-medium text-body-medium hover:bg-primary transition-colors flex items-center gap-2 shadow-sm shadow-primary/20">
+<span class="material-symbols-outlined text-sm">send</span>
+                                Submit Assignment
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden bg-surface border-t border-border-subtle shadow-lg flex justify-around items-center h-16 px-2">
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-variant rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-variant rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">school</span>
+<span class="font-label-caps text-label-caps mt-1">Academics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary bg-primary-container/10 rounded-xl p-2 active:bg-secondary-container scale-95 duration-100" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">assignment</span>
+<span class="font-label-caps text-label-caps mt-1 font-bold">Assignments</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-variant rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">mail</span>
+<span class="font-label-caps text-label-caps mt-1">Inbox</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant p-2 hover:bg-surface-variant rounded-xl transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-caps text-label-caps mt-1">Profile</span>
+</a>
+</nav>
+<script>
+        // Simple drag and drop interactivity
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('drag-active');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('drag-active');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-active');
+            // Handle files here in a real app
+            console.log(e.dataTransfer.files);
+            alert("File drop detected. (Simulated interaction)");
+        });
+        
+        fileInput.addEventListener('change', () => {
+             alert("File selected. (Simulated interaction)");
+        });
+    </script>
+</body></html>
