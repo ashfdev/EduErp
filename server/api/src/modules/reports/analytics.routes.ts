@@ -12,6 +12,7 @@ import { reqParam } from "../../lib/req-param";
 import { notFound, badRequest } from "../../lib/errors";
 import { ANALYTICS_MESSAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { accountBalance } from "../accounts/accounts.routes";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -52,24 +53,32 @@ analyticsRouter.get(
 
     const [
       studentsTotal, studentsActive, studentsNewThisYear,
-      studentsPresentToday, studentsAbsentToday,
-      staffTotal, staffActive, staffOnLeaveToday, staffPresentToday,
+      studentsPresentToday, studentsAbsentToday, studentsLateToday, studentsOnLeaveToday,
+      studentsByGender,
+      staffTotal, staffActive, staffOnLeaveToday, staffPresentToday, staffAbsentToday, staffLateToday,
       todayPayments, monthPayments,
       outstandingInvoices,
       overdueInvoicesCount,
       activeExams, publishedResults, upcomingEvents,
       booksIssued, overdueIssues,
       latestPublishedExam,
+      admissionByStatus,
+      salaryDisbursedToday,
     ] = await Promise.all([
       prisma.student.count({ where: { deleted_at: null } }),
       prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
       prisma.student.count({ where: { deleted_at: null, ...newThisYearWhere } }),
       prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "PRESENT" } }),
       prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "ABSENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "LATE" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "LEAVE" } }),
+      prisma.student.groupBy({ by: ["gender"], where: { deleted_at: null, status: "ACTIVE" }, _count: { _all: true } }),
       prisma.staff.count({ where: { deleted_at: null } }),
       prisma.staff.count({ where: { deleted_at: null, is_active: true } }),
       prisma.leaveRequest.count({ where: { status: "APPROVED", from_date: { lte: todayEnd }, to_date: { gte: todayStart } } }),
       prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "PRESENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "ABSENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "LATE" } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: todayStart, lt: todayEnd } }, select: { amount: true } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
       prisma.invoice.findMany({ where: { status: { notIn: ["PAID", "WAIVED"] } }, select: { amount_due: true, amount_paid: true, fine_amount: true } }),
@@ -84,9 +93,32 @@ analyticsRouter.get(
         orderBy: { published_at: "desc" },
         select: { published_at: true, exam: { select: { name: true } } },
       }),
+      prisma.admissionApplication.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.payrollRecord.aggregate({ where: { status: "PAID", paid_at: { gte: todayStart, lt: todayEnd } }, _sum: { net_salary: true } }),
     ]);
 
     const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
+
+    // Cash in Hand (1001) + Cash at Bank (1002) — the same debit-minus-
+    // credit-over-POSTED-vouchers computation the Accounts module's own
+    // reports already use (accountBalance(), reused directly, not
+    // reimplemented). Nullable-safe: a fresh install's seed always creates
+    // both system-reserved accounts, but this stays defensive regardless.
+    const [cashAccount, bankAccount] = await Promise.all([
+      prisma.account.findUnique({ where: { code: "1001" } }),
+      prisma.account.findUnique({ where: { code: "1002" } }),
+    ]);
+    const [cashBalance, bankBalance] = await Promise.all([
+      cashAccount ? accountBalance(cashAccount.id) : Promise.resolve({ balance: 0 }),
+      bankAccount ? accountBalance(bankAccount.id) : Promise.resolve({ balance: 0 }),
+    ]);
+    const currentFundBalance = Math.round((cashBalance.balance + bankBalance.balance) * 100) / 100;
+
+    const genderCounts = { MALE: 0, FEMALE: 0, OTHER: 0 };
+    for (const g of studentsByGender) genderCounts[g.gender as keyof typeof genderCounts] = g._count._all;
+
+    const admissionStatusCounts: Record<string, number> = {};
+    for (const a of admissionByStatus) admissionStatusCounts[a.status] = a._count._all;
 
     res.json({
       success: true,
@@ -106,13 +138,24 @@ analyticsRouter.get(
           // sections get marked, instead of being misleadingly high from
           // the first attendance row onward.
           today_percentage: studentsActive ? Math.round((studentsPresentToday / studentsActive) * 1000) / 10 : null,
+          today_late: studentsLateToday,
+          on_leave_today: studentsOnLeaveToday,
+          by_gender: genderCounts,
         },
-        staff: { total: staffTotal, active: staffActive, on_leave_today: staffOnLeaveToday, present_today: staffPresentToday },
+        staff: {
+          total: staffTotal,
+          active: staffActive,
+          on_leave_today: staffOnLeaveToday,
+          present_today: staffPresentToday,
+          today_absent: staffAbsentToday,
+          today_late: staffLateToday,
+        },
         finance: {
           today_collection: todayPayments.reduce((s, p) => s + p.amount, 0),
           this_month_collection: monthPayments.reduce((s, p) => s + p.amount, 0),
           total_outstanding: Math.round(totalOutstanding * 100) / 100,
           overdue_invoices: overdueInvoicesCount,
+          current_fund_balance: currentFundBalance,
         },
         academic: {
           active_exams: activeExams,
@@ -121,6 +164,8 @@ analyticsRouter.get(
           latest_published_exam: latestPublishedExam ? { name: latestPublishedExam.exam.name, published_at: latestPublishedExam.published_at } : null,
         },
         library: { books_issued: booksIssued, overdue_issues: overdueIssues },
+        admission: { by_status: admissionStatusCounts },
+        payroll: { salary_disbursed_today: salaryDisbursedToday._sum.net_salary ?? 0 },
       },
     });
   }),

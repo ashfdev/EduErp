@@ -25,7 +25,10 @@ accountsRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 // never editable, matching CLAUDE.md's "account codes are system-reserved" rule.
 const SYSTEM_RESERVED_CODES = ["1001", "1002", "1003", "2002", "2003", "2004", "3004", "4001", "4002", "4003", "5001", "5002", "5018"];
 
-async function accountBalance(accountId: string): Promise<{ debit: number; credit: number; balance: number }> {
+// Exported for reuse by analytics.routes.ts's dashboard overview (Plan
+// Thirteen, Phase I, Current Fund Balance widget) -- the same debit-minus-
+// credit-over-POSTED-vouchers computation, not a second implementation.
+export async function accountBalance(accountId: string): Promise<{ debit: number; credit: number; balance: number }> {
   const [debitAgg, creditAgg] = await Promise.all([
     prisma.journalEntry.aggregate({ where: { debit_account_id: accountId, voucher: { status: "POSTED" } }, _sum: { amount: true } }),
     prisma.journalEntry.aggregate({ where: { credit_account_id: accountId, voucher: { status: "POSTED" } }, _sum: { amount: true } }),

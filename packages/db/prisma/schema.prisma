@@ -1925,6 +1925,10 @@ model PayrollRecord {
   payslip_url      String?
   processed_by_id  String?
   created_at       DateTime      @default(now())
+  // Set only when status flips to PAID via POST /mark-paid (Plan Thirteen,
+  // Phase I) -- distinct from created_at, which reflects when the record
+  // was first calculated/finalized, not when salary was actually disbursed.
+  paid_at          DateTime?
 
   @@unique([staff_id, month, year])
 }

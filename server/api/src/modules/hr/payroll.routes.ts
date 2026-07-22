@@ -243,7 +243,7 @@ payrollRouter.post(
 
     const result = await prisma.payrollRecord.updateMany({
       where: { id: { in: records.map((r) => r.id) } },
-      data: { status: "PAID" },
+      data: { status: "PAID", paid_at: new Date() },
     });
 
     for (const record of records) {

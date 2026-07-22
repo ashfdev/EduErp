@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
   LineChart, Line, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -18,11 +18,16 @@ import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight,
 const AT_RISK_VISIBLE_ROLES = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"];
 
 interface Overview {
-  students: { total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null };
-  staff: { total: number; active: number; on_leave_today: number; present_today: number };
-  finance: { today_collection: number; this_month_collection: number; total_outstanding: number; overdue_invoices: number };
+  students: {
+    total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null;
+    today_late: number; on_leave_today: number; by_gender: { MALE: number; FEMALE: number; OTHER: number };
+  };
+  staff: { total: number; active: number; on_leave_today: number; present_today: number; today_absent: number; today_late: number };
+  finance: { today_collection: number; this_month_collection: number; total_outstanding: number; overdue_invoices: number; current_fund_balance: number };
   academic: { active_exams: number; published_results: number; upcoming_events: number; latest_published_exam: { name: string; published_at: string | null } | null };
   library: { books_issued: number; overdue_issues: number };
+  admission: { by_status: Record<string, number> };
+  payroll: { salary_disbursed_today: number };
 }
 interface AttendanceTrend {
   labels: string[];
@@ -81,6 +86,8 @@ export default function DashboardPage() {
   // Theme colors for charts
   const CHART_PRIMARY = "#2563EB"; // Tailwind blue-600
   const CHART_SECONDARY = "#60A5FA"; // Tailwind blue-400
+  const GENDER_COLORS = ["#2563EB", "#EC4899", "#94A3B8"]; // blue-600, pink-500, slate-400
+  const ADMISSION_COLORS = ["#94A3B8", "#F59E0B", "#FBBF24", "#EF4444", "#3B82F6", "#10B981"]; // slate/amber/red/blue/emerald
 
   return (
     <PageWrapper>
@@ -221,6 +228,73 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 2.5 — Additional metrics (Plan Thirteen, Phase I) */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 mb-6">
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-emerald-600">{overview?.staff.present_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffPresentToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-rose-600">{overview?.staff.today_absent ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffAbsentToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.staff.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffLateToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.students.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsLateToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-blue-600">{overview?.students.on_leave_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsOnLeaveToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold">৳{(overview?.finance.current_fund_balance ?? 0).toLocaleString()}</p><p className="text-xs text-muted-foreground">{t("currentFundBalance")}</p></CardContent></Card>
+      </div>
+
+      {/* Row 2.6 — Gender split + Admission status donuts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-4 font-semibold tracking-tight">{t("genderSplit")}</p>
+            {overview && (overview.students.by_gender.MALE + overview.students.by_gender.FEMALE + overview.students.by_gender.OTHER) > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: t("genderMale"), value: overview.students.by_gender.MALE },
+                      { name: t("genderFemale"), value: overview.students.by_gender.FEMALE },
+                      { name: t("genderOther"), value: overview.students.by_gender.OTHER },
+                    ].filter((d) => d.value > 0)}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  >
+                    {GENDER_COLORS.map((color, i) => <Cell key={i} fill={color} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-[220px] items-center justify-center"><EmptyState title={t("noData")} /></div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-6">
+            <p className="mb-4 font-semibold tracking-tight">{t("admissionStatus")}</p>
+            {overview && Object.values(overview.admission.by_status).some((v) => v > 0) ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={Object.entries(overview.admission.by_status).filter(([, v]) => v > 0).map(([status, value]) => ({ name: status, value }))}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  >
+                    {Object.keys(overview.admission.by_status).map((_, i) => <Cell key={i} fill={ADMISSION_COLORS[i % ADMISSION_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-[220px] items-center justify-center"><EmptyState title={t("noData")} /></div>
+            )}
           </CardContent>
         </Card>
       </div>
