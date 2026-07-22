@@ -2,14 +2,16 @@ import { Router } from "express";
 import { z } from "zod";
 import ExcelJS from "exceljs";
 import { parse } from "csv-parse/sync";
+import type { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { csvUpload } from "../../middleware/upload";
+import { csvUpload, documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema } from "@education-erp/validators";
+import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
@@ -292,12 +294,16 @@ studentsRouter.get(
           student_uid: student.student_uid,
           name_en: student.name_en,
           name_bn: student.name_bn,
+          middle_name: student.middle_name,
+          nick_name: student.nick_name,
           date_of_birth: student.date_of_birth,
           gender: student.gender,
           religion: student.religion,
           blood_group: student.blood_group,
           nationality: student.nationality,
           phone: student.phone,
+          other_phone: student.other_phone,
+          passport_no: student.passport_no,
           photo_url: student.photo_url,
           address_permanent: student.address_permanent,
           address_current: student.address_current,
@@ -393,12 +399,17 @@ studentsRouter.post(
           student_uid,
           name_en: body.name_en,
           name_bn: body.name_bn,
+          middle_name: body.middle_name,
+          nick_name: body.nick_name,
           date_of_birth: body.date_of_birth,
           gender: body.gender,
           religion: body.religion,
+          nationality: body.nationality ?? undefined,
           blood_group: body.blood_group,
           nid_or_birth_reg: body.nid_or_birth_reg,
+          passport_no: body.passport_no,
           phone: body.phone,
+          other_phone: body.other_phone,
           guardian_id: guardianId,
           father_name: body.father_name,
           father_phone: body.father_phone,
@@ -500,7 +511,14 @@ studentsRouter.put(
         }
       }
 
-      const result = await tx.student.update({ where: { id }, data: fields });
+      // Explicit cast: TS's union-discrimination between Prisma's
+      // StudentUpdateInput/StudentUncheckedUpdateInput starts failing once
+      // `fields`'s inferred object type crosses a certain optional-property
+      // count (confirmed by bisecting -- this call site typechecked cleanly
+      // before Phase C's 5 new optional Student fields were added to the
+      // Zod schema, with no other change here). The runtime shape is
+      // unchanged; this only satisfies the type checker.
+      const result = await tx.student.update({ where: { id }, data: fields as Prisma.StudentUpdateInput });
 
       if (classChanged && fields.current_class_id) {
         const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
@@ -1011,5 +1029,67 @@ studentsRouter.post(
         no_own_login_count: noOwnLoginCount,
       },
     });
+  }),
+);
+
+// ── Documents (Plan Thirteen, Phase C) ────────────────────────────
+// Mirrors the Faculty Document Vault's exact shape (hr/staff.routes.ts) --
+// private blob_key, signed download URLs only, magic-byte-verified upload.
+// Staff-uploaded only (no student/guardian self-service path here), so this
+// stays behind the router's existing STAFF_ONLY_ROLES floor gate with no
+// extra per-route check needed.
+
+studentsRouter.get(
+  "/:id/documents",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const documents = await prisma.studentDocument.findMany({ where: { student_id: id }, orderBy: { uploaded_at: "desc" } });
+    res.json({ success: true, data: documents });
+  }),
+);
+
+studentsRouter.post(
+  "/:id/documents",
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    if (!req.file) throw badRequest("A file is required");
+    const body = studentDocumentSchema.parse(req.body);
+
+    const { blobKey } = await uploadBuffer("student-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const document = await prisma.studentDocument.create({
+      data: {
+        student_id: id,
+        doc_type: body.doc_type,
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        mime_type: req.file.mimetype,
+        uploaded_by_id: req.user!.sub,
+      },
+    });
+    res.status(201).json({ success: true, data: document });
+  }),
+);
+
+studentsRouter.get(
+  "/:id/documents/:doc_id/download",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const document = await prisma.studentDocument.findFirst({ where: { id: reqParam(req, "doc_id"), student_id: id } });
+    if (!document) throw notFound("Document not found");
+    const url = await getSignedDownloadUrl(document.blob_key);
+    res.json({ success: true, data: { url } });
+  }),
+);
+
+studentsRouter.delete(
+  "/:id/documents/:doc_id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const document = await prisma.studentDocument.findFirst({ where: { id: reqParam(req, "doc_id"), student_id: id } });
+    if (!document) throw notFound("Document not found");
+    await prisma.studentDocument.delete({ where: { id: document.id } });
+    res.status(204).send();
   }),
 );

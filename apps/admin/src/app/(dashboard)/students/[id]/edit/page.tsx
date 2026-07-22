@@ -35,12 +35,18 @@ interface StudentProfile {
     id: string;
     name_en: string;
     name_bn: string | null;
+    middle_name: string | null;
+    nick_name: string | null;
     gender: string;
     date_of_birth: string | null;
     religion: string | null;
+    nationality: string | null;
     blood_group: string | null;
     phone: string | null;
+    other_phone: string | null;
+    passport_no: string | null;
     address_permanent: string | null;
+    address_current: string | null;
     district: string | null;
     has_disability: boolean;
     disability_note: string | null;
@@ -62,14 +68,23 @@ interface StudentProfile {
   };
 }
 
+const RELIGIONS = ["Islam", "Hinduism", "Christianity", "Buddhism", "Other"];
+const NATIONALITIES = ["Bangladeshi", "Indian", "Other"];
+
 const emptyForm = {
   name_en: "",
   name_bn: "",
+  middle_name: "",
+  nick_name: "",
   gender: "MALE" as "MALE" | "FEMALE" | "OTHER",
   date_of_birth: "",
   religion: "",
+  nationality: "Bangladeshi",
   blood_group: "",
   phone: "",
+  other_phone: "",
+  passport_no: "",
+  address_current: "",
   address_permanent: "",
   district: "",
   has_disability: false,
@@ -112,11 +127,17 @@ export default function EditStudentPage() {
     setForm({
       name_en: p.name_en,
       name_bn: p.name_bn ?? "",
+      middle_name: p.middle_name ?? "",
+      nick_name: p.nick_name ?? "",
       gender: p.gender as "MALE" | "FEMALE" | "OTHER",
       date_of_birth: p.date_of_birth ? p.date_of_birth.slice(0, 10) : "",
       religion: p.religion ?? "",
+      nationality: p.nationality ?? "Bangladeshi",
       blood_group: p.blood_group ?? "",
       phone: p.phone ?? "",
+      other_phone: p.other_phone ?? "",
+      passport_no: p.passport_no ?? "",
+      address_current: p.address_current ?? "",
       address_permanent: p.address_permanent ?? "",
       district: p.district ?? "",
       has_disability: p.has_disability,
@@ -151,10 +172,16 @@ export default function EditStudentPage() {
         ...form,
         override,
         name_bn: form.name_bn || undefined,
+        middle_name: form.middle_name || undefined,
+        nick_name: form.nick_name || undefined,
         date_of_birth: form.date_of_birth || undefined,
         religion: form.religion || undefined,
+        nationality: form.nationality || undefined,
         blood_group: form.blood_group || undefined,
         phone: form.phone || undefined,
+        other_phone: form.other_phone || undefined,
+        passport_no: form.passport_no || undefined,
+        address_current: form.address_current || undefined,
         address_permanent: form.address_permanent || undefined,
         district: form.district || undefined,
         disability_note: form.disability_note || undefined,
@@ -201,6 +228,8 @@ export default function EditStudentPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Name (English) *</Label><Input value={form.name_en} onChange={(e) => set("name_en", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Name (Bangla)</Label><Input value={form.name_bn} onChange={(e) => set("name_bn", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Middle Name</Label><Input value={form.middle_name} onChange={(e) => set("middle_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Nick Name</Label><Input value={form.nick_name} onChange={(e) => set("nick_name", e.target.value)} /></div>
               <div className="space-y-1.5">
                 <Label>Gender *</Label>
                 <Select value={form.gender} onValueChange={(v) => set("gender", v as typeof form.gender)}>
@@ -213,11 +242,44 @@ export default function EditStudentPage() {
                 </Select>
               </div>
               <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Religion</Label><Input value={form.religion} onChange={(e) => set("religion", e.target.value)} /></div>
+              <div className="space-y-1.5">
+                <Label>Religion</Label>
+                <Select value={form.religion} onValueChange={(v) => set("religion", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {RELIGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nationality</Label>
+                <Select value={form.nationality} onValueChange={(v) => set("nationality", v)}>
+                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>
+                    {NATIONALITIES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5"><Label>Blood Group</Label><Input value={form.blood_group} onChange={(e) => set("blood_group", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Student Phone (optional)</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Other Phone</Label><Input value={form.other_phone} onChange={(e) => set("other_phone", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>District</Label><Input value={form.district} onChange={(e) => set("district", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1.5"><Label>Permanent Address</Label><Input value={form.address_permanent} onChange={(e) => set("address_permanent", e.target.value)} /></div>
+              <div />
+              <div className="col-span-2 space-y-1.5"><Label>Present Address</Label><Input value={form.address_current} onChange={(e) => set("address_current", e.target.value)} /></div>
+              <div className="col-span-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>Permanent Address</Label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary hover:underline"
+                    onClick={() => set("address_permanent", form.address_current)}
+                  >
+                    Same as Present Address
+                  </button>
+                </div>
+                <Input value={form.address_permanent} onChange={(e) => set("address_permanent", e.target.value)} />
+              </div>
               <div className="col-span-2 flex items-center justify-between">
                 <Label>Has disability</Label>
                 <Switch checked={form.has_disability} onCheckedChange={(v) => set("has_disability", v)} />

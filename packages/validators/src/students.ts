@@ -3,16 +3,24 @@ import { z } from "zod";
 export const createStudentSchema = z.object({
   name_en: z.string().min(1),
   name_bn: z.string().optional().nullable(),
+  middle_name: z.string().optional().nullable(),
+  nick_name: z.string().optional().nullable(),
   gender: z.enum(["MALE", "FEMALE", "OTHER"]),
   date_of_birth: z.coerce.date().optional().nullable(),
   religion: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
   blood_group: z.string().optional().nullable(),
   nid_or_birth_reg: z.string().optional().nullable(),
+  passport_no: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
+  other_phone: z.string().optional().nullable(),
   has_disability: z.boolean().optional(),
   disability_note: z.string().optional().nullable(),
-  address_permanent: z.string().optional().nullable(),
+  // "Present Address" in the UI (Plan Thirteen, Phase C) -- the field name
+  // stays address_current to match the already-existing DB column, which
+  // predates the UI split and was never wired in before this.
   address_current: z.string().optional().nullable(),
+  address_permanent: z.string().optional().nullable(),
   district: z.string().optional().nullable(),
 
   guardian_id: z.string().optional().nullable(),
@@ -85,3 +93,17 @@ export const bulkPromoteSchema = z.object({
   student_group_ids: z.record(z.string(), z.string()).optional(),
 });
 export type BulkPromoteInput = z.infer<typeof bulkPromoteSchema>;
+
+export const studentDocumentSchema = z.object({
+  doc_type: z.enum([
+    "BIRTH_CERTIFICATE",
+    "TRANSFER_CERTIFICATE",
+    "TESTIMONIAL",
+    "ACADEMIC_CERTIFICATE",
+    "MARKSHEET",
+    "FATHER_NID",
+    "MOTHER_NID",
+    "OTHER",
+  ]),
+});
+export type StudentDocumentInput = z.infer<typeof studentDocumentSchema>;

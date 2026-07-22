@@ -10,6 +10,13 @@ import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
+interface StudentDocumentRow {
+  id: string;
+  doc_type: string;
+  original_filename: string;
+  uploaded_at: string;
+}
+
 interface StudentProfile {
   personal: {
     student_uid: string;
@@ -121,6 +128,44 @@ export default function StudentProfilePage() {
     queryKey: ["students", id],
     queryFn: async () => (await api.get(`/api/students/${id}`)).data.data,
   });
+
+  const { data: documents } = useQuery<StudentDocumentRow[]>({
+    queryKey: ["students", id, "documents"],
+    queryFn: async () => (await api.get(`/api/students/${id}/documents`)).data.data,
+  });
+  const [docUploadOpen, setDocUploadOpen] = useState(false);
+  const [docType, setDocType] = useState("BIRTH_CERTIFICATE");
+  const [docFile, setDocFile] = useState<File | null>(null);
+
+  const uploadDocMutation = useMutation({
+    mutationFn: () => {
+      const formData = new FormData();
+      formData.append("doc_type", docType);
+      formData.append("file", docFile!);
+      return api.post(`/api/students/${id}/documents`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Document uploaded");
+      queryClient.invalidateQueries({ queryKey: ["students", id, "documents"] });
+      setDocUploadOpen(false);
+      setDocFile(null);
+      setDocType("BIRTH_CERTIFICATE");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to upload document"),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: string) => api.delete(`/api/students/${id}/documents/${docId}`),
+    onSuccess: () => {
+      toast.success("Document removed");
+      queryClient.invalidateQueries({ queryKey: ["students", id, "documents"] });
+    },
+  });
+
+  async function downloadStudentDocument(docId: string) {
+    const res = await api.get(`/api/students/${id}/documents/${docId}/download`);
+    window.open(res.data.data.url, "_blank");
+  }
 
   const graduateMutation = useMutation({
     mutationFn: () => api.post(`/api/students/${id}/graduate`, { graduation_year: graduationYear }),
@@ -274,6 +319,7 @@ export default function StudentProfilePage() {
           <TabsTrigger value="fees">Fees</TabsTrigger>
           <TabsTrigger value="health">Health</TabsTrigger>
           <TabsTrigger value="discipline">Discipline</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal">
@@ -565,7 +611,61 @@ export default function StudentProfilePage() {
         <TabsContent value="discipline">
           <StudentDisciplineTab studentId={id} />
         </TabsContent>
+
+        <TabsContent value="documents">
+          <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setDocUploadOpen(true)}>+ Upload Document</Button></div>
+          <Card>
+            <CardContent className="pt-6">
+              {!documents?.length && <EmptyState title="No documents uploaded yet" />}
+              {!!documents?.length && (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Type</th><th className="p-2">File</th><th className="p-2">Uploaded</th><th className="p-2" /></tr></thead>
+                  <tbody>
+                    {documents.map((d) => (
+                      <tr key={d.id} className="border-b">
+                        <td className="p-2">{d.doc_type.replace(/_/g, " ")}</td>
+                        <td className="p-2 text-muted-foreground">{d.original_filename}</td>
+                        <td className="p-2">{new Date(d.uploaded_at).toLocaleDateString()}</td>
+                        <td className="p-2 text-right">
+                          <button onClick={() => downloadStudentDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
+                          <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={docUploadOpen} onOpenChange={setDocUploadOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Upload Document</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Document Type</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={docType} onChange={(e) => setDocType(e.target.value)}>
+                <option value="BIRTH_CERTIFICATE">Birth Certificate</option>
+                <option value="TRANSFER_CERTIFICATE">Transfer Certificate</option>
+                <option value="TESTIMONIAL">Testimonial</option>
+                <option value="ACADEMIC_CERTIFICATE">Academic Certificate</option>
+                <option value="MARKSHEET">Marksheet</option>
+                <option value="FATHER_NID">Father&apos;s NID</option>
+                <option value="MOTHER_NID">Mother&apos;s NID</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1.5"><Label>File</Label><Input type="file" onChange={(e) => setDocFile(e.target.files?.[0] ?? null)} /></div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => uploadDocMutation.mutate()} disabled={uploadDocMutation.isPending || !docFile}>
+              {uploadDocMutation.isPending ? "Uploading..." : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PdfPreviewModal
         open={pdfPreview.open}

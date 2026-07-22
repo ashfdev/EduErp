@@ -514,6 +514,11 @@ model Student {
   student_uid           String      @unique
   name_en               String
   name_bn               String?
+  // Both purely additive/nullable (Plan Thirteen, Phase C) -- neither
+  // existed anywhere in the schema before, unlike nationality/
+  // address_current below, which were already here just unwired from the UI.
+  middle_name           String?
+  nick_name             String?
   date_of_birth         DateTime?
   gender                Gender
   religion              String?
@@ -521,6 +526,8 @@ model Student {
   nationality           String      @default("Bangladeshi")
   nid_or_birth_reg      String?
   phone                 String?
+  other_phone           String?
+  passport_no           String?
   guardian_id           String?
   guardian              Guardian?   @relation(fields: [guardian_id], references: [id])
   father_name           String?
@@ -594,6 +601,7 @@ model Student {
   quiz_attempts          QuizAttempt[]
   document_requests      DocumentRequest[]
   visitors                Visitor[]
+  documents               StudentDocument[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1844,6 +1852,36 @@ model StaffDocument {
   verified_at     DateTime?
 
   @@index([staff_id])
+}
+
+// Mirrors StaffDocument's exact shape (Plan Thirteen, Phase C) -- a fixed
+// 7-value doc_type is enough to label each upload on its own (unlike Staff's
+// open-ended vault, no separate free-text title needed). Staff-uploaded only
+// (during admission/edit) -- no student/guardian self-service path exists
+// for this, unlike some other student-facing models in this schema.
+model StudentDocument {
+  id                String          @id @default(cuid())
+  student_id        String
+  student           Student         @relation(fields: [student_id], references: [id])
+  doc_type          StudentDocType
+  blob_key          String
+  original_filename String
+  mime_type         String
+  uploaded_at       DateTime        @default(now())
+  uploaded_by_id    String?
+
+  @@index([student_id])
+}
+
+enum StudentDocType {
+  BIRTH_CERTIFICATE
+  TRANSFER_CERTIFICATE
+  TESTIMONIAL
+  ACADEMIC_CERTIFICATE
+  MARKSHEET
+  FATHER_NID
+  MOTHER_NID
+  OTHER
 }
 
 model SalaryStructure {
