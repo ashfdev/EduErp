@@ -167,6 +167,19 @@ export default function StudentProfilePage() {
     window.open(res.data.data.url, "_blank");
   }
 
+  const [waiveTarget, setWaiveTarget] = useState<{ id: string; description: string; amount_due: number } | null>(null);
+  const [waiveReason, setWaiveReason] = useState("");
+  const waiveMutation = useMutation({
+    mutationFn: () => api.put(`/api/fees/invoices/${waiveTarget!.id}/waive`, { reason: waiveReason }),
+    onSuccess: () => {
+      toast.success("Invoice waived");
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      setWaiveTarget(null);
+      setWaiveReason("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to waive invoice"),
+  });
+
   const graduateMutation = useMutation({
     mutationFn: () => api.post(`/api/students/${id}/graduate`, { graduation_year: graduationYear }),
     onSuccess: () => {
@@ -542,6 +555,11 @@ export default function StudentProfilePage() {
                           <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/fee/invoice/${inv.id}`, `Invoice_${inv.id}.pdf`)}>
                             Download
                           </Button>
+                          {inv.status !== "PAID" && inv.status !== "WAIVED" && (
+                            <Button size="sm" variant="outline" onClick={() => setWaiveTarget({ id: inv.id, description: inv.description, amount_due: inv.amount_due })}>
+                              Waive
+                            </Button>
+                          )}
                         </td>
                       </tr>
                       {!!inv.payments?.length && (
@@ -662,6 +680,26 @@ export default function StudentProfilePage() {
           <DialogFooter>
             <Button onClick={() => uploadDocMutation.mutate()} disabled={uploadDocMutation.isPending || !docFile}>
               {uploadDocMutation.isPending ? "Uploading..." : "Upload"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!waiveTarget} onOpenChange={(open) => { if (!open) { setWaiveTarget(null); setWaiveReason(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Waive Invoice</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {waiveTarget && (
+              <p className="text-sm text-muted-foreground">{waiveTarget.description} — ৳{waiveTarget.amount_due}</p>
+            )}
+            <div className="space-y-1.5">
+              <Label>Reason</Label>
+              <Input value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="e.g. Sibling discount approved by Principal" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!waiveReason || waiveMutation.isPending} onClick={() => waiveMutation.mutate()}>
+              {waiveMutation.isPending ? "Waiving..." : "Confirm Waive"}
             </Button>
           </DialogFooter>
         </DialogContent>

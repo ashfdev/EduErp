@@ -44,6 +44,23 @@ export const waiveInvoiceSchema = z.object({
   reason: z.string().min(1),
 });
 
+export const waiverTypeSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  discount_type: z.enum(["PERCENTAGE", "FIXED"]),
+  discount_value: z.number().min(0),
+  applicable_categories: z.array(feeCategorySchema).default([]),
+  is_active: z.boolean().optional(),
+});
+export type WaiverTypeInput = z.infer<typeof waiverTypeSchema>;
+
+export const assignStudentWaiverSchema = z.object({
+  student_id: z.string().min(1),
+  waiver_type_id: z.string().min(1),
+  academic_year_id: z.string().optional().nullable(),
+});
+export type AssignStudentWaiverInput = z.infer<typeof assignStudentWaiverSchema>;
+
 export const initiatePaymentSchema = z.object({
   invoice_id: z.string().min(1),
   gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"]),

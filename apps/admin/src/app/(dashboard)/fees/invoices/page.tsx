@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, PdfPreviewModal } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -16,6 +16,10 @@ interface Invoice {
   status: string;
   due_date: string;
   student: { name_en: string; student_uid: string; current_class?: { name_en: string } | null };
+}
+
+function canWaive(status: string) {
+  return status !== "PAID" && status !== "WAIVED";
 }
 interface YearOption { id: string; is_active: boolean }
 
@@ -43,6 +47,19 @@ export default function InvoicesPage() {
 
   const [month] = useState(new Date().getMonth() + 1);
   const [year] = useState(new Date().getFullYear());
+  const [waiveTarget, setWaiveTarget] = useState<Invoice | null>(null);
+  const [waiveReason, setWaiveReason] = useState("");
+
+  const waiveMutation = useMutation({
+    mutationFn: () => api.put(`/api/fees/invoices/${waiveTarget!.id}/waive`, { reason: waiveReason }),
+    onSuccess: () => {
+      toast.success("Invoice waived");
+      queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
+      setWaiveTarget(null);
+      setWaiveReason("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to waive invoice"),
+  });
 
   const bulkGenerateMutation = useMutation({
     mutationFn: () => api.post("/api/fees/invoices/generate-bulk-monthly", { academic_year_id: activeYear?.id, month, year }),
@@ -87,6 +104,9 @@ export default function InvoicesPage() {
                   <td className="p-2 text-right space-x-2">
                     <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.student.name_en}`)}>View</Button>
                     <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
+                    {canWaive(inv.status) && (
+                      <Button size="sm" variant="outline" onClick={() => setWaiveTarget(inv)}>Waive</Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -101,6 +121,28 @@ export default function InvoicesPage() {
         title={pdfPreview.title}
         pdfUrl={pdfPreview.url}
       />
+
+      <Dialog open={!!waiveTarget} onOpenChange={(open) => { if (!open) { setWaiveTarget(null); setWaiveReason(""); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Waive Invoice</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {waiveTarget && (
+              <p className="text-sm text-muted-foreground">
+                {waiveTarget.student.name_en} — {waiveTarget.description} — ৳{waiveTarget.amount_due}
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label>Reason</Label>
+              <Input value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="e.g. Sibling discount approved by Principal" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!waiveReason || waiveMutation.isPending} onClick={() => waiveMutation.mutate()}>
+              {waiveMutation.isPending ? "Waiving..." : "Confirm Waive"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

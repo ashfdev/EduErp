@@ -1,8 +1,49 @@
-import type { Prisma, PrismaClient, FeeStructure } from "@education-erp/db";
+import type { Prisma, PrismaClient, FeeStructure, Invoice } from "@education-erp/db";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createAdvanceCreditConsumptionJournal } from "../accounts/auto-journal.service";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
+
+// Auto-applies every active StudentWaiver the student holds that matches
+// this invoice's category and academic year (Plan Thirteen, Phase F) --
+// called once, right after a fresh invoice is created, before the advance-
+// credit auto-apply below (so credit only ever covers what's genuinely
+// still owed after any waiver discount). Multiple waivers stack (e.g. a
+// scholarship + a sibling discount both apply), each computed against the
+// amount remaining after prior waivers, never going below 0. Each
+// application is traced via an InvoiceWaiverApplication row rather than
+// opaquely mutating amount_due, since the Student-wise Waivers report
+// (Phase G) needs this trail.
+export async function applyWaiversToInvoice(tx: Tx, invoice: Invoice): Promise<Invoice> {
+  const waivers = await tx.studentWaiver.findMany({
+    where: {
+      student_id: invoice.student_id,
+      revoked_at: null,
+      OR: [{ academic_year_id: null }, { academic_year_id: invoice.academic_year_id }],
+      waiver_type: { is_active: true },
+    },
+    include: { waiver_type: true },
+  });
+
+  let current = invoice;
+  for (const w of waivers) {
+    const applicable = w.waiver_type.applicable_categories as string[];
+    if (applicable.length > 0 && !applicable.includes(current.category)) continue;
+    if (current.amount_due <= 0) break;
+
+    const rawDiscount =
+      w.waiver_type.discount_type === "PERCENTAGE" ? current.amount_due * (w.waiver_type.discount_value / 100) : w.waiver_type.discount_value;
+    const discount = Math.min(Math.round(rawDiscount * 100) / 100, current.amount_due);
+    if (discount <= 0) continue;
+
+    await tx.invoiceWaiverApplication.create({
+      data: { invoice_id: current.id, student_waiver_id: w.id, discount_amount: discount },
+    });
+    current = await tx.invoice.update({ where: { id: current.id }, data: { amount_due: { decrement: discount } } });
+  }
+
+  return current;
+}
 
 // Shared by /invoices/generate-bulk-monthly and the admission enroll handler
 // (which invoices a new student's first month immediately) — one place for
@@ -19,7 +60,7 @@ export async function createMonthlyInvoiceIfMissing(
   if (existing) return { created: false };
 
   const dueDate = new Date(year, month - 1, structure.due_day ?? 10);
-  const invoice = await tx.invoice.create({
+  let invoice = await tx.invoice.create({
     data: {
       invoice_no: await generateInvoiceNo(tx, year),
       student_id: studentId,
@@ -34,10 +75,14 @@ export async function createMonthlyInvoiceIfMissing(
     },
   });
 
+  invoice = await applyWaiversToInvoice(tx, invoice);
+
   // Auto-absorb any available advance credit against this brand-new
   // invoice — a family that pre-paid ahead of time (Phase 81's /collect
   // overpayment path) shouldn't see it sit inertly while a fresh invoice
-  // shows the full amount as newly due.
+  // shows the full amount as newly due. Runs against amount_due as it
+  // stands *after* any waiver discount above, so credit only ever covers
+  // what's genuinely still owed.
   const student = await tx.student.findUnique({ where: { id: studentId }, select: { credit_balance: true } });
   const applied = student ? Math.min(student.credit_balance, invoice.amount_due) : 0;
   if (applied > 0) {

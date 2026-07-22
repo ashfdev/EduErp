@@ -260,6 +260,7 @@ model AcademicYear {
   admission_cycles          AdmissionCycle[]
   fee_structures            FeeStructure[]
   course_enrollments        CourseEnrollment[]
+  student_waivers           StudentWaiver[]
 }
 
 model Shift {
@@ -602,6 +603,7 @@ model Student {
   document_requests      DocumentRequest[]
   visitors                Visitor[]
   documents               StudentDocument[]
+  waivers                 StudentWaiver[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1264,9 +1266,72 @@ model Invoice {
   created_at       DateTime      @default(now())
   updated_at       DateTime      @updatedAt
   payments         Payment[]
+  waiver_applications InvoiceWaiverApplication[]
 
   @@index([student_id])
   @@index([status])
+}
+
+// Full reusable Waiver Type system (Plan Thirteen, Phase F) -- a template
+// (e.g. "Staff Child - 50%") assignable to a student, auto-applying to
+// matching invoices going forward at invoice-creation time (see
+// createMonthlyInvoiceIfMissing in invoice-helpers.ts), alongside (not
+// replacing) the simpler one-off Invoice.status=WAIVED action on
+// PUT /invoices/:id/waive for ad-hoc single-invoice cases.
+model WaiverType {
+  id                    String              @id @default(cuid())
+  name                  String
+  description           String?
+  discount_type         WaiverDiscountType
+  discount_value        Float
+  // Empty array = applies to every FeeCategory. Stored as a Json string
+  // array rather than a relation table -- a short, static enum list, not
+  // worth a join table.
+  applicable_categories Json                @default("[]")
+  is_active             Boolean             @default(true)
+  created_at            DateTime            @default(now())
+  student_waivers       StudentWaiver[]
+}
+
+enum WaiverDiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+// A student can hold multiple independently-active/revocable waivers at
+// once (e.g. a scholarship + a sibling discount) -- not a single slot.
+model StudentWaiver {
+  id               String     @id @default(cuid())
+  student_id       String
+  student          Student    @relation(fields: [student_id], references: [id])
+  waiver_type_id   String
+  waiver_type      WaiverType @relation(fields: [waiver_type_id], references: [id])
+  // Null = applies every year until explicitly revoked.
+  academic_year_id String?
+  academic_year    AcademicYear? @relation(fields: [academic_year_id], references: [id])
+  assigned_by_id   String
+  assigned_at      DateTime   @default(now())
+  revoked_at       DateTime?
+  revoked_by_id    String?
+  applications     InvoiceWaiverApplication[]
+
+  @@index([student_id])
+}
+
+// One row per invoice a waiver actually discounted -- traced per-invoice
+// rather than opaquely mutating Invoice.amount_due, since the Student-wise
+// Waivers report (Phase G) needs this trail.
+model InvoiceWaiverApplication {
+  id                String        @id @default(cuid())
+  invoice_id        String
+  invoice           Invoice       @relation(fields: [invoice_id], references: [id])
+  student_waiver_id String
+  student_waiver    StudentWaiver @relation(fields: [student_waiver_id], references: [id])
+  discount_amount   Float
+  applied_at        DateTime      @default(now())
+
+  @@index([invoice_id])
+  @@index([student_waiver_id])
 }
 
 model Payment {

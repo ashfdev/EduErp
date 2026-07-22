@@ -7,12 +7,12 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema } from "@education-erp/validators";
+import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema } from "@education-erp/validators";
 import { calculateLateFee } from "../../utils/late-fee";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing, syncOverdueInvoices } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice } from "./invoice-helpers";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
@@ -104,7 +104,7 @@ feesRouter.post(
         skipped++;
         continue;
       }
-      await prisma.invoice.create({
+      const invoice = await prisma.invoice.create({
         data: {
           invoice_no: await generateInvoiceNo(prisma),
           student_id: student.id,
@@ -118,6 +118,12 @@ feesRouter.post(
           year: body.year,
         },
       });
+      // Same waiver auto-apply as createMonthlyInvoiceIfMissing (Phase F) --
+      // this route is a genuinely separate invoice-creation code path (a
+      // real, confirmed gap found while live-testing: it doesn't share that
+      // helper at all), so without this a waiver would silently not apply
+      // whenever an admin generates invoices through this specific route.
+      await applyWaiversToInvoice(prisma, invoice);
       created++;
     }
 
@@ -198,6 +204,109 @@ feesRouter.put(
     const invoice = await prisma.invoice.update({ where: { id }, data: { status: "WAIVED" } });
     await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "Invoice", targetId: id, metadata: { reason: body.reason }, req });
     res.json({ success: true, data: invoice, message: `Waived: ${body.reason}` });
+  }),
+);
+
+// ── Waiver Types (reusable templates, Plan Thirteen, Phase F) ─────
+
+feesRouter.get(
+  "/waiver-types",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (_req, res) => {
+    const types = await prisma.waiverType.findMany({ orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: types });
+  }),
+);
+
+feesRouter.post(
+  "/waiver-types",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = waiverTypeSchema.parse(req.body);
+    const type = await prisma.waiverType.create({
+      data: {
+        name: body.name,
+        description: body.description,
+        discount_type: body.discount_type,
+        discount_value: body.discount_value,
+        applicable_categories: body.applicable_categories,
+      },
+    });
+    res.status(201).json({ success: true, data: type });
+  }),
+);
+
+feesRouter.put(
+  "/waiver-types/:id",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = waiverTypeSchema.partial().parse(req.body);
+    const type = await prisma.waiverType.update({ where: { id }, data: body });
+    res.json({ success: true, data: type });
+  }),
+);
+
+// ── Student Waivers (assignments) ──────────────────────────────────
+
+feesRouter.get(
+  "/student-waivers",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ student_id: z.string().optional(), class_id: z.string().optional(), active_only: z.string().optional() }).parse(req.query);
+    const waivers = await prisma.studentWaiver.findMany({
+      where: {
+        ...(query.student_id && { student_id: query.student_id }),
+        ...(query.active_only === "true" && { revoked_at: null }),
+        ...(query.class_id && { student: { current_class_id: query.class_id } }),
+      },
+      include: {
+        student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } } } },
+        waiver_type: true,
+        academic_year: { select: { id: true, label: true } },
+      },
+      orderBy: { assigned_at: "desc" },
+    });
+    res.json({ success: true, data: waivers });
+  }),
+);
+
+feesRouter.post(
+  "/student-waivers",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = assignStudentWaiverSchema.parse(req.body);
+    const [student, waiverType] = await Promise.all([
+      prisma.student.findFirst({ where: { id: body.student_id, deleted_at: null } }),
+      prisma.waiverType.findUnique({ where: { id: body.waiver_type_id } }),
+    ]);
+    if (!student) throw notFound("Student not found");
+    if (!waiverType) throw notFound("Waiver type not found");
+
+    const waiver = await prisma.studentWaiver.create({
+      data: {
+        student_id: body.student_id,
+        waiver_type_id: body.waiver_type_id,
+        academic_year_id: body.academic_year_id ?? null,
+        assigned_by_id: req.user!.sub,
+      },
+    });
+    await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "StudentWaiver", targetId: waiver.id, metadata: { student_id: body.student_id, waiver_type_id: body.waiver_type_id }, req });
+    res.status(201).json({ success: true, data: waiver });
+  }),
+);
+
+feesRouter.put(
+  "/student-waivers/:id/revoke",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.studentWaiver.findUnique({ where: { id } });
+    if (!existing) throw notFound("Waiver assignment not found");
+    if (existing.revoked_at) throw badRequest("This waiver has already been revoked");
+
+    const waiver = await prisma.studentWaiver.update({ where: { id }, data: { revoked_at: new Date(), revoked_by_id: req.user!.sub } });
+    res.json({ success: true, data: waiver });
   }),
 );
 
