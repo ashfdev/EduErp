@@ -9,7 +9,8 @@ import {
   ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
-  Settings, ChevronDown, DoorOpen, CalendarClock, type LucideIcon,
+  Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, type LucideIcon,
 } from "lucide-react";
 
 interface NavItem {
@@ -67,7 +68,14 @@ const NAV_GROUPS: NavGroup[] = [
     key: "hrStaff",
     items: [
       { href: "/hr", key: "hr", icon: Briefcase },
+      { href: "/hr/staff/new", key: "addStaff", icon: UserRoundPlus },
       { href: "/hr/attendance", key: "employeeAttendance", icon: ClipboardCheck },
+      { href: "/hr/leave", key: "staffLeaveRequests", icon: CalendarOff },
+      { href: "/hr/payroll", key: "managePayroll", icon: DollarSign },
+      { href: "/hr/faculty", key: "facultyList", icon: Contact },
+      { href: "/hr/staff", key: "staffList", icon: IdCard },
+      { href: "/hr/appraisals", key: "appraisals", icon: ClipboardList },
+      { href: "/hr/jobs", key: "jobPostings", icon: Newspaper },
     ],
   },
   {
