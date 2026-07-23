@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, SearchInput, EmptyState, PdfPreviewModal } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, SearchInput, EmptyState, PdfPreviewModal, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -80,46 +80,46 @@ export default function FeeReceiptsPage() {
       {!receipts.length && <EmptyState title="No receipts found" description="Try a different name, ID, receipt number, or date range." />}
       {!!receipts.length && (
         <Card>
-          <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Receipt No</th>
-                  <th className="p-2">Student</th>
-                  <th className="p-2">Category</th>
-                  <th className="p-2">Amount</th>
-                  <th className="p-2">Paid At</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Receipt No</TableHead>
+                  <TableHead>Student</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Paid At</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {receipts.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
-                    <td className="p-2 font-mono text-xs">{r.receipt_no ?? "-"}</td>
-                    <td className="p-2">
+                  <TableRow key={r.id}>
+                    <TableCell className="font-mono text-xs">{r.receipt_no ?? "-"}</TableCell>
+                    <TableCell>
                       <Link href={`/students/${r.invoice.student.id}`} className="text-primary hover:underline">
                         {r.invoice.student.name_en}
                       </Link>
                       <span className="ml-1 text-xs text-muted-foreground">({r.invoice.student.student_uid})</span>
-                    </td>
-                    <td className="p-2">{r.invoice.category.replace(/_/g, " ")}</td>
-                    <td className="p-2">৳{r.amount.toLocaleString()}</td>
-                    <td className="p-2">{r.paid_at ? new Date(r.paid_at).toLocaleDateString() : "-"}</td>
-                    <td className="p-2 text-right space-x-2">
+                    </TableCell>
+                    <TableCell>{r.invoice.category.replace(/_/g, " ")}</TableCell>
+                    <TableCell>৳{r.amount.toLocaleString()}</TableCell>
+                    <TableCell>{r.paid_at ? new Date(r.paid_at).toLocaleDateString() : "-"}</TableCell>
+                    <TableCell className="text-right space-x-2">
                       <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/receipt/${r.id}`, `Receipt — ${r.invoice.student.name_en}`)}>
                         View
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => downloadReceiptPdf(r.id, r.receipt_no)}>
                         Download
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
 
             {meta && meta.totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center justify-between p-3">
                 <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
                 <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
                 <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>

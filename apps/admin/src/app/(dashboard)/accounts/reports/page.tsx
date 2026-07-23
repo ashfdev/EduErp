@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableBody, TableRow, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface TrialBalanceRow { code: string; name: string; debit: number; credit: number }
@@ -24,18 +24,18 @@ function TrialBalanceView() {
         {data.groups.map((g) => (
           <div key={g.group}>
             <p className="mb-1 font-medium">{g.group}</p>
-            <table className="w-full text-sm">
-              <tbody>
+            <Table>
+              <TableBody>
                 {g.accounts.map((a) => (
-                  <tr key={a.code} className="border-b">
-                    <td className="py-1 font-mono text-muted-foreground">{a.code}</td>
-                    <td className="py-1">{a.name}</td>
-                    <td className="py-1 text-right">{a.debit ? `৳${a.debit.toLocaleString()}` : ""}</td>
-                    <td className="py-1 text-right">{a.credit ? `৳${a.credit.toLocaleString()}` : ""}</td>
-                  </tr>
+                  <TableRow key={a.code}>
+                    <TableCell className="font-mono text-muted-foreground">{a.code}</TableCell>
+                    <TableCell>{a.name}</TableCell>
+                    <TableCell className="text-right">{a.debit ? `৳${a.debit.toLocaleString()}` : ""}</TableCell>
+                    <TableCell className="text-right">{a.credit ? `৳${a.credit.toLocaleString()}` : ""}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         ))}
         <div className="flex justify-between border-t pt-2 font-medium">

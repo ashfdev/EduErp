@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Voucher {
@@ -52,39 +52,37 @@ export default function VouchersPage() {
       </Card>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-0">
           {!data?.items.length ? (
-            <EmptyState title="No vouchers found" />
+            <div className="p-6"><EmptyState title="No vouchers found" /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                    <th className="py-2 pr-4">Voucher No</th>
-                    <th className="py-2 pr-4">Type</th>
-                    <th className="py-2 pr-4">Date</th>
-                    <th className="py-2 pr-4">Narration</th>
-                    <th className="py-2 pr-4">Amount</th>
-                    <th className="py-2 pr-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((v) => (
-                    <tr key={v.id} className="border-b last:border-0 hover:bg-accent">
-                      <td className="py-2 pr-4"><Link href={`/accounts/vouchers/${v.id}`} className="font-medium text-primary">{v.voucher_no}</Link></td>
-                      <td className="py-2 pr-4">{v.voucher_type}</td>
-                      <td className="py-2 pr-4">{new Date(v.date).toLocaleDateString()}</td>
-                      <td className="max-w-xs truncate py-2 pr-4">{v.narration}</td>
-                      <td className="py-2 pr-4">৳{v.total_amount.toLocaleString()}</td>
-                      <td className="py-2 pr-4"><StatusBadge status={v.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Voucher No</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Narration</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell><Link href={`/accounts/vouchers/${v.id}`} className="font-medium text-primary">{v.voucher_no}</Link></TableCell>
+                    <TableCell>{v.voucher_type}</TableCell>
+                    <TableCell>{new Date(v.date).toLocaleDateString()}</TableCell>
+                    <TableCell className="max-w-xs truncate">{v.narration}</TableCell>
+                    <TableCell>৳{v.total_amount.toLocaleString()}</TableCell>
+                    <TableCell><StatusBadge status={v.status} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
           {data?.meta && data.meta.totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-2 p-3">
               <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
               <span className="text-sm text-muted-foreground">Page {page} of {data.meta.totalPages}</span>
               <Button size="sm" variant="outline" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>

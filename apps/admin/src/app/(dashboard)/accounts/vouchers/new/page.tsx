@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -123,23 +123,23 @@ export default function NewVoucherPage() {
 
           <div className="space-y-2">
             <Label>Journal Entries</Label>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <th className="p-2">#</th>
-                    <th className="p-2">Debit Account</th>
-                    <th className="p-2">Credit Account</th>
-                    <th className="p-2">Amount (৳)</th>
-                    <th className="p-2">Narration</th>
-                    <th className="p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>#</TableHead>
+                    <TableHead>Debit Account</TableHead>
+                    <TableHead>Credit Account</TableHead>
+                    <TableHead>Amount (৳)</TableHead>
+                    <TableHead>Narration</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {lines.map((line, index) => (
-                    <tr key={index} className="border-b last:border-0">
-                      <td className="p-2 text-muted-foreground">{index + 1}</td>
-                      <td className="p-2">
+                    <TableRow key={index}>
+                      <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                      <TableCell>
                         <Select value={line.debit_account_id || "NONE"} onValueChange={(v) => updateLine(index, { debit_account_id: v === "NONE" ? "" : v })}>
                           <SelectTrigger className="w-48"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
@@ -147,8 +147,8 @@ export default function NewVoucherPage() {
                             {accounts?.map((a) => <SelectItem key={a.id} value={a.id}>({a.code}) {a.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                      </td>
-                      <td className="p-2">
+                      </TableCell>
+                      <TableCell>
                         <Select value={line.credit_account_id || "NONE"} onValueChange={(v) => updateLine(index, { credit_account_id: v === "NONE" ? "" : v })}>
                           <SelectTrigger className="w-48"><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
@@ -156,16 +156,16 @@ export default function NewVoucherPage() {
                             {accounts?.map((a) => <SelectItem key={a.id} value={a.id}>({a.code}) {a.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
-                      </td>
-                      <td className="p-2"><Input type="number" value={line.amount} onChange={(e) => updateLine(index, { amount: e.target.value })} className="w-28" /></td>
-                      <td className="p-2"><Input value={line.narration} onChange={(e) => updateLine(index, { narration: e.target.value })} className="w-40" /></td>
-                      <td className="p-2">
+                      </TableCell>
+                      <TableCell><Input type="number" value={line.amount} onChange={(e) => updateLine(index, { amount: e.target.value })} className="w-28" /></TableCell>
+                      <TableCell><Input value={line.narration} onChange={(e) => updateLine(index, { narration: e.target.value })} className="w-40" /></TableCell>
+                      <TableCell>
                         <Button size="sm" variant="ghost" onClick={() => removeRow(index)} disabled={lines.length === 1}>✕</Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             <Button size="sm" variant="outline" onClick={addRow}>+ Add Row</Button>
           </div>

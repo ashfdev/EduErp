@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ChartPreviewRow {
@@ -120,28 +120,28 @@ function ChartImportExport() {
                 {confirmMutation.isPending ? "Importing..." : `Confirm Import (${preview.valid})`}
               </Button>
             </div>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <th className="p-2">Row</th><th className="p-2">Code</th><th className="p-2">Name</th><th className="p-2">Group</th><th className="p-2">Nature</th><th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Row</TableHead><TableHead>Code</TableHead><TableHead>Name</TableHead><TableHead>Group</TableHead><TableHead>Nature</TableHead><TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {preview.preview.map((p) => (
-                    <tr key={p.row} className="border-b last:border-0">
-                      <td className="p-2">{p.row}</td>
-                      <td className="p-2 font-mono">{p.data.code}</td>
-                      <td className="p-2">{p.data.name}</td>
-                      <td className="p-2">{p.data.account_group}</td>
-                      <td className="p-2">{p.data.account_nature}</td>
-                      <td className="p-2">
+                    <TableRow key={p.row}>
+                      <TableCell>{p.row}</TableCell>
+                      <TableCell className="font-mono">{p.data.code}</TableCell>
+                      <TableCell>{p.data.name}</TableCell>
+                      <TableCell>{p.data.account_group}</TableCell>
+                      <TableCell>{p.data.account_nature}</TableCell>
+                      <TableCell>
                         {p.valid ? <Badge variant="success">Valid</Badge> : <Badge variant="destructive" title={p.errors.join("; ")}>{p.errors.join("; ")}</Badge>}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
@@ -256,28 +256,28 @@ function VoucherImportExport() {
                 {confirmMutation.isPending ? "Importing..." : `Confirm Import (${preview.valid})`}
               </Button>
             </div>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <th className="p-2">Group</th><th className="p-2">Date</th><th className="p-2">Narration</th><th className="p-2">Lines</th><th className="p-2">Amount</th><th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Group</TableHead><TableHead>Date</TableHead><TableHead>Narration</TableHead><TableHead>Lines</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {preview.preview.map((g) => (
-                    <tr key={g.row_group_id} className="border-b last:border-0">
-                      <td className="p-2 font-mono">{g.row_group_id}</td>
-                      <td className="p-2">{g.date}</td>
-                      <td className="p-2">{g.narration}</td>
-                      <td className="p-2">{g.lines.length}</td>
-                      <td className="p-2">৳{g.total_amount.toLocaleString()}</td>
-                      <td className="p-2">
+                    <TableRow key={g.row_group_id}>
+                      <TableCell className="font-mono">{g.row_group_id}</TableCell>
+                      <TableCell>{g.date}</TableCell>
+                      <TableCell>{g.narration}</TableCell>
+                      <TableCell>{g.lines.length}</TableCell>
+                      <TableCell>৳{g.total_amount.toLocaleString()}</TableCell>
+                      <TableCell>
                         {g.valid ? <Badge variant="success">Valid</Badge> : <Badge variant="destructive" title={g.errors.join("; ")}>{g.errors.length} error(s)</Badge>}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             {preview.preview.some((g) => !g.valid) && (
               <div className="text-sm text-destructive">

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalFailure {
@@ -55,36 +55,36 @@ export default function JournalFailuresPage() {
 
       {!!failures?.length && (
         <Card>
-          <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">When</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2">Reference ID</th>
-                  <th className="p-2">Error</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Reference ID</TableHead>
+                  <TableHead>Error</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {failures.map((f) => (
-                  <tr key={f.id} className="border-b last:border-0">
-                    <td className="p-2 whitespace-nowrap">{new Date(f.created_at).toLocaleString()}</td>
-                    <td className="p-2"><Badge variant="outline">{f.reference_type}</Badge></td>
-                    <td className="p-2 font-mono text-xs">{f.reference_id ?? "—"}</td>
-                    <td className="p-2 text-destructive">{f.error_message}</td>
-                    <td className="p-2 text-right">
+                  <TableRow key={f.id}>
+                    <TableCell className="whitespace-nowrap">{new Date(f.created_at).toLocaleString()}</TableCell>
+                    <TableCell><Badge variant="outline">{f.reference_type}</Badge></TableCell>
+                    <TableCell className="font-mono text-xs">{f.reference_id ?? "—"}</TableCell>
+                    <TableCell className="text-destructive">{f.error_message}</TableCell>
+                    <TableCell className="text-right">
                       {!f.resolved_at && (
                         <Button size="sm" variant="outline" onClick={() => resolveMutation.mutate(f.id)} disabled={resolveMutation.isPending}>
                           Mark Resolved
                         </Button>
                       )}
                       {f.resolved_at && <Badge variant="success">Resolved</Badge>}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

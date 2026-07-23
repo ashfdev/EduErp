@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, SearchInput, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -190,13 +190,13 @@ export default function MarkEntryGridPage() {
       {data.subjects.length > 0 && (
         <Card>
           <CardContent className="overflow-x-auto pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Roll</th>
-                  <th className="p-2">Name</th>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Roll</TableHead>
+                  <TableHead>Name</TableHead>
                   {data.subjects.map((s) => (
-                    <th key={s.id} className="p-2">
+                    <TableHead key={s.id}>
                       {s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span>
                       {s.components && s.components.length > 0 ? (
                         <div className="flex flex-wrap gap-1 text-[10px] font-normal normal-case text-muted-foreground">
@@ -211,24 +211,24 @@ export default function MarkEntryGridPage() {
                           </div>
                         )
                       )}
-                    </th>
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredStudents.map((st) => (
-                  <tr key={st.id} className="border-b">
-                    <td className="p-2">{st.current_roll_no}</td>
-                    <td className="p-2">
+                  <TableRow key={st.id}>
+                    <TableCell>{st.current_roll_no}</TableCell>
+                    <TableCell>
                       <Link href={`/students/${st.id}`} className="hover:underline" target="_blank">{st.name_en}</Link>
-                    </td>
+                    </TableCell>
                     {data.subjects.map((s) => {
                       const enrolled = isEnrolled(st.id, s.id);
                       if (!enrolled) {
                         return (
-                          <td key={s.id} className="p-1 text-center">
+                          <TableCell key={s.id} className="text-center">
                             <span className="text-muted-foreground" title="Not enrolled in this subject">—</span>
-                          </td>
+                          </TableCell>
                         );
                       }
                       const v = getValue(st.id, s.id);
@@ -237,7 +237,7 @@ export default function MarkEntryGridPage() {
                         ? Object.values(v.component_marks ?? {}).reduce((sum, n) => sum + (n || 0), 0)
                         : undefined;
                       return (
-                        <td key={s.id} className="p-1">
+                        <TableCell key={s.id}>
                           <div className="flex items-center gap-1">
                             {status === "APPROVED" && (
                               <Badge variant="success" title="Already approved — editing will require re-approval">✓</Badge>
@@ -297,13 +297,13 @@ export default function MarkEntryGridPage() {
                               Ab
                             </label>
                           </div>
-                        </td>
+                        </TableCell>
                       );
                     })}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

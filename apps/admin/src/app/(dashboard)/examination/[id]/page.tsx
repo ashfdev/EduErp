@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SubjectConfig {
@@ -232,43 +232,43 @@ export default function ExamDetailPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Subject</th>
-                <th className="p-2">Class</th>
-                <th className="p-2">Group</th>
-                <th className="p-2">Full (Theory)</th>
-                <th className="p-2">Full (Practical)</th>
-                <th className="p-2">Pass (Theory)</th>
-                <th className="p-2">Pass (Practical)</th>
-                <th className="p-2">Total Marks</th>
-                <th className="p-2">Theory Breakdown</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Subject</TableHead>
+                <TableHead>Class</TableHead>
+                <TableHead>Group</TableHead>
+                <TableHead>Full (Theory)</TableHead>
+                <TableHead>Full (Practical)</TableHead>
+                <TableHead>Pass (Theory)</TableHead>
+                <TableHead>Pass (Practical)</TableHead>
+                <TableHead>Total Marks</TableHead>
+                <TableHead>Theory Breakdown</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {visibleConfigs.map((c) => {
                 const componentCount = (exam.component_configs ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
                 return (
-                  <tr key={c.subject_id} className="border-b">
-                    <td className="p-2">{c.subject.name_en}</td>
-                    <td className="p-2 text-muted-foreground">{c.subject.class.name_en}</td>
-                    <td className="p-2 text-muted-foreground">{c.subject.group?.name_en ?? "—"}</td>
-                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></td>
-                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></td>
-                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></td>
-                    <td className="p-1"><Input type="number" className="h-8 w-24" value={c.pass_marks_practical} onChange={(e) => updateConfig(c.subject_id, { pass_marks_practical: Number(e.target.value) })} /></td>
-                    <td className="p-2 font-medium">{c.full_marks_theory + c.full_marks_practical}</td>
-                    <td className="p-1">
+                  <TableRow key={c.subject_id}>
+                    <TableCell>{c.subject.name_en}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.subject.class.name_en}</TableCell>
+                    <TableCell className="text-muted-foreground">{c.subject.group?.name_en ?? "—"}</TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.pass_marks_practical} onChange={(e) => updateConfig(c.subject_id, { pass_marks_practical: Number(e.target.value) })} /></TableCell>
+                    <TableCell className="font-medium">{c.full_marks_theory + c.full_marks_practical}</TableCell>
+                    <TableCell>
                       <Button size="sm" variant="outline" onClick={() => openComponentEditor(c.subject_id)}>
                         {componentCount ? `${componentCount} component(s)` : "Plain theory mark"}
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           <Button className="mt-4" size="sm" onClick={() => saveConfigMutation.mutate()} disabled={saveConfigMutation.isPending}>
             Save Configuration
           </Button>

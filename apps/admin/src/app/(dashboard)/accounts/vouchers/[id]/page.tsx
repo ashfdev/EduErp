@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalEntry {
@@ -124,34 +124,34 @@ export default function VoucherDetailPage() {
 
           {voucher.narration_bn && <p className="text-sm"><span className="text-muted-foreground">বাংলা: </span>{voucher.narration_bn}</p>}
 
-          <div className="overflow-x-auto rounded-md border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                  <th className="p-2">Debit Account</th>
-                  <th className="p-2">Credit Account</th>
-                  <th className="p-2">Amount</th>
-                  <th className="p-2">Narration</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Debit Account</TableHead>
+                  <TableHead>Credit Account</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Narration</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {voucher.journal_entries.map((e) => (
-                  <tr key={e.id} className="border-b last:border-0">
-                    <td className="p-2">{e.debit_account ? `(${e.debit_account.code}) ${e.debit_account.name}` : "—"}</td>
-                    <td className="p-2">{e.credit_account ? `(${e.credit_account.code}) ${e.credit_account.name}` : "—"}</td>
-                    <td className="p-2">৳{e.amount.toLocaleString()}</td>
-                    <td className="p-2">{e.narration ?? "—"}</td>
-                  </tr>
+                  <TableRow key={e.id}>
+                    <TableCell>{e.debit_account ? `(${e.debit_account.code}) ${e.debit_account.name}` : "—"}</TableCell>
+                    <TableCell>{e.credit_account ? `(${e.credit_account.code}) ${e.credit_account.name}` : "—"}</TableCell>
+                    <TableCell>৳{e.amount.toLocaleString()}</TableCell>
+                    <TableCell>{e.narration ?? "—"}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t font-medium">
-                  <td className="p-2" colSpan={2}>Total</td>
-                  <td className="p-2">৳{voucher.total_amount.toLocaleString()}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={2}>Total</TableCell>
+                  <TableCell>৳{voucher.total_amount.toLocaleString()}</TableCell>
+                  <TableCell></TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
         </CardContent>
       </Card>

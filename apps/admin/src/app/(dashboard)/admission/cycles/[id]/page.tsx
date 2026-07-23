@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Cycle {
@@ -245,34 +245,34 @@ export default function AdmissionCycleDetailPage() {
           {!!applications?.length && (
             <Card>
               <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2"></th>
-                      <th className="p-2">Roll</th>
-                      <th className="p-2">Applicant</th>
-                      <th className="p-2 cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("rank")}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead></TableHead>
+                      <TableHead>Roll</TableHead>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("rank")}>
                         Rank {sortBy === "rank" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                      <th className="p-2">Status</th>
-                      <th className="p-2 cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("applied")}>
+                      </TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("applied")}>
                         Applied On {sortBy === "applied" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {sortedApplications.map((a) => (
-                      <tr key={a.id} className="border-b">
-                        <td className="p-2"><Checkbox checked={selected.includes(a.id)} onCheckedChange={(v) => setSelected((prev) => (v ? [...prev, a.id] : prev.filter((x) => x !== a.id)))} /></td>
-                        <td className="p-2 font-mono text-xs">{a.admission_roll ?? "-"}</td>
-                        <td className="p-2"><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></td>
-                        <td className="p-2">{a.merit_rank ?? "-"}</td>
-                        <td className="p-2"><StatusBadge status={a.status} /></td>
-                        <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
-                      </tr>
+                      <TableRow key={a.id}>
+                        <TableCell><Checkbox checked={selected.includes(a.id)} onCheckedChange={(v) => setSelected((prev) => (v ? [...prev, a.id] : prev.filter((x) => x !== a.id)))} /></TableCell>
+                        <TableCell className="font-mono text-xs">{a.admission_roll ?? "-"}</TableCell>
+                        <TableCell><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></TableCell>
+                        <TableCell>{a.merit_rank ?? "-"}</TableCell>
+                        <TableCell><StatusBadge status={a.status} /></TableCell>
+                        <TableCell>{new Date(a.created_at).toLocaleDateString()}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
@@ -296,26 +296,26 @@ export default function AdmissionCycleDetailPage() {
           {!!meritList.length && (
             <Card className="mt-3">
               <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">Rank</th>
-                      <th className="p-2">Roll</th>
-                      <th className="p-2">Applicant</th>
-                      <th className="p-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rank</TableHead>
+                      <TableHead>Roll</TableHead>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {meritList.map((a) => (
-                      <tr key={a.id} className="border-b">
-                        <td className="p-2 font-medium">#{a.merit_rank}</td>
-                        <td className="p-2 font-mono text-xs">{a.admission_roll ?? "-"}</td>
-                        <td className="p-2"><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></td>
-                        <td className="p-2"><StatusBadge status={a.status} /></td>
-                      </tr>
+                      <TableRow key={a.id}>
+                        <TableCell className="font-medium">#{a.merit_rank}</TableCell>
+                        <TableCell className="font-mono text-xs">{a.admission_roll ?? "-"}</TableCell>
+                        <TableCell><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></TableCell>
+                        <TableCell><StatusBadge status={a.status} /></TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
@@ -370,25 +370,25 @@ export default function AdmissionCycleDetailPage() {
                   <Button size="sm" onClick={() => seatPlanMutation.mutate()} disabled={seatPlanMutation.isPending || !seatStatuses.length}>Generate Seat Plan</Button>
 
                   {!!seatPlan?.length && (
-                    <div className="mt-3 overflow-x-auto rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                            <th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Roll</th><th className="p-2">Applicant</th><th className="p-2">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
+                    <div className="mt-3 rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Hall</TableHead><TableHead>Seat</TableHead><TableHead>Roll</TableHead><TableHead>Applicant</TableHead><TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
                           {seatPlan.map((s, i) => (
-                            <tr key={i} className="border-b last:border-0">
-                              <td className="p-2">{s.hall_name}</td>
-                              <td className="p-2">{s.seat_number}</td>
-                              <td className="p-2 font-mono text-xs">{s.admission_roll}</td>
-                              <td className="p-2">{s.applicant_name}</td>
-                              <td className="p-2"><StatusBadge status={s.status} /></td>
-                            </tr>
+                            <TableRow key={i}>
+                              <TableCell>{s.hall_name}</TableCell>
+                              <TableCell>{s.seat_number}</TableCell>
+                              <TableCell className="font-mono text-xs">{s.admission_roll}</TableCell>
+                              <TableCell>{s.applicant_name}</TableCell>
+                              <TableCell><StatusBadge status={s.status} /></TableCell>
+                            </TableRow>
                           ))}
-                        </tbody>
-                      </table>
+                        </TableBody>
+                      </Table>
                     </div>
                   )}
                 </CardContent>

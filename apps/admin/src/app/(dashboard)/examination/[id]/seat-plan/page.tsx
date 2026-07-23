@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, EmptyState, Input, PageHeader, PageWrapper, PdfPreviewModal, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, EmptyState, Input, PageHeader, PageWrapper, PdfPreviewModal, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -116,23 +116,25 @@ export default function SeatPlanPage() {
                 Approve Selected ({selected.size})
               </Button>
             </div>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2" /><th className="p-2">Session</th><th className="p-2">Hall</th><th className="p-2">Seat</th><th className="p-2">Student</th><th className="p-2">Class</th><th className="p-2">Due</th><th className="p-2">Exam Office Approval</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead></TableHead><TableHead>Session</TableHead><TableHead>Hall</TableHead><TableHead>Seat</TableHead><TableHead>Student</TableHead><TableHead>Class</TableHead><TableHead>Due</TableHead><TableHead>Exam Office Approval</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {plans.map((p) => (
-                  <tr key={p.id} className="border-b">
-                    <td className="p-2"><Checkbox checked={selected.has(p.student_id)} onCheckedChange={() => toggle(p.student_id)} disabled={p.exam_office_cleared} /></td>
-                    <td className="p-2 text-muted-foreground">{p.session?.label ?? "—"}</td>
-                    <td className="p-2">{p.hall_name}</td>
-                    <td className="p-2">{p.seat_number}</td>
-                    <td className="p-2">{p.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.student.student_uid}</span></td>
-                    <td className="p-2">{p.student.current_class.name_en}</td>
-                    <td className="p-2">{p.outstanding_due > 0 ? <Badge variant="destructive">৳{p.outstanding_due} due</Badge> : <span className="text-muted-foreground">—</span>}</td>
-                    <td className="p-2">{p.exam_office_cleared ? <StatusBadge status="APPROVED" /> : <StatusBadge status="PENDING" />}</td>
-                  </tr>
+                  <TableRow key={p.id}>
+                    <TableCell><Checkbox checked={selected.has(p.student_id)} onCheckedChange={() => toggle(p.student_id)} disabled={p.exam_office_cleared} /></TableCell>
+                    <TableCell className="text-muted-foreground">{p.session?.label ?? "—"}</TableCell>
+                    <TableCell>{p.hall_name}</TableCell>
+                    <TableCell>{p.seat_number}</TableCell>
+                    <TableCell>{p.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.student.student_uid}</span></TableCell>
+                    <TableCell>{p.student.current_class.name_en}</TableCell>
+                    <TableCell>{p.outstanding_due > 0 ? <Badge variant="destructive">৳{p.outstanding_due} due</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>{p.exam_office_cleared ? <StatusBadge status="APPROVED" /> : <StatusBadge status="PENDING" />}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

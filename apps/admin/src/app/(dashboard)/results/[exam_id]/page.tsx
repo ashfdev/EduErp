@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -120,32 +120,32 @@ export default function ExamResultsPage() {
                 <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
                 <Card>
                   <CardContent className="pt-6">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="p-2">Position</th>
-                          <th className="p-2">Roll</th>
-                          <th className="p-2">Name</th>
-                          <th className="p-2">GPA</th>
-                          <th className="p-2">Grade</th>
-                          <th className="p-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Position</TableHead>
+                          <TableHead>Roll</TableHead>
+                          <TableHead>Name</TableHead>
+                          <TableHead>GPA</TableHead>
+                          <TableHead>Grade</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {filteredStudents.map((s) => (
-                          <tr key={s.student_id} className="border-b">
-                            <td className="p-2">{s.has_failed ? "—" : s.position}</td>
-                            <td className="p-2">{s.roll_no}</td>
-                            <td className="p-2">
+                          <TableRow key={s.student_id}>
+                            <TableCell>{s.has_failed ? "—" : s.position}</TableCell>
+                            <TableCell>{s.roll_no}</TableCell>
+                            <TableCell>
                               <Link href={`/students/${s.student_id}`} className="hover:underline" target="_blank">{s.name_en}</Link>
-                            </td>
-                            <td className="p-2">{s.total_gpa}</td>
-                            <td className="p-2">{s.overall_grade}</td>
-                            <td className="p-2"><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></td>
-                          </tr>
+                            </TableCell>
+                            <TableCell>{s.total_gpa}</TableCell>
+                            <TableCell>{s.overall_grade}</TableCell>
+                            <TableCell><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </CardContent>
                 </Card>
               </>
@@ -157,19 +157,21 @@ export default function ExamResultsPage() {
             {!!merit?.length && (
               <Card>
                 <CardContent className="pt-6">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Rank</th><th className="p-2">Roll</th><th className="p-2">Name</th><th className="p-2">GPA</th></tr></thead>
-                    <tbody>
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Rank</TableHead><TableHead>Roll</TableHead><TableHead>Name</TableHead><TableHead>GPA</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {merit.map((m) => (
-                        <tr key={m.student_uid} className="border-b">
-                          <td className="p-2 font-semibold">{m.rank}</td>
-                          <td className="p-2">{m.roll_no}</td>
-                          <td className="p-2">{m.name_en}</td>
-                          <td className="p-2">{m.total_gpa}</td>
-                        </tr>
+                        <TableRow key={m.student_uid}>
+                          <TableCell className="font-semibold">{m.rank}</TableCell>
+                          <TableCell>{m.roll_no}</TableCell>
+                          <TableCell>{m.name_en}</TableCell>
+                          <TableCell>{m.total_gpa}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             )}
@@ -178,20 +180,22 @@ export default function ExamResultsPage() {
           <TabsContent value="analysis">
             <Card>
               <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Subject</th><th className="p-2">Appeared</th><th className="p-2">Passed</th><th className="p-2">Pass Rate</th><th className="p-2">Avg Marks</th></tr></thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Subject</TableHead><TableHead>Appeared</TableHead><TableHead>Passed</TableHead><TableHead>Pass Rate</TableHead><TableHead>Avg Marks</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {analysis?.map((a) => (
-                      <tr key={a.subject_id} className="border-b">
-                        <td className="p-2">{a.subject_name}</td>
-                        <td className="p-2">{a.appeared}</td>
-                        <td className="p-2">{a.passed}</td>
-                        <td className="p-2">{a.pass_rate != null ? <StatusBadge status={a.pass_rate >= 80 ? "ACTIVE" : "PENDING"} /> : "—"} {a.pass_rate}%</td>
-                        <td className="p-2">{a.average_marks}</td>
-                      </tr>
+                      <TableRow key={a.subject_id}>
+                        <TableCell>{a.subject_name}</TableCell>
+                        <TableCell>{a.appeared}</TableCell>
+                        <TableCell>{a.passed}</TableCell>
+                        <TableCell>{a.pass_rate != null ? <StatusBadge status={a.pass_rate >= 80 ? "ACTIVE" : "PENDING"} /> : "—"} {a.pass_rate}%</TableCell>
+                        <TableCell>{a.average_marks}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
