@@ -196,6 +196,21 @@ hrStaffRouter.get(
   }),
 );
 
+// Pre-creation photo upload (Plan Thirteen, Phase M) — mirrors
+// institution.routes.ts's own "POST /logo" shape exactly: no owning entity
+// id exists yet, this just returns a URL to attach to the create payload.
+hrStaffRouter.post(
+  "/photo",
+  authorize(HR_MANAGE_ROLES),
+  imageUpload.single("photo"),
+  verifyImageMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A photo file is required");
+    const { url } = await uploadBuffer("staff", req.file.originalname, req.file.buffer, req.file.mimetype);
+    res.json({ success: true, data: { photo_url: url } });
+  }),
+);
+
 hrStaffRouter.post(
   "/",
   authorize(HR_MANAGE_ROLES),
@@ -250,6 +265,12 @@ hrStaffRouter.post(
           phone: body.phone,
           email: body.email,
           address: body.address,
+          address_house_name: body.address_house_name,
+          address_village: body.address_village,
+          address_post_code: body.address_post_code,
+          address_district: body.address_district,
+          address_division: body.address_division,
+          photo_url: body.photo_url,
           employment_type: body.employment_type,
           joining_date: body.joining_date ?? new Date(),
           biometric_id: body.biometric_id,

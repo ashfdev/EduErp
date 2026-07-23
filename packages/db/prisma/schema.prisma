@@ -552,6 +552,22 @@ model Student {
   address_permanent     String?
   address_current       String?
   district              String?
+  // Structured Present/Permanent address (Plan Thirteen, Phase N) —
+  // additive alongside address_current/address_permanent above, which are
+  // kept as supplementary Road/Area free-text lines rather than replaced.
+  // The legacy single `district` field predates this and is ambiguous about
+  // which address it described; superseded by present_district going
+  // forward (left in place, unwritten by new code, never hard-deleted).
+  present_house_name    String?
+  present_village       String?
+  present_post_code     String?
+  present_district      String?
+  present_division      String?
+  permanent_house_name  String?
+  permanent_village     String?
+  permanent_post_code   String?
+  permanent_district    String?
+  permanent_division    String?
   current_class_id      String?
   current_class         Class?      @relation("CurrentClass", fields: [current_class_id], references: [id])
   current_section_id    String?
@@ -863,6 +879,14 @@ model Staff {
   phone               String?
   email               String?
   address             String?
+  // Structured address (Plan Thirteen, Phase M) — additive alongside the
+  // existing free-text `address`, which is kept as a supplementary Road/Area
+  // line rather than replaced.
+  address_house_name  String?
+  address_village     String?
+  address_post_code   String?
+  address_district    String?
+  address_division    String?
   photo_url           String?
   signature_url       String?
   biometric_id        String?
