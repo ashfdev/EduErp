@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
 import Image from "next/image";
 import { fetchContent } from "@/lib/content-api";
@@ -11,6 +11,7 @@ import {
   Users, UserCheck, CalendarDays, BookOpen,
   ChevronRight, Megaphone, ArrowRight, Image as ImageIcon,
   GraduationCap, Download, MapPin, Building2, MessageSquare, Quote,
+  Link2, BookMarked,
   type LucideIcon
 } from "lucide-react";
 import { Button } from "@education-erp/ui";
@@ -21,6 +22,8 @@ function stripHtml(html: string): string {
 
 export default function HomePage() {
   const t = useTranslations("home");
+  const tf = useTranslations("footer");
+  const locale = useLocale();
   const [institution, setInstitution] = useState<Institution | null>(null);
   const [sliders, setSliders] = useState<Slider[]>([]);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -138,32 +141,46 @@ export default function HomePage() {
           <StatCard icon={Building2} label={t("founded")} value={institution?.founded_year ?? "-"} color="text-purple-600" />
           <StatCard icon={MapPin} label={t("eiin")} value={institution?.eiin ?? "-"} color="text-rose-600" />
         </section>
+      </div>
 
-        {/* Admission Banner */}
-        {openCycles.length > 0 && (
-          <section className="mb-16">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      {/* Admission Banner */}
+      {openCycles.length > 0 && (
+        <section className="w-full bg-slate-50/80 py-12 sm:py-16 mb-12 sm:mb-16 border-y border-slate-200/60">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            
+            <div className="flex flex-col items-center justify-center text-center mb-8">
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 mb-3">
+                {openCycles.length} {t("seats") ? "Classes Open" : "Classes Open"}
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">
+                {t("admissionOpen", { className: "" }).replace(/[—\-]/g, "").trim()}
+              </h2>
+              <p className="text-slate-500 mt-2 text-sm sm:text-base">Select a class below to start your application</p>
+            </div>
+            
+            <div className="flex flex-col gap-3">
               {openCycles.map((c) => (
-                <div key={c.id} className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-secondary p-8 sm:p-10 shadow-lg text-white flex flex-col sm:flex-row items-center justify-between gap-6">
-                  <div className="absolute -right-20 -top-20 opacity-10 blur-2xl">
-                    <GraduationCap className="h-64 w-64" />
+                <div key={c.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-md hover:border-blue-100 transition-all group">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{c.class.name_en}</h3>
+                    <div className="text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {c.seat_count} {t("seats") ? "Seats" : "Seats"}</span>
+                      <span className="text-slate-300 hidden sm:block">•</span>
+                      <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> {new Date(c.close_date).toLocaleDateString()}</span>
+                    </div>
                   </div>
-                  <div className="relative z-10 text-center sm:text-left">
-                    <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider mb-3 backdrop-blur-md">Admissions Open</span>
-                    <h3 className="text-2xl sm:text-3xl font-bold mb-2">{t("admissionOpen", { className: c.class.name_en })}</h3>
-                    <p className="text-primary-foreground/90 font-medium">
-                      {t("seatsCloses", { seats: c.seat_count, date: new Date(c.close_date).toLocaleDateString() })}
-                    </p>
-                  </div>
-                  <Button asChild variant="secondary" size="lg" className="relative z-10 shrink-0 rounded-full font-bold px-8 shadow-xl">
-                    <Link href={`/admission/${c.id}`}>{t("applyNow")}</Link>
+                  <Button asChild variant="outline" className="w-full sm:w-auto shrink-0 border-slate-200 text-slate-700 hover:text-blue-700 hover:bg-blue-50 hover:border-blue-200 rounded-full px-6 font-semibold transition-colors">
+                    <Link href={`/admission/${c.id}`}>{t("applyNow")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
                   </Button>
                 </div>
               ))}
             </div>
-          </section>
-        )}
+            
+          </div>
+        </section>
+      )}
 
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Main Content: Notices & Principal */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 mb-12">
           {/* Left Column: Notices */}
@@ -212,24 +229,7 @@ export default function HomePage() {
           </section>
         </div>
 
-        {/* Quick Links (Full Width) */}
-        <section className="mb-16">
-          <h2 className="text-xl font-bold tracking-tight text-slate-800 mb-6">{t("quickLinks")}</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {QUICK_LINKS.map((q) => (
-              <Link
-                key={q.href}
-                href={q.href}
-                className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-5 text-center transition-all hover:border-primary/30 hover:shadow-md hover:-translate-y-1 group"
-              >
-                <div className={`rounded-full p-3 ${q.bg} ${q.color} transition-transform group-hover:scale-110`}>
-                  <q.icon className="h-6 w-6" />
-                </div>
-                <span className="text-xs font-bold text-slate-700">{t(q.labelKey)}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
+
 
         {/* Governing Body & Teachers */}
         {(governingBody.length > 0 || faculty.length > 0) && (
@@ -332,51 +332,92 @@ export default function HomePage() {
             </section>
           )}
 
-          {/* Upcoming Events */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
-                <CalendarDays className="h-6 w-6 text-primary" />
-                {t("upcomingEvents")}
+          {/* Right Column: Events + Quick Links */}
+          <div className="flex flex-col gap-12">
+            {/* Upcoming Events */}
+            <section className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
+                  <CalendarDays className="h-6 w-6 text-primary" />
+                  {t("upcomingEvents")}
+                </h2>
+                <Button variant="ghost" asChild className="text-primary hover:bg-primary/10">
+                  <Link href="/events">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                </Button>
+              </div>
+              <div className="flex flex-col gap-4">
+                {!events.length && (
+                  <div className="rounded-2xl border border-slate-200 border-dashed p-8 text-center bg-white">
+                    <p className="text-sm text-slate-500">{t("noUpcomingEvents")}</p>
+                  </div>
+                )}
+                {events.map((e) => (
+                  <Link key={e.id} href="/events" className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                    <div className="flex w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/5 py-2 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">
+                        {new Date(e.date_from).toLocaleDateString(undefined, { month: "short" })}
+                      </span>
+                      <span className="text-2xl font-black leading-none mt-1">
+                        {new Date(e.date_from).getDate()}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-slate-800 group-hover:text-primary transition-colors">{e.name}</p>
+                      <p className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" />
+                        {e.date_to && e.date_to !== e.date_from
+                          ? `${new Date(e.date_from).toLocaleDateString()} – ${new Date(e.date_to).toLocaleDateString()}`
+                          : new Date(e.date_from).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="hidden sm:block shrink-0">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        {e.type}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            {/* Important Links */}
+            <section className="space-y-4 bg-slate-50/80 p-5 sm:p-6 rounded-3xl border border-slate-100 shadow-[0_2px_15px_rgb(0,0,0,0.03)]">
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 flex items-center justify-center gap-3 mb-6">
+                <BookMarked className="h-6 w-6 text-slate-700" />
+                {tf("importantLinks")}
               </h2>
-              <Button variant="ghost" asChild className="text-primary hover:bg-primary/10">
-                <Link href="/events">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
-              </Button>
-            </div>
-            <div className="flex flex-col gap-4">
-              {!events.length && (
-                <div className="rounded-2xl border border-slate-200 border-dashed p-8 text-center bg-white">
-                  <p className="text-sm text-slate-500">{t("noUpcomingEvents")}</p>
-                </div>
-              )}
-              {events.map((e) => (
-                <Link key={e.id} href="/events" className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
-                  <div className="flex w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/5 py-2 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                    <span className="text-[10px] font-bold uppercase tracking-wider">
-                      {new Date(e.date_from).toLocaleDateString(undefined, { month: "short" })}
+              <div className="flex flex-col gap-2.5">
+                {[
+                  { name_en: "Ministry of Education", name_bn: "শিক্ষা মন্ত্রণালয়", url: "https://moedu.gov.bd" },
+                  { name_en: "DSHE", name_bn: "মাধ্যমিক ও উচ্চ মাধ্যমিক শিক্ষা অধিদপ্তর", url: "http://www.dshe.gov.bd" },
+                  { name_en: "Education Board Results", name_bn: "পরীক্ষার রেজাল্ট", url: "http://www.educationboardresults.gov.bd" },
+                  { name_en: "BANBEIS", name_bn: "ব্যানবেইস", url: "http://www.banbeis.gov.bd" },
+                  { name_en: "NAEM", name_bn: "নায়েম", url: "http://www.naem.gov.bd" },
+                  { name_en: "NCTB", name_bn: "এনসিটিবি", url: "http://www.nctb.gov.bd" },
+                  { name_en: "Teachers Portal", name_bn: "শিক্ষক বাতায়ন", url: "https://www.teachers.gov.bd" },
+                  { name_en: "Kishor Batayon", name_bn: "কিশোর বাতায়ন", url: "http://konnect.edu.bd" },
+                ].map((link, i) => (
+                  <a
+                    key={i}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-white px-4 py-3 border border-slate-100 transition-all hover:border-blue-200 hover:shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3 truncate">
+                      <Link2 className="h-4 w-4 text-orange-500 group-hover:text-orange-600 shrink-0 -rotate-45 transition-colors" />
+                      <span className="text-sm font-bold text-slate-700 leading-tight group-hover:text-blue-700 transition-colors truncate">
+                        {locale === "bn" ? link.name_bn : link.name_en}
+                      </span>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-[10px] sm:text-xs font-bold text-blue-600 ring-1 ring-blue-200/50 group-hover:bg-blue-100 transition-colors">
+                      {locale === "bn" ? "ভিজিট করুন" : "Visit"}
                     </span>
-                    <span className="text-2xl font-black leading-none mt-1">
-                      {new Date(e.date_from).getDate()}
-                    </span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold text-slate-800 group-hover:text-primary transition-colors">{e.name}</p>
-                    <p className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      {e.date_to && e.date_to !== e.date_from
-                        ? `${new Date(e.date_from).toLocaleDateString()} – ${new Date(e.date_to).toLocaleDateString()}`
-                        : new Date(e.date_from).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="hidden sm:block shrink-0">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                      {e.type}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
+                  </a>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
 
       </div>

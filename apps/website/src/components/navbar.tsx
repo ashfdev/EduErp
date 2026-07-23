@@ -5,8 +5,8 @@ import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import type { Institution } from "@/lib/types";
-import { Menu, X, ChevronDown, UserCircle2, Search, Languages } from "lucide-react";
-import { Button } from "@education-erp/ui";
+import { Menu, X, ChevronDown, UserCircle2 } from "lucide-react";
+import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@education-erp/ui";
 import { fetchContent } from "@/lib/content-api";
 import { NOTICES_LAST_VISIT_KEY, markNoticesVisited } from "@/lib/notices-visit";
 
@@ -71,8 +71,6 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [hasNewNotice, setHasNewNotice] = useState(false);
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   const locale = useLocale();
@@ -84,7 +82,6 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   const tAcademic = useTranslations("academic");
   const tGoverningBody = useTranslations("governingBody");
   const tFaculty = useTranslations("faculty");
-  const tSearch = useTranslations("search");
 
   useEffect(() => {
     const handleScroll = () => {
@@ -114,14 +111,6 @@ export function Navbar({ institution }: { institution: Institution | null }) {
     setHasNewNotice(false);
   }
 
-  function submitSearch() {
-    const q = searchQuery.trim();
-    if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}`);
-    setSearchOpen(false);
-    setSearchQuery("");
-  }
-
   function label(link: NavLink): string {
     if (link.labelFrom === "about") return tAbout(link.key);
     if (link.labelFrom === "academic") return tAcademic(link.key);
@@ -138,145 +127,163 @@ export function Navbar({ institution }: { institution: Institution | null }) {
     { key: "academic", children: academicChildren },
     { key: "notices", children: NOTICES_CHILDREN },
     { key: "admission", children: ADMISSION_CHILDREN },
-    { key: "media", children: MEDIA_CHILDREN },
   ];
 
   return (
-    <header
-      className={`sticky top-0 z-50 w-full transition-all duration-300 bg-white/95 backdrop-blur-md border-b border-slate-200 ${scrolled ? "shadow-md" : ""
-        }`}
-    >
-      {/* Top Bar removed as per user request */}
+    <header className="sticky top-0 z-50 w-full flex flex-col">
+      {/* Top Bar (Secondary Actions) */}
+      <div className="bg-slate-900 text-slate-300 py-1.5 transition-colors relative z-20">
+        <div className="mx-auto flex w-full items-center justify-between px-4 sm:px-6 lg:px-12 xl:px-16 2xl:px-24 text-[11px] sm:text-xs font-medium">
+          {/* Top Left: Quick Links / Info */}
+          <div className="flex items-center gap-4 sm:gap-6">
+            {/* Can add phone or email here later */}
+          </div>
+
+          {/* Top Right: Actions & Language */}
+          <div className="flex items-center gap-4 sm:gap-6">
+            <Link href="/result" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors font-semibold text-[11px] sm:text-xs border border-slate-700/50">
+              {t("resultLookup")}
+            </Link>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex items-center gap-1 hover:text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm"
+                  aria-label="Switch language"
+                >
+                  {locale === "en" ? "English" : "বাংলা"}
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="w-24">
+                <DropdownMenuItem 
+                  className={`font-bold ${locale === "en" ? "bg-slate-100" : ""}`}
+                  onClick={() => router.replace(pathname, { locale: "en" })}
+                >
+                  English
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className={`font-bold ${locale === "bn" ? "bg-slate-100" : ""}`}
+                  onClick={() => router.replace(pathname, { locale: "bn" })}
+                >
+                  বাংলা
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
 
       {/* Main Navbar */}
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 py-2 lg:py-3">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          {institution?.logo_url ? (
-            <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 group-hover:ring-primary/20 transition-all">
-              <Image src={institution.logo_url} alt="logo" fill sizes="56px" className="object-contain p-1" priority />
-            </div>
-          ) : (
-            <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 text-2xl">
-              🏫
-            </div>
-          )}
-          <div className="flex flex-col">
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800 group-hover:text-primary transition-colors">
-              {institution?.name_en ?? "Education ERP"}
-            </h1>
-            {institution?.tagline_en && (
-              <p className="text-xs font-medium text-slate-500 line-clamp-1">{institution.tagline_en}</p>
-            )}
+      <div className={`w-full transition-all duration-300 px-4 sm:px-6 relative z-10 ${scrolled ? "py-2" : "py-4"}`}>
+        <div className={`mx-auto flex w-full max-w-[96%] items-center justify-between px-4 sm:px-6 lg:px-8 gap-4 rounded-full transition-all duration-300 border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-sm ${scrolled ? "shadow-md py-2" : "py-2.5 lg:py-3"}`}>
+          
+          {/* Logo (Left) */}
+          <div className="flex-1 flex justify-start items-center min-w-0">
+            <Link href="/" className="flex items-center gap-3 group">
+              {institution?.logo_url ? (
+                <div className={`relative shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 group-hover:ring-primary/20 transition-all ${scrolled ? "h-10 w-10 sm:h-12 sm:w-12" : "h-12 w-12 sm:h-14 sm:w-14"}`}>
+                  <Image src={institution.logo_url} alt="logo" fill sizes="56px" className="object-contain p-1" priority />
+                </div>
+              ) : (
+                <div className={`flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-2xl transition-all ${scrolled ? "h-10 w-10 sm:h-12 sm:w-12" : "h-12 w-12 sm:h-14 sm:w-14"}`}>
+                  🏫
+                </div>
+              )}
+              <div className="flex flex-col min-w-0">
+                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2">
+                  {institution?.name_en ?? "Education ERP"}
+                </h1>
+                {institution?.tagline_en && !scrolled && (
+                  <p className="text-[11px] font-medium text-slate-500 truncate mt-0.5">{institution.tagline_en}</p>
+                )}
+              </div>
+            </Link>
           </div>
-        </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-1">
-          <Link
-            href="/"
-            className={`px-3 py-2 text-sm font-semibold transition-colors rounded-full hover:bg-primary hover:text-white ${pathname === "/" ? "text-primary hover:text-white" : "text-slate-600"
-              }`}
-          >
-            {t("home")}
-          </Link>
-          {groups.map((g) => {
-            const groupActive = g.children.some((c) => pathname === c.href || pathname.startsWith(`${c.href}/`));
-            return (
-              <div key={g.key} className="group/dropdown relative">
-                <button
-                  className={`relative flex items-center gap-1 px-3 py-2 text-sm font-semibold transition-colors rounded-full hover:bg-primary hover:text-white ${groupActive ? "text-primary hover:text-white" : "text-slate-600"
-                    }`}
-                >
-                  {t(g.key)}
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180" />
-                  {g.key === "notices" && hasNewNotice && (
-                    <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
-                  )}
-                </button>
+          {/* Desktop Navigation (Center) */}
+          <nav className="hidden lg:flex shrink-0 items-center justify-center gap-1 xl:gap-2">
+            <Link
+              href="/"
+              className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:text-blue-600 hover:bg-blue-50/80 ${pathname === "/" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"
+                }`}
+            >
+              {t("home")}
+            </Link>
+            {groups.map((g) => {
+              const groupActive = g.children.some((c) => pathname === c.href || pathname.startsWith(`${c.href}/`));
+              return (
+                <div key={g.key} className="group/dropdown relative">
+                  <button
+                    className={`relative flex items-center gap-1 px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${groupActive ? "text-blue-600 bg-blue-50/80" : "text-slate-600"
+                      }`}
+                  >
+                    {t(g.key)}
+                    <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-hover/dropdown:rotate-180 opacity-60" />
+                  </button>
 
-                {/* Dropdown Menu */}
-                <div className="absolute left-0 top-full pt-2 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
-                  <div className="w-56 rounded-xl border border-slate-100 bg-white p-1.5 shadow-xl shadow-black/5 ring-1 ring-black/5">
-                    {g.children.map((c, i) => {
-                      const childActive = pathname === c.href || pathname.startsWith(`${c.href}/`);
-                      return (
-                        <div key={c.href}>
-                          {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
-                            <p className={`px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100" : ""}`}>
-                              {tAbout(c.subheading)}
-                            </p>
-                          )}
-                          <Link
-                            href={c.href}
-                            onClick={g.key === "notices" ? clearNoticeBadge : undefined}
-                            className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${childActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-primary"
-                              }`}
-                          >
-                            {label(c)}
-                          </Link>
-                        </div>
-                      );
-                    })}
+                  {/* Dropdown Menu */}
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full pt-3 opacity-0 invisible group-hover/dropdown:opacity-100 group-hover/dropdown:visible transition-all duration-200 z-50">
+                    <div className="w-56 rounded-2xl border border-slate-100 bg-white/95 backdrop-blur-xl p-2 shadow-xl shadow-black/5 ring-1 ring-black/5">
+                      {g.children.map((c, i) => {
+                        const childActive = pathname === c.href || pathname.startsWith(`${c.href}/`);
+                        return (
+                          <div key={c.href}>
+                            {c.subheading && c.subheading !== g.children[i - 1]?.subheading && (
+                              <p className={`px-3 pb-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 ${i > 0 ? "mt-2 pt-2 border-t border-slate-100/80" : ""}`}>
+                                {tAbout(c.subheading)}
+                              </p>
+                            )}
+                            <Link
+                              href={c.href}
+                              onClick={g.key === "notices" ? clearNoticeBadge : undefined}
+                              className={`block rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all ${childActive ? "bg-blue-50 text-blue-600" : "text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                                }`}
+                            >
+                              {label(c)}
+                            </Link>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </nav>
+              );
+            })}
+            {/* Additional Direct Links */}
+            <Link href="/gallery" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/gallery" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+              {t("gallery")}
+            </Link>
+            <Link href="/careers" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/careers" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+              {t("careers")}
+            </Link>
+            <Link href="/contact" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/contact" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+              {t("contact")}
+            </Link>
+          </nav>
 
-        {/* Actions */}
-        <div className="hidden lg:flex items-center gap-3">
-          <Link href="/result" className="text-sm font-semibold text-slate-600 hover:text-primary transition-colors hidden xl:block">
-            {t("resultLookup")}
-          </Link>
-          <button
-            onClick={() => router.replace(pathname, { locale: otherLocale })}
-            className="flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-primary transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-full"
-            aria-label="Switch language"
-          >
-            <Languages className="h-4 w-4" />
-            {otherLocale === "bn" ? "বাংলা" : "En"}
-          </button>
-          {searchOpen ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitSearch();
-              }}
-              className="flex items-center"
+          {/* Right Section (Portal Login) */}
+          <div className="flex-1 flex justify-end items-center gap-2">
+            <a 
+              href={portalUrl} 
+              target="_blank" 
+              rel="noreferrer"
+              className="hidden lg:flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 transition-colors rounded-full font-bold text-sm relative z-0"
             >
-              <input
-                autoFocus
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onBlur={() => !searchQuery && setSearchOpen(false)}
-                placeholder={tSearch("placeholder")}
-                className="h-9 w-48 rounded-full border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-              />
-            </form>
-          ) : (
-            <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)} className="text-slate-600 hover:text-primary rounded-full border-slate-300 bg-white shadow-sm hover:border-primary/30" aria-label={tSearch("title")}>
-              <Search className="h-4 w-4" />
-            </Button>
-          )}
-          <Button asChild className="rounded-full px-6 shadow-sm hover:shadow-md transition-all font-semibold">
-            <a href={portalUrl} target="_blank" rel="noreferrer">
-              <UserCircle2 className="mr-2 h-4 w-4" />
+              <UserCircle2 className="h-4 w-4" />
               {t("portalLogin")}
             </a>
-          </Button>
-        </div>
 
-        {/* Mobile Toggle */}
-        <button
-          className="lg:hidden p-2 -mr-2 text-slate-600 hover:bg-slate-50 rounded-md"
-          onClick={() => setOpen(!open)}
-          aria-label="Toggle menu"
-        >
-          {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+            {/* Mobile Toggle */}
+            <button
+              className="lg:hidden p-2 -mr-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors relative z-0"
+              onClick={() => setOpen(!open)}
+              aria-label="Toggle menu"
+            >
+              {open ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Mobile Navigation Menu */}
@@ -325,6 +332,16 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 )}
               </div>
             ))}
+
+            <Link href="/gallery" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+              {t("gallery")}
+            </Link>
+            <Link href="/careers" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+              {t("careers")}
+            </Link>
+            <Link href="/contact" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
+              {t("contact")}
+            </Link>
 
             <div className="mt-6 pt-6 border-t flex flex-col gap-3">
               <Button asChild className="w-full rounded-xl justify-center h-12 text-base">
