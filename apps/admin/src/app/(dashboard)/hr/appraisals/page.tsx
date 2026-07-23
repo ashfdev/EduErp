@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Criterion { key: string; label: string; max_score: number }
@@ -116,36 +116,36 @@ export default function AppraisalsPage() {
       {!reviews?.length && <EmptyState title="No reviews yet" />}
       <Card>
         <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Staff</th>
-                <th className="p-2">Period</th>
-                <th className="p-2">Template</th>
-                <th className="p-2">Score</th>
-                <th className="p-2">Status</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Staff</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Template</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {reviews?.map((r) => (
-                <tr key={r.id} className="border-b">
-                  <td className="p-2">{r.staff.name_en}</td>
-                  <td className="p-2">{r.review_period}</td>
-                  <td className="p-2">{r.template.name}</td>
-                  <td className="p-2">{r.overall_score ?? "—"}</td>
-                  <td className="p-2"><Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge></td>
-                  <td className="p-2">
+                <TableRow key={r.id}>
+                  <TableCell>{r.staff.name_en}</TableCell>
+                  <TableCell>{r.review_period}</TableCell>
+                  <TableCell>{r.template.name}</TableCell>
+                  <TableCell>{r.overall_score ?? "—"}</TableCell>
+                  <TableCell><Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge></TableCell>
+                  <TableCell>
                     {r.status === "DRAFT" && (
                       <Button size="sm" variant="outline" onClick={() => { setScoreReviewId(r.id); setScoreDraft({}); setComments(""); }}>
                         Score
                       </Button>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

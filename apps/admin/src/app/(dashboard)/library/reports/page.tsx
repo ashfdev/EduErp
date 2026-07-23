@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface OverdueIssue {
@@ -49,19 +49,21 @@ export default function LibraryReportsPage() {
           {!!overdue?.length && (
             <Card>
               <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Book</th><th className="p-2">Borrower</th><th className="p-2">Days Late</th><th className="p-2">Projected Fine</th></tr></thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Book</TableHead><TableHead>Borrower</TableHead><TableHead>Days Late</TableHead><TableHead>Projected Fine</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {overdue.map((o) => (
-                      <tr key={o.id} className="border-b">
-                        <td className="p-2">{o.book.title}</td>
-                        <td className="p-2">{o.person?.name ?? "-"} <span className="font-mono text-xs text-muted-foreground">{o.person?.uid}</span></td>
-                        <td className="p-2 text-red-600">{o.days_late}</td>
-                        <td className="p-2">৳{o.projected_fine}</td>
-                      </tr>
+                      <TableRow key={o.id}>
+                        <TableCell>{o.book.title}</TableCell>
+                        <TableCell>{o.person?.name ?? "-"} <span className="font-mono text-xs text-muted-foreground">{o.person?.uid}</span></TableCell>
+                        <TableCell className="text-red-600">{o.days_late}</TableCell>
+                        <TableCell>৳{o.projected_fine}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}

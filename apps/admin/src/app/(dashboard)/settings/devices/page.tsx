@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Table, TableBody, TableRow, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -110,33 +111,33 @@ function DeviceCard({ device }: { device: Device }) {
             {showLogs && (
               <div className="max-h-48 overflow-y-auto rounded-md border">
                 {!logs?.length && <p className="p-2 text-xs text-muted-foreground">No punch logs yet.</p>}
-                <table className="w-full text-xs">
-                  <tbody>
+                <Table className="text-xs">
+                  <TableBody>
                     {logs?.map((l) => (
-                      <tr key={l.id} className="border-b">
-                        <td className="p-1">{l.device_user_id}</td>
-                        <td className="p-1">{new Date(l.punch_at).toLocaleString()}</td>
-                        <td className="p-1">{l.is_processed ? (l.mapped_person_id ? "Mapped" : "Unmapped") : "Pending"}</td>
-                      </tr>
+                      <TableRow key={l.id}>
+                        <TableCell>{l.device_user_id}</TableCell>
+                        <TableCell>{new Date(l.punch_at).toLocaleString()}</TableCell>
+                        <TableCell>{l.is_processed ? (l.mapped_person_id ? "Mapped" : "Unmapped") : "Pending"}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
 
             {showUnmapped && (
               <div className="max-h-48 overflow-y-auto rounded-md border">
                 {!unmapped?.length && <p className="p-2 text-xs text-muted-foreground">No unmapped biometric IDs.</p>}
-                <table className="w-full text-xs">
-                  <tbody>
+                <Table className="text-xs">
+                  <TableBody>
                     {unmapped?.map((l) => (
-                      <tr key={l.id} className="border-b">
-                        <td className="p-1">Device User ID: {l.device_user_id}</td>
-                        <td className="p-1">{new Date(l.punch_at).toLocaleString()}</td>
-                      </tr>
+                      <TableRow key={l.id}>
+                        <TableCell>Device User ID: {l.device_user_id}</TableCell>
+                        <TableCell>{new Date(l.punch_at).toLocaleString()}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>

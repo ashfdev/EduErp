@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AcademicYear {
@@ -248,20 +248,20 @@ export default function AcademicSettingsPage() {
         </CardHeader>
         <CardContent>
           {!years?.length && <EmptyState title="No academic years yet" />}
-          <table className="w-full text-sm">
-            <tbody>
+          <Table>
+            <TableBody>
               {years?.map((y) => (
-                <tr key={y.id} className="border-b">
-                  <td className="p-2 font-medium">{y.label}</td>
-                  <td className="p-2 text-muted-foreground">{new Date(y.start_date).toLocaleDateString()} – {new Date(y.end_date).toLocaleDateString()}</td>
-                  <td className="p-2">{y.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="outline">Inactive</Badge>}</td>
-                  <td className="p-2">
+                <TableRow key={y.id}>
+                  <TableCell className="font-medium">{y.label}</TableCell>
+                  <TableCell className="text-muted-foreground">{new Date(y.start_date).toLocaleDateString()} – {new Date(y.end_date).toLocaleDateString()}</TableCell>
+                  <TableCell>{y.is_active ? <Badge variant="success">Active</Badge> : <Badge variant="outline">Inactive</Badge>}</TableCell>
+                  <TableCell>
                     {!y.is_active && <Button size="sm" variant="outline" onClick={() => activateYear.mutate(y.id)}>Set Active</Button>}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -445,28 +445,28 @@ export default function AcademicSettingsPage() {
           <div className="space-y-3">
             {!periods?.length && <EmptyState title="No periods configured yet" />}
             {!!periods?.length && (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="p-1">#</th>
-                    <th className="p-1">Time</th>
-                    <th className="p-1">Break?</th>
-                    <th className="p-1" />
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>#</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Break?</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {periods.map((p) => (
-                    <tr key={p.id} className="border-b">
-                      <td className="p-1">{p.period_no}</td>
-                      <td className="p-1">{p.start_time}–{p.end_time}</td>
-                      <td className="p-1">{p.is_break ? "Break" : ""}</td>
-                      <td className="p-1 text-right">
+                    <TableRow key={p.id}>
+                      <TableCell>{p.period_no}</TableCell>
+                      <TableCell>{p.start_time}–{p.end_time}</TableCell>
+                      <TableCell>{p.is_break ? "Break" : ""}</TableCell>
+                      <TableCell className="text-right">
                         <Button size="sm" variant="destructive" onClick={() => deletePeriod.mutate(p.id)}>Delete</Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
             <div className="grid grid-cols-4 gap-2 border-t pt-3">
               <div className="space-y-1.5">

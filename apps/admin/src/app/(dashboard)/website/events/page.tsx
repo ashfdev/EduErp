@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { EVENT_TYPES } from "@education-erp/types";
 import { api } from "@/lib/api";
 
@@ -52,20 +52,22 @@ export default function EventsPage() {
       {!!events?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Name</th><th className="p-2">From</th><th className="p-2">To</th><th className="p-2">Type</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Name</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Type</TableHead><TableHead>Actions</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {events.map((e) => (
-                  <tr key={e.id} className="border-b">
-                    <td className="p-2">{e.name}</td>
-                    <td className="p-2">{new Date(e.date_from).toLocaleDateString()}</td>
-                    <td className="p-2">{e.date_to ? new Date(e.date_to).toLocaleDateString() : "-"}</td>
-                    <td className="p-2">{e.type}</td>
-                    <td className="p-2"><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(e.id)}>Delete</Button></td>
-                  </tr>
+                  <TableRow key={e.id}>
+                    <TableCell>{e.name}</TableCell>
+                    <TableCell>{new Date(e.date_from).toLocaleDateString()}</TableCell>
+                    <TableCell>{e.date_to ? new Date(e.date_to).toLocaleDateString() : "-"}</TableCell>
+                    <TableCell>{e.type}</TableCell>
+                    <TableCell><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(e.id)}>Delete</Button></TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

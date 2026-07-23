@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Issue {
@@ -43,22 +43,24 @@ export default function ReturnBookPage() {
       {!!filtered?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Book</th><th className="p-2">Due Date</th><th className="p-2">Status</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Book</TableHead><TableHead>Due Date</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {filtered.map((i) => {
                   const overdue = new Date(i.due_date) < new Date();
                   return (
-                    <tr key={i.id} className="border-b">
-                      <td className="p-2">{i.book.title} — {i.book.author}</td>
-                      <td className="p-2">{new Date(i.due_date).toLocaleDateString()}</td>
-                      <td className="p-2">{overdue ? <StatusBadge status="OVERDUE" /> : <StatusBadge status="ISSUED" />}</td>
-                      <td className="p-2"><Button size="sm" onClick={() => returnMutation.mutate(i.id)}>Mark Returned</Button></td>
-                    </tr>
+                    <TableRow key={i.id}>
+                      <TableCell>{i.book.title} — {i.book.author}</TableCell>
+                      <TableCell>{new Date(i.due_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{overdue ? <StatusBadge status="OVERDUE" /> : <StatusBadge status="ISSUED" />}</TableCell>
+                      <TableCell><Button size="sm" onClick={() => returnMutation.mutate(i.id)}>Mark Returned</Button></TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

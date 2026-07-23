@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -225,37 +225,37 @@ export default function RoutineSettingsPage() {
           <CardContent className="overflow-x-auto pt-6">
             {!slots?.length && <EmptyState title="No routine slots yet for this class/section" />}
             {!!slots?.length && (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="p-2">Day</th>
-                    <th className="p-2">Period</th>
-                    <th className="p-2">Time</th>
-                    <th className="p-2">Section</th>
-                    {!!groups.length && <th className="p-2">Group</th>}
-                    <th className="p-2">Subject</th>
-                    <th className="p-2">Teacher</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Day</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Section</TableHead>
+                    {!!groups.length && <TableHead>Group</TableHead>}
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Teacher</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {slots.map((s) => (
-                    <tr key={s.id} className="border-b">
-                      <td className="p-2">{DAYS[s.day_of_week]}</td>
-                      <td className="p-2">{s.period_no}</td>
-                      <td className="p-2">{s.start_time}–{s.end_time}</td>
-                      <td className="p-2">{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</td>
-                      {!!groups.length && <td className="p-2">{s.group?.name_en ?? "All Groups"}</td>}
-                      <td className="p-2">{s.subject?.name_en ?? "-"}</td>
-                      <td className="p-2">{s.teacher?.name_en ?? "-"}</td>
-                      <td className="p-2 text-right">
+                    <TableRow key={s.id}>
+                      <TableCell>{DAYS[s.day_of_week]}</TableCell>
+                      <TableCell>{s.period_no}</TableCell>
+                      <TableCell>{s.start_time}–{s.end_time}</TableCell>
+                      <TableCell>{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</TableCell>
+                      {!!groups.length && <TableCell>{s.group?.name_en ?? "All Groups"}</TableCell>}
+                      <TableCell>{s.subject?.name_en ?? "-"}</TableCell>
+                      <TableCell>{s.teacher?.name_en ?? "-"}</TableCell>
+                      <TableCell className="text-right">
                         <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>{" "}
                         <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>

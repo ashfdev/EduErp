@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AssetDetail {
@@ -104,20 +104,22 @@ export default function AssetDetailPage() {
               {!asset.depreciation_entries.length ? (
                 <EmptyState title="No depreciation runs yet" />
               ) : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">Period</th><th className="py-2">Opening</th><th className="py-2">Rate</th><th className="py-2">Dep Amount</th><th className="py-2">Closing</th></tr></thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Period</TableHead><TableHead>Opening</TableHead><TableHead>Rate</TableHead><TableHead>Dep Amount</TableHead><TableHead>Closing</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {asset.depreciation_entries.map((e) => (
-                      <tr key={e.id} className="border-b last:border-0">
-                        <td className="py-2">{e.period}</td>
-                        <td className="py-2">৳{e.opening_value.toLocaleString()}</td>
-                        <td className="py-2">{e.dep_rate}%</td>
-                        <td className="py-2">৳{e.dep_amount.toLocaleString()}</td>
-                        <td className="py-2">৳{e.closing_value.toLocaleString()}</td>
-                      </tr>
+                      <TableRow key={e.id}>
+                        <TableCell>{e.period}</TableCell>
+                        <TableCell>৳{e.opening_value.toLocaleString()}</TableCell>
+                        <TableCell>{e.dep_rate}%</TableCell>
+                        <TableCell>৳{e.dep_amount.toLocaleString()}</TableCell>
+                        <TableCell>৳{e.closing_value.toLocaleString()}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
               {asset.book_value === 0 && asset.depreciation_entries.length > 0 && <p className="mt-2 text-sm text-muted-foreground">Fully depreciated.</p>}
             </CardContent>

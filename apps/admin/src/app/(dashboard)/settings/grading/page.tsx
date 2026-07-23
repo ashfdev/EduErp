@@ -14,6 +14,12 @@ import {
   Badge,
   Input,
   EmptyState,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -150,30 +156,30 @@ export default function GradingSettingsPage() {
         <Card>
           <CardHeader><CardTitle>Editing: {name}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Min Marks</th>
-                  <th className="p-2">Max Marks</th>
-                  <th className="p-2">Grade</th>
-                  <th className="p-2">GPA Point</th>
-                  <th className="p-2">Remarks</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Min Marks</TableHead>
+                  <TableHead>Max Marks</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead>GPA Point</TableHead>
+                  <TableHead>Remarks</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {ranges.map((r, i) => (
-                  <tr key={i} className="border-b">
-                    <td className="p-1"><Input type="number" value={r.min_marks} onChange={(e) => updateRow(i, { min_marks: Number(e.target.value) })} className="h-8 w-24" /></td>
-                    <td className="p-1"><Input type="number" value={r.max_marks} onChange={(e) => updateRow(i, { max_marks: Number(e.target.value) })} className="h-8 w-24" /></td>
-                    <td className="p-1"><Input value={r.grade_letter} onChange={(e) => updateRow(i, { grade_letter: e.target.value })} className="h-8 w-20" /></td>
-                    <td className="p-1"><Input type="number" step="0.1" value={r.grade_point} onChange={(e) => updateRow(i, { grade_point: Number(e.target.value) })} className="h-8 w-20" /></td>
-                    <td className="p-1"><Input value={r.remarks ?? ""} onChange={(e) => updateRow(i, { remarks: e.target.value })} className="h-8" /></td>
-                    <td className="p-1"><Button type="button" size="sm" variant="ghost" onClick={() => removeRow(i)}>✕</Button></td>
-                  </tr>
+                  <TableRow key={i}>
+                    <TableCell><Input type="number" value={r.min_marks} onChange={(e) => updateRow(i, { min_marks: Number(e.target.value) })} className="h-8 w-24" /></TableCell>
+                    <TableCell><Input type="number" value={r.max_marks} onChange={(e) => updateRow(i, { max_marks: Number(e.target.value) })} className="h-8 w-24" /></TableCell>
+                    <TableCell><Input value={r.grade_letter} onChange={(e) => updateRow(i, { grade_letter: e.target.value })} className="h-8 w-20" /></TableCell>
+                    <TableCell><Input type="number" step="0.1" value={r.grade_point} onChange={(e) => updateRow(i, { grade_point: Number(e.target.value) })} className="h-8 w-20" /></TableCell>
+                    <TableCell><Input value={r.remarks ?? ""} onChange={(e) => updateRow(i, { remarks: e.target.value })} className="h-8" /></TableCell>
+                    <TableCell><Button type="button" size="sm" variant="ghost" onClick={() => removeRow(i)}>✕</Button></TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             <Button type="button" variant="outline" size="sm" onClick={addRow}>+ Add Grade Row</Button>
             <div className="flex gap-2">
               <Button onClick={() => saveRangesMutation.mutate()} disabled={saveRangesMutation.isPending}>

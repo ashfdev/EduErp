@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ProgramRow {
@@ -182,38 +182,38 @@ export default function ProgramDetailPage() {
       {!!courses?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Sem</th>
-                  <th className="p-2">Code</th>
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Credit Hours</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2">Prerequisites</th>
-                  <th className="p-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sem</TableHead>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Credit Hours</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Prerequisites</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {courses.map((c) => (
-                  <tr key={c.id} className="border-b">
-                    <td className="p-2">{c.semester_number}</td>
-                    <td className="p-2 font-mono text-xs">{c.code}</td>
-                    <td className="p-2">{c.name_en}</td>
-                    <td className="p-2">{c.credit_hours === 0 ? <Badge variant="outline">Audit</Badge> : c.credit_hours}</td>
-                    <td className="p-2"><Badge variant="outline">{c.course_type}</Badge></td>
-                    <td className="p-2">
+                  <TableRow key={c.id}>
+                    <TableCell>{c.semester_number}</TableCell>
+                    <TableCell className="font-mono text-xs">{c.code}</TableCell>
+                    <TableCell>{c.name_en}</TableCell>
+                    <TableCell>{c.credit_hours === 0 ? <Badge variant="outline">Audit</Badge> : c.credit_hours}</TableCell>
+                    <TableCell><Badge variant="outline">{c.course_type}</Badge></TableCell>
+                    <TableCell>
                       {c.required_by.length ? c.required_by.map((r) => r.prerequisite_course.code).join(", ") : <span className="text-muted-foreground">None</span>}
-                    </td>
-                    <td className="p-2 flex gap-2">
+                    </TableCell>
+                    <TableCell className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEditCourse(c)}>Edit</Button>
                       <Button size="sm" variant="outline" onClick={() => setPrereqCourseId(c.id)}>Prerequisites</Button>
                       <Button size="sm" variant="outline" onClick={() => setDeleteTarget({ id: c.id, name_en: c.name_en })}>Delete</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

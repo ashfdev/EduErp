@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   PageWrapper, PageHeader, Card, CardContent, Button, Label, StatusBadge, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -96,36 +97,34 @@ export default function NotificationLogsPage() {
           ) : !data?.items.length ? (
             <EmptyState title="No notification logs yet" description="Logs appear here as soon as an SMS, email, or push notification is queued." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                    <th className="py-2 pr-4">Channel</th>
-                    <th className="py-2 pr-4">Trigger</th>
-                    <th className="py-2 pr-4">Recipient</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Sent At</th>
-                    <th className="py-2 pr-4">Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((log) => (
-                    <tr key={log.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4">{log.channel}</td>
-                      <td className="py-2 pr-4">{log.trigger?.replace(/_/g, " ") ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-2 pr-4">{log.recipient}</td>
-                      <td className="py-2 pr-4">
-                        <StatusBadge status={log.status} />
-                      </td>
-                      <td className="py-2 pr-4">{log.sent_at ? new Date(log.sent_at).toLocaleString() : <span className="text-muted-foreground">—</span>}</td>
-                      <td className="max-w-xs truncate py-2 pr-4" title={log.error_message ?? log.message ?? ""}>
-                        {log.status === "FAILED" ? <span className="text-red-500">{log.error_message}</span> : log.message}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Channel</TableHead>
+                  <TableHead>Trigger</TableHead>
+                  <TableHead>Recipient</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Sent At</TableHead>
+                  <TableHead>Message</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>{log.channel}</TableCell>
+                    <TableCell>{log.trigger?.replace(/_/g, " ") ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell>{log.recipient}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={log.status} />
+                    </TableCell>
+                    <TableCell>{log.sent_at ? new Date(log.sent_at).toLocaleString() : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="max-w-xs truncate" title={log.error_message ?? log.message ?? ""}>
+                      {log.status === "FAILED" ? <span className="text-red-500">{log.error_message}</span> : log.message}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {data?.meta && data.meta.totalPages > 1 && (

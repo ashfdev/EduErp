@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveType {
@@ -71,29 +71,29 @@ export default function LeaveTypesPage() {
       {!!leaveTypes?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Days Allowed</th>
-                  <th className="p-2">Paid</th>
-                  <th className="p-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Days Allowed</TableHead>
+                  <TableHead>Paid</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {leaveTypes.map((lt) => (
-                  <tr key={lt.id} className="border-b">
-                    <td className="p-2 font-medium">{lt.name}</td>
-                    <td className="p-2">{lt.days_allowed}</td>
-                    <td className="p-2">{lt.is_paid ? "Yes" : "No"}</td>
-                    <td className="p-2 text-right">
+                  <TableRow key={lt.id}>
+                    <TableCell className="font-medium">{lt.name}</TableCell>
+                    <TableCell>{lt.days_allowed}</TableCell>
+                    <TableCell>{lt.is_paid ? "Yes" : "No"}</TableCell>
+                    <TableCell className="text-right">
                       <Button size="sm" variant="outline" onClick={() => openEdit(lt)}>Edit</Button>{" "}
                       <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(lt.id)}>Delete</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

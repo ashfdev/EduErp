@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SalaryStructure {
@@ -75,40 +75,40 @@ export default function SalaryStructuresPage() {
       {!!structures?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Basic</th>
-                  <th className="p-2">House Rent</th>
-                  <th className="p-2">Medical</th>
-                  <th className="p-2">Transport</th>
-                  <th className="p-2">PF %</th>
-                  <th className="p-2">TDS %</th>
-                  <th className="p-2">Default</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Basic</TableHead>
+                  <TableHead>House Rent</TableHead>
+                  <TableHead>Medical</TableHead>
+                  <TableHead>Transport</TableHead>
+                  <TableHead>PF %</TableHead>
+                  <TableHead>TDS %</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {structures.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="p-2 font-medium">{s.name} {s.is_default && <Badge variant="success" className="ml-2">Default</Badge>}</td>
-                    <td className="p-2">৳{s.basic.toLocaleString()}</td>
-                    <td className="p-2">৳{s.house_rent.toLocaleString()}</td>
-                    <td className="p-2">৳{s.medical.toLocaleString()}</td>
-                    <td className="p-2">৳{s.transport.toLocaleString()}</td>
-                    <td className="p-2">{s.pf_percentage}%</td>
-                    <td className="p-2">{s.tds_percentage}%</td>
-                    <td className="p-2">
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.name} {s.is_default && <Badge variant="success" className="ml-2">Default</Badge>}</TableCell>
+                    <TableCell>৳{s.basic.toLocaleString()}</TableCell>
+                    <TableCell>৳{s.house_rent.toLocaleString()}</TableCell>
+                    <TableCell>৳{s.medical.toLocaleString()}</TableCell>
+                    <TableCell>৳{s.transport.toLocaleString()}</TableCell>
+                    <TableCell>{s.pf_percentage}%</TableCell>
+                    <TableCell>{s.tds_percentage}%</TableCell>
+                    <TableCell>
                       <Switch checked={s.is_default} disabled={s.is_default || setDefaultMutation.isPending} onCheckedChange={() => setDefaultMutation.mutate(s)} />
-                    </td>
-                    <td className="p-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

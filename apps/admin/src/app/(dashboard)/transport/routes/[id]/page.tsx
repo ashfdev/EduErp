@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Route {
@@ -68,19 +68,21 @@ export default function RouteManifestPage() {
           <p className="mb-2 font-medium">Passenger Manifest ({students?.length ?? 0})</p>
           {!students?.length && <EmptyState title="No students assigned to this route" />}
           {!!students?.length && (
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Student</th><th className="p-2">ID</th><th className="p-2">Class</th><th className="p-2">Pickup Stop</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Student</TableHead><TableHead>ID</TableHead><TableHead>Class</TableHead><TableHead>Pickup Stop</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {students.map((s) => (
-                  <tr key={s.id} className="border-b">
-                    <td className="p-2">{s.student.name_en}</td>
-                    <td className="p-2 font-mono text-xs">{s.student.student_uid}</td>
-                    <td className="p-2">{s.student.current_class?.name_en ?? "-"}</td>
-                    <td className="p-2">{s.pickup_stop ?? "-"}</td>
-                  </tr>
+                  <TableRow key={s.id}>
+                    <TableCell>{s.student.name_en}</TableCell>
+                    <TableCell className="font-mono text-xs">{s.student.student_uid}</TableCell>
+                    <TableCell>{s.student.current_class?.name_en ?? "-"}</TableCell>
+                    <TableCell>{s.pickup_stop ?? "-"}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

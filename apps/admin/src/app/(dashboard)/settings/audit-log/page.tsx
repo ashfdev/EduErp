@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   PageWrapper, PageHeader, Card, CardContent, Button, Label, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -63,36 +64,34 @@ export default function AuditLogPage() {
           ) : !data?.items.length ? (
             <EmptyState title="No audit log entries yet" description="Entries appear here as sensitive actions occur (logins, result publish, fee waivers, etc.)." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                    <th className="py-2 pr-4">Action</th>
-                    <th className="py-2 pr-4">User ID</th>
-                    <th className="py-2 pr-4">Target</th>
-                    <th className="py-2 pr-4">IP</th>
-                    <th className="py-2 pr-4">Details</th>
-                    <th className="py-2 pr-4">When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((log) => (
-                    <tr key={log.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-medium">{log.action.replace(/_/g, " ")}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">{log.user_id ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        {log.target_type ? `${log.target_type}:${log.target_id}` : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-2 pr-4">{log.ip_address ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="max-w-xs truncate py-2 pr-4 text-xs text-muted-foreground" title={JSON.stringify(log.metadata)}>
-                        {log.metadata ? JSON.stringify(log.metadata) : ""}
-                      </td>
-                      <td className="py-2 pr-4">{new Date(log.created_at).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Action</TableHead>
+                  <TableHead>User ID</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>IP</TableHead>
+                  <TableHead>Details</TableHead>
+                  <TableHead>When</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="font-medium">{log.action.replace(/_/g, " ")}</TableCell>
+                    <TableCell className="font-mono text-xs">{log.user_id ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {log.target_type ? `${log.target_type}:${log.target_id}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>{log.ip_address ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="max-w-xs truncate text-xs text-muted-foreground" title={JSON.stringify(log.metadata)}>
+                      {log.metadata ? JSON.stringify(log.metadata) : ""}
+                    </TableCell>
+                    <TableCell>{new Date(log.created_at).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {data?.meta && data.meta.totalPages > 1 && (

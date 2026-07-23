@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Item {
@@ -48,35 +48,35 @@ export default function StockPage() {
           {!data?.items.length ? (
             <EmptyState title="No items yet" description="Add items under a category first, via the API or a future items admin page." />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                  <th className="py-2 pr-4">Code</th>
-                  <th className="py-2 pr-4">Name</th>
-                  <th className="py-2 pr-4">Category</th>
-                  <th className="py-2 pr-4">Unit</th>
-                  <th className="py-2 pr-4">Current Stock</th>
-                  <th className="py-2 pr-4">Min Stock</th>
-                  <th className="py-2 pr-4">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Current Stock</TableHead>
+                  <TableHead>Min Stock</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.items.map((i) => {
                   const status = stockStatus(i);
                   return (
-                    <tr key={i.id} className="border-b last:border-0">
-                      <td className="py-2 pr-4 font-mono">{i.item_code}</td>
-                      <td className="py-2 pr-4">{i.name}</td>
-                      <td className="py-2 pr-4">{i.category.name}</td>
-                      <td className="py-2 pr-4">{i.unit}</td>
-                      <td className="py-2 pr-4">{i.current_stock}</td>
-                      <td className="py-2 pr-4">{i.minimum_stock}</td>
-                      <td className="py-2 pr-4"><Badge className={status.color}>{status.label}</Badge></td>
-                    </tr>
+                    <TableRow key={i.id}>
+                      <TableCell className="font-mono">{i.item_code}</TableCell>
+                      <TableCell>{i.name}</TableCell>
+                      <TableCell>{i.category.name}</TableCell>
+                      <TableCell>{i.unit}</TableCell>
+                      <TableCell>{i.current_stock}</TableCell>
+                      <TableCell>{i.minimum_stock}</TableCell>
+                      <TableCell><Badge className={status.color}>{status.label}</Badge></TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

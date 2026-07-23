@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LinkRow {
@@ -74,33 +74,33 @@ export default function ImportantLinksPage() {
       {!!links?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Order</th>
-                  <th className="p-2">Title</th>
-                  <th className="p-2">URL</th>
-                  <th className="p-2">Active</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>URL</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {links.map((l) => (
-                  <tr key={l.id} className="border-b">
-                    <td className="p-2">{l.display_order}</td>
-                    <td className="p-2">{l.title}</td>
-                    <td className="p-2"><a href={l.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{l.url}</a></td>
-                    <td className="p-2">
+                  <TableRow key={l.id}>
+                    <TableCell>{l.display_order}</TableCell>
+                    <TableCell>{l.title}</TableCell>
+                    <TableCell><a href={l.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{l.url}</a></TableCell>
+                    <TableCell>
                       <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(l)}>{l.is_active ? "Active" : "Inactive"}</Button>
-                    </td>
-                    <td className="p-2 space-x-2 text-right">
+                    </TableCell>
+                    <TableCell className="space-x-2 text-right">
                       <Button size="sm" variant="outline" onClick={() => openEdit(l)}>Edit</Button>
                       <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(l.id)}>Delete</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

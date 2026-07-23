@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, SearchInput, Switch } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, SearchInput, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Book {
@@ -106,23 +106,25 @@ export default function BookCatalogPage() {
       {!!books?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Title</th><th className="p-2">Author</th><th className="p-2">Category</th><th className="p-2">Location</th><th className="p-2">Available</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Title</TableHead><TableHead>Author</TableHead><TableHead>Category</TableHead><TableHead>Location</TableHead><TableHead>Available</TableHead><TableHead>Actions</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {books.map((b) => (
-                  <tr key={b.id} className="border-b">
-                    <td className="p-2">{b.title}</td>
-                    <td className="p-2">{b.author}</td>
-                    <td className="p-2">{b.category}</td>
-                    <td className="p-2">{b.location ?? "-"}</td>
-                    <td className="p-2">{b.available} / {b.total_copies}</td>
-                    <td className="p-2">
+                  <TableRow key={b.id}>
+                    <TableCell>{b.title}</TableCell>
+                    <TableCell>{b.author}</TableCell>
+                    <TableCell>{b.category}</TableCell>
+                    <TableCell>{b.location ?? "-"}</TableCell>
+                    <TableCell>{b.available} / {b.total_copies}</TableCell>
+                    <TableCell>
                       <Button size="sm" variant="outline" onClick={() => addCopiesMutation.mutate({ id: b.id, count: 1 })}>+1 Copy</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
 
             {meta && meta.totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between">

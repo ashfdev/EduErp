@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -121,34 +121,34 @@ export default function UsersPage() {
               )}
             </div>
           )}
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Name</th>
-                <th className="p-2">Phone</th>
-                <th className="p-2">Role</th>
-                <th className="p-2">Status</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {!!users?.length && !filteredUsers.length && (
-                <tr><td colSpan={5} className="p-4 text-center text-sm text-muted-foreground">No users match this search/filter.</td></tr>
+                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">No users match this search/filter.</TableCell></TableRow>
               )}
               {filteredUsers.map((u) => (
-                <tr key={u.id} className="border-b">
-                  <td className="p-2 font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</td>
-                  <td className="p-2">{u.phone}</td>
-                  <td className="p-2"><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></td>
-                  <td className="p-2"><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></td>
-                  <td className="p-2 space-x-2">
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</TableCell>
+                  <TableCell>{u.phone}</TableCell>
+                  <TableCell><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></TableCell>
+                  <TableCell><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
+                  <TableCell className="space-x-2">
                     <Button size="sm" variant="outline" onClick={() => setResetTarget(u)}>Reset Password</Button>
                     <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(u.id)}>{u.is_active ? "Disable" : "Enable"}</Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

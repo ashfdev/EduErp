@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Input, Badge, StatusBadge, EmptyState, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -148,50 +148,50 @@ export default function PayrollPage() {
       {!!records?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2"></th><th className="p-2">Staff</th><th className="p-2">Department</th><th className="p-2">Working</th>
-                  <th className="p-2">Present</th><th className="p-2">Gross</th><th className="p-2">Deductions</th><th className="p-2">Net</th><th className="p-2">Status</th><th className="p-2">Payslip</th><th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead></TableHead><TableHead>Staff</TableHead><TableHead>Department</TableHead><TableHead>Working</TableHead>
+                  <TableHead>Present</TableHead><TableHead>Gross</TableHead><TableHead>Deductions</TableHead><TableHead>Net</TableHead><TableHead>Status</TableHead><TableHead>Payslip</TableHead><TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {records.map((r) => (
-                  <tr key={r.id} className="border-b">
-                    <td className="p-2">
+                  <TableRow key={r.id}>
+                    <TableCell>
                       {r.status === "FINALIZED" && (
                         <input type="checkbox" checked={selected.includes(r.id)} onChange={(e) => setSelected((prev) => (e.target.checked ? [...prev, r.id] : prev.filter((x) => x !== r.id)))} />
                       )}
-                    </td>
-                    <td className="p-2">{r.staff.name_en}</td>
-                    <td className="p-2">{r.staff.department?.name_en ?? "-"}</td>
-                    <td className="p-2">{r.working_days}</td>
-                    <td className="p-2">
+                    </TableCell>
+                    <TableCell>{r.staff.name_en}</TableCell>
+                    <TableCell>{r.staff.department?.name_en ?? "-"}</TableCell>
+                    <TableCell>{r.working_days}</TableCell>
+                    <TableCell>
                       {r.present_days}
                       {r.attendance_incomplete && (
                         <Badge variant="warning" className="ml-2" title="Fewer attendance records than working days this month — absence deduction may be inaccurate, review before finalizing">
                           Incomplete
                         </Badge>
                       )}
-                    </td>
-                    <td className="p-2">৳{r.gross_salary.toFixed(0)}</td>
-                    <td className="p-2">৳{r.deductions.toFixed(0)}</td>
-                    <td className="p-2 font-medium">৳{r.net_salary.toFixed(0)}</td>
-                    <td className="p-2"><StatusBadge status={r.status} /></td>
-                    <td className="p-2">
+                    </TableCell>
+                    <TableCell>৳{r.gross_salary.toFixed(0)}</TableCell>
+                    <TableCell>৳{r.deductions.toFixed(0)}</TableCell>
+                    <TableCell className="font-medium">৳{r.net_salary.toFixed(0)}</TableCell>
+                    <TableCell><StatusBadge status={r.status} /></TableCell>
+                    <TableCell>
                       {r.status !== "DRAFT" && <button onClick={() => downloadPayslip(r.id)} className="text-primary hover:underline">Download</button>}
-                    </td>
-                    <td className="p-2">
+                    </TableCell>
+                    <TableCell>
                       {r.status === "PAID" && (
                         <Button size="sm" variant="destructive" onClick={() => setVoidTarget({ id: r.id, name: r.staff.name_en })}>
                           Void
                         </Button>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

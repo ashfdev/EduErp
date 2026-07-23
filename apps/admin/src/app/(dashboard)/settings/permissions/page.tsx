@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const ROLES = [
@@ -139,33 +139,33 @@ export default function PermissionsPage() {
               )}
             </div>
           )}
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Name</th>
-                <th className="p-2">Phone</th>
-                <th className="p-2">Current Role</th>
-                <th className="p-2">Status</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Current Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {!!users?.length && !filteredUsers.length && (
-                <tr><td colSpan={5} className="p-4 text-center text-sm text-muted-foreground">No users match this search/filter.</td></tr>
+                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">No users match this search/filter.</TableCell></TableRow>
               )}
               {filteredUsers.map((u) => (
-                <tr key={u.id} className="border-b">
-                  <td className="p-2 font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</td>
-                  <td className="p-2">{u.phone}</td>
-                  <td className="p-2"><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></td>
-                  <td className="p-2"><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></td>
-                  <td className="p-2">
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</TableCell>
+                  <TableCell>{u.phone}</TableCell>
+                  <TableCell><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></TableCell>
+                  <TableCell><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
+                  <TableCell>
                     <Button size="sm" variant="outline" onClick={() => openEdit(u)}>Change Role</Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -180,13 +180,13 @@ export default function PermissionsPage() {
           {[...permissionsByCategory.entries()].map(([category, rows]) => (
             <div key={category}>
               <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">{category}</p>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <tbody>
+              <div className="rounded-md border">
+                <Table>
+                  <TableBody>
                     {rows.map((p) => (
-                      <tr key={p.id} className="border-b align-top last:border-b-0">
-                        <td className="w-56 p-2 font-medium">{p.label}</td>
-                        <td className="p-2">
+                      <TableRow key={p.id} className="align-top">
+                        <TableCell className="w-56 font-medium">{p.label}</TableCell>
+                        <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {p.roles.filter((r) => !ALWAYS_GRANTED.includes(r)).map((r) => (
                               <Badge key={r} variant="secondary">{r.replace(/_/g, " ")}</Badge>
@@ -195,14 +195,14 @@ export default function PermissionsPage() {
                               <span className="text-xs text-muted-foreground">SUPER_ADMIN / ADMIN only</span>
                             )}
                           </div>
-                        </td>
-                        <td className="w-28 p-2 text-right">
+                        </TableCell>
+                        <TableCell className="w-28 text-right">
                           <Button size="sm" variant="outline" onClick={() => openEditPermission(p)}>Edit</Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           ))}

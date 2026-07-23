@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Requisition {
@@ -64,20 +64,22 @@ function RequisitionsTab() {
       <CardContent className="space-y-4 pt-6">
         <div className="flex justify-end"><Button size="sm" onClick={() => setShowNew(true)}>New Requisition</Button></div>
         {!data?.length ? <EmptyState title="No requisitions yet" /> : (
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">REQ No</th><th className="py-2">Reason</th><th className="py-2">Items</th><th className="py-2">Status</th><th className="py-2"></th></tr></thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>REQ No</TableHead><TableHead>Reason</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
               {data.map((r) => (
-                <tr key={r.id} className="border-b last:border-0">
-                  <td className="py-2">{r.req_no}</td>
-                  <td className="py-2">{r.reason}</td>
-                  <td className="py-2">{r.items.length}</td>
-                  <td className="py-2"><Badge>{r.status}</Badge></td>
-                  <td className="py-2">{r.status === "PENDING" && <Button size="sm" variant="outline" onClick={() => approveMutation.mutate(r.id)}>Approve</Button>}</td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell>{r.req_no}</TableCell>
+                  <TableCell>{r.reason}</TableCell>
+                  <TableCell>{r.items.length}</TableCell>
+                  <TableCell><Badge>{r.status}</Badge></TableCell>
+                  <TableCell>{r.status === "PENDING" && <Button size="sm" variant="outline" onClick={() => approveMutation.mutate(r.id)}>Approve</Button>}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
 
         <Dialog open={showNew} onOpenChange={setShowNew}>
@@ -156,23 +158,25 @@ function PurchaseOrdersTab() {
       <CardContent className="space-y-4 pt-6">
         <div className="flex justify-end"><Button size="sm" onClick={() => setShowNew(true)}>Create PO</Button></div>
         {!orders?.length ? <EmptyState title="No purchase orders yet" /> : (
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">PO No</th><th className="py-2">Supplier</th><th className="py-2">Amount</th><th className="py-2">Status</th><th className="py-2"></th></tr></thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>PO No</TableHead><TableHead>Supplier</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
               {orders.map((po) => (
-                <tr key={po.id} className="border-b last:border-0">
-                  <td className="py-2">{po.po_no}</td>
-                  <td className="py-2">{po.supplier.name}</td>
-                  <td className="py-2">৳{po.total_amount.toLocaleString()}</td>
-                  <td className="py-2"><Badge>{po.status.replace(/_/g, " ")}</Badge></td>
-                  <td className="py-2 space-x-2">
+                <TableRow key={po.id}>
+                  <TableCell>{po.po_no}</TableCell>
+                  <TableCell>{po.supplier.name}</TableCell>
+                  <TableCell>৳{po.total_amount.toLocaleString()}</TableCell>
+                  <TableCell><Badge>{po.status.replace(/_/g, " ")}</Badge></TableCell>
+                  <TableCell className="space-x-2">
                     {po.status === "DRAFT" && <Button size="sm" variant="outline" onClick={() => approveMutation.mutate(po.id)}>Approve</Button>}
                     {(po.status === "APPROVED" || po.status === "PARTIALLY_RECEIVED") && <Button size="sm" onClick={() => setShowGrn(po)}>Receive (GRN)</Button>}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
 
         <Dialog open={showNew} onOpenChange={setShowNew}>
@@ -235,20 +239,22 @@ function ReceivedTab() {
     <Card>
       <CardContent className="pt-6">
         {!data?.length ? <EmptyState title="No GRNs yet" /> : (
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-xs uppercase text-muted-foreground"><th className="py-2">GRN No</th><th className="py-2">PO No</th><th className="py-2">Supplier</th><th className="py-2">Date</th><th className="py-2">Amount</th></tr></thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>GRN No</TableHead><TableHead>PO No</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead>Amount</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
               {data.map((g) => (
-                <tr key={g.id} className="border-b last:border-0">
-                  <td className="py-2">{g.grn_no}</td>
-                  <td className="py-2">{g.po.po_no}</td>
-                  <td className="py-2">{g.po.supplier.name}</td>
-                  <td className="py-2">{new Date(g.received_date).toLocaleDateString()}</td>
-                  <td className="py-2">৳{g.total_amount.toLocaleString()}</td>
-                </tr>
+                <TableRow key={g.id}>
+                  <TableCell>{g.grn_no}</TableCell>
+                  <TableCell>{g.po.po_no}</TableCell>
+                  <TableCell>{g.po.supplier.name}</TableCell>
+                  <TableCell>{new Date(g.received_date).toLocaleDateString()}</TableCell>
+                  <TableCell>৳{g.total_amount.toLocaleString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>

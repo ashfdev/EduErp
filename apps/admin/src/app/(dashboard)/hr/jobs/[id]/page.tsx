@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Applicant {
@@ -69,28 +69,28 @@ export default function JobApplicantsPage() {
         <CardContent className="pt-6">
           {!applicants?.length && <EmptyState title="No applications received yet" />}
           {!!applicants?.length && (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Contact</th>
-                  <th className="p-2">Applied</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Applied</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {applicants.map((a) => (
-                  <tr key={a.id} className="border-b align-top">
-                    <td className="p-2 font-medium">{a.applicant_name}</td>
-                    <td className="p-2">
+                  <TableRow key={a.id} className="align-top">
+                    <TableCell className="font-medium">{a.applicant_name}</TableCell>
+                    <TableCell>
                       <p>{a.phone}</p>
                       {a.email && <p className="text-xs text-muted-foreground">{a.email}</p>}
                       {a.cover_note && <p className="mt-1 max-w-xs text-xs text-muted-foreground">{a.cover_note}</p>}
-                    </td>
-                    <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
-                    <td className="p-2"><Badge variant={STATUS_VARIANT[a.status]}>{a.status}</Badge></td>
-                    <td className="p-2 text-right">
+                    </TableCell>
+                    <TableCell>{new Date(a.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell><Badge variant={STATUS_VARIANT[a.status]}>{a.status}</Badge></TableCell>
+                    <TableCell className="text-right">
                       <div className="flex flex-col items-end gap-1">
                         <Button size="sm" variant="outline" onClick={() => downloadCv(a.id)}>Download CV</Button>
                         <select
@@ -101,11 +101,11 @@ export default function JobApplicantsPage() {
                           {NEXT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

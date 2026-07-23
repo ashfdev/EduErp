@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
@@ -60,20 +60,22 @@ export default function DownloadsPage() {
       {!!downloads?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Title</th><th className="p-2">Category</th><th className="p-2">Visibility</th><th className="p-2">Downloads</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Title</TableHead><TableHead>Category</TableHead><TableHead>Visibility</TableHead><TableHead>Downloads</TableHead><TableHead>Actions</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {downloads.map((d) => (
-                  <tr key={d.id} className="border-b">
-                    <td className="p-2">{d.title}</td>
-                    <td className="p-2"><StatusBadge status={d.category} /></td>
-                    <td className="p-2"><StatusBadge status={d.is_public ? "PUBLIC" : "PRIVATE"} /></td>
-                    <td className="p-2">{d.download_count}</td>
-                    <td className="p-2"><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button></td>
-                  </tr>
+                  <TableRow key={d.id}>
+                    <TableCell>{d.title}</TableCell>
+                    <TableCell><StatusBadge status={d.category} /></TableCell>
+                    <TableCell><StatusBadge status={d.is_public ? "PUBLIC" : "PRIVATE"} /></TableCell>
+                    <TableCell>{d.download_count}</TableCell>
+                    <TableCell><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button></TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

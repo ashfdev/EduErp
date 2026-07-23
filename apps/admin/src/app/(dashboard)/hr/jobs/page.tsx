@@ -20,6 +20,12 @@ import {
   DialogTitle,
   DialogFooter,
   EmptyState,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -104,28 +110,28 @@ export default function JobPostingsPage() {
         <CardContent className="pt-6">
           {!jobs?.length && <EmptyState title="No job postings yet" />}
           {!!jobs?.length && (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Title</th>
-                  <th className="p-2">Department</th>
-                  <th className="p-2">Deadline</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Deadline</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {jobs.map((j) => (
-                  <tr key={j.id} className="border-b">
-                    <td className="p-2 font-medium">
+                  <TableRow key={j.id}>
+                    <TableCell className="font-medium">
                       <Link href={`/hr/jobs/${j.id}`} className="hover:underline">{j.title}</Link>
-                    </td>
-                    <td className="p-2">{j.department ?? "-"}</td>
-                    <td className="p-2">{j.deadline ? new Date(j.deadline).toLocaleDateString() : "-"}</td>
-                    <td className="p-2">
+                    </TableCell>
+                    <TableCell>{j.department ?? "-"}</TableCell>
+                    <TableCell>{j.deadline ? new Date(j.deadline).toLocaleDateString() : "-"}</TableCell>
+                    <TableCell>
                       {j.is_published ? <Badge variant="success">Published</Badge> : <Badge variant="outline">Draft</Badge>}
-                    </td>
-                    <td className="p-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button size="sm" variant="outline" onClick={() => openEdit(j)}>Edit</Button>{" "}
                       <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate({ id: j.id, is_published: !j.is_published })}>
                         {j.is_published ? "Unpublish" : "Publish"}
@@ -133,11 +139,11 @@ export default function JobPostingsPage() {
                       <Link href={`/hr/jobs/${j.id}`}>
                         <Button size="sm" variant="outline">Applicants</Button>
                       </Link>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

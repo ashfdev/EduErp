@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, RichTextEditor, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, RichTextEditor, StatusBadge, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Notice {
@@ -141,22 +141,22 @@ export default function NoticesPage() {
       {!!notices?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">Title</th><th className="p-2">Audience</th><th className="p-2">Pinned</th>
-                  <th className="p-2">Published</th><th className="p-2">SMS</th><th className="p-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead><TableHead>Audience</TableHead><TableHead>Pinned</TableHead>
+                  <TableHead>Published</TableHead><TableHead>SMS</TableHead><TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {notices.map((n) => (
-                  <tr key={n.id} className="border-b">
-                    <td className="p-2">{n.title}</td>
-                    <td className="p-2"><StatusBadge status={n.audience} /></td>
-                    <td className="p-2">{n.is_pinned ? "📌" : ""}</td>
-                    <td className="p-2"><StatusBadge status={n.is_published ? "PUBLISHED" : "DRAFT"} /></td>
-                    <td className="p-2">{n.sms_sent_at ? "Sent" : n.send_sms ? "Pending" : "-"}</td>
-                    <td className="p-2 space-x-2">
+                  <TableRow key={n.id}>
+                    <TableCell>{n.title}</TableCell>
+                    <TableCell><StatusBadge status={n.audience} /></TableCell>
+                    <TableCell>{n.is_pinned ? "📌" : ""}</TableCell>
+                    <TableCell><StatusBadge status={n.is_published ? "PUBLISHED" : "DRAFT"} /></TableCell>
+                    <TableCell>{n.sms_sent_at ? "Sent" : n.send_sms ? "Pending" : "-"}</TableCell>
+                    <TableCell className="space-x-2">
                       {n.is_published ? (
                         <Button size="sm" variant="outline" onClick={() => unpublishMutation.mutate(n.id)}>Unpublish</Button>
                       ) : (
@@ -169,11 +169,11 @@ export default function NoticesPage() {
                         </a>
                       )}
                       <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(n.id)}>Delete</Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

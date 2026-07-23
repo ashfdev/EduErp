@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveRequest {
@@ -44,33 +44,33 @@ function LeaveTable({ status }: { status: string }) {
   return (
     <Card>
       <CardContent className="pt-6">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-muted-foreground">
-              <th className="p-2">Staff</th><th className="p-2">Type</th><th className="p-2">From</th><th className="p-2">To</th><th className="p-2">Reason</th><th className="p-2">Status</th><th className="p-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Staff</TableHead><TableHead>Type</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Reason</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {leaves.map((l) => (
-              <tr key={l.id} className="border-b">
-                <td className="p-2">{l.staff.name_en} <span className="font-mono text-xs text-muted-foreground">{l.staff.staff_uid}</span></td>
-                <td className="p-2">{l.leave_type.name}</td>
-                <td className="p-2">{new Date(l.from_date).toLocaleDateString()}</td>
-                <td className="p-2">{new Date(l.to_date).toLocaleDateString()}</td>
-                <td className="p-2">{l.reason}</td>
-                <td className="p-2"><StatusBadge status={l.status} /></td>
-                <td className="p-2 space-x-2">
+              <TableRow key={l.id}>
+                <TableCell>{l.staff.name_en} <span className="font-mono text-xs text-muted-foreground">{l.staff.staff_uid}</span></TableCell>
+                <TableCell>{l.leave_type.name}</TableCell>
+                <TableCell>{new Date(l.from_date).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(l.to_date).toLocaleDateString()}</TableCell>
+                <TableCell>{l.reason}</TableCell>
+                <TableCell><StatusBadge status={l.status} /></TableCell>
+                <TableCell className="space-x-2">
                   {l.status === "PENDING" && (
                     <>
                       <Button size="sm" onClick={() => approveMutation.mutate(l.id)}>Approve</Button>
                       <Button size="sm" variant="destructive" onClick={() => rejectMutation.mutate(l.id)}>Reject</Button>
                     </>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );

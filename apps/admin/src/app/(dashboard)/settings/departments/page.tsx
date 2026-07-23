@@ -17,6 +17,10 @@ import {
   DialogTitle,
   DialogFooter,
   EmptyState,
+  Table,
+  TableBody,
+  TableRow,
+  TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -98,13 +102,13 @@ export default function DepartmentsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <tbody>
+          <Table>
+            <TableBody>
               {departments?.map((d) => (
-                <tr key={d.id} className="border-b">
-                  <td className="p-2 font-medium">{d.name_en}</td>
-                  <td className="p-2 text-muted-foreground">{d.code}</td>
-                  <td className="p-2">
+                <TableRow key={d.id}>
+                  <TableCell className="font-medium">{d.name_en}</TableCell>
+                  <TableCell className="text-muted-foreground">{d.code}</TableCell>
+                  <TableCell>
                     <select
                       className="rounded-md border px-2 py-1 text-sm"
                       value={d.head_id ?? ""}
@@ -113,15 +117,15 @@ export default function DepartmentsPage() {
                       <option value="">No head assigned</option>
                       {staff?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
                     </select>
-                  </td>
-                  <td className="p-2 text-right">
+                  </TableCell>
+                  <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => openEdit(d)}>Edit</Button>{" "}
                     <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

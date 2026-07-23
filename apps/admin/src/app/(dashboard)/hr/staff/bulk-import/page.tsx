@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PreviewRow {
@@ -104,17 +104,19 @@ export default function BulkImportStaffPage() {
           {!!departments?.length && (
             <details className="rounded-md border p-3">
               <summary className="cursor-pointer text-sm font-medium">Department ID reference</summary>
-              <table className="mt-2 w-full text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-1">Department</th><th className="p-1">ID</th></tr></thead>
-                <tbody>
+              <Table className="mt-2">
+                <TableHeader>
+                  <TableRow><TableHead>Department</TableHead><TableHead>ID</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {departments.map((d) => (
-                    <tr key={d.id} className="border-b last:border-0">
-                      <td className="p-1">{d.name_en}</td>
-                      <td className="p-1 font-mono text-xs">{d.id}</td>
-                    </tr>
+                    <TableRow key={d.id}>
+                      <TableCell>{d.name_en}</TableCell>
+                      <TableCell className="font-mono text-xs">{d.id}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </details>
           )}
         </CardContent>
@@ -141,28 +143,28 @@ export default function BulkImportStaffPage() {
                 {confirmMutation.isPending ? "Importing..." : `Confirm Import (${preview.valid})`}
               </Button>
             </div>
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                    <th className="p-2">Row</th><th className="p-2">Name</th><th className="p-2">Designation</th><th className="p-2">Role</th><th className="p-2">Phone</th><th className="p-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Row</TableHead><TableHead>Name</TableHead><TableHead>Designation</TableHead><TableHead>Role</TableHead><TableHead>Phone</TableHead><TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {preview.preview.map((p) => (
-                    <tr key={p.row} className="border-b last:border-0">
-                      <td className="p-2">{p.row}</td>
-                      <td className="p-2">{p.data.name_en}</td>
-                      <td className="p-2">{p.data.designation}</td>
-                      <td className="p-2">{p.data.role}</td>
-                      <td className="p-2">{p.data.phone}</td>
-                      <td className="p-2">
+                    <TableRow key={p.row}>
+                      <TableCell>{p.row}</TableCell>
+                      <TableCell>{p.data.name_en}</TableCell>
+                      <TableCell>{p.data.designation}</TableCell>
+                      <TableCell>{p.data.role}</TableCell>
+                      <TableCell>{p.data.phone}</TableCell>
+                      <TableCell>
                         {p.valid ? <Badge variant="success">Valid</Badge> : <Badge variant="destructive" title={p.errors.join("; ")}>{p.errors.join("; ")}</Badge>}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>

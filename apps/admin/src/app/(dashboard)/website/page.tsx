@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const SECTIONS = [
@@ -61,20 +61,22 @@ export default function WebsiteDashboardPage() {
         {!!submissions?.length && (
           <Card>
             <CardContent className="pt-6">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Name</th><th className="p-2">Subject</th><th className="p-2">Message</th><th className="p-2">Status</th><th className="p-2">Received</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Name</TableHead><TableHead>Subject</TableHead><TableHead>Message</TableHead><TableHead>Status</TableHead><TableHead>Received</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {submissions.map((s) => (
-                    <tr key={s.id} className="border-b">
-                      <td className="p-2">{s.name}</td>
-                      <td className="p-2">{s.subject ?? "-"}</td>
-                      <td className="max-w-xs truncate p-2">{s.message}</td>
-                      <td className="p-2"><StatusBadge status={s.is_read ? "READ" : "UNREAD"} /></td>
-                      <td className="p-2">{new Date(s.created_at).toLocaleDateString()}</td>
-                    </tr>
+                    <TableRow key={s.id}>
+                      <TableCell>{s.name}</TableCell>
+                      <TableCell>{s.subject ?? "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate">{s.message}</TableCell>
+                      <TableCell><StatusBadge status={s.is_read ? "READ" : "UNREAD"} /></TableCell>
+                      <TableCell>{new Date(s.created_at).toLocaleDateString()}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         )}

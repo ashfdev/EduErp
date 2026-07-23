@@ -19,6 +19,10 @@ import {
   DialogTitle,
   DialogFooter,
   EmptyState,
+  Table,
+  TableBody,
+  TableRow,
+  TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -282,17 +286,17 @@ export default function SubjectsSettingsPage() {
 
                       {expandedSubject === s.id && (
                         <div className="space-y-3 border-t pt-3">
-                          <table className="w-full text-sm">
-                            <tbody>
+                          <Table>
+                            <TableBody>
                               {assignments?.map((a) => (
-                                <tr key={a.id} className="border-b">
-                                  <td className="p-1">{selectedClass?.sections.find((sec) => sec.id === a.section_id)?.name ?? "All sections"}</td>
-                                  <td className="p-1">{a.staff.name_en}</td>
-                                  <td className="p-1"><Button size="sm" variant="ghost" onClick={() => unassignMutation.mutate(a.id)}>Remove</Button></td>
-                                </tr>
+                                <TableRow key={a.id}>
+                                  <TableCell>{selectedClass?.sections.find((sec) => sec.id === a.section_id)?.name ?? "All sections"}</TableCell>
+                                  <TableCell>{a.staff.name_en}</TableCell>
+                                  <TableCell><Button size="sm" variant="ghost" onClick={() => unassignMutation.mutate(a.id)}>Remove</Button></TableCell>
+                                </TableRow>
                               ))}
-                            </tbody>
-                          </table>
+                            </TableBody>
+                          </Table>
                           <div className="flex gap-2">
                             <select className="rounded-md border px-2 py-1 text-sm" value={assignSectionId} onChange={(e) => setAssignSectionId(e.target.value)}>
                               <option value="">All sections</option>

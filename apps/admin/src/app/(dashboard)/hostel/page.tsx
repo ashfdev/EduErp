@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState,
   Tabs, TabsList, TabsTrigger, TabsContent, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -229,21 +230,23 @@ function VisitorsTab() {
       {!!visitors?.length && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Visitor</th><th className="p-2">Relation</th><th className="p-2">Phone</th><th className="p-2">In Time</th><th className="p-2">Status</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow><TableHead>Visitor</TableHead><TableHead>Relation</TableHead><TableHead>Phone</TableHead><TableHead>In Time</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {visitors.map((v) => (
-                  <tr key={v.id} className="border-b">
-                    <td className="p-2">{v.visitor_name}</td>
-                    <td className="p-2">{v.relation}</td>
-                    <td className="p-2">{v.phone}</td>
-                    <td className="p-2">{new Date(v.in_time).toLocaleString()}</td>
-                    <td className="p-2">{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</td>
-                    <td className="p-2">{!v.out_time && <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>Check Out</Button>}</td>
-                  </tr>
+                  <TableRow key={v.id}>
+                    <TableCell>{v.visitor_name}</TableCell>
+                    <TableCell>{v.relation}</TableCell>
+                    <TableCell>{v.phone}</TableCell>
+                    <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
+                    <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
+                    <TableCell>{!v.out_time && <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>Check Out</Button>}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
@@ -294,20 +297,22 @@ function OccupancyTab() {
       </div>
       <Card>
         <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Block</th><th className="p-2">Room</th><th className="p-2">Occupied</th><th className="p-2">Capacity</th><th className="p-2">Fill %</th></tr></thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow><TableHead>Block</TableHead><TableHead>Room</TableHead><TableHead>Occupied</TableHead><TableHead>Capacity</TableHead><TableHead>Fill %</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
               {data.rooms.map((r) => (
-                <tr key={r.id} className="border-b">
-                  <td className="p-2">{r.block_name}</td>
-                  <td className="p-2">{r.room_no}</td>
-                  <td className="p-2">{r.occupied}</td>
-                  <td className="p-2">{r.capacity}</td>
-                  <td className="p-2">{r.fill_rate}%</td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell>{r.block_name}</TableCell>
+                  <TableCell>{r.room_no}</TableCell>
+                  <TableCell>{r.occupied}</TableCell>
+                  <TableCell>{r.capacity}</TableCell>
+                  <TableCell>{r.fill_rate}%</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

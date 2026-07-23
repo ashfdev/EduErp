@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Input } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Asset {
@@ -56,36 +56,34 @@ export default function AssetsPage() {
           {!data?.items.length ? (
             <EmptyState title="No assets yet" description="Add a fixed asset, or receive one via a purchase order GRN." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-                    <th className="py-2 pr-4">Asset UID</th>
-                    <th className="py-2 pr-4">Name</th>
-                    <th className="py-2 pr-4">Category</th>
-                    <th className="py-2 pr-4">Department</th>
-                    <th className="py-2 pr-4">Purchase Price</th>
-                    <th className="py-2 pr-4">Book Value</th>
-                    <th className="py-2 pr-4">Condition</th>
-                    <th className="py-2 pr-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((a) => (
-                    <tr key={a.id} className="border-b last:border-0 hover:bg-accent">
-                      <td className="py-2 pr-4"><Link href={`/inventory/assets/${a.id}`} className="font-mono text-primary">{a.asset_uid}</Link></td>
-                      <td className="py-2 pr-4">{a.name}</td>
-                      <td className="py-2 pr-4">{a.category.name}</td>
-                      <td className="py-2 pr-4">{a.department?.name_en ?? "—"}</td>
-                      <td className="py-2 pr-4">৳{a.purchase_price.toLocaleString()}</td>
-                      <td className="py-2 pr-4">৳{a.book_value.toLocaleString()}</td>
-                      <td className="py-2 pr-4"><Badge className={CONDITION_COLOR[a.condition]}>{a.condition}</Badge></td>
-                      <td className="py-2 pr-4"><Badge className={STATUS_COLOR[a.status]}>{a.status.replace(/_/g, " ")}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Asset UID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Purchase Price</TableHead>
+                  <TableHead>Book Value</TableHead>
+                  <TableHead>Condition</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.items.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell><Link href={`/inventory/assets/${a.id}`} className="font-mono text-primary">{a.asset_uid}</Link></TableCell>
+                    <TableCell>{a.name}</TableCell>
+                    <TableCell>{a.category.name}</TableCell>
+                    <TableCell>{a.department?.name_en ?? "—"}</TableCell>
+                    <TableCell>৳{a.purchase_price.toLocaleString()}</TableCell>
+                    <TableCell>৳{a.book_value.toLocaleString()}</TableCell>
+                    <TableCell><Badge className={CONDITION_COLOR[a.condition]}>{a.condition}</Badge></TableCell>
+                    <TableCell><Badge className={STATUS_COLOR[a.status]}>{a.status.replace(/_/g, " ")}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
