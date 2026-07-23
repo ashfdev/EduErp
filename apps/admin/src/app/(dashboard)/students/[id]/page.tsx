@@ -34,6 +34,7 @@ interface StudentProfile {
     father_phone?: string | null;
     mother_name?: string | null;
     mother_phone?: string | null;
+    documents_count: number;
   };
   academic: {
     current: {
@@ -238,6 +239,7 @@ export default function StudentProfilePage() {
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{personal.name_en}</h1>
             <StatusBadge status={personal.status} />
+            {personal.documents_count === 0 && <Badge variant="warning">No documents on file</Badge>}
           </div>
           {personal.name_bn && <p className="text-muted-foreground">{personal.name_bn}</p>}
           <p className="mt-1 font-mono text-sm text-muted-foreground">{personal.student_uid}</p>

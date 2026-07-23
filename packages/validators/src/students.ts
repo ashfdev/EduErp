@@ -16,22 +16,42 @@ export const createStudentSchema = z.object({
   other_phone: z.string().optional().nullable(),
   has_disability: z.boolean().optional(),
   disability_note: z.string().optional().nullable(),
+  // Mandatory (Plan Thirteen, Phase N) — collected in the New Student
+  // wizard's first step via a pre-creation upload (POST /api/students/photo).
+  photo_url: z.string().url(),
   // "Present Address" in the UI (Plan Thirteen, Phase C) -- the field name
   // stays address_current to match the already-existing DB column, which
-  // predates the UI split and was never wired in before this.
+  // predates the UI split and was never wired in before this. Kept as a
+  // supplementary Road/Area free-text line alongside the structured fields
+  // below (Phase N), not replaced.
   address_current: z.string().optional().nullable(),
   address_permanent: z.string().optional().nullable(),
   district: z.string().optional().nullable(),
+  // Structured Present/Permanent address (Plan Thirteen, Phase N) — all
+  // mandatory per the owner's explicit ask.
+  present_house_name: z.string().min(1, "House name is required"),
+  present_village: z.string().min(1, "Village is required"),
+  present_post_code: z.string().min(1, "Post code is required"),
+  present_district: z.string().min(1, "District is required"),
+  present_division: z.string().min(1, "Division is required"),
+  permanent_house_name: z.string().min(1, "House name is required"),
+  permanent_village: z.string().min(1, "Village is required"),
+  permanent_post_code: z.string().min(1, "Post code is required"),
+  permanent_district: z.string().min(1, "District is required"),
+  permanent_division: z.string().min(1, "Division is required"),
 
   guardian_id: z.string().optional().nullable(),
-  father_name: z.string().optional().nullable(),
+  // Both parents' name/phone/NID/occupation are mandatory (Plan Thirteen,
+  // Phase N, per the owner's explicit ask) — father_nid/mother_nid already
+  // existed on the Student model but had no UI/validator wiring before this.
+  father_name: z.string().min(1, "Father's name is required"),
   father_phone: z.string().regex(/^01\d{9}$/, "Father's phone must be 11 digits starting with 01"),
-  father_nid: z.string().optional().nullable(),
-  father_occupation: z.string().optional().nullable(),
-  mother_name: z.string().optional().nullable(),
-  mother_phone: z.string().optional().nullable(),
-  mother_nid: z.string().optional().nullable(),
-  mother_occupation: z.string().optional().nullable(),
+  father_nid: z.string().min(1, "Father's NID is required"),
+  father_occupation: z.string().min(1, "Father's occupation is required"),
+  mother_name: z.string().min(1, "Mother's name is required"),
+  mother_phone: z.string().regex(/^01\d{9}$/, "Mother's phone must be 11 digits starting with 01"),
+  mother_nid: z.string().min(1, "Mother's NID is required"),
+  mother_occupation: z.string().min(1, "Mother's occupation is required"),
 
   current_class_id: z.string().min(1, "Class is required"),
   current_section_id: z.string().optional().nullable(),

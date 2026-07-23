@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { csvUpload, documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
+import { csvUpload, documentUpload, verifyDocumentMagicBytes, imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
@@ -44,6 +44,10 @@ const STUDENT_LIST_SELECT = {
   current_section: { select: { id: true, name: true } },
   group: { select: { id: true, name_en: true } },
   guardian: { select: { phone: true } },
+  // Powers the "No documents on file" warning badge (Plan Thirteen, Phase
+  // N) — mirrors the identical `_count.documents` pattern already used for
+  // Staff/Faculty (Plan Eight).
+  _count: { select: { documents: true } },
 } as const;
 
 studentsRouter.get(
@@ -247,6 +251,9 @@ studentsRouter.get(
         attendance: { orderBy: { date: "desc" }, take: 60 },
         mark_entries: { include: { exam: true, subject: true } },
         invoices: { include: { payments: true, fee_structure: { select: { frequency: true } } }, orderBy: { due_date: "desc" } },
+        // Powers the "No documents on file" warning badge (Plan Thirteen,
+        // Phase N), mirroring Staff/Faculty's identical pattern (Plan Eight).
+        _count: { select: { documents: true } },
       },
     });
     if (!student) throw notFound("Student not found");
@@ -318,6 +325,9 @@ studentsRouter.get(
           mother_name: student.mother_name,
           mother_phone: student.mother_phone,
           mother_occupation: student.mother_occupation,
+          // Powers the "No documents on file" warning badge (Plan Thirteen,
+          // Phase N), mirroring Staff/Faculty's identical pattern (Plan Eight).
+          documents_count: student._count.documents,
         },
         academic: {
           current: {
@@ -357,6 +367,21 @@ studentsRouter.get(
         discipline: [],
       },
     });
+  }),
+);
+
+// Pre-creation photo upload (Plan Thirteen, Phase N) — mirrors the
+// equivalent staff route exactly: no Student id exists yet, this just
+// returns a URL to attach to the create payload's now-mandatory photo_url.
+studentsRouter.post(
+  "/photo",
+  authorize(STUDENT_CRUD_ROLES),
+  imageUpload.single("photo"),
+  verifyImageMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A photo file is required");
+    const { url } = await uploadBuffer("students", req.file.originalname, req.file.buffer, req.file.mimetype);
+    res.json({ success: true, data: { photo_url: url } });
   }),
 );
 
@@ -422,6 +447,17 @@ studentsRouter.post(
           address_permanent: body.address_permanent,
           address_current: body.address_current,
           district: body.district,
+          present_house_name: body.present_house_name,
+          present_village: body.present_village,
+          present_post_code: body.present_post_code,
+          present_district: body.present_district,
+          present_division: body.present_division,
+          permanent_house_name: body.permanent_house_name,
+          permanent_village: body.permanent_village,
+          permanent_post_code: body.permanent_post_code,
+          permanent_district: body.permanent_district,
+          permanent_division: body.permanent_division,
+          photo_url: body.photo_url,
           current_class_id: body.current_class_id,
           current_section_id: body.current_section_id,
           group_id: body.group_id,

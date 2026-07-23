@@ -20,11 +20,12 @@ import {
   SelectContent,
   SelectItem,
   ConfirmDialog,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
-const STEPS = ["Personal", "Guardian", "Academic Placement", "Subjects", "Review"];
+const STEPS = ["Personal", "Guardian", "Academic Placement", "Subjects", "Documents", "Review"];
 
 interface ClassOption {
   id: string;
@@ -42,6 +43,7 @@ interface SubjectOption {
 
 const RELIGIONS = ["Islam", "Hinduism", "Christianity", "Buddhism", "Other"];
 const NATIONALITIES = ["Bangladeshi", "Indian", "Other"];
+const DOC_TYPES = ["BIRTH_CERTIFICATE", "TRANSFER_CERTIFICATE", "TESTIMONIAL", "ACADEMIC_CERTIFICATE", "MARKSHEET", "FATHER_NID", "MOTHER_NID", "OTHER"] as const;
 
 const emptyForm = {
   name_en: "",
@@ -58,14 +60,25 @@ const emptyForm = {
   passport_no: "",
   address_current: "",
   address_permanent: "",
-  district: "",
+  present_house_name: "",
+  present_village: "",
+  present_post_code: "",
+  present_district: "",
+  present_division: "",
+  permanent_house_name: "",
+  permanent_village: "",
+  permanent_post_code: "",
+  permanent_district: "",
+  permanent_division: "",
   has_disability: false,
   disability_note: "",
   father_name: "",
   father_phone: "",
+  father_nid: "",
   father_occupation: "",
   mother_name: "",
   mother_phone: "",
+  mother_nid: "",
   mother_occupation: "",
   academic_year_id: "",
   current_class_id: "",
@@ -81,6 +94,11 @@ const emptyForm = {
   send_portal_login_sms: true,
 };
 
+interface StagedDoc {
+  file: File;
+  doc_type: (typeof DOC_TYPES)[number];
+}
+
 export default function NewStudentPage() {
   const router = useRouter();
   const { terms } = useInstitution();
@@ -88,6 +106,11 @@ export default function NewStudentPage() {
   const [form, setForm] = useState(emptyForm);
   const [selectedOptional, setSelectedOptional] = useState<string[]>([]);
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
+  const [newDocType, setNewDocType] = useState<(typeof DOC_TYPES)[number]>("BIRTH_CERTIFICATE");
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
   const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
@@ -113,18 +136,55 @@ export default function NewStudentPage() {
   const compulsory = subjects?.filter((s) => s.is_compulsory) ?? [];
   const optional = subjects?.filter((s) => s.is_optional) ?? [];
 
+  async function handlePhotoSelect(file: File | null) {
+    if (!file) return;
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await api.post("/api/students/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setPhotoUrl(res.data.data.photo_url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err) ?? "Failed to upload photo");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  function addStagedDoc() {
+    if (!newDocFile) return;
+    setStagedDocs((prev) => [...prev, { file: newDocFile, doc_type: newDocType }]);
+    setNewDocFile(null);
+  }
+
   const createMutation = useMutation({
     mutationFn: (override?: boolean) =>
       api.post("/api/students", {
         ...form,
         date_of_birth: form.date_of_birth || undefined,
         group_id: form.group_id || undefined,
+        photo_url: photoUrl,
         selected_optional_subject_ids: selectedOptional,
         override,
       }),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      const studentId = res.data.data.id as string;
+      let failedCount = 0;
+      for (const doc of stagedDocs) {
+        try {
+          const fd = new FormData();
+          fd.append("file", doc.file);
+          fd.append("doc_type", doc.doc_type);
+          await api.post(`/api/students/${studentId}/documents`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+        } catch {
+          failedCount++;
+        }
+      }
+      if (failedCount > 0) {
+        toast(`${failedCount} document(s) failed to upload — add them manually from the Documents tab.`);
+      }
       toast.success(`Student created — ID: ${res.data.data.student_uid}`);
-      router.push(`/students/${res.data.data.id}`);
+      router.push(`/students/${studentId}`);
     },
     onError: (err: unknown) => {
       const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
@@ -140,12 +200,32 @@ export default function NewStudentPage() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function copyPresentToPermanent() {
+    setForm((f) => ({
+      ...f,
+      address_permanent: f.address_current,
+      permanent_house_name: f.present_house_name,
+      permanent_village: f.present_village,
+      permanent_post_code: f.present_post_code,
+      permanent_district: f.present_district,
+      permanent_division: f.present_division,
+    }));
+  }
+
+  const presentAddressComplete = !!(form.present_house_name && form.present_village && form.present_post_code && form.present_district && form.present_division);
+  const permanentAddressComplete = !!(form.permanent_house_name && form.permanent_village && form.permanent_post_code && form.permanent_district && form.permanent_division);
+  const guardianComplete = !!(
+    form.father_name && form.father_phone && form.father_nid && form.father_occupation &&
+    form.mother_name && form.mother_phone && form.mother_nid && form.mother_occupation
+  );
+
   const canProceed =
-    (step === 0 && form.name_en && form.gender) ||
-    (step === 1 && form.father_phone) ||
+    (step === 0 && form.name_en && form.gender && !!photoUrl && presentAddressComplete && permanentAddressComplete) ||
+    (step === 1 && guardianComplete) ||
     (step === 2 && form.academic_year_id && form.current_class_id && (!selectedClass?.groups.length || form.group_id)) ||
     step === 3 ||
-    step === 4;
+    step === 4 ||
+    step === 5;
 
   return (
     <PageWrapper>
@@ -162,80 +242,112 @@ export default function NewStudentPage() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           {step === 0 && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label>Name (English) *</Label><Input value={form.name_en} onChange={(e) => set("name_en", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Name (Bangla)</Label><Input value={form.name_bn} onChange={(e) => set("name_bn", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Middle Name</Label><Input value={form.middle_name} onChange={(e) => set("middle_name", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Nick Name</Label><Input value={form.nick_name} onChange={(e) => set("nick_name", e.target.value)} /></div>
+            <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Gender *</Label>
-                <Select value={form.gender} onValueChange={(v) => set("gender", v as typeof form.gender)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MALE">Male</SelectItem>
-                    <SelectItem value="FEMALE">Female</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Student Photo *</Label>
+                <div className="flex items-center gap-3">
+                  {photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={photoUrl} alt="Student photo" className="h-16 w-16 rounded-full object-cover border" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border bg-muted text-xs text-muted-foreground">No photo</div>
+                  )}
+                  <Input type="file" accept="image/*" onChange={(e) => handlePhotoSelect(e.target.files?.[0] ?? null)} disabled={photoUploading} className="max-w-xs" />
+                  {photoUploading && <span className="text-xs text-muted-foreground">Uploading...</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">A photo is required before continuing.</p>
               </div>
-              <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} /></div>
-              <div className="space-y-1.5">
-                <Label>Religion</Label>
-                <Select value={form.religion} onValueChange={(v) => set("religion", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    {RELIGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5"><Label>Name (English) *</Label><Input value={form.name_en} onChange={(e) => set("name_en", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Name (Bangla)</Label><Input value={form.name_bn} onChange={(e) => set("name_bn", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Middle Name</Label><Input value={form.middle_name} onChange={(e) => set("middle_name", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Nick Name</Label><Input value={form.nick_name} onChange={(e) => set("nick_name", e.target.value)} /></div>
+                <div className="space-y-1.5">
+                  <Label>Gender *</Label>
+                  <Select value={form.gender} onValueChange={(v) => set("gender", v as typeof form.gender)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MALE">Male</SelectItem>
+                      <SelectItem value="FEMALE">Female</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => set("date_of_birth", e.target.value)} /></div>
+                <div className="space-y-1.5">
+                  <Label>Religion</Label>
+                  <Select value={form.religion} onValueChange={(v) => set("religion", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      {RELIGIONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Nationality</Label>
+                  <Select value={form.nationality} onValueChange={(v) => set("nationality", v)}>
+                    <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                    <SelectContent>
+                      {NATIONALITIES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5"><Label>Blood Group</Label><Input value={form.blood_group} onChange={(e) => set("blood_group", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Student Phone (optional)</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Other Phone</Label><Input value={form.other_phone} onChange={(e) => set("other_phone", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} /></div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Nationality</Label>
-                <Select value={form.nationality} onValueChange={(v) => set("nationality", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
-                  <SelectContent>
-                    {NATIONALITIES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+
+              <div className="rounded-md border p-3 space-y-3">
+                <p className="text-sm font-medium">Present Address *</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5"><Label>House Name *</Label><Input value={form.present_house_name} onChange={(e) => set("present_house_name", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Village *</Label><Input value={form.present_village} onChange={(e) => set("present_village", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Post Code *</Label><Input value={form.present_post_code} onChange={(e) => set("present_post_code", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>District *</Label><Input value={form.present_district} onChange={(e) => set("present_district", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Division *</Label><Input value={form.present_division} onChange={(e) => set("present_division", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Road / Area (optional)</Label><Input value={form.address_current} onChange={(e) => set("address_current", e.target.value)} /></div>
+                </div>
               </div>
-              <div className="space-y-1.5"><Label>Blood Group</Label><Input value={form.blood_group} onChange={(e) => set("blood_group", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Student Phone (optional)</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Other Phone</Label><Input value={form.other_phone} onChange={(e) => set("other_phone", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>District</Label><Input value={form.district} onChange={(e) => set("district", e.target.value)} /></div>
-              <div />
-              <div className="col-span-2 space-y-1.5"><Label>Present Address</Label><Input value={form.address_current} onChange={(e) => set("address_current", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1.5">
+
+              <div className="rounded-md border p-3 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Permanent Address</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:underline"
-                    onClick={() => set("address_permanent", form.address_current)}
-                  >
+                  <p className="text-sm font-medium">Permanent Address *</p>
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={copyPresentToPermanent}>
                     Same as Present Address
                   </button>
                 </div>
-                <Input value={form.address_permanent} onChange={(e) => set("address_permanent", e.target.value)} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5"><Label>House Name *</Label><Input value={form.permanent_house_name} onChange={(e) => set("permanent_house_name", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Village *</Label><Input value={form.permanent_village} onChange={(e) => set("permanent_village", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Post Code *</Label><Input value={form.permanent_post_code} onChange={(e) => set("permanent_post_code", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>District *</Label><Input value={form.permanent_district} onChange={(e) => set("permanent_district", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Division *</Label><Input value={form.permanent_division} onChange={(e) => set("permanent_division", e.target.value)} /></div>
+                  <div className="space-y-1.5"><Label>Road / Area (optional)</Label><Input value={form.address_permanent} onChange={(e) => set("address_permanent", e.target.value)} /></div>
+                </div>
               </div>
-              <div className="col-span-2 flex items-center justify-between">
+
+              <div className="flex items-center justify-between">
                 <Label>Has disability</Label>
                 <Switch checked={form.has_disability} onCheckedChange={(v) => set("has_disability", v)} />
               </div>
               {form.has_disability && (
-                <div className="col-span-2 space-y-1.5"><Label>Disability Note</Label><Input value={form.disability_note} onChange={(e) => set("disability_note", e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Disability Note</Label><Input value={form.disability_note} onChange={(e) => set("disability_note", e.target.value)} /></div>
               )}
             </div>
           )}
 
           {step === 1 && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><Label>Father&apos;s Name</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s Name *</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
-              <div className="space-y-1.5"><Label>Father&apos;s Occupation</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
-              <div />
-              <div className="space-y-1.5"><Label>Mother&apos;s Name</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Mother&apos;s Phone</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} /></div>
-              <div className="space-y-1.5"><Label>Mother&apos;s Occupation</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s NID *</Label><Input value={form.father_nid} onChange={(e) => set("father_nid", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s Occupation *</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Name *</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Phone *</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s NID *</Label><Input value={form.mother_nid} onChange={(e) => set("mother_nid", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s Occupation *</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
             </div>
           )}
 
@@ -330,14 +442,86 @@ export default function NewStudentPage() {
           )}
 
           {step === 4 && (
-            <div className="space-y-3">
-              <p className="text-sm">
-                <strong>{form.name_en}</strong> ({form.gender}) — {classes?.find((c) => c.id === form.current_class_id)?.name_en}
-              </p>
-              <p className="text-sm text-muted-foreground">Guardian: {form.father_name} · {form.father_phone}</p>
-              <p className="text-sm text-muted-foreground">
-                Subjects: {compulsory.length} compulsory + {selectedOptional.length} optional
-              </p>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Optional — you can also add documents later from this student&apos;s profile.</p>
+              <div className="space-y-2">
+                {stagedDocs.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                    <span><Badge variant="outline">{d.doc_type.replace(/_/g, " ")}</Badge> {d.file.name}</span>
+                    <Button size="sm" variant="outline" onClick={() => setStagedDocs((prev) => prev.filter((_, idx) => idx !== i))}>Remove</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3 items-end rounded-md border p-3">
+                <div className="space-y-1.5">
+                  <Label>Type</Label>
+                  <select className="w-full rounded-md border px-3 py-2 text-sm" value={newDocType} onChange={(e) => setNewDocType(e.target.value as (typeof DOC_TYPES)[number])}>
+                    {DOC_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, " ")}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5"><Label>File</Label><Input type="file" onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)} /></div>
+                <Button type="button" variant="outline" disabled={!newDocFile} onClick={addStagedDoc}>+ Add</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 5 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                {photoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoUrl} alt="Student photo" className="h-20 w-20 rounded-full object-cover border" />
+                )}
+                <div>
+                  <p className="text-base font-semibold">{form.name_en}{form.name_bn ? ` (${form.name_bn})` : ""}</p>
+                  <p className="text-sm text-muted-foreground">{form.gender} · DOB {form.date_of_birth || "—"} · {form.religion || "—"} · {form.nationality}</p>
+                  <p className="text-sm text-muted-foreground">{classes?.find((c) => c.id === form.current_class_id)?.name_en} {form.current_section_id ? `— ${selectedClass?.sections.find((s) => s.id === form.current_section_id)?.name}` : ""}</p>
+                </div>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Contact</p>
+                <p className="text-sm text-muted-foreground">Phone: {form.phone || "—"} · Other: {form.other_phone || "—"} · Passport: {form.passport_no || "—"}</p>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Present Address</p>
+                <p className="text-sm text-muted-foreground">
+                  {[form.present_house_name, form.present_village, form.address_current, form.present_post_code, form.present_district, form.present_division].filter(Boolean).join(", ")}
+                </p>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Permanent Address</p>
+                <p className="text-sm text-muted-foreground">
+                  {[form.permanent_house_name, form.permanent_village, form.address_permanent, form.permanent_post_code, form.permanent_district, form.permanent_division].filter(Boolean).join(", ")}
+                </p>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Guardian</p>
+                <p className="text-sm text-muted-foreground">Father: {form.father_name} · {form.father_phone} · NID {form.father_nid} · {form.father_occupation}</p>
+                <p className="text-sm text-muted-foreground">Mother: {form.mother_name} · {form.mother_phone} · NID {form.mother_nid} · {form.mother_occupation}</p>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Academic Placement</p>
+                <p className="text-sm text-muted-foreground">
+                  Roll: {form.current_roll_no || "—"} · Registration: {form.registration_no || "—"} · Admission: {form.admission_date}
+                </p>
+                <p className="text-sm text-muted-foreground">Subjects: {compulsory.length} compulsory + {selectedOptional.length} optional</p>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="mb-2 text-sm font-medium">Documents staged</p>
+                {stagedDocs.length ? (
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                    {stagedDocs.map((d, i) => <li key={i}>{d.doc_type.replace(/_/g, " ")} — {d.file.name}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">None — can be added later from the profile.</p>
+                )}
+              </div>
+
               <div className="flex items-center justify-between">
                 <Label>Send portal login via SMS</Label>
                 <Switch checked={form.send_portal_login_sms} onCheckedChange={(v) => set("send_portal_login_sms", v)} />

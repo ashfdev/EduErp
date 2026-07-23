@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState,
+  PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Badge,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -27,6 +27,7 @@ interface StudentRow {
   current_section?: { name: string } | null;
   group?: { name_en: string } | null;
   guardian?: { phone: string } | null;
+  _count: { documents: number };
 }
 
 interface ClassOption {
@@ -248,7 +249,10 @@ export default function StudentsPage() {
                   </TableCell>
                   <TableCell className="font-mono text-[11px]">{s.student_uid}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{s.name_en}</div>
+                    <div className="font-medium">
+                      {s.name_en}
+                      {s._count.documents === 0 && <Badge variant="warning" className="ml-2">No documents</Badge>}
+                    </div>
                     {s.name_bn && <div className="text-[11px] text-muted-foreground">{s.name_bn}</div>}
                   </TableCell>
                   <TableCell>{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</TableCell>
