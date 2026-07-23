@@ -34,7 +34,7 @@ export function Footer({ institution }: { institution: Institution | null }) {
                 <Image src={institution.logo_url} alt="Logo" width={80} height={80} className="h-full w-full object-contain" />
               </div>
             ) : (
-              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-3xl ring-1 ring-primary/20">
+              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-3xl ring-1 ring-primary/20">
                 🏫
               </div>
             )}

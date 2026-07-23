@@ -83,9 +83,9 @@ export function MonthCalendar({ year, month, events, onEventClick, workingDays }
             return (
               <div
                 key={i}
-                className={`min-h-[92px] border-b border-r p-1.5 ${inMonth ? (isNonWorking ? "bg-amber-50/50" : "bg-white") : "bg-gray-50"} ${i % 7 === 6 ? "border-r-0" : ""}`}
+                className={`min-h-[76px] border-b border-r p-1.5 ${inMonth ? (isNonWorking ? "bg-amber-50/50" : "bg-white") : "bg-gray-50"} ${i % 7 === 6 ? "border-r-0" : ""}`}
               >
-                <p className={`mb-1 text-xs ${inMonth ? "text-gray-700" : "text-gray-300"} ${isToday ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 font-semibold text-white" : ""}`}>
+                <p className={`mb-1 text-xs ${inMonth ? "text-gray-700" : "text-gray-300"} ${isToday ? "inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary font-semibold text-white shadow-sm shadow-green-200" : ""}`}>
                   {d.getDate()}
                 </p>
                 <div className="space-y-0.5">

@@ -140,7 +140,7 @@ export default function JobDetailPage() {
         <button
           type="submit"
           disabled={uploading || submitting}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
         >
           {uploading ? t("uploadingCv") : submitting ? t("submitting") : t("submitApplication")}
         </button>

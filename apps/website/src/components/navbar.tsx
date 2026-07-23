@@ -132,7 +132,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   return (
     <header className="sticky top-0 z-50 w-full flex flex-col">
       {/* Top Bar (Secondary Actions) */}
-      <div className="bg-slate-900 text-slate-300 py-1.5 transition-colors relative z-20">
+      <div className="bg-green-800 text-green-100 py-1.5 transition-colors relative z-20">
         <div className="mx-auto flex w-full items-center justify-between px-4 sm:px-6 lg:px-12 xl:px-16 2xl:px-24 text-[11px] sm:text-xs font-medium">
           {/* Top Left: Quick Links / Info */}
           <div className="flex items-center gap-4 sm:gap-6">
@@ -141,14 +141,14 @@ export function Navbar({ institution }: { institution: Institution | null }) {
 
           {/* Top Right: Actions & Language */}
           <div className="flex items-center gap-4 sm:gap-6">
-            <Link href="/result" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors font-semibold text-[11px] sm:text-xs border border-slate-700/50">
+            <Link href="/result" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-700 text-green-100 hover:text-white hover:bg-green-600 transition-colors font-semibold text-[11px] sm:text-xs border border-green-600/50">
               {t("resultLookup")}
             </Link>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center gap-1 hover:text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-700 text-green-100 hover:text-white hover:bg-green-600 transition-colors font-semibold text-[11px] sm:text-xs border border-green-600/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label="Switch language"
                 >
                   {locale === "en" ? "English" : "বাংলা"}
@@ -191,7 +191,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2">
+                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-green-700 transition-colors line-clamp-2">
                   {institution?.name_en ?? "Education ERP"}
                 </h1>
                 {institution?.tagline_en && !scrolled && (
@@ -205,7 +205,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
           <nav className="hidden lg:flex shrink-0 items-center justify-center gap-1 xl:gap-2">
             <Link
               href="/"
-              className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:text-blue-600 hover:bg-blue-50/80 ${pathname === "/" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"
+              className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:text-green-700 hover:bg-green-50/80 ${pathname === "/" ? "text-green-700 bg-green-50/80" : "text-slate-600"
                 }`}
             >
               {t("home")}
@@ -215,7 +215,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
               return (
                 <div key={g.key} className="group/dropdown relative">
                   <button
-                    className={`relative flex items-center gap-1 px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${groupActive ? "text-blue-600 bg-blue-50/80" : "text-slate-600"
+                    className={`relative flex items-center gap-1 px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${groupActive ? "text-green-700 bg-green-50/80" : "text-slate-600"
                       }`}
                   >
                     {t(g.key)}
@@ -237,7 +237,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                             <Link
                               href={c.href}
                               onClick={g.key === "notices" ? clearNoticeBadge : undefined}
-                              className={`block rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all ${childActive ? "bg-blue-50 text-blue-600" : "text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                              className={`block rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all ${childActive ? "bg-green-50 text-green-700" : "text-slate-500 hover:bg-green-50 hover:text-green-700"
                                 }`}
                             >
                               {label(c)}
@@ -251,24 +251,24 @@ export function Navbar({ institution }: { institution: Institution | null }) {
               );
             })}
             {/* Additional Direct Links */}
-            <Link href="/gallery" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/gallery" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+            <Link href="/gallery" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/gallery" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
               {t("gallery")}
             </Link>
-            <Link href="/careers" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/careers" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+            <Link href="/careers" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/careers" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
               {t("careers")}
             </Link>
-            <Link href="/contact" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-blue-50/80 hover:text-blue-600 ${pathname === "/contact" ? "text-blue-600 bg-blue-50/80" : "text-slate-600"}`}>
+            <Link href="/contact" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/contact" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
               {t("contact")}
             </Link>
           </nav>
 
           {/* Right Section (Portal Login) */}
-          <div className="flex-1 flex justify-end items-center gap-2">
+          <div className="flex lg:flex-1 shrink-0 justify-end items-center gap-2">
             <a 
               href={portalUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="hidden lg:flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 transition-colors rounded-full font-bold text-sm relative z-0"
+              className="hidden lg:flex items-center gap-1.5 px-4 py-2 bg-green-700 text-white hover:bg-green-800 transition-colors rounded-full font-bold text-sm relative z-0"
             >
               <UserCircle2 className="h-4 w-4" />
               {t("portalLogin")}
