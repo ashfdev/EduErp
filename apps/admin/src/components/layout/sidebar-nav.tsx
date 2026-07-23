@@ -10,7 +10,7 @@ import {
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
   Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
-  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, type LucideIcon,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, type LucideIcon,
 } from "lucide-react";
 
 interface NavItem {
@@ -76,6 +76,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/hr/staff", key: "staffList", icon: IdCard },
       { href: "/hr/appraisals", key: "appraisals", icon: ClipboardList },
       { href: "/hr/jobs", key: "jobPostings", icon: Newspaper },
+      { href: "/hr/substitutes", key: "proxySubstitute", icon: Repeat },
     ],
   },
   {

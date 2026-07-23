@@ -16,6 +16,7 @@ import {
   sectionSchema,
   groupSchema,
   routineSlotSchema,
+  routineSubstitutionSchema,
   generateRoutineSchema,
 } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
@@ -403,12 +404,16 @@ routineRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const query = z
-      .object({ class_id: z.string().optional(), section_id: z.string().optional(), group_id: z.string().optional() })
+      .object({ class_id: z.string().optional(), section_id: z.string().optional(), group_id: z.string().optional(), day_of_week: z.coerce.number().int().min(0).max(6).optional() })
       .parse(req.query);
     const slots = await prisma.routineSlot.findMany({
       where: {
         ...(query.class_id && { class_id: query.class_id }),
         ...(query.section_id && { section_id: query.section_id }),
+        // Plan Thirteen, Phase K — lets the Proxy/Substitute admin page ask
+        // "every slot happening on this specific weekday, across every
+        // class" without needing a class_id first.
+        ...(query.day_of_week !== undefined && { day_of_week: query.day_of_week }),
         // Omitted entirely = every slot (shared + every group), matching the
         // admin "no group filter selected" view. Explicitly passed = that
         // group's own slots PLUS the shared (group_id: null) ones every
@@ -417,8 +422,10 @@ routineRouter.get(
         ...(query.group_id && { OR: [{ group_id: query.group_id }, { group_id: null }] }),
       },
       include: {
+        class: { select: { name_en: true } },
+        section: { select: { name: true } },
         subject: { select: { name_en: true } },
-        teacher: { select: { name_en: true } },
+        teacher: { select: { id: true, name_en: true } },
         group: { select: { name_en: true } },
       },
       orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
@@ -458,6 +465,139 @@ routineRouter.delete(
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.routineSlot.delete({ where: { id: reqParam(req, "id") } });
+    res.status(204).send();
+  }),
+);
+
+// ── Teacher Proxy / Substitute Management (Plan Thirteen, Phase K) ──────
+// A date-specific exception recorded against a recurring RoutineSlot,
+// mirroring AdmitCardOverride's own separate-override-table shape — the
+// base RoutineSlot row is never mutated, this only records "on this one
+// date, this other teacher covers this slot instead."
+
+// A candidate substitute must be free at that exact (day_of_week, period_no)
+// on the given date — checked two ways: not already teaching a *different*
+// RoutineSlot at that day/period (their own regular schedule), and not
+// already covering as a substitute for some *other* slot at that date/
+// period. Both checks are real double-booking risks; neither alone is
+// sufficient.
+async function assertSubstituteAvailable(input: { substituteTeacherId: string; dayOfWeek: number; periodNo: number; date: Date; excludeRoutineSlotId: string }) {
+  const ownSlotClash = await prisma.routineSlot.findFirst({
+    where: {
+      teacher_id: input.substituteTeacherId,
+      day_of_week: input.dayOfWeek,
+      period_no: input.periodNo,
+      id: { not: input.excludeRoutineSlotId },
+    },
+    include: { class: { select: { name_en: true } }, section: { select: { name: true } } },
+  });
+  if (ownSlotClash) {
+    throw badRequest(
+      `This teacher already teaches period ${input.periodNo} on this day, in ${ownSlotClash.class.name_en}${ownSlotClash.section ? ` (${ownSlotClash.section.name})` : ""}`,
+    );
+  }
+
+  const substitutionClash = await prisma.routineSubstitution.findFirst({
+    where: {
+      substitute_teacher_id: input.substituteTeacherId,
+      date: input.date,
+      routine_slot: { period_no: input.periodNo },
+      routine_slot_id: { not: input.excludeRoutineSlotId },
+    },
+  });
+  if (substitutionClash) {
+    throw badRequest("This teacher is already covering another class at this same period on this date");
+  }
+}
+
+export const routineSubstitutionsRouter = Router();
+routineSubstitutionsRouter.use(authenticate);
+
+routineSubstitutionsRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ date: z.coerce.date() }).parse(req.query);
+    const date = new Date(Date.UTC(query.date.getFullYear(), query.date.getMonth(), query.date.getDate()));
+    const substitutions = await prisma.routineSubstitution.findMany({
+      where: { date },
+      include: {
+        routine_slot: {
+          include: {
+            class: { select: { name_en: true } },
+            section: { select: { name: true } },
+            subject: { select: { name_en: true } },
+          },
+        },
+        original_teacher: { select: { name_en: true } },
+        substitute_teacher: { select: { name_en: true } },
+      },
+      orderBy: { routine_slot: { period_no: "asc" } },
+    });
+    res.json({ success: true, data: substitutions });
+  }),
+);
+
+routineSubstitutionsRouter.post(
+  "/",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = routineSubstitutionSchema.parse(req.body);
+    const slot = await prisma.routineSlot.findUnique({ where: { id: body.routine_slot_id } });
+    if (!slot) throw notFound("Routine slot not found");
+    if (!slot.teacher_id) throw badRequest("This routine slot has no regular teacher assigned yet");
+
+    const date = new Date(Date.UTC(body.date.getFullYear(), body.date.getMonth(), body.date.getDate()));
+    if (date.getUTCDay() !== slot.day_of_week) {
+      throw badRequest("The given date's weekday doesn't match this routine slot's scheduled day");
+    }
+    if (body.substitute_teacher_id === slot.teacher_id) {
+      throw badRequest("The substitute cannot be the same as the regular teacher");
+    }
+
+    await assertSubstituteAvailable({
+      substituteTeacherId: body.substitute_teacher_id,
+      dayOfWeek: slot.day_of_week,
+      periodNo: slot.period_no,
+      date,
+      excludeRoutineSlotId: slot.id,
+    });
+
+    const existing = await prisma.routineSubstitution.findUnique({
+      where: { routine_slot_id_date: { routine_slot_id: slot.id, date } },
+    });
+    if (existing) throw conflict("A substitute has already been assigned for this slot on this date");
+
+    const substitution = await prisma.routineSubstitution.create({
+      data: {
+        routine_slot_id: slot.id,
+        date,
+        original_teacher_id: slot.teacher_id,
+        substitute_teacher_id: body.substitute_teacher_id,
+        reason: body.reason,
+        assigned_by_id: req.user!.sub,
+      },
+    });
+
+    const substituteStaff = await prisma.staff.findUnique({ where: { id: body.substitute_teacher_id }, select: { user_id: true } });
+    if (substituteStaff) {
+      await createInAppNotification({
+        userId: substituteStaff.user_id,
+        type: "ROUTINE_UPDATED",
+        title: "You've been assigned as a substitute teacher",
+        body: `Cover period ${slot.period_no} on ${date.toISOString().slice(0, 10)}`,
+        link: "/routine",
+      });
+    }
+
+    res.status(201).json({ success: true, data: substitution });
+  }),
+);
+
+routineSubstitutionsRouter.delete(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    await prisma.routineSubstitution.delete({ where: { id: reqParam(req, "id") } });
     res.status(204).send();
   }),
 );

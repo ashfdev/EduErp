@@ -221,6 +221,13 @@ export const routineSlotSchema = z.object({
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
 });
 
+export const routineSubstitutionSchema = z.object({
+  routine_slot_id: z.string().min(1),
+  date: z.coerce.date(),
+  substitute_teacher_id: z.string().min(1),
+  reason: z.string().optional().nullable(),
+});
+
 export const generateRoutineSchema = z.object({
   scope: z.enum(["CLASS", "CAMPUS"]),
   class_id: z.string().optional(),

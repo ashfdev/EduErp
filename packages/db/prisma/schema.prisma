@@ -930,6 +930,8 @@ model Staff {
   ptm_slots           PTMSlot[]
   performance_reviews PerformanceReview[]
   student_leave_approvals StudentLeaveApproval[]
+  original_teacher_substitutions   RoutineSubstitution[] @relation("OriginalTeacherSubstitutions")
+  substitute_teacher_substitutions RoutineSubstitution[] @relation("SubstituteTeacherSubstitutions")
 
   @@index([department_id])
   @@index([program_id])
@@ -2921,6 +2923,7 @@ model RoutineSlot {
   // only what it created and never clobber a human's hand-fix.
   generated   Boolean  @default(false)
   subject_attendance_records SubjectAttendance[]
+  substitutions RoutineSubstitution[]
 
   // NOTE: this constraint alone does not stop two rows from colliding when
   // section_id is NULL (Postgres treats each NULL as distinct in a unique
@@ -2949,6 +2952,29 @@ model RoutineSlot {
   @@index([teacher_id])
   @@index([section_id])
   @@index([group_id])
+}
+
+// A date-specific exception recorded against a recurring RoutineSlot (Plan
+// Thirteen, Phase K) — mirrors AdmitCardOverride's own separate-override-
+// table shape exactly: RoutineSlot itself is never mutated, this table only
+// records "on this one date, this other teacher covers this slot instead."
+model RoutineSubstitution {
+  id                    String    @id @default(cuid())
+  routine_slot_id       String
+  routine_slot          RoutineSlot @relation(fields: [routine_slot_id], references: [id])
+  date                  DateTime  @db.Date
+  original_teacher_id   String
+  original_teacher      Staff     @relation("OriginalTeacherSubstitutions", fields: [original_teacher_id], references: [id])
+  substitute_teacher_id String
+  substitute_teacher    Staff     @relation("SubstituteTeacherSubstitutions", fields: [substitute_teacher_id], references: [id])
+  reason                String?
+  assigned_by_id        String
+  assigned_at           DateTime  @default(now())
+  created_at            DateTime  @default(now())
+
+  @@unique([routine_slot_id, date])
+  @@index([date])
+  @@index([substitute_teacher_id])
 }
 
 model PushSubscription {

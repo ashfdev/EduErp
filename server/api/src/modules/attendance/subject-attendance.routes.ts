@@ -18,10 +18,26 @@ import { reqParam } from "../../lib/req-param";
 // assertSectionOwnership() (which does let a class teacher mark anything in
 // their own homeroom) — that broader allowance stays exactly as-is for the
 // old daily/campus route and does not carry over here.
-async function assertSubjectSectionOwnership(userId: string, role: string, subjectId: string, sectionId: string) {
+//
+// One additional, narrowly-scoped allowed path (Plan Thirteen, Phase K): a
+// staff member holding a RoutineSubstitution for this EXACT routine_slot_id
+// on this EXACT date may also mark it — never a general "this person can
+// mark this section" grant, just that one date/slot they're covering.
+async function assertSubjectSectionOwnership(userId: string, role: string, subjectId: string, sectionId: string, routineSlotId: string, date: Date) {
   if (role === "ADMIN" || role === "SUPER_ADMIN") return;
   const has = await hasSubjectTeacherAssignment(userId, subjectId, sectionId);
-  if (!has) throw forbidden("You are not assigned to teach this subject in this section");
+  if (has) return;
+
+  const staff = await prisma.staff.findFirst({ where: { user_id: userId }, select: { id: true } });
+  const substituting = staff
+    ? await prisma.routineSubstitution.findUnique({
+        where: { routine_slot_id_date: { routine_slot_id: routineSlotId, date } },
+        select: { substitute_teacher_id: true },
+      })
+    : null;
+  if (staff && substituting?.substitute_teacher_id === staff.id) return;
+
+  throw forbidden("You are not assigned to teach this subject in this section");
 }
 
 // Deliberately Date.UTC(), not `new Date(local Y, M, D)` — this server runs
@@ -78,9 +94,9 @@ subjectAttendanceRouter.get(
     if (!slot) throw notFound("Routine slot not found");
     if (!slot.subject_id || !slot.section_id) throw badRequest("This routine slot has no subject/section configured yet");
 
-    await assertSubjectSectionOwnership(req.user!.sub, req.user!.role, slot.subject_id, slot.section_id);
-
     const date = startOfDay(query.date);
+    await assertSubjectSectionOwnership(req.user!.sub, req.user!.role, slot.subject_id, slot.section_id, slot.id, date);
+
     const [students, existing] = await Promise.all([
       prisma.student.findMany({
         where: {
@@ -138,12 +154,12 @@ subjectAttendanceRouter.post(
     if (!slot) throw notFound("Routine slot not found");
     if (!slot.subject_id || !slot.section_id) throw badRequest("This routine slot has no subject/section configured yet");
 
-    await assertSubjectSectionOwnership(req.user!.sub, req.user!.role, slot.subject_id, slot.section_id);
-
     const date = startOfDay(body.date);
     if (date.getDay() !== slot.day_of_week) {
       throw badRequest("The given date's weekday doesn't match this routine slot's scheduled day");
     }
+
+    await assertSubjectSectionOwnership(req.user!.sub, req.user!.role, slot.subject_id, slot.section_id, slot.id, date);
 
     const enrolledIds = await resolveEnrolledStudentIds(slot.section_id, slot.group_id, slot.subject_id);
     const notEnrolled = body.records.filter((r) => !enrolledIds.has(r.student_id));

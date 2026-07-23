@@ -23,26 +23,51 @@ teacherRouter.get(
     if (!staffId) return res.json({ success: true, data: [] });
 
     const todayDayOfWeek = new Date().getDay();
-    const slots = await prisma.routineSlot.findMany({
-      where: { teacher_id: staffId, day_of_week: todayDayOfWeek },
-      include: {
-        class: { select: { id: true, name_en: true } },
-        section: { select: { id: true, name: true } },
-        subject: { select: { id: true, name_en: true } },
-        group: { select: { id: true, name_en: true } },
-      },
-      orderBy: { period_no: "asc" },
-    });
+    // Date.UTC(), not a local-time Date: this server runs in Bangladesh time
+    // (UTC+6), and a locally-constructed midnight Date serializes to the
+    // *previous* UTC calendar day once it hits a @db.Date column comparison
+    // (confirmed empirically while building subject-attendance.routes.ts).
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    const [ownSlots, substitutions] = await Promise.all([
+      prisma.routineSlot.findMany({
+        where: { teacher_id: staffId, day_of_week: todayDayOfWeek },
+        include: {
+          class: { select: { id: true, name_en: true } },
+          section: { select: { id: true, name: true } },
+          subject: { select: { id: true, name_en: true } },
+          group: { select: { id: true, name_en: true } },
+        },
+        orderBy: { period_no: "asc" },
+      }),
+      // Plan Thirteen, Phase K — periods this teacher is covering for
+      // someone else today, clearly labeled, alongside their own regular
+      // periods (never mixed together without the label distinguishing them).
+      prisma.routineSubstitution.findMany({
+        where: { substitute_teacher_id: staffId, date: todayUtc },
+        include: {
+          original_teacher: { select: { name_en: true } },
+          routine_slot: {
+            include: {
+              class: { select: { id: true, name_en: true } },
+              section: { select: { id: true, name: true } },
+              subject: { select: { id: true, name_en: true } },
+              group: { select: { id: true, name_en: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const slots = [
+      ...ownSlots.map((s) => ({ ...s, substituting_for: null as string | null })),
+      ...substitutions.map((sub) => ({ ...sub.routine_slot, substituting_for: sub.original_teacher.name_en })),
+    ].sort((a, b) => a.period_no - b.period_no);
 
     // Real per-period marked status, not a per-section-per-day blanket check
     // — marking one period must never show every other period (different
-    // subjects, same section) as "done" too. Date.UTC(), not a local-time
-    // Date: this server runs in Bangladesh time (UTC+6), and a
-    // locally-constructed midnight Date serializes to the *previous* UTC
-    // calendar day once it hits a @db.Date column comparison (confirmed
-    // empirically while building subject-attendance.routes.ts).
-    const now = new Date();
-    const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    // subjects, same section) as "done" too.
     const validSlots = slots.filter((s) => s.subject_id && s.section_id);
     const markedKeys = validSlots.length
       ? await prisma.subjectAttendance

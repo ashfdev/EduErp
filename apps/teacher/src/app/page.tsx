@@ -19,6 +19,7 @@ interface ScheduleSlot {
   subject: { name_en: string } | null;
   group: { name_en: string } | null;
   attendance_marked: boolean;
+  substituting_for: string | null;
 }
 
 type SlotStatus = "upcoming" | "ongoing" | "completed" | "missed";
@@ -150,6 +151,9 @@ export default function TeacherHomePage() {
                           <Badge variant={STATUS_BADGE_VARIANT[status]} className="mt-1.5">
                             {t(`status${status.charAt(0).toUpperCase()}${status.slice(1)}`)}
                           </Badge>
+                          {s.substituting_for && (
+                            <Badge variant="warning" className="mt-1.5 ml-1.5">Substituting for {s.substituting_for}</Badge>
+                          )}
                         </div>
                       </div>
                       <div className="mt-3 sm:mt-0 flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
