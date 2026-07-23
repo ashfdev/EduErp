@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, SearchInput } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -132,28 +132,28 @@ export default function MarkAttendancePage() {
           </div>
 
           <Card>
-            <CardContent className="pt-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="p-2">{t("colRoll")}</th>
-                    <th className="p-2">{t("colName")}</th>
-                    <th className="p-2">{t("colSource")}</th>
-                    {STATUSES.map((s) => <th key={s} className="p-2 text-center">{STATUS_LABEL[s]}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("colRoll")}</TableHead>
+                    <TableHead>{t("colName")}</TableHead>
+                    <TableHead>{t("colSource")}</TableHead>
+                    {STATUSES.map((s) => <TableHead key={s} className="text-center">{STATUS_LABEL[s]}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {filteredRows.map((r) => (
-                    <tr key={r.id} className="border-b">
-                      <td className="p-2">{r.current_roll_no ?? "—"}</td>
-                      <td className="p-2">
+                    <TableRow key={r.id}>
+                      <TableCell>{r.current_roll_no ?? "—"}</TableCell>
+                      <TableCell>
                         <Link href={`/students/${r.id}`} className="hover:underline" target="_blank">{r.name_en}</Link>
-                      </td>
-                      <td className="p-2">
+                      </TableCell>
+                      <TableCell>
                         {r.source === "BIOMETRIC" && <Badge variant="outline">{t("biometric")}</Badge>}
-                      </td>
+                      </TableCell>
                       {STATUSES.map((s) => (
-                        <td key={s} className="p-1 text-center">
+                        <TableCell key={s} className="text-center">
                           <button
                             type="button"
                             onClick={() => setMarks((prev) => ({ ...prev, [r.id]: s }))}
@@ -161,12 +161,12 @@ export default function MarkAttendancePage() {
                           >
                             {STATUS_LABEL[s]}
                           </button>
-                        </td>
+                        </TableCell>
                       ))}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
 

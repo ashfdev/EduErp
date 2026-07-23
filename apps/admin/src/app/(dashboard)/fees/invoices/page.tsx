@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -88,30 +88,41 @@ export default function InvoicesPage() {
 
       {!invoices?.length && <EmptyState title="No invoices found" />}
       <Card>
-        <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Student</th><th className="p-2">Description</th><th className="p-2">Due</th><th className="p-2">Paid</th><th className="p-2">Fine</th><th className="p-2">Due Date</th><th className="p-2">Status</th><th className="p-2" /></tr></thead>
-            <tbody>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead>Paid</TableHead>
+                <TableHead>Fine</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {invoices?.map((inv) => (
-                <tr key={inv.id} className="border-b">
-                  <td className="p-2">{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></td>
-                  <td className="p-2">{inv.description}</td>
-                  <td className="p-2">৳{inv.amount_due}</td>
-                  <td className="p-2">৳{inv.amount_paid}</td>
-                  <td className="p-2">৳{inv.fine_amount}</td>
-                  <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
-                  <td className="p-2"><StatusBadge status={inv.status} /></td>
-                  <td className="p-2 text-right space-x-2">
+                <TableRow key={inv.id}>
+                  <TableCell>{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></TableCell>
+                  <TableCell>{inv.description}</TableCell>
+                  <TableCell>৳{inv.amount_due}</TableCell>
+                  <TableCell>৳{inv.amount_paid}</TableCell>
+                  <TableCell>৳{inv.fine_amount}</TableCell>
+                  <TableCell>{new Date(inv.due_date).toLocaleDateString()}</TableCell>
+                  <TableCell><StatusBadge status={inv.status} /></TableCell>
+                  <TableCell className="text-right space-x-2">
                     <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.student.name_en}`)}>View</Button>
                     <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
                     {canWaive(inv.status) && (
                       <Button size="sm" variant="outline" onClick={() => setWaiveTarget(inv)}>Waive</Button>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

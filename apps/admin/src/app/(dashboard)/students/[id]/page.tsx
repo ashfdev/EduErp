@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
@@ -384,28 +384,28 @@ export default function StudentProfilePage() {
 
         <TabsContent value="subjects">
           <Card>
-            <CardContent className="pt-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="p-2">Subject</th>
-                    <th className="p-2">Code</th>
-                    <th className="p-2">Type</th>
-                    <th className="p-2">Teacher</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Teacher</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {subjects.map((s) => (
-                    <tr key={s.subject_id} className="border-b">
-                      <td className="p-2">{s.subject_name_en}</td>
-                      <td className="p-2 font-mono text-xs">{s.subject_code}</td>
-                      <td className="p-2"><Badge variant={s.is_compulsory ? "default" : "outline"}>{s.is_compulsory ? "Compulsory" : "Optional"}</Badge></td>
-                      <td className="p-2">{s.assigned_teacher?.name_en ?? "Unassigned"}</td>
-                    </tr>
+                    <TableRow key={s.subject_id}>
+                      <TableCell>{s.subject_name_en}</TableCell>
+                      <TableCell className="font-mono text-xs">{s.subject_code}</TableCell>
+                      <TableCell><Badge variant={s.is_compulsory ? "default" : "outline"}>{s.is_compulsory ? "Compulsory" : "Optional"}</Badge></TableCell>
+                      <TableCell>{s.assigned_teacher?.name_en ?? "Unassigned"}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-              {!subjects.length && <EmptyState title="No subjects assigned yet" />}
+                </TableBody>
+              </Table>
+              {!subjects.length && <div className="p-6"><EmptyState title="No subjects assigned yet" /></div>}
             </CardContent>
           </Card>
         </TabsContent>
@@ -434,41 +434,41 @@ export default function StudentProfilePage() {
             <Card className="mt-4">
               <CardContent className="pt-6">
                 <p className="mb-3 text-sm font-medium">Subject-Wise Attendance (this year)</p>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">Subject</th>
-                      <th className="p-2">Sessions</th>
-                      <th className="p-2">Attendance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Subject</TableHead>
+                      <TableHead>Sessions</TableHead>
+                      <TableHead>Attendance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {subjectAttendance.subjects.map((s) => {
                       const isOpen = expandedSubjectId === s.subject_id;
                       return (
                         <Fragment key={s.subject_id}>
-                          <tr
-                            className="cursor-pointer border-b last:border-0 hover:bg-muted/40"
+                          <TableRow
+                            className="cursor-pointer"
                             onClick={() => setExpandedSubjectId(isOpen ? null : s.subject_id)}
                           >
-                            <td className="p-2">
+                            <TableCell>
                               <span className="inline-flex items-center gap-1.5">
                                 <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
                                 {s.subject_name_en}
                               </span>
-                            </td>
-                            <td className="p-2">{s.percentage === null ? "—" : `${s.present} / ${s.total}`}</td>
-                            <td className="p-2">
+                            </TableCell>
+                            <TableCell>{s.percentage === null ? "—" : `${s.present} / ${s.total}`}</TableCell>
+                            <TableCell>
                               {s.percentage === null ? (
                                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">No attendance recorded yet</span>
                               ) : (
                                 <span className={`font-semibold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-600" : "text-red-600"}`}>{s.percentage}%</span>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                           {isOpen && (
-                            <tr key={`${s.subject_id}-detail`} className="border-b bg-muted/20 last:border-0">
-                              <td colSpan={3} className="p-3">
+                            <TableRow key={`${s.subject_id}-detail`} className="bg-muted/20">
+                              <TableCell colSpan={3} className="p-3">
                                 {subjectHistoryLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
                                 {!subjectHistoryLoading && !subjectHistory?.length && (
                                   <p className="text-xs text-muted-foreground">No sessions recorded yet.</p>
@@ -485,14 +485,14 @@ export default function StudentProfilePage() {
                                     ))}
                                   </div>
                                 )}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           )}
                         </Fragment>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
@@ -502,18 +502,18 @@ export default function StudentProfilePage() {
           <Card>
             <CardContent className="pt-6">
               {!results.length && <EmptyState title="No results published yet" />}
-              <table className="w-full text-sm">
-                <tbody>
+              <Table>
+                <TableBody>
                   {results.map((r) => (
-                    <tr key={r.id} className="border-b">
-                      <td className="p-2">{r.exam.name}</td>
-                      <td className="p-2">{r.subject.name_en}</td>
-                      <td className="p-2">{r.marks_total ?? "—"}</td>
-                      <td className="p-2">{r.grade_letter ?? "—"}</td>
-                    </tr>
+                    <TableRow key={r.id}>
+                      <TableCell>{r.exam.name}</TableCell>
+                      <TableCell>{r.subject.name_en}</TableCell>
+                      <TableCell>{r.marks_total ?? "—"}</TableCell>
+                      <TableCell>{r.grade_letter ?? "—"}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -534,23 +534,23 @@ export default function StudentProfilePage() {
                 </Link>
               </div>
               {!fees.invoices.length && <EmptyState title="No invoices yet" />}
-              <table className="w-full text-sm">
-                <tbody>
+              <Table>
+                <TableBody>
                   {fees.invoices.map((inv) => (
-                    <>
-                      <tr key={inv.id} className="border-b">
-                        <td className="p-2">
+                    <Fragment key={inv.id}>
+                      <TableRow>
+                        <TableCell>
                           {inv.description}
                           <div className="mt-1 flex gap-1">
                             <Badge variant="outline">{CATEGORY_LABEL[inv.category] ?? inv.category}</Badge>
                             <Badge variant="outline">{frequencyLabel(inv)}</Badge>
                           </div>
-                        </td>
-                        <td className="p-2">৳{inv.amount_due}</td>
-                        <td className="p-2">৳{inv.amount_paid}</td>
-                        <td className="p-2">{new Date(inv.due_date).toLocaleDateString()}</td>
-                        <td className="p-2"><StatusBadge status={inv.status} /></td>
-                        <td className="p-2 text-right space-x-2">
+                        </TableCell>
+                        <TableCell>৳{inv.amount_due}</TableCell>
+                        <TableCell>৳{inv.amount_paid}</TableCell>
+                        <TableCell>{new Date(inv.due_date).toLocaleDateString()}</TableCell>
+                        <TableCell><StatusBadge status={inv.status} /></TableCell>
+                        <TableCell className="text-right space-x-2">
                           <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.id}`)}>
                             View
                           </Button>
@@ -562,33 +562,33 @@ export default function StudentProfilePage() {
                               Waive
                             </Button>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                       {!!inv.payments?.length && (
-                        <tr key={`${inv.id}-payments`} className="border-b bg-muted/30">
-                          <td colSpan={6} className="px-2 pb-2">
-                            <table className="w-full text-xs">
-                              <thead>
-                                <tr className="text-left text-muted-foreground">
-                                  <th className="py-1 pl-4">Receipt No</th>
-                                  <th className="py-1">Method</th>
-                                  <th className="py-1">Amount</th>
-                                  <th className="py-1">Date</th>
-                                  <th className="py-1">Notes</th>
-                                  <th className="py-1">Status</th>
-                                  <th className="py-1" />
-                                </tr>
-                              </thead>
-                              <tbody>
+                        <TableRow key={`${inv.id}-payments`} className="bg-muted/30">
+                          <TableCell colSpan={6} className="px-2 pb-2">
+                            <Table className="text-xs">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="pl-4">Receipt No</TableHead>
+                                  <TableHead>Method</TableHead>
+                                  <TableHead>Amount</TableHead>
+                                  <TableHead>Date</TableHead>
+                                  <TableHead>Notes</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
                                 {inv.payments.map((p) => (
-                                  <tr key={p.id}>
-                                    <td className="py-1 pl-4 font-mono">{p.receipt_no ?? "—"}</td>
-                                    <td className="py-1">{p.gateway.replace(/_/g, " ")}</td>
-                                    <td className="py-1">৳{p.amount}</td>
-                                    <td className="py-1">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</td>
-                                    <td className="py-1">{p.notes ?? "—"}</td>
-                                    <td className="py-1">{p.status === "REFUNDED" ? <Badge variant="destructive">Refunded</Badge> : p.status}</td>
-                                    <td className="py-1 text-right space-x-2">
+                                  <TableRow key={p.id}>
+                                    <TableCell className="pl-4 font-mono">{p.receipt_no ?? "—"}</TableCell>
+                                    <TableCell>{p.gateway.replace(/_/g, " ")}</TableCell>
+                                    <TableCell>৳{p.amount}</TableCell>
+                                    <TableCell>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</TableCell>
+                                    <TableCell>{p.notes ?? "—"}</TableCell>
+                                    <TableCell>{p.status === "REFUNDED" ? <Badge variant="destructive">Refunded</Badge> : p.status}</TableCell>
+                                    <TableCell className="text-right space-x-2">
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -608,18 +608,18 @@ export default function StudentProfilePage() {
                                           Refund
                                         </Button>
                                       )}
-                                    </td>
-                                  </tr>
+                                    </TableCell>
+                                  </TableRow>
                                 ))}
-                              </tbody>
-                            </table>
-                          </td>
-                        </tr>
+                              </TableBody>
+                            </Table>
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -638,22 +638,24 @@ export default function StudentProfilePage() {
             <CardContent className="pt-6">
               {!documents?.length && <EmptyState title="No documents uploaded yet" />}
               {!!documents?.length && (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Type</th><th className="p-2">File</th><th className="p-2">Uploaded</th><th className="p-2" /></tr></thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Type</TableHead><TableHead>File</TableHead><TableHead>Uploaded</TableHead><TableHead></TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {documents.map((d) => (
-                      <tr key={d.id} className="border-b">
-                        <td className="p-2">{d.doc_type.replace(/_/g, " ")}</td>
-                        <td className="p-2 text-muted-foreground">{d.original_filename}</td>
-                        <td className="p-2">{new Date(d.uploaded_at).toLocaleDateString()}</td>
-                        <td className="p-2 text-right">
+                      <TableRow key={d.id}>
+                        <TableCell>{d.doc_type.replace(/_/g, " ")}</TableCell>
+                        <TableCell className="text-muted-foreground">{d.original_filename}</TableCell>
+                        <TableCell>{new Date(d.uploaded_at).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
                           <button onClick={() => downloadStudentDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
                           <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
@@ -791,17 +793,17 @@ function StudentHealthTab({ studentId }: { studentId: string }) {
       <Card>
         <CardContent className="pt-6">
           {!data?.incidents.length && <EmptyState title="No health incidents recorded" />}
-          <table className="w-full text-sm">
-            <tbody>
+          <Table>
+            <TableBody>
               {data?.incidents.map((i) => (
-                <tr key={i.id} className="border-b">
-                  <td className="p-2 text-muted-foreground">{new Date(i.date).toLocaleDateString()}</td>
-                  <td className="p-2">{i.description}</td>
-                  <td className="p-2 text-muted-foreground">{i.action_taken ?? "—"}</td>
-                </tr>
+                <TableRow key={i.id}>
+                  <TableCell className="text-muted-foreground">{new Date(i.date).toLocaleDateString()}</TableCell>
+                  <TableCell>{i.description}</TableCell>
+                  <TableCell className="text-muted-foreground">{i.action_taken ?? "—"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -873,18 +875,18 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
       <Card>
         <CardContent className="pt-6">
           {!records?.length && <EmptyState title="No discipline records" />}
-          <table className="w-full text-sm">
-            <tbody>
+          <Table>
+            <TableBody>
               {records?.map((r) => (
-                <tr key={r.id} className="border-b">
-                  <td className="p-2 text-muted-foreground">{new Date(r.occurred_at).toLocaleDateString()}</td>
-                  <td className="p-2"><Badge variant={r.category === "COMMENDATION" ? "default" : "outline"}>{r.category}</Badge></td>
-                  <td className="p-2">{r.description}</td>
-                  <td className="p-2 text-muted-foreground">{r.action_taken ?? "—"}</td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell className="text-muted-foreground">{new Date(r.occurred_at).toLocaleDateString()}</TableCell>
+                  <TableCell><Badge variant={r.category === "COMMENDATION" ? "default" : "outline"}>{r.category}</Badge></TableCell>
+                  <TableCell>{r.description}</TableCell>
+                  <TableCell className="text-muted-foreground">{r.action_taken ?? "—"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 

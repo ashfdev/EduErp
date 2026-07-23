@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -68,13 +68,13 @@ function DailyRegisterTab({ classes }: { classes?: ClassOption[] }) {
         <Card>
           <CardContent className="pt-6">
             <p className="mb-2 text-sm text-muted-foreground">{data.class} · {data.section} · {data.shift ?? "No shift"} · Teacher: {data.teacher ?? "—"}</p>
-            <table className="w-full text-sm">
-              <tbody>
+            <Table>
+              <TableBody>
                 {data.rows.map((r: { roll_no: string; name_en: string; status: string }, i: number) => (
-                  <tr key={i} className="border-b"><td className="p-1">{r.roll_no}</td><td className="p-1">{r.name_en}</td><td className="p-1"><StatusBadge status={r.status} /></td></tr>
+                  <TableRow key={i}><TableCell>{r.roll_no}</TableCell><TableCell>{r.name_en}</TableCell><TableCell><StatusBadge status={r.status} /></TableCell></TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
@@ -114,24 +114,24 @@ function MonthlySheetTab({ classes }: { classes?: ClassOption[] }) {
       {data && (
         <Card>
           <CardContent className="overflow-x-auto pt-6">
-            <table className="text-xs">
-              <thead>
-                <tr>
-                  <th className="p-1 text-left">Name</th>
-                  {Array.from({ length: data.days_in_month }, (_, i) => <th key={i} className="p-1">{i + 1}</th>)}
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="text-xs">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  {Array.from({ length: data.days_in_month }, (_, i) => <TableHead key={i} className="text-center">{i + 1}</TableHead>)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.students.map((s: { name_en: string; days: Record<number, string> }, i: number) => (
-                  <tr key={i}>
-                    <td className="p-1">{s.name_en}</td>
+                  <TableRow key={i}>
+                    <TableCell>{s.name_en}</TableCell>
                     {Array.from({ length: data.days_in_month }, (_, d) => (
-                      <td key={d} className="p-1 text-center">{s.days[d + 1]?.[0] ?? ""}</td>
+                      <TableCell key={d} className="text-center">{s.days[d + 1]?.[0] ?? ""}</TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
@@ -164,18 +164,18 @@ function DefaultersTab({ classes }: { classes?: ClassOption[] }) {
       {data && data.length > 0 && (
         <Card>
           <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <tbody>
+            <Table>
+              <TableBody>
                 {data.map((d: { id: string; student_uid: string; name_en: string; attendance_percentage: number; current_class?: { name_en: string } }) => (
-                  <tr key={d.id} className="border-b">
-                    <td className="p-1 font-mono text-xs">{d.student_uid}</td>
-                    <td className="p-1">{d.name_en}</td>
-                    <td className="p-1">{d.current_class?.name_en}</td>
-                    <td className="p-1 text-red-600">{d.attendance_percentage}%</td>
-                  </tr>
+                  <TableRow key={d.id}>
+                    <TableCell className="font-mono text-xs">{d.student_uid}</TableCell>
+                    <TableCell>{d.name_en}</TableCell>
+                    <TableCell>{d.current_class?.name_en}</TableCell>
+                    <TableCell className="text-red-600">{d.attendance_percentage}%</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

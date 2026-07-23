@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StaffDetail {
@@ -533,13 +533,13 @@ export default function StaffDetailPage() {
           <Card>
             <CardContent className="pt-6">
               {!staff.subject_assignments.length && <EmptyState title="No subjects assigned" />}
-              <table className="w-full text-sm">
-                <tbody>
+              <Table>
+                <TableBody>
                   {staff.subject_assignments.map((a) => (
-                    <tr key={a.id} className="border-b"><td className="p-2">{a.subject.name_en}</td><td className="p-2 font-mono text-xs">{a.subject.code}</td></tr>
+                    <TableRow key={a.id}><TableCell>{a.subject.name_en}</TableCell><TableCell className="font-mono text-xs">{a.subject.code}</TableCell></TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
 
@@ -592,19 +592,21 @@ export default function StaffDetailPage() {
           <Card>
             <CardContent className="pt-6">
               {!staff.leave_requests.length && <EmptyState title="No leave history" />}
-              <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Type</th><th className="p-2">From</th><th className="p-2">To</th><th className="p-2">Status</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Type</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Status</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {staff.leave_requests.map((l) => (
-                    <tr key={l.id} className="border-b">
-                      <td className="p-2">{l.leave_type.name}</td>
-                      <td className="p-2">{new Date(l.from_date).toLocaleDateString()}</td>
-                      <td className="p-2">{new Date(l.to_date).toLocaleDateString()}</td>
-                      <td className="p-2"><StatusBadge status={l.status} /></td>
-                    </tr>
+                    <TableRow key={l.id}>
+                      <TableCell>{l.leave_type.name}</TableCell>
+                      <TableCell>{new Date(l.from_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(l.to_date).toLocaleDateString()}</TableCell>
+                      <TableCell><StatusBadge status={l.status} /></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -613,19 +615,21 @@ export default function StaffDetailPage() {
           <Card>
             <CardContent className="pt-6">
               {!staff.payroll_records.length && <EmptyState title="No payroll history" />}
-              <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Month</th><th className="p-2">Net Salary</th><th className="p-2">Status</th><th className="p-2">Payslip</th></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Month</TableHead><TableHead>Net Salary</TableHead><TableHead>Status</TableHead><TableHead>Payslip</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {staff.payroll_records.map((p) => (
-                    <tr key={p.id} className="border-b">
-                      <td className="p-2">{p.month}/{p.year}</td>
-                      <td className="p-2">৳{p.net_salary}</td>
-                      <td className="p-2"><StatusBadge status={p.status} /></td>
-                      <td className="p-2"><button onClick={() => downloadPayslip(p.id)} className="text-primary hover:underline">Download</button></td>
-                    </tr>
+                    <TableRow key={p.id}>
+                      <TableCell>{p.month}/{p.year}</TableCell>
+                      <TableCell>৳{p.net_salary}</TableCell>
+                      <TableCell><StatusBadge status={p.status} /></TableCell>
+                      <TableCell><button onClick={() => downloadPayslip(p.id)} className="text-primary hover:underline">Download</button></TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -635,23 +639,25 @@ export default function StaffDetailPage() {
           <Card>
             <CardContent className="pt-6">
               {!documents?.length && <EmptyState title="No documents uploaded yet" />}
-              <table className="w-full text-sm">
-                <thead><tr className="border-b text-left text-muted-foreground"><th className="p-2">Type</th><th className="p-2">Title</th><th className="p-2">File</th><th className="p-2">Uploaded</th><th className="p-2" /></tr></thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>Type</TableHead><TableHead>Title</TableHead><TableHead>File</TableHead><TableHead>Uploaded</TableHead><TableHead></TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
                   {documents?.map((d) => (
-                    <tr key={d.id} className="border-b">
-                      <td className="p-2">{d.doc_type}</td>
-                      <td className="p-2">{d.title}</td>
-                      <td className="p-2 text-muted-foreground">{d.original_filename}</td>
-                      <td className="p-2">{new Date(d.uploaded_at).toLocaleDateString()}</td>
-                      <td className="p-2 text-right">
+                    <TableRow key={d.id}>
+                      <TableCell>{d.doc_type}</TableCell>
+                      <TableCell>{d.title}</TableCell>
+                      <TableCell className="text-muted-foreground">{d.original_filename}</TableCell>
+                      <TableCell>{new Date(d.uploaded_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
                         <button onClick={() => downloadStaffDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
                         <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>

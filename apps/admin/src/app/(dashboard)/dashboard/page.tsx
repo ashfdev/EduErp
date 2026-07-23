@@ -96,76 +96,76 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 1 — Quick Stats */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
         <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-muted-foreground">{t("totalStudents")}</p>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <Users className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <Users className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-3xl font-bold tracking-tight">{overview?.students.total ?? "-"}</p>
-            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
-              <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+            <p className="text-2xl font-bold tracking-tight">{overview?.students.total ?? "-"}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
+              <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                 <ArrowUpRight className="mr-1 h-3 w-3" />
                 {t("present", { count: overview?.students.today_present ?? 0 })}
               </span>
-              <span className="flex items-center text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+              <span className="flex items-center text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
                 <ArrowDownRight className="mr-1 h-3 w-3" />
                 {t("absent", { count: overview?.students.today_absent ?? 0 })}
               </span>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-muted-foreground">{t("staff")}</p>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-                <UserCheck className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                <UserCheck className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-3xl font-bold tracking-tight">{overview?.staff.total ?? "-"}</p>
-            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
-              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">
+            <p className="text-2xl font-bold tracking-tight">{overview?.staff.total ?? "-"}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
+              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
                 {t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}
               </span>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-muted-foreground">{t("todaysCollection")}</p>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <Wallet className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <Wallet className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-3xl font-bold tracking-tight">৳{overview?.finance.today_collection ?? 0}</p>
-            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
-              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-1 rounded-full">
+            <p className="text-2xl font-bold tracking-tight">৳{overview?.finance.today_collection ?? 0}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
+              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
                 {t("thisMonth", { amount: overview?.finance.this_month_collection ?? 0 })}
               </span>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-medium text-muted-foreground">{t("attendanceToday")}</p>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                <Activity className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <Activity className="h-4 w-4" />
               </div>
             </div>
-            <p className="text-3xl font-bold tracking-tight">{overview?.students.today_percentage ?? "-"}%</p>
-            <div className="mt-3 flex items-center gap-3 text-xs font-medium">
+            <p className="text-2xl font-bold tracking-tight">{overview?.students.today_percentage ?? "-"}%</p>
+            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
               <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-                <div 
-                  className="bg-amber-500 h-1.5 rounded-full" 
+                <div
+                  className="bg-amber-500 h-1.5 rounded-full"
                   style={{ width: `${overview?.students.today_percentage ?? 0}%` }}
                 ></div>
               </div>

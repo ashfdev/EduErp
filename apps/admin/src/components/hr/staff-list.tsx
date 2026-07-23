@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Image from "next/image";
-import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -148,56 +148,56 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
       {!staff?.length && <EmptyState title={`No ${title.toLowerCase()} found`} />}
       {!!staff?.length && (
         <Card>
-          <CardContent className="pt-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="p-2">
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
                     <Checkbox
                       checked={!!staff.length && selected.size === staff.length}
                       onCheckedChange={(v) => setSelected(v ? new Set(staff.map((s) => s.id)) : new Set())}
                     />
-                  </th>
-                  <th className="p-2"></th>
-                  <th className="p-2">Name</th>
-                  <th className="p-2">Designation</th>
-                  <th className="p-2">Department</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                  <TableHead></TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {staff.map((s) => (
-                  <tr key={s.id} className="border-b">
-                    <td className="p-2">
+                  <TableRow key={s.id}>
+                    <TableCell>
                       <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggleSelected(s.id)} />
-                    </td>
-                    <td className="p-2">
-                      <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-muted text-xs">
-                        {s.photo_url ? <Image src={s.photo_url} alt="" width={32} height={32} className="h-8 w-8 object-cover" /> : "👤"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-muted text-xs">
+                        {s.photo_url ? <Image src={s.photo_url} alt="" width={28} height={28} className="h-7 w-7 object-cover" /> : "👤"}
                       </div>
-                    </td>
-                    <td className="p-2">
-                      <Link href={`/hr/staff/${s.id}`} className="text-primary hover:underline">{s.name_en}</Link>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/hr/staff/${s.id}`} className="font-medium text-primary hover:underline">{s.name_en}</Link>
                       {s._count.documents === 0 && (
                         <Badge variant="warning" className="ml-2">No documents</Badge>
                       )}
                       {!s.salary_structure_id && (
                         <Badge variant="warning" className="ml-2">No salary structure</Badge>
                       )}
-                    </td>
-                    <td className="p-2">{s.designation}</td>
-                    <td className="p-2">{s.department?.name_en ?? "-"}</td>
-                    <td className="p-2"><StatusBadge status={s.is_active ? "ACTIVE" : "INACTIVE"} /></td>
-                    <td className="p-2 text-right">
+                    </TableCell>
+                    <TableCell>{s.designation}</TableCell>
+                    <TableCell>{s.department?.name_en ?? "-"}</TableCell>
+                    <TableCell><StatusBadge status={s.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
+                    <TableCell className="text-right">
                       <Link href={`/hr/staff/${s.id}`}>
                         <Button size="sm" variant="outline">View</Button>
                       </Link>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

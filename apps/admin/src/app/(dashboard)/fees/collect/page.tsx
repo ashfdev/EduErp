@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, PageHeader, PageWrapper, SearchInput, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
@@ -139,36 +139,36 @@ export default function CollectFeePage() {
 
           {!!filteredRoster?.length && (
             <Card>
-              <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">Roll</th>
-                      <th className="p-2">Student</th>
-                      <th className="p-2">Status</th>
-                      <th className="p-2">Outstanding</th>
-                      <th className="p-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Roll</TableHead>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Outstanding</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filteredRoster.map((s) => (
-                      <tr key={s.id} className="border-b">
-                        <td className="p-2">{s.current_roll_no ?? "—"}</td>
-                        <td className="p-2">
+                      <TableRow key={s.id}>
+                        <TableCell>{s.current_roll_no ?? "—"}</TableCell>
+                        <TableCell>
                           <p className="font-medium">{s.name_en}</p>
                           <p className="font-mono text-xs text-muted-foreground">{s.student_uid}</p>
-                        </td>
-                        <td className="p-2">{rosterStatusBadge(s.status)}</td>
-                        <td className="p-2">৳{s.outstanding}</td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell>{rosterStatusBadge(s.status)}</TableCell>
+                        <TableCell>৳{s.outstanding}</TableCell>
+                        <TableCell className="text-right">
                           <Button size="sm" variant="outline" onClick={() => setCollectingStudent({ id: s.id, name_en: s.name_en, student_uid: s.student_uid })}>
                             Collect
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
