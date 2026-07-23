@@ -424,6 +424,41 @@ documentsRouter.get(
   }),
 );
 
+// ───────────────────────── Gate Pass Documents ─────────────────────────
+
+documentsRouter.get(
+  "/gatepass/:visitor_id/slip",
+  asyncHandler(async (req, res) => {
+    const visitorId = reqParam(req, "visitor_id");
+    const visitor = await prisma.visitor.findUnique({
+      where: { id: visitorId },
+      include: {
+        student: { select: { name_en: true, student_uid: true } },
+        class: { select: { name_en: true } },
+        section: { select: { name: true } },
+      },
+    });
+    if (!visitor) throw notFound("Visitor record not found");
+
+    const qr = await generateQrDataUrl(`visitor:${visitor.id}`);
+    const pdf = await renderDocument("VISITOR_SLIP", {
+      visitor_name: visitor.visitor_name,
+      phone: visitor.phone,
+      visitor_type: visitor.visitor_type,
+      relation: visitor.relation,
+      relation_type: visitor.relation_type,
+      visiting_student_name: visitor.student?.name_en ?? null,
+      visiting_student_uid: visitor.student?.student_uid ?? null,
+      visiting_class_name: visitor.class?.name_en ?? null,
+      visiting_section_name: visitor.section?.name ?? null,
+      reason: visitor.reason,
+      in_time: visitor.in_time.toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      qr_code: qr,
+    });
+    sendPdf(res, pdf, `visitor-slip-${visitor.id}.pdf`, req.query.download === "true");
+  }),
+);
+
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {

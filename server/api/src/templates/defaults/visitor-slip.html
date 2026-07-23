@@ -1,0 +1,48 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 10mm; }
+  .slip { width: 90mm; border: 1.5px solid {{institution.primary_color}}; border-radius: 6px; padding: 8mm; }
+  .header { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header img { height: 12mm; }
+  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .header p { margin: 2px 0 0; font-size: 9px; color: #555; }
+  .title { text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 1px; margin: 8px 0; color: {{institution.primary_color}}; }
+  table.info { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+  table.info td { padding: 3px 0; vertical-align: top; }
+  table.info td.label { width: 32%; color: #555; font-weight: 600; }
+  .qr { text-align: center; margin-top: 10px; }
+  .qr img { width: 26mm; height: 26mm; }
+  .footer-note { margin-top: 8px; font-size: 9px; color: #777; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="slip">
+    <div class="header">
+      {{institutionLogo}}
+      <div>
+        <h1>{{institution.name_en}}</h1>
+        <p>{{institution.address}}</p>
+      </div>
+    </div>
+    <div class="title">VISITOR SLIP</div>
+    <table class="info">
+      <tr><td class="label">Visitor Name</td><td>{{visitor_name}}</td></tr>
+      <tr><td class="label">Phone</td><td>{{phone}}</td></tr>
+      <tr><td class="label">Type</td><td>{{visitor_type}}</td></tr>
+      {{#if relation}}<tr><td class="label">Relation</td><td>{{relation}}{{#if relation_type}} ({{relation_type}}){{/if}}</td></tr>{{/if}}
+      {{#if visiting_student_name}}
+      <tr><td class="label">Visiting</td><td>{{visiting_student_name}} ({{visiting_student_uid}})</td></tr>
+      <tr><td class="label">Class</td><td>{{visiting_class_name}}{{#if visiting_section_name}} — {{visiting_section_name}}{{/if}}</td></tr>
+      {{/if}}
+      <tr><td class="label">Reason</td><td>{{reason}}</td></tr>
+      <tr><td class="label">In Time</td><td>{{in_time}}</td></tr>
+    </table>
+    <div class="qr"><img src="{{qr_code}}" /></div>
+    <p class="footer-note">Please keep this slip and return it to the gate on exit.</p>
+  </div>
+</body>
+</html>

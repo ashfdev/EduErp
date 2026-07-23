@@ -8,9 +8,11 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  PdfPreviewModal,
   extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface StudentRow {
   id: string;
@@ -41,9 +43,11 @@ function todayLocalDateString(): string {
 
 export default function GatePassPage() {
   const queryClient = useQueryClient();
+  const pdfPreview = usePdfPreview();
   const [open, setOpen] = useState(false);
   const [activeOnly, setActiveOnly] = useState(false);
   const [dateFilter, setDateFilter] = useState(todayLocalDateString());
+  const [justLoggedIn, setJustLoggedIn] = useState<{ id: string; name: string } | null>(null);
 
   const [visitorType, setVisitorType] = useState<(typeof VISITOR_TYPES)[number]>("GUARDIAN");
   const [visitorName, setVisitorName] = useState("");
@@ -88,14 +92,19 @@ export default function GatePassPage() {
         reason,
         student_id: visitorType === "GUARDIAN" ? selectedStudent?.id : undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       toast.success("Visitor logged in");
       queryClient.invalidateQueries({ queryKey: ["gatepass", "visitors"] });
       setOpen(false);
+      setJustLoggedIn({ id: res.data.data.id, name: res.data.data.visitor_name });
       resetForm();
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to log visitor"),
   });
+
+  function downloadSlip(visitorId: string, visitorName: string) {
+    pdfPreview.openPreview(`/api/documents/gatepass/${visitorId}/slip`, `Visitor Slip — ${visitorName}`);
+  }
 
   const checkoutMutation = useMutation({
     mutationFn: (id: string) => api.put(`/api/gatepass/visitors/${id}/checkout`),
@@ -116,6 +125,20 @@ export default function GatePassPage() {
         breadcrumbs={[{ label: "Gate Pass" }]}
         action={<Button onClick={() => setOpen(true)}>+ Log Visitor In</Button>}
       />
+
+      {justLoggedIn && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="flex items-center justify-between pt-6">
+            <p className="text-sm">
+              <strong>{justLoggedIn.name}</strong> logged in — download their visitor slip to hand over at the gate.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => downloadSlip(justLoggedIn.id, justLoggedIn.name)}>Download Slip</Button>
+              <Button size="sm" variant="outline" onClick={() => setJustLoggedIn(null)}>Dismiss</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
@@ -158,11 +181,16 @@ export default function GatePassPage() {
                     <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
                     <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
                     <TableCell>
-                      {!v.out_time && (
-                        <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>
-                          Check Out
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => downloadSlip(v.id, v.visitor_name)}>
+                          Slip
                         </Button>
-                      )}
+                        {!v.out_time && (
+                          <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>
+                            Check Out
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -222,6 +250,13 @@ export default function GatePassPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <PdfPreviewModal
+        open={pdfPreview.open}
+        onOpenChange={(o) => !o && pdfPreview.closePreview()}
+        title={pdfPreview.title}
+        pdfUrl={pdfPreview.url}
+      />
     </PageWrapper>
   );
 }
