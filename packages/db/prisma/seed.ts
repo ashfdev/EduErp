@@ -1005,42 +1005,95 @@ async function main() {
 
   const STATIC_PAGES: { page_key: string; title_en: string; content_en: string }[] = [
     {
+      page_key: "about",
+      title_en: "About Us",
+      content_en:
+        "<p>Welcome to <strong>Alhumaira Model School &amp; College</strong> — a place where knowledge meets character, and every student is given the tools to build a purposeful life.</p>" +
+        "<p>Established in <strong>2010</strong> in Chattogram, we have grown from a small community initiative into one of the area's most trusted educational institutions, serving over <strong>800 students</strong> across Classes 6 to 10 under the Bangladesh Secondary and Higher Secondary Education system.</p>" +
+        "<h2>Who We Are</h2>" +
+        "<p>We are a team of <strong>35+ dedicated teachers and staff</strong> who believe that education is not just about passing examinations — it is about nurturing curious, responsible, and compassionate human beings.</p>" +
+        "<ul>" +
+        "<li><strong>Founded:</strong> 2010, Chattogram, Bangladesh</li>" +
+        "<li><strong>Board:</strong> Chittagong Education Board (BISE Chattogram)</li>" +
+        "<li><strong>Classes Offered:</strong> Class 6 to Class 10</li>" +
+        "<li><strong>Medium of Instruction:</strong> Bengali (Bangla Medium)</li>" +
+        "<li><strong>Total Students:</strong> 800+ enrolled (2026)</li>" +
+        "<li><strong>Faculty:</strong> 35+ qualified teachers</li>" +
+        "</ul>" +
+        "<h2>What Makes Us Different</h2>" +
+        "<p>At Alhumaira, we combine academic rigour with moral and spiritual values. Our classrooms are structured for critical thinking, and our co-curricular activities — from science fairs to debate competitions — help students discover and develop their unique strengths.</p>" +
+        "<blockquote>We do not just teach — we inspire. Our goal is to produce graduates who think deeply, act ethically, and contribute meaningfully to their communities.</blockquote>" +
+        "<h2>Our Commitment</h2>" +
+        "<p>We are committed to maintaining a safe, inclusive, and stimulating environment for every student. Regular guardian communication, transparent academic reporting, and continuous teacher development are pillars of our school culture.</p>",
+    },
+    {
       page_key: "history",
       title_en: "Our History",
       content_en:
-        "<p>Alhumaira Model School &amp; College was founded in 2010 by a group of educators and community leaders in Chattogram who shared a vision of accessible, values-based education.</p>" +
-        "<p>Starting with a single building and a handful of classes, the institution has grown steadily over the years — expanding its campus, adding science and computer laboratories, and building a reputation for strong academic results across the Chittagong Board.</p>" +
-        "<p>Today, the institution serves students from Class 6 through Class 10, guided by the same founding principle: that every student deserves an education that develops both mind and character.</p>",
+        "<h2>Founding Years (2010–2013)</h2>" +
+        "<p>Alhumaira Model School &amp; College was founded in <strong>2010</strong> by a group of educators and community leaders in Chattogram who shared a vision of accessible, values-based education. Starting with only 3 classrooms and 120 students, the institution quickly earned a reputation for academic rigour and moral grounding.</p>" +
+        "<h2>Growth &amp; Expansion (2014–2020)</h2>" +
+        "<p>Within four years, enrolment had tripled. The school expanded its campus — adding a dedicated science laboratory, a computer lab with 30 stations, and a well-stocked library. Academic results consistently ranked among the top in the Chittagong Board zone.</p>" +
+        "<blockquote>Every student deserves an education that develops both mind and character. — Founding Charter, 2010</blockquote>" +
+        "<h2>Today</h2>" +
+        "<p>The institution now serves students from Class 6 through Class 10, with over <strong>800 enrolled students</strong> and a faculty of 35+ dedicated teachers. We continue to grow with the same founding spirit that started it all.</p>",
     },
     {
       page_key: "mission_vision",
-      title_en: "Mission &amp; Vision",
+      title_en: "Mission & Vision",
       content_en:
-        "<h2>Our Mission</h2><p>To provide quality, values-based education that nurtures every student's intellectual, moral, and physical development, preparing them to be responsible citizens and lifelong learners.</p>" +
-        "<h2>Our Vision</h2><p>To be a leading center of academic and moral excellence, producing graduates who lead with knowledge, integrity, and compassion.</p>",
+        "<h2>Our Mission</h2>" +
+        "<p>To provide quality, values-based education that nurtures every student's <strong>intellectual, moral, and physical development</strong> — preparing them to be responsible citizens and lifelong learners who contribute meaningfully to society.</p>" +
+        "<h2>Our Vision</h2>" +
+        "<p>To be a leading center of academic and moral excellence in Chattogram — producing graduates who lead with <strong>knowledge, integrity, and compassion</strong>.</p>" +
+        "<h2>Our Core Values</h2>" +
+        "<ul>" +
+        "<li><strong>Excellence</strong> — We hold ourselves to the highest standard in teaching and learning.</li>" +
+        "<li><strong>Integrity</strong> — Honesty and ethics are non-negotiable in all that we do.</li>" +
+        "<li><strong>Inclusivity</strong> — Every student, regardless of background, deserves quality education.</li>" +
+        "<li><strong>Compassion</strong> — We treat every person in our community with dignity and care.</li>" +
+        "</ul>",
     },
     {
       page_key: "facilities",
       title_en: "Facilities",
       content_en:
-        "<p>Our campus is built to support well-rounded learning:</p><ul>" +
-        "<li>Modern science laboratory for Physics, Chemistry, and Biology practicals</li>" +
-        "<li>Computer laboratory with internet access for ICT classes</li>" +
-        "<li>A well-stocked library open through the school day</li>" +
-        "<li>A dedicated sports ground for physical education and inter-house competitions</li>" +
-        "<li>A prayer room (Musalla) for daily Zuhr prayer</li>" +
-        "<li>CCTV-monitored campus for student safety</li>" +
+        "<p>Our campus is built to support <strong>well-rounded learning</strong> — combining strong academics with the physical and spiritual wellbeing of every student.</p>" +
+        "<h2>Academic Facilities</h2>" +
+        "<ul>" +
+        "<li><strong>Science Laboratory</strong> — Fully equipped for Physics, Chemistry, and Biology practicals for Classes 9–10.</li>" +
+        "<li><strong>ICT Lab</strong> — 30-station computer laboratory with broadband internet access.</li>" +
+        "<li><strong>Library</strong> — 2,000+ titles, open during all school hours, with a dedicated reading area.</li>" +
+        "</ul>" +
+        "<h2>Co-curricular &amp; Welfare</h2>" +
+        "<ul>" +
+        "<li><strong>Sports Ground</strong> — Dedicated field for football, cricket, and inter-house athletics.</li>" +
+        "<li><strong>Musalla (Prayer Room)</strong> — Available for daily Zuhr and Asr prayers.</li>" +
+        "<li><strong>CCTV Surveillance</strong> — Campus-wide monitoring for the safety of all students and staff.</li>" +
+        "<li><strong>Canteen</strong> — Hygienic on-campus food service with affordable daily menus.</li>" +
         "</ul>",
     },
     {
       page_key: "achievements",
       title_en: "Achievements",
       content_en:
-        "<p>A few highlights from recent years:</p><ul>" +
-        "<li>100% pass rate in the SSC Examination for three consecutive years</li>" +
-        "<li>District-level champion, Inter-School Science Fair, 2025</li>" +
-        "<li>Runner-up, Divisional Debate Competition, 2024</li>" +
-        "<li>Principal awarded District Best Headteacher, 2022</li>" +
+        "<p>We are proud of the dedication of our students and staff. Here are some highlights from recent years.</p>" +
+        "<h2>Academic Excellence</h2>" +
+        "<ul>" +
+        "<li><strong>100% pass rate</strong> in the SSC Examination for three consecutive years (2023, 2024, 2025).</li>" +
+        "<li><strong>Top 5 position</strong> in the Chittagong Board zone rankings, 2025.</li>" +
+        "<li>18 students received <strong>A+ (GPA 5.00)</strong> in the 2025 SSC Examinations.</li>" +
+        "</ul>" +
+        "<h2>Co-curricular Honours</h2>" +
+        "<ul>" +
+        "<li><strong>District Champion</strong> — Inter-School Science Fair, 2025.</li>" +
+        "<li><strong>Runner-up</strong> — Divisional Debate Competition, 2024.</li>" +
+        "<li><strong>1st Place</strong> — Chattogram Zonal Math Olympiad, 2024.</li>" +
+        "</ul>" +
+        "<h2>Staff Recognition</h2>" +
+        "<ul>" +
+        "<li>Principal Mohammad Aminul Islam awarded <strong>District Best Headteacher</strong>, 2022.</li>" +
+        "<li>Two teachers recognised at the <strong>National Teacher Excellence Awards</strong>, 2023.</li>" +
         "</ul>",
     },
     {
@@ -1084,29 +1137,59 @@ async function main() {
       page_key: "grading_system",
       title_en: "Grading System",
       content_en:
-        "<p>We follow the standard Bangladesh Board grading scale (GPA 5.00):</p><ul>" +
-        "<li>80–100 marks: A+ (GPA 5.00) — Excellent</li>" +
-        "<li>70–79: A (GPA 4.00) — Very Good</li>" +
-        "<li>60–69: A- (GPA 3.50) — Good</li>" +
-        "<li>50–59: B (GPA 3.00) — Above Average</li>" +
-        "<li>40–49: C (GPA 2.00) — Average</li>" +
-        "<li>33–39: D (GPA 1.00) — Pass</li>" +
-        "<li>Below 33: F (GPA 0.00) — Fail</li>" +
-        "</ul>",
+        "<p>We follow the standard <strong>Bangladesh Board grading scale</strong> with a maximum GPA of 5.00, aligned with the National Curriculum and Textbook Board (NCTB) guidelines.</p>" +
+        "<h2>Grade Scale</h2>" +
+        "<table>" +
+        "<thead><tr><th>Marks Range</th><th>Grade Letter</th><th>GPA</th><th>Performance</th></tr></thead>" +
+        "<tbody>" +
+        "<tr><td>80 – 100</td><td><strong>A+</strong></td><td>5.00</td><td>Excellent</td></tr>" +
+        "<tr><td>70 – 79</td><td><strong>A</strong></td><td>4.00</td><td>Very Good</td></tr>" +
+        "<tr><td>60 – 69</td><td><strong>A−</strong></td><td>3.50</td><td>Good</td></tr>" +
+        "<tr><td>50 – 59</td><td><strong>B</strong></td><td>3.00</td><td>Above Average</td></tr>" +
+        "<tr><td>40 – 49</td><td><strong>C</strong></td><td>2.00</td><td>Average</td></tr>" +
+        "<tr><td>33 – 39</td><td><strong>D</strong></td><td>1.00</td><td>Pass</td></tr>" +
+        "<tr><td>Below 33</td><td><strong>F</strong></td><td>0.00</td><td>Fail</td></tr>" +
+        "</tbody>" +
+        "</table>" +
+        "<h2>GPA Calculation</h2>" +
+        "<p>The overall GPA is calculated as the <strong>average of all subject GPAs</strong>. Subjects with practical components (e.g., Science, ICT) include both written and practical marks in the final tally.</p>" +
+        "<blockquote>A student who obtains F in any subject is considered to have failed the examination, regardless of overall GPA.</blockquote>",
     },
     {
       page_key: "academic_regulations",
       title_en: "Academic Regulations",
       content_en:
-        "<p>Students are required to maintain at least 75% attendance to sit for the annual examination. Promotion to the next class depends on passing all compulsory subjects in the Annual Final Examination.</p>" +
-        "<p>Three examinations are held each academic year: a Class Test, a Half-Yearly Examination, and the Annual Final Examination, weighted 10%, 30%, and 60% respectively toward the final result.</p>",
+        "<h2>Attendance Policy</h2>" +
+        "<p>Students are required to maintain a minimum of <strong>75% attendance</strong> to be eligible to sit for the Annual Final Examination. Attendance is recorded daily and reported to guardians each month.</p>" +
+        "<h2>Examination Structure</h2>" +
+        "<p>Three examinations are held each academic year, each contributing to the final result:</p>" +
+        "<table>" +
+        "<thead><tr><th>Examination</th><th>Timing</th><th>Weight</th></tr></thead>" +
+        "<tbody>" +
+        "<tr><td>Class Test</td><td>Throughout the year</td><td>10%</td></tr>" +
+        "<tr><td>Half-Yearly Examination</td><td>July – August</td><td>30%</td></tr>" +
+        "<tr><td>Annual Final Examination</td><td>November – December</td><td>60%</td></tr>" +
+        "</tbody>" +
+        "</table>" +
+        "<h2>Promotion Policy</h2>" +
+        "<p>Promotion to the next class requires passing all <strong>compulsory subjects</strong> in the Annual Final Examination. Students who fail one subject may be eligible for a supplementary examination at the discretion of the Academic Committee.</p>" +
+        "<blockquote>Academic integrity is taken seriously. Any form of cheating or plagiarism in examinations will result in immediate disqualification and may lead to suspension.</blockquote>",
     },
     {
       page_key: "policies",
       title_en: "School Policies",
       content_en:
-        "<p>Students are expected to wear the prescribed uniform on all school days and maintain discipline both on and off campus. Mobile phones are not permitted inside the classroom without prior teacher permission.</p>" +
-        "<p>Homework is assigned daily and reviewed by subject teachers; guardians are encouraged to review their child's homework diary regularly.</p>",
+        "<h2>Dress Code</h2>" +
+        "<p>Students must wear the <strong>prescribed school uniform</strong> on all school days. Uniforms must be clean, properly fitted, and complete — including the school badge. Violation of the dress code will result in a formal warning.</p>" +
+        "<h2>Conduct &amp; Discipline</h2>" +
+        "<ul>" +
+        "<li>Students are expected to treat all teachers, staff, and fellow students with respect.</li>" +
+        "<li>Mobile phones are <strong>not permitted</strong> inside classrooms without prior written permission from a teacher.</li>" +
+        "<li>Bullying, harassment, or discrimination of any kind will not be tolerated and may result in suspension.</li>" +
+        "</ul>" +
+        "<h2>Homework &amp; Guardian Involvement</h2>" +
+        "<p>Homework is assigned daily across all subjects. Subject teachers review homework at the start of each class. Guardians are strongly encouraged to review their child's <strong>homework diary</strong> every evening and sign it weekly.</p>" +
+        "<blockquote>An involved guardian is a student's greatest academic advantage. We welcome your regular communication with class teachers.</blockquote>",
     },
   ];
   for (const p of STATIC_PAGES) {

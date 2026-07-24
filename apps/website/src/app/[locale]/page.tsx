@@ -251,6 +251,7 @@ export default function HomePage() {
         {/* ── Governing Body ── */}
         {governingBody.length > 0 && (
           <section className="mb-14">
+            {/* Section title */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                 <Users className="h-5 w-5 text-primary" />
@@ -261,47 +262,31 @@ export default function HomePage() {
               </Button>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-4">
-              {/* Chairman — Featured Card */}
-              {chairman && (
-                <div className="lg:w-64 shrink-0 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden flex flex-row lg:flex-col items-center gap-4 p-5 border-l-4 border-l-primary">
-                  <div className="h-16 w-16 lg:h-24 lg:w-24 shrink-0 rounded-full overflow-hidden ring-2 ring-green-100 bg-green-50">
-                    {chairman.photo_url ? (
-                      <Image src={chairman.photo_url} alt={chairman.name} width={96} height={96} className="h-full w-full object-cover" />
+            {/* Simple card grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {governingBody.map((m) => (
+                <div key={m.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center text-center gap-3">
+                  {/* Avatar */}
+                  <div className="h-16 w-16 rounded-full overflow-hidden bg-slate-100 ring-2 ring-slate-200 shrink-0">
+                    {m.photo_url ? (
+                      <Image src={m.photo_url} alt={m.name} width={64} height={64} className="h-full w-full object-cover" />
                     ) : (
-                      <div className="h-full w-full flex items-center justify-center text-primary/40"><Users className="h-8 w-8" /></div>
+                      <div className="h-full w-full flex items-center justify-center text-slate-400">
+                        <Users className="h-6 w-6" />
+                      </div>
                     )}
                   </div>
-                  <div className="lg:text-center">
-                    <p className="font-bold text-slate-900 text-sm leading-tight">{chairman.name}</p>
-                    <p className="text-xs text-primary font-semibold mt-1">{chairman.designation}</p>
-                  </div>
+                  {/* Name */}
+                  <p className="text-sm font-semibold text-slate-800 leading-snug">{m.name}</p>
+                  {/* Designation — bold, prominent */}
+                  <p className="text-xs font-bold text-green-700 uppercase tracking-wide">{m.designation}</p>
                 </div>
-              )}
-
-              {/* Other Members — Directory List */}
-              {otherMembers.length > 0 && (
-                <div className="flex-1 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden divide-y divide-slate-100">
-                  {otherMembers.map((m) => (
-                    <div key={m.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-green-50/50 transition-colors">
-                      <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden ring-1 ring-green-100 bg-green-50">
-                        {m.photo_url ? (
-                          <Image src={m.photo_url} alt={m.name} width={40} height={40} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="h-full w-full flex items-center justify-center text-primary/40"><Users className="h-4 w-4" /></div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{m.name}</p>
-                      </div>
-                      <span className="shrink-0 text-xs text-slate-500 font-medium">{m.designation}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              ))}
             </div>
           </section>
         )}
+
+
 
         {/* ── Teachers (Horizontal Scroll) ── */}
         {faculty.length > 0 && (

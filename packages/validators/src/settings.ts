@@ -1,6 +1,33 @@
 import { z } from "zod";
-import { AuthorityRole, DocumentType, PromotionAttendanceMode, StudentLeaveApprovalMode, UserRole } from "@education-erp/types";
+import { UserRole } from "@education-erp/types";
 import { passwordSchema } from "./auth";
+
+// These enums mirror the Prisma schema. Defined locally so this package
+// compiles even when `prisma generate` hasn't been run yet (e.g. fresh clone).
+const AuthorityRole = {
+  PRINCIPAL: "PRINCIPAL", VICE_PRINCIPAL: "VICE_PRINCIPAL",
+  HEAD_OF_DEPARTMENT: "HEAD_OF_DEPARTMENT", EXAM_CONTROLLER: "EXAM_CONTROLLER",
+  CHAIRMAN: "CHAIRMAN", TEACHER: "TEACHER",
+} as const;
+type AuthorityRole = typeof AuthorityRole[keyof typeof AuthorityRole];
+
+const DocumentType = {
+  ADMIT_CARD: "ADMIT_CARD", RESULT_CARD: "RESULT_CARD",
+  CERTIFICATE: "CERTIFICATE", TESTIMONIAL: "TESTIMONIAL",
+  TRANSFER_CERTIFICATE: "TRANSFER_CERTIFICATE", ID_CARD: "ID_CARD",
+} as const;
+type DocumentType = typeof DocumentType[keyof typeof DocumentType];
+
+const PromotionAttendanceMode = {
+  STRICT: "STRICT", ADVISORY: "ADVISORY", DISABLED: "DISABLED",
+} as const;
+type PromotionAttendanceMode = typeof PromotionAttendanceMode[keyof typeof PromotionAttendanceMode];
+
+const StudentLeaveApprovalMode = {
+  CLASS_TEACHER_ONLY: "CLASS_TEACHER_ONLY",
+  ALL_SUBJECT_TEACHERS: "ALL_SUBJECT_TEACHERS",
+} as const;
+type StudentLeaveApprovalMode = typeof StudentLeaveApprovalMode[keyof typeof StudentLeaveApprovalMode];
 
 export const institutionTypeSchema = z.enum(["SCHOOL", "COLLEGE", "UNIVERSITY", "MADRASAH"]);
 
