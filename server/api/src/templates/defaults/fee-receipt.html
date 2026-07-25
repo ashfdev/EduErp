@@ -4,8 +4,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
-  body { margin: 0; padding: 12mm; font-size: 12px; color: #333; }
+  body { margin: 0; padding: 12mm; font-size: 12px; color: #333; position: relative; }
   .copy-label { text-align: right; font-size: 9px; color: #999; margin-bottom: 4px; }
+  .status-stamp {
+    position: absolute; top: 14mm; right: 14mm; z-index: 5;
+    border: 3px solid; border-radius: 6px; padding: 4px 14px;
+    font-size: 16px; font-weight: 800; letter-spacing: 1px;
+    transform: rotate(-12deg); text-transform: uppercase; opacity: 0.85;
+  }
+  .outstanding-note { margin: 4px 0; font-size: 11px; font-weight: 700; color: #dc2626; }
   .header { text-align: center; margin-bottom: 8px; }
   .header img { height: 18mm; width: 18mm; border-radius: 50%; object-fit: cover; margin-bottom: 4px; }
   .header h1 { margin: 0; font-size: 19px; color: {{institution.primary_color}}; font-weight: 700; }
@@ -35,6 +42,7 @@
 </style>
 </head>
 <body>
+  {{statusStamp invoice_status}}
   {{#if copy_label}}<p class="copy-label">{{copy_label}}</p>{{/if}}
   <div class="header">
     {{#if institution.logo_url}}<img src="{{institution.logo_url}}" alt="logo" />{{/if}}
@@ -59,6 +67,7 @@
     </tbody>
   </table>
   <div class="words-row"><span class="label">In Words</span><span class="value">{{amountInWords total}} Taka Only</span></div>
+  {{#if invoice_outstanding}}<p class="outstanding-note">Remaining Due on this Invoice: ৳{{invoice_outstanding}}</p>{{/if}}
   <p class="payment">Payment Method: {{payment_method}} {{#if transaction_id}}| Transaction ID: {{transaction_id}}{{/if}}</p>
   <p class="note">Note: Receipts should be kept in custody, so that it can be shown if necessary.</p>
   <div class="footer">

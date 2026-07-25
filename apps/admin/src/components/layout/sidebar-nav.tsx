@@ -60,6 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
     key: "finance",
     items: [
       { href: "/fees", key: "fees", icon: Wallet },
+      { href: "/finance/all-invoices", key: "allInvoices", icon: FileText },
       { href: "/accounts", key: "accounts", icon: Calculator },
       { href: "/fees/waivers", key: "waiverSetup", icon: Wallet },
       { href: "/fees/sub-categories", key: "feeSubCategories", icon: Tags },

@@ -24,6 +24,7 @@ import { marksRouter } from "./modules/examination/marks.routes";
 import { markCorrectionRouter } from "./modules/examination/mark-correction.routes";
 import { resultsRouter } from "./modules/results/results.routes";
 import { feesRouter } from "./modules/fees/fees.routes";
+import { financeRouter } from "./modules/finance/finance.routes";
 import { paymentsRouter } from "./modules/fees/payments.routes";
 import { admissionRouter } from "./modules/admission/admission.routes";
 import { documentsRouter } from "./modules/documents/documents.routes";
@@ -111,6 +112,7 @@ export function createApp(): Express {
   app.use("/api/mark-corrections", markCorrectionRouter);
   app.use("/api/results", resultsRouter);
   app.use("/api/fees", feesRouter);
+  app.use("/api/finance", financeRouter);
   app.use("/api/payments", paymentsRouter);
   app.use("/api/admission", admissionRouter);
   app.use("/api/documents", documentsRouter);

@@ -18,6 +18,7 @@ import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { createInAppNotification } from "../../services/in-app-notification.service";
+import { syncOverdueInvoices } from "../fees/invoice-helpers";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import type { UserRole } from "@education-erp/types";
 
@@ -884,6 +885,7 @@ documentsRouter.get(
     });
     if (!payment) throw notFound("Payment not found");
 
+    const invoiceOutstanding = Math.max(0, payment.invoice.amount_due + payment.invoice.fine_amount - payment.invoice.amount_paid);
     const qr = await generateQrDataUrl(`receipt:${payment.id}`);
     const pdf = await renderDocument("FEE_RECEIPT", {
       receipt_no: payment.receipt_no ?? payment.id,
@@ -894,6 +896,14 @@ documentsRouter.get(
       payment_method: payment.gateway,
       transaction_id: payment.transaction_id,
       is_invoice: false,
+      // A receipt always documents a completed payment (this route is only
+      // ever reached once a Payment is COMPLETED) -- the stamp is always
+      // "PAID" for the transaction itself. invoice_status/
+      // invoice_outstanding separately show whether the underlying invoice
+      // this payment applied to is now fully settled or still has a
+      // remaining balance (a receipt can document a partial payment).
+      invoice_status: payment.invoice.status,
+      invoice_outstanding: invoiceOutstanding,
       qr_code: qr,
       copy_label: receiptCopyLabel(req.query.copy),
     });
@@ -923,6 +933,15 @@ documentsRouter.get(
     if (!payments.length) throw notFound("Receipt batch not found");
     const first = payments[0]!;
 
+    // A batch can cover several invoices at once (e.g. a fee + a fine paid
+    // together) -- "PAID" only if every one of them is now fully settled;
+    // otherwise "PARTIAL" with the combined remaining balance, same logic
+    // as the single-receipt route above just summed across every line's
+    // own invoice.
+    const uniqueInvoices = new Map(payments.map((p) => [p.invoice.id, p.invoice]));
+    const allInvoicesPaid = [...uniqueInvoices.values()].every((inv) => inv.status === "PAID" || inv.status === "WAIVED");
+    const combinedOutstanding = [...uniqueInvoices.values()].reduce((sum, inv) => sum + Math.max(0, inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+
     const qr = await generateQrDataUrl(`receipt-batch:${batchId}`);
     const pdf = await renderDocument("FEE_RECEIPT", {
       receipt_no: first.receipt_no ?? first.id,
@@ -933,6 +952,8 @@ documentsRouter.get(
       payment_method: first.gateway,
       transaction_id: first.transaction_id,
       is_invoice: false,
+      invoice_status: allInvoicesPaid ? "PAID" : "PARTIAL",
+      invoice_outstanding: combinedOutstanding,
       qr_code: qr,
       copy_label: receiptCopyLabel(req.query.copy),
     });
@@ -945,6 +966,9 @@ documentsRouter.get(
   allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const invoiceId = reqParam(req, "invoice_id");
+    const existing = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { student_id: true } });
+    if (!existing) throw notFound("Invoice not found");
+    await syncOverdueInvoices(prisma, existing.student_id);
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { student: { include: { current_class: true, current_section: true } } } });
     if (!invoice) throw notFound("Invoice not found");
 
@@ -957,6 +981,8 @@ documentsRouter.get(
       payment_method: "N/A",
       transaction_id: null,
       is_invoice: true,
+      invoice_status: invoice.status,
+      invoice_outstanding: Math.max(0, invoice.amount_due + invoice.fine_amount - invoice.amount_paid),
     });
     sendPdf(res, pdf, `invoice-${invoice.id}.pdf`, req.query.download === "true");
   }),

@@ -79,6 +79,19 @@ function numberToWords(amount: number): string {
   return parts.join(" ");
 }
 
+// Shared label/color mapping for a printed document's payment-status stamp
+// (Invoice.status) -- the same statuses shown as StatusBadge in every admin
+// list page, reused here so a printed receipt/invoice unambiguously shows
+// whether it's paid, still due, overdue, or waived, matching that same
+// color language.
+const STATUS_STAMP_META: Record<string, { label: string; color: string }> = {
+  PAID: { label: "PAID", color: "#16a34a" },
+  PARTIAL: { label: "PARTIALLY PAID", color: "#d97706" },
+  PENDING: { label: "UNPAID / DUE", color: "#dc2626" },
+  OVERDUE: { label: "OVERDUE", color: "#991b1b" },
+  WAIVED: { label: "WAIVED", color: "#64748b" },
+};
+
 let helpersRegistered = false;
 
 function registerHelpers() {
@@ -123,6 +136,17 @@ function registerHelpers() {
   // (paisa isn't a real unit in this system's Float amounts); values above
   // 99,999,999 fall back to the plain number rather than guessing a label.
   Handlebars.registerHelper("amountInWords", (amount: unknown) => new Handlebars.SafeString(numberToWords(Math.round(Number(amount) || 0))));
+
+  // Rotated corner "stamp" showing a printed document's real payment
+  // status (PAID/PARTIALLY PAID/UNPAID/OVERDUE/WAIVED) -- unambiguous at a
+  // glance, matching the exact color language every admin list page's
+  // StatusBadge already uses for the same Invoice.status values. Renders
+  // nothing for an unrecognized/missing status rather than an empty stamp.
+  Handlebars.registerHelper("statusStamp", (status: unknown) => {
+    const meta = STATUS_STAMP_META[String(status ?? "")];
+    if (!meta) return new Handlebars.SafeString("");
+    return new Handlebars.SafeString(`<div class="status-stamp" style="border-color:${meta.color};color:${meta.color};">${meta.label}</div>`);
+  });
 
   Handlebars.registerHelper("institutionLogo", function (this: unknown, options: Handlebars.HelperOptions) {
     const root = options.data?.root as { institution?: { logo_url?: string | null; name_en?: string } } | undefined;
