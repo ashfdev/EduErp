@@ -201,34 +201,41 @@ function StudentSummaryTab() {
 
 function CollectionSummaryTab() {
   const now = new Date();
-  const [from] = useState(new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().slice(0, 10));
-  const [to] = useState(now.toISOString().slice(0, 10));
+  const [from, setFrom] = useState(new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().slice(0, 10));
+  const [to, setTo] = useState(now.toISOString().slice(0, 10));
 
-  const { data } = useQuery<{ daily: { date: string; amount: number }[]; by_category: Record<string, number>; by_gateway: Record<string, number> }>({
+  const { data } = useQuery<{ daily: { date: string; amount: number }[]; by_category: { category: string; total: number }[]; gateway_breakdown: { gateway: string; total: number }[] }>({
     queryKey: ["analytics", "fee-collection", from, to],
     queryFn: async () => (await api.get("/api/analytics/fee-collection", { params: { from_date: from, to_date: to } })).data.data,
   });
 
-  if (!data) return null;
-  const totalCollected = data.daily.reduce((s, d) => s + d.amount, 0);
+  const totalCollected = data?.daily.reduce((s, d) => s + d.amount, 0) ?? 0;
   return (
     <Card>
       <CardContent className="space-y-4 pt-6">
-        <p className="text-sm">Total Collected (last 30 days): <span className="font-semibold">৳{totalCollected}</span></p>
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <p className="mb-2 text-sm font-medium">By Category</p>
-            {Object.entries(data.by_category ?? {}).map(([cat, amt]) => (
-              <div key={cat} className="flex justify-between border-b py-1 text-sm"><span>{cat}</span><span>৳{amt}</span></div>
-            ))}
-          </div>
-          <div>
-            <p className="mb-2 text-sm font-medium">By Gateway</p>
-            {Object.entries(data.by_gateway ?? {}).map(([gw, amt]) => (
-              <div key={gw} className="flex justify-between border-b py-1 text-sm"><span>{gw}</span><span>৳{amt}</span></div>
-            ))}
-          </div>
+        <div className="flex items-end gap-3">
+          <div><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+          <div><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         </div>
+        <p className="text-sm">Total Collected ({from} – {to}): <span className="font-semibold">৳{totalCollected}</span></p>
+        {data && (
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <p className="mb-2 text-sm font-medium">By Category</p>
+              {!data.by_category.length && <p className="text-sm text-muted-foreground">No payments in this range</p>}
+              {data.by_category.map((c) => (
+                <div key={c.category} className="flex justify-between border-b py-1 text-sm"><span>{c.category}</span><span>৳{c.total}</span></div>
+              ))}
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium">By Gateway</p>
+              {!data.gateway_breakdown.length && <p className="text-sm text-muted-foreground">No payments in this range</p>}
+              {data.gateway_breakdown.map((g) => (
+                <div key={g.gateway} className="flex justify-between border-b py-1 text-sm"><span>{g.gateway.replace(/_/g, " ")}</span><span>৳{g.total}</span></div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

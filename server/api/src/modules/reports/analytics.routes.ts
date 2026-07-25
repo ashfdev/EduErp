@@ -39,6 +39,23 @@ function monthRange() {
   return { start, end };
 }
 
+// Formats a Date using its local calendar fields (not UTC) — matches
+// todayRange()/monthRange()'s local-time convention, so a payment made
+// late at night local time doesn't get bucketed onto the next UTC day.
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Parses a "YYYY-MM-DD" query param as local midnight, not UTC midnight
+// (new Date("YYYY-MM-DD") is always UTC per the ECMA-262 date-only form).
+function parseLocalDate(s: string): Date {
+  const parts = s.split("-").map(Number);
+  return new Date(parts[0] ?? 1970, (parts[1] ?? 1) - 1, parts[2] ?? 1);
+}
+
 analyticsRouter.get(
   "/overview",
   asyncHandler(async (_req, res) => {
@@ -250,8 +267,8 @@ analyticsRouter.get(
   "/fee-collection",
   asyncHandler(async (req, res) => {
     const query = z.object({ from_date: z.string().min(1), to_date: z.string().min(1) }).parse(req.query);
-    const from = new Date(query.from_date);
-    const to = new Date(new Date(query.to_date).getTime() + 24 * 60 * 60 * 1000);
+    const from = parseLocalDate(query.from_date);
+    const to = new Date(parseLocalDate(query.to_date).getTime() + 24 * 60 * 60 * 1000);
 
     const payments = await prisma.payment.findMany({
       where: { status: "COMPLETED", paid_at: { gte: from, lt: to } },
@@ -263,7 +280,7 @@ analyticsRouter.get(
     const gatewayMap = new Map<string, number>();
 
     for (const p of payments) {
-      const dateKey = (p.paid_at ?? p.created_at).toISOString().slice(0, 10);
+      const dateKey = localDateKey(p.paid_at ?? p.created_at);
       dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + p.amount);
       categoryMap.set(p.invoice.category, (categoryMap.get(p.invoice.category) ?? 0) + p.amount);
       gatewayMap.set(p.gateway, (gatewayMap.get(p.gateway) ?? 0) + p.amount);
