@@ -24,6 +24,7 @@
   .sig-image { max-height: 12mm; max-width: 40mm; display: block; margin: 0 auto; }
   .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
   .sig-designation, .sig-label { font-size: 9px; color: #555; }
+  .adj-note { color: #dc2626; font-style: italic; font-size: 9px; margin: 2px 0; }
 </style>
 </head>
 <body>
@@ -42,6 +43,8 @@
     <tr><td>Substitution Bonus</td><td>৳{{substitution_bonus}}</td><td></td><td></td></tr>
     <tr class="total-row"><td>Gross Salary</td><td>৳{{gross_salary}}</td><td>Total Deductions</td><td>৳{{deductions}}</td></tr>
   </table>
+  {{#if absent_deduction}}<p class="adj-note">* Absence deduction — for days explicitly marked absent this period.</p>{{/if}}
+  {{#if late_deduction}}<p class="adj-note">* Late deduction — for days marked late this period.</p>{{/if}}
   <p class="net">Net Salary: ৳{{net_salary}}</p>
   <div class="days"><span>Working Days: {{working_days}}</span><span>Present Days: {{present_days}}</span></div>
   <div class="footer">

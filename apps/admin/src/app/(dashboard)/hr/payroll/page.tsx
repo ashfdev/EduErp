@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AdjustmentNote, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -230,8 +230,14 @@ export default function PayrollPage() {
                 <div className="space-y-1">
                   <div className="flex justify-between"><span>Provident Fund</span><span>৳{breakdownTarget.pf_amount.toFixed(2)}</span></div>
                   <div className="flex justify-between"><span>TDS</span><span>৳{breakdownTarget.tds_amount.toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span>Absence</span><span>৳{breakdownTarget.absent_deduction.toFixed(2)}</span></div>
-                  <div className="flex justify-between"><span>Late</span><span>৳{breakdownTarget.late_deduction.toFixed(2)}</span></div>
+                  <div>
+                    <div className="flex justify-between"><span>Absence</span><span>৳{breakdownTarget.absent_deduction.toFixed(2)}</span></div>
+                    {breakdownTarget.absent_deduction > 0 && <AdjustmentNote>Deducted for days explicitly marked absent this period</AdjustmentNote>}
+                  </div>
+                  <div>
+                    <div className="flex justify-between"><span>Late</span><span>৳{breakdownTarget.late_deduction.toFixed(2)}</span></div>
+                    {breakdownTarget.late_deduction > 0 && <AdjustmentNote>Deducted for days marked late this period</AdjustmentNote>}
+                  </div>
                   <div className="flex justify-between"><span>Advance Recovery</span><span>৳{breakdownTarget.advance_deducted.toFixed(2)}</span></div>
                   <div className="flex justify-between font-medium"><span>Total Deductions</span><span>৳{breakdownTarget.deductions.toFixed(2)}</span></div>
                 </div>

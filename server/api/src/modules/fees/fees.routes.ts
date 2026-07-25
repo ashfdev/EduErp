@@ -19,7 +19,7 @@ import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice } from "./invoice-helpers";
 import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
-import { resolveFineForInvoice } from "./fee-fine-engine";
+import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
 
@@ -662,6 +662,7 @@ feesRouter.get(
     const lines = await Promise.all(
       invoices.map(async (inv) => {
         const fine = await resolveFineForInvoice(prisma, inv, student.current_class_id, rules);
+        const fineSource = fine > 0 ? await describeFineSource(prisma, inv, student.current_class_id, rules) : null;
         const outstanding = Math.max(0, inv.amount_due + fine - inv.amount_paid);
         const period = inv.month && inv.year ? `${MONTH_NAMES[inv.month - 1]} ${inv.year}` : inv.year ? `${inv.year}` : "One-time";
         return {
@@ -673,6 +674,7 @@ feesRouter.get(
           amount_due: inv.amount_due,
           amount_paid: inv.amount_paid,
           fine_amount: fine,
+          fine_source: fineSource,
           outstanding,
           is_manual_fine: inv.is_manual_fine,
           waivers: inv.waiver_applications.map((w) => ({ waiver_name: w.student_waiver.waiver_type.name, discount_amount: w.discount_amount })),

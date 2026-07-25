@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, Label,
+  AdjustmentNote, Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, Label,
   PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage,
 } from "@education-erp/ui";
@@ -46,6 +46,7 @@ interface WorkspaceLine {
   amount_due: number;
   amount_paid: number;
   fine_amount: number;
+  fine_source: string | null;
   outstanding: number;
   is_manual_fine: boolean;
   waivers: { waiver_name: string; discount_amount: number }[];
@@ -379,41 +380,46 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lines.map((line) => (
-                  <Fragment key={line.invoice_id}>
-                    <TableRow>
-                      <TableCell>
-                        <Checkbox checked={selected.has(line.invoice_id)} onCheckedChange={() => toggleLine(line.invoice_id)} disabled={line.outstanding <= 0} />
-                      </TableCell>
-                      <TableCell>
-                        <p className="font-medium">{line.description}{line.is_manual_fine && <Badge variant="destructive" className="ml-2">Fine</Badge>}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {line.category}{line.sub_category ? ` · ${line.sub_category}` : ""} · {line.period}
-                          {line.fine_amount > 0 && ` · Fine ৳${line.fine_amount}`}
-                        </p>
-                      </TableCell>
-                      <TableCell>৳{line.outstanding}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          className="w-20"
-                          value={discounts[line.invoice_id] ?? ""}
-                          onChange={(e) => setDiscounts((prev) => ({ ...prev, [line.invoice_id]: Number(e.target.value) }))}
-                          disabled={!selected.has(line.invoice_id)}
-                        />
-                      </TableCell>
-                      <TableCell>৳{Math.max(0, line.outstanding - (discounts[line.invoice_id] ?? 0))}</TableCell>
-                    </TableRow>
-                    {line.waivers.map((w, i) => (
-                      <TableRow key={`${line.invoice_id}-waiver-${i}`}>
-                        <TableCell></TableCell>
-                        <TableCell colSpan={4} className="italic text-red-600">
-                          Waiver applied — {w.waiver_name} (৳{w.discount_amount} deducted from fund)
+                {lines.map((line) => {
+                  const discount = discounts[line.invoice_id] ?? 0;
+                  return (
+                    <Fragment key={line.invoice_id}>
+                      <TableRow>
+                        <TableCell>
+                          <Checkbox checked={selected.has(line.invoice_id)} onCheckedChange={() => toggleLine(line.invoice_id)} disabled={line.outstanding <= 0} />
                         </TableCell>
+                        <TableCell>
+                          <p className="font-medium">{line.description}{line.is_manual_fine && <Badge variant="destructive" className="ml-2">Fine</Badge>}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {line.category}{line.sub_category ? ` · ${line.sub_category}` : ""} · {line.period}
+                            {line.fine_amount > 0 && ` · Fine ৳${line.fine_amount}`}
+                          </p>
+                          {line.fine_amount > 0 && line.fine_source && <AdjustmentNote>{line.fine_source}</AdjustmentNote>}
+                        </TableCell>
+                        <TableCell>৳{line.outstanding}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            className="w-20"
+                            value={discounts[line.invoice_id] ?? ""}
+                            onChange={(e) => setDiscounts((prev) => ({ ...prev, [line.invoice_id]: Number(e.target.value) }))}
+                            disabled={!selected.has(line.invoice_id)}
+                          />
+                          {selected.has(line.invoice_id) && discount > 0 && <AdjustmentNote>Staff discount — not journaled</AdjustmentNote>}
+                        </TableCell>
+                        <TableCell>৳{Math.max(0, line.outstanding - discount)}</TableCell>
                       </TableRow>
-                    ))}
-                  </Fragment>
-                ))}
+                      {line.waivers.map((w, i) => (
+                        <TableRow key={`${line.invoice_id}-waiver-${i}`}>
+                          <TableCell></TableCell>
+                          <TableCell colSpan={4}>
+                            <AdjustmentNote>Waived — {w.waiver_name} fund (৳{w.discount_amount} deducted)</AdjustmentNote>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
