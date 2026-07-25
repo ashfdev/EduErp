@@ -3387,6 +3387,7 @@ enum DocumentType {
   SEAT_PLAN
   NOTICE
   VISITOR_SLIP
+  ROUTINE
 }
 
 enum NoticeAudience {

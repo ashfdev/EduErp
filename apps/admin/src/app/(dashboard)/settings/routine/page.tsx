@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, RoutineGrid, PdfPreviewModal, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -93,6 +95,28 @@ export default function RoutineSettingsPage() {
       ).data.data,
     enabled: !!classId,
   });
+
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [pdfOpen, setPdfOpen] = useState(false);
+
+  const gridData = useMemo(() => {
+    const periodMap = new Map<number, { period_no: number; start_time: string; end_time: string; cells: Record<number, { subject: string; teacher: string } | null> }>();
+    for (const s of slots ?? []) {
+      if (!periodMap.has(s.period_no)) {
+        periodMap.set(s.period_no, { period_no: s.period_no, start_time: s.start_time, end_time: s.end_time, cells: {} });
+      }
+      periodMap.get(s.period_no)!.cells[s.day_of_week] = { subject: s.subject?.name_en ?? "Free", teacher: s.teacher?.name_en ?? "" };
+    }
+    const days = DAYS;
+    const rows = [...periodMap.values()]
+      .sort((a, b) => a.period_no - b.period_no)
+      .map((p) => ({ period_no: p.period_no, start_time: p.start_time, end_time: p.end_time, cells: days.map((_, i) => p.cells[i] ?? null) }));
+    return { days, rows };
+  }, [slots]);
+
+  const pdfUrl = classId
+    ? `${API_BASE_URL}/api/content/routine/pdf?class_id=${classId}${sectionFilter ? `&section_id=${sectionFilter}` : ""}${groupFilter ? `&group_id=${groupFilter}` : ""}`
+    : null;
 
   function openCreate() {
     setEditingId(null);
@@ -185,6 +209,13 @@ export default function RoutineSettingsPage() {
         action={<Button variant="outline" onClick={() => { setGenerateResult(null); setGenerateOpen(true); }}>Auto-Generate</Button>}
       />
 
+      <PdfPreviewModal
+        open={pdfOpen}
+        onOpenChange={setPdfOpen}
+        title="Class Routine"
+        pdfUrl={pdfOpen ? pdfUrl : null}
+      />
+
       <Card>
         <CardContent className={`grid grid-cols-1 gap-4 pt-6 ${groups.length ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <div className="space-y-1.5">
@@ -223,8 +254,16 @@ export default function RoutineSettingsPage() {
       {classId && (
         <Card>
           <CardContent className="overflow-x-auto pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex gap-1 rounded-md border p-0.5">
+                <Button size="sm" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}>List</Button>
+                <Button size="sm" variant={viewMode === "grid" ? "default" : "ghost"} onClick={() => setViewMode("grid")}>Grid</Button>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setPdfOpen(true)} disabled={!slots?.length}>Download PDF</Button>
+            </div>
             {!slots?.length && <EmptyState title="No routine slots yet for this class/section" />}
-            {!!slots?.length && (
+            {!!slots?.length && viewMode === "grid" && <RoutineGrid days={gridData.days} rows={gridData.rows} todayIndex={new Date().getDay()} />}
+            {!!slots?.length && viewMode === "list" && (
               <Table>
                 <TableHeader>
                   <TableRow>

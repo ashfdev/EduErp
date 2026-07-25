@@ -31,6 +31,7 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   SEAT_PLAN: "seat-plan",
   NOTICE: "notice",
   VISITOR_SLIP: "visitor-slip",
+  ROUTINE: "routine",
 };
 
 let helpersRegistered = false;

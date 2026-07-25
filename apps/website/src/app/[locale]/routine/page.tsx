@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchContent } from "@/lib/content-api";
+import { fetchContent, API_URL } from "@/lib/content-api";
 import type { ClassPicker, RoutineSlotItem } from "@/lib/types";
-import { ErrorState } from "@education-erp/ui";
-import { Clock, CalendarDays, BookOpen, User, ChevronRight, Loader2 } from "lucide-react";
+import { ErrorState, RoutineGrid, PdfPreviewModal } from "@education-erp/ui";
+import { Clock, CalendarDays, BookOpen, User, ChevronRight, Loader2, Download, LayoutGrid, List } from "lucide-react";
+
+const GRID_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const DAY_KEYS = ["daySun", "dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat"] as const;
 
@@ -31,6 +33,8 @@ export default function RoutinePage() {
   const [loadError, setLoadError] = useState(false);
   const today = new Date().getDay();
   const [day, setDay] = useState(today);
+  const [layout, setLayout] = useState<"list" | "grid">("list");
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   useEffect(() => {
     fetchContent<ClassPicker[]>("/classes").then((d) => setClasses(d ?? [])).catch(() => {});
@@ -145,6 +149,52 @@ export default function RoutinePage() {
         {/* Results */}
         {slots !== null && (
           <div>
+            {/* View toggle + PDF download */}
+            <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+              <div className="flex gap-1 rounded-full border border-slate-200 bg-white p-1">
+                <button
+                  onClick={() => setLayout("list")}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all ${layout === "list" ? "bg-green-700 text-white" : "text-slate-600"}`}
+                >
+                  <List className="h-3.5 w-3.5" /> {t("dayView")}
+                </button>
+                <button
+                  onClick={() => setLayout("grid")}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all ${layout === "grid" ? "bg-green-700 text-white" : "text-slate-600"}`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" /> {t("weekGrid")}
+                </button>
+              </div>
+              <button
+                onClick={() => setPdfOpen(true)}
+                disabled={!slots.length}
+                className="flex items-center gap-2 rounded-full bg-green-700/10 px-4 py-2 text-xs font-bold text-green-700 hover:bg-green-700 hover:text-white transition-colors disabled:opacity-40"
+              >
+                <Download className="h-3.5 w-3.5" /> {t("downloadPdf")}
+              </button>
+            </div>
+
+            {layout === "grid" ? (
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6">
+                <RoutineGrid
+                  days={GRID_DAYS}
+                  todayIndex={today}
+                  rows={(() => {
+                    const periodMap = new Map<number, { period_no: number; start_time: string; end_time: string; cells: Record<number, { subject: string; teacher: string } | null> }>();
+                    for (const s of slots) {
+                      if (!periodMap.has(s.period_no)) {
+                        periodMap.set(s.period_no, { period_no: s.period_no, start_time: s.start_time, end_time: s.end_time, cells: {} });
+                      }
+                      periodMap.get(s.period_no)!.cells[s.day_of_week] = { subject: s.subject?.name_en ?? t("freePeriod"), teacher: s.teacher?.name_en ?? "" };
+                    }
+                    return [...periodMap.values()]
+                      .sort((a, b) => a.period_no - b.period_no)
+                      .map((p) => ({ period_no: p.period_no, start_time: p.start_time, end_time: p.end_time, cells: GRID_DAYS.map((_, i) => p.cells[i] ?? null) }));
+                  })()}
+                />
+              </div>
+            ) : (
+            <>
             {/* Day Pills */}
             <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
               {DAY_KEYS.map((key, i) => (
@@ -208,8 +258,19 @@ export default function RoutinePage() {
                 </div>
               ))}
             </div>
+            </>
+            )}
           </div>
         )}
+
+        <PdfPreviewModal
+          open={pdfOpen}
+          onOpenChange={setPdfOpen}
+          title={t("title")}
+          pdfUrl={pdfOpen && classId ? `${API_URL}/api/content/routine/pdf?class_id=${classId}${sectionId ? `&section_id=${sectionId}` : ""}${groupId ? `&group_id=${groupId}` : ""}` : null}
+          downloadLabel={t("download")}
+          closeLabel={t("closePreview")}
+        />
       </div>
     </div>
   );

@@ -185,7 +185,12 @@
     "dayWed": "Wed",
     "dayThu": "Thu",
     "dayFri": "Fri",
-    "daySat": "Sat"
+    "daySat": "Sat",
+    "dayView": "Day View",
+    "weekGrid": "Week Grid",
+    "downloadPdf": "Download PDF",
+    "download": "Download",
+    "closePreview": "Close"
   },
   "notices": {
     "title": "Notice Board",

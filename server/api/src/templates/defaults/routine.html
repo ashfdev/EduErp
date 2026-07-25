@@ -1,0 +1,68 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 10mm; font-size: 11px; }
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .header img { height: 16mm; }
+  .header .center { text-align: center; }
+  .header .center h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .header .title { font-size: 16px; font-weight: 700; }
+  .meta { font-size: 11px; color: #555; margin-top: 6px; margin-bottom: 4px; }
+  table.grid { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.grid th, table.grid td { border: 1px solid #999; padding: 5px; font-size: 10px; text-align: left; vertical-align: top; }
+  table.grid th { background: {{institution.primary_color}}; color: #fff; }
+  .period-no { font-weight: 700; }
+  .period-time { color: #666; font-size: 9px; }
+  .subject { font-weight: 600; }
+  .teacher { color: #666; font-size: 9px; }
+  .free { color: #999; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 30px; }
+  .signature-block { text-align: center; width: 30%; }
+</style>
+</head>
+<body>
+  <div class="header">
+    {{institutionLogo}}
+    <div class="center">
+      <h1>{{institution.name_en}}</h1>
+      <p>{{institution.address}} | EIIN: {{institution.eiin}}</p>
+    </div>
+    <div class="title">CLASS ROUTINE</div>
+  </div>
+  <p class="meta">Class: {{class_name}}{{#if section_name}} — Section {{section_name}}{{/if}}{{#if group_name}} — {{group_name}}{{/if}}</p>
+
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>Period</th>
+        {{#each days}}<th>{{this}}</th>{{/each}}
+      </tr>
+    </thead>
+    <tbody>
+      {{#each rows}}
+      <tr>
+        <td><div class="period-no">P{{this.period_no}}</div><div class="period-time">{{this.start_time}}–{{this.end_time}}</div></td>
+        {{#each this.cells}}
+        <td>
+          {{#if this}}
+            <div class="subject">{{this.subject}}</div>
+            {{#if this.teacher}}<div class="teacher">{{this.teacher}}</div>{{/if}}
+          {{else}}
+            <span class="free">—</span>
+          {{/if}}
+        </td>
+        {{/each}}
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="signatures">
+    {{signatureBlock 1}}
+    {{signatureBlock 2}}
+  </div>
+</body>
+</html>

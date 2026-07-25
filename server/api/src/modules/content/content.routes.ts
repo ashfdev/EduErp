@@ -537,6 +537,74 @@ contentRouter.get(
   }),
 );
 
+const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// Organizes a flat list of RoutineSlot rows into a day-columns x
+// period-rows grid shape for the ROUTINE PDF template — same idea as the
+// grid views on all three frontends (apps/admin, apps/portal,
+// apps/website), just server-side for the PDF render.
+function buildRoutineGrid(
+  slots: { day_of_week: number; period_no: number; start_time: string; end_time: string; subject: { name_en: string } | null; teacher: { name_en: string } | null }[],
+) {
+  const periodMap = new Map<number, { period_no: number; start_time: string; end_time: string; cells: Record<number, { subject: string; teacher: string } | null> }>();
+  for (const slot of slots) {
+    if (!periodMap.has(slot.period_no)) {
+      periodMap.set(slot.period_no, { period_no: slot.period_no, start_time: slot.start_time, end_time: slot.end_time, cells: {} });
+    }
+    periodMap.get(slot.period_no)!.cells[slot.day_of_week] = { subject: slot.subject?.name_en ?? "Free", teacher: slot.teacher?.name_en ?? "" };
+  }
+  const rows = [...periodMap.values()]
+    .sort((a, b) => a.period_no - b.period_no)
+    .map((p) => ({
+      period_no: p.period_no,
+      start_time: p.start_time,
+      end_time: p.end_time,
+      cells: DAY_LABELS.map((_, i) => p.cells[i] ?? null),
+    }));
+  return { days: DAY_LABELS, rows };
+}
+
+// Institution-branded PDF of a class/section(/group) routine grid — same
+// public/no-auth posture as /routine and /notices/:id/pdf above, since the
+// underlying data is already fully public via the unauthenticated /routine
+// endpoint just above. Shared by all three frontends' "Download PDF"
+// buttons (admin, portal, public website) rather than duplicating this
+// route under a staff-authenticated path too.
+contentRouter.get(
+  "/routine/pdf",
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional(), group_id: z.string().optional() }).parse(req.query);
+    const cls = await prisma.class.findUnique({
+      where: { id: query.class_id },
+      select: {
+        name_en: true,
+        sections: { select: { id: true, name: true } },
+        groups: { select: { id: true, name_en: true } },
+      },
+    });
+    if (!cls) throw notFound("Class not found");
+
+    const slots = await prisma.routineSlot.findMany({
+      where: {
+        class_id: query.class_id,
+        ...(query.section_id && { OR: [{ section_id: query.section_id }, { section_id: null }] }),
+        AND: [{ OR: [{ group_id: query.group_id ?? null }, { group_id: null }] }],
+      },
+      include: { subject: { select: { name_en: true } }, teacher: { select: { name_en: true } } },
+      orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
+    });
+
+    const grid = buildRoutineGrid(slots);
+    const sectionName = query.section_id ? cls.sections.find((s) => s.id === query.section_id)?.name : undefined;
+    const groupName = query.group_id ? cls.groups.find((g) => g.id === query.group_id)?.name_en : undefined;
+
+    const pdf = await renderDocument("ROUTINE", { class_name: cls.name_en, section_name: sectionName, group_name: groupName, ...grid });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="routine-${query.class_id}.pdf"`);
+    res.send(pdf);
+  }),
+);
+
 contentRouter.get(
   "/stats",
   asyncHandler(async (_req, res) => {

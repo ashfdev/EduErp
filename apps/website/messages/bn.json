@@ -185,7 +185,12 @@
     "dayWed": "বুধ",
     "dayThu": "বৃহঃ",
     "dayFri": "শুক্র",
-    "daySat": "শনি"
+    "daySat": "শনি",
+    "dayView": "দিন ভিউ",
+    "weekGrid": "সাপ্তাহিক গ্রিড",
+    "downloadPdf": "পিডিএফ ডাউনলোড",
+    "download": "ডাউনলোড",
+    "closePreview": "বন্ধ করুন"
   },
   "notices": {
     "title": "নোটিশ বোর্ড",

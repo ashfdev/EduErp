@@ -6,10 +6,16 @@ import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Card, CardContent, LoadingSpinner, ErrorState, Badge } from "@education-erp/ui";
+import { Card, CardContent, LoadingSpinner, ErrorState, Badge, Button, RoutineGrid, PdfPreviewModal } from "@education-erp/ui";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 interface RoutineSlot {
   id: string;
+  class_id: string;
+  section_id: string | null;
+  group_id: string | null;
   day_of_week: number;
   period_no: number;
   start_time: string;
@@ -45,6 +51,7 @@ function RoutineContent() {
   const tCommon = useTranslations("common");
   const today = new Date().getDay();
   const [day, setDay] = useState(today);
+  const [viewMode, setViewMode] = useState<"day" | "grid">("day");
 
   const { data, isLoading, isError, refetch } = useQuery<RoutineSlot[]>({
     queryKey: ["portal", "routine", activeStudentId],
@@ -68,7 +75,13 @@ function RoutineContent() {
 
   return (
     <div className="space-y-3 p-4">
+      <RoutineViewToggle data={data ?? []} viewMode={viewMode} setViewMode={setViewMode} />
       <h1 className="text-lg font-semibold">{t("title")}</h1>
+
+      {viewMode === "grid" ? (
+        <GridView data={data ?? []} />
+      ) : (
+        <>
       <div className="flex gap-1 overflow-x-auto">
         {DAY_KEYS.map((key, i) => (
           <button
@@ -107,8 +120,61 @@ function RoutineContent() {
           </Card>
         );
       })}
+        </>
+      )}
     </div>
   );
+}
+
+function RoutineViewToggle({
+  data,
+  viewMode,
+  setViewMode,
+}: {
+  data: RoutineSlot[];
+  viewMode: "day" | "grid";
+  setViewMode: (v: "day" | "grid") => void;
+}) {
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const first = data[0];
+  const pdfUrl = first
+    ? `${API_BASE_URL}/api/content/routine/pdf?class_id=${first.class_id}${first.section_id ? `&section_id=${first.section_id}` : ""}${first.group_id ? `&group_id=${first.group_id}` : ""}`
+    : null;
+
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex gap-1 rounded-full bg-gray-100 p-0.5">
+        <button
+          onClick={() => setViewMode("day")}
+          className={`rounded-full px-3 py-1 text-xs ${viewMode === "day" ? "bg-white shadow-sm" : "text-gray-500"}`}
+        >
+          Day
+        </button>
+        <button
+          onClick={() => setViewMode("grid")}
+          className={`rounded-full px-3 py-1 text-xs ${viewMode === "grid" ? "bg-white shadow-sm" : "text-gray-500"}`}
+        >
+          Week Grid
+        </button>
+      </div>
+      <Button size="sm" variant="outline" onClick={() => setPdfOpen(true)} disabled={!first}>Download PDF</Button>
+      <PdfPreviewModal open={pdfOpen} onOpenChange={setPdfOpen} title="Class Routine" pdfUrl={pdfOpen ? pdfUrl : null} />
+    </div>
+  );
+}
+
+function GridView({ data }: { data: RoutineSlot[] }) {
+  const periodMap = new Map<number, { period_no: number; start_time: string; end_time: string; cells: Record<number, { subject: string; teacher: string; coveredBy?: string | null } | null> }>();
+  for (const s of data) {
+    if (!periodMap.has(s.period_no)) {
+      periodMap.set(s.period_no, { period_no: s.period_no, start_time: s.start_time, end_time: s.end_time, cells: {} });
+    }
+    periodMap.get(s.period_no)!.cells[s.day_of_week] = { subject: s.subject?.name_en ?? "Free", teacher: "", coveredBy: s.covered_by };
+  }
+  const rows = [...periodMap.values()]
+    .sort((a, b) => a.period_no - b.period_no)
+    .map((p) => ({ period_no: p.period_no, start_time: p.start_time, end_time: p.end_time, cells: DAYS.map((_, i) => p.cells[i] ?? null) }));
+  return <RoutineGrid days={DAYS} rows={rows} todayIndex={new Date().getDay()} />;
 }
 
 export default function RoutinePage() {
