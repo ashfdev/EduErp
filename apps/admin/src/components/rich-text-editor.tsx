@@ -148,6 +148,7 @@ export function RichTextEditor({ value, onChange, placeholder = "Start writing..
       <div
         className="px-5 py-4 cursor-text"
         style={{ minHeight }}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onClick={() => { (editor as any)?.chain().focus().run(); }}
       >
         <style>{`
