@@ -494,7 +494,24 @@ portalRouter.get(
       include: { subject: true, group: { select: { name_en: true } } },
       orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
     });
-    res.json({ success: true, data: slots });
+
+    // Merge in today's substitutions (Plan Fourteen, Phase C3) — mirrors
+    // apps/teacher's GET /schedule/today merge exactly, but scoped to only
+    // today's specific date (not every future/past occurrence of this
+    // weekly slot) since the portal view spans the whole week, not just today.
+    const now = new Date();
+    const todayUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const todaySlotIds = slots.filter((s) => s.day_of_week === todayUtc.getUTCDay()).map((s) => s.id);
+    const todaySubs = todaySlotIds.length
+      ? await prisma.routineSubstitution.findMany({
+          where: { routine_slot_id: { in: todaySlotIds }, date: todayUtc },
+          select: { routine_slot_id: true, substitute_teacher: { select: { name_en: true } } },
+        })
+      : [];
+    const coveredById = new Map(todaySubs.map((s) => [s.routine_slot_id, s.substitute_teacher.name_en]));
+    const slotsWithCoverage = slots.map((s) => ({ ...s, covered_by: coveredById.get(s.id) ?? null }));
+
+    res.json({ success: true, data: slotsWithCoverage });
   }),
 );
 

@@ -17,9 +17,9 @@ interface RoutineSlotRow {
   period_no: number;
   start_time: string;
   end_time: string;
-  class: { name_en: string };
+  class: { id: string; name_en: string };
   section: { name: string } | null;
-  subject: { name_en: string } | null;
+  subject: { id: string; name_en: string } | null;
   teacher: { id: string; name_en: string } | null;
 }
 interface SubstitutionRow {
@@ -34,6 +34,15 @@ interface TeacherOption {
   id: string;
   name_en: string;
   designation: string;
+  department_id: string | null;
+}
+interface DepartmentOption {
+  id: string;
+  name_en: string;
+}
+interface SubjectOption {
+  id: string;
+  name_en: string;
 }
 
 function todayLocalDateString(): string {
@@ -47,6 +56,8 @@ export default function ProxySubstitutePage() {
   const [assignTarget, setAssignTarget] = useState<RoutineSlotRow | null>(null);
   const [substituteId, setSubstituteId] = useState("");
   const [reason, setReason] = useState("");
+  const [filterDepartmentId, setFilterDepartmentId] = useState("");
+  const [filterSubjectId, setFilterSubjectId] = useState("");
 
   // Local calendar weekday for the selected date — the same day_of_week
   // convention RoutineSlot already uses (0=Sunday).
@@ -60,9 +71,26 @@ export default function ProxySubstitutePage() {
     queryKey: ["settings", "routine", "substitutions", date],
     queryFn: async () => (await api.get("/api/settings/routine/substitutions", { params: { date } })).data.data,
   });
+  // Re-fetched per filter combination (Plan Fourteen, Phase C1) — the
+  // subject filter already correctly handles group-scoping "for free"
+  // since a group-scoped Subject row is distinct per Group.
   const { data: teachers } = useQuery<TeacherOption[]>({
-    queryKey: ["staff", "teachers"],
-    queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
+    queryKey: ["staff", "teachers", filterDepartmentId, filterSubjectId],
+    queryFn: async () =>
+      (
+        await api.get("/api/staff/teachers", {
+          params: { department_id: filterDepartmentId || undefined, subject_id: filterSubjectId || undefined },
+        })
+      ).data.data,
+  });
+  const { data: departments } = useQuery<DepartmentOption[]>({
+    queryKey: ["settings", "departments"],
+    queryFn: async () => (await api.get("/api/settings/departments")).data.data,
+  });
+  const { data: subjectOptions } = useQuery<SubjectOption[]>({
+    queryKey: ["subjects", assignTarget?.class.id],
+    queryFn: async () => (await api.get("/api/subjects", { params: { class_id: assignTarget!.class.id } })).data.data,
+    enabled: !!assignTarget,
   });
 
   const substitutionBySlot = new Map(substitutions?.map((s) => [s.routine_slot_id, s]) ?? []);
@@ -154,7 +182,19 @@ export default function ProxySubstitutePage() {
                               Revoke
                             </Button>
                           ) : (
-                            <Button size="sm" onClick={() => { setAssignTarget(s); setSubstituteId(""); setReason(""); }}>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                setAssignTarget(s);
+                                setSubstituteId("");
+                                setReason("");
+                                setFilterDepartmentId("");
+                                // Pre-filled (Plan Fourteen, Phase C1) — narrows the picker to
+                                // teachers who already teach this exact subject by default;
+                                // still clearable if the admin wants a broader list.
+                                setFilterSubjectId(s.subject?.id ?? "");
+                              }}
+                            >
                               Assign Substitute
                             </Button>
                           )}
@@ -175,6 +215,28 @@ export default function ProxySubstitutePage() {
             <p className="text-sm text-muted-foreground">
               {assignTarget?.class.name_en}{assignTarget?.section ? ` — ${assignTarget.section.name}` : ""} · {assignTarget?.subject?.name_en} · Regular teacher: {assignTarget?.teacher?.name_en}
             </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Filter by Department</Label>
+                <Select value={filterDepartmentId || "all"} onValueChange={(v) => setFilterDepartmentId(v === "all" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="All Departments" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments?.map((d) => <SelectItem key={d.id} value={d.id}>{d.name_en}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Filter by Subject</Label>
+                <Select value={filterSubjectId || "all"} onValueChange={(v) => setFilterSubjectId(v === "all" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="All Subjects" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {subjectOptions?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name_en}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Substitute Teacher</Label>
               <Select value={substituteId} onValueChange={setSubstituteId}>
@@ -183,6 +245,9 @@ export default function ProxySubstitutePage() {
                   {teachers?.filter((t) => t.id !== assignTarget?.teacher?.id).map((t) => (
                     <SelectItem key={t.id} value={t.id}>{t.name_en} — {t.designation}</SelectItem>
                   ))}
+                  {!teachers?.filter((t) => t.id !== assignTarget?.teacher?.id).length && (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">No teachers match these filters</p>
+                  )}
                 </SelectContent>
               </Select>
             </div>

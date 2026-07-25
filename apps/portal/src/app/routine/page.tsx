@@ -15,6 +15,9 @@ interface RoutineSlot {
   start_time: string;
   end_time: string;
   subject: { name_en: string } | null;
+  // Only ever set for today's specific date, never a future/past occurrence
+  // of this recurring weekly slot (Plan Fourteen, Phase C3).
+  covered_by: string | null;
 }
 
 const DAY_KEYS = ["daySun", "dayMon", "dayTue", "dayWed", "dayThu", "dayFri", "daySat"] as const;
@@ -91,6 +94,11 @@ function RoutineContent() {
                 {status && (
                   <Badge variant={STATUS_BADGE_VARIANT[status]} className="mt-1.5">
                     {t(`status${status.charAt(0).toUpperCase()}${status.slice(1)}`)}
+                  </Badge>
+                )}
+                {s.covered_by && (
+                  <Badge variant="warning" className="mt-1.5 ml-1.5">
+                    Covered today by {s.covered_by}
                   </Badge>
                 )}
               </div>

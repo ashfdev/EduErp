@@ -422,9 +422,11 @@ routineRouter.get(
         ...(query.group_id && { OR: [{ group_id: query.group_id }, { group_id: null }] }),
       },
       include: {
-        class: { select: { name_en: true } },
+        class: { select: { id: true, name_en: true } },
         section: { select: { name: true } },
-        subject: { select: { name_en: true } },
+        // id added (Plan Fourteen, Phase C1) — the Proxy/Substitute page
+        // uses it to pre-fill the substitute picker's Subject filter.
+        subject: { select: { id: true, name_en: true } },
         teacher: { select: { id: true, name_en: true } },
         group: { select: { name_en: true } },
       },
@@ -578,13 +580,27 @@ routineSubstitutionsRouter.post(
       },
     });
 
-    const substituteStaff = await prisma.staff.findUnique({ where: { id: body.substitute_teacher_id }, select: { user_id: true } });
+    const [substituteStaff, originalStaff] = await Promise.all([
+      prisma.staff.findUnique({ where: { id: body.substitute_teacher_id }, select: { user_id: true, name_en: true } }),
+      prisma.staff.findUnique({ where: { id: slot.teacher_id }, select: { user_id: true, name_en: true } }),
+    ]);
     if (substituteStaff) {
       await createInAppNotification({
         userId: substituteStaff.user_id,
         type: "ROUTINE_UPDATED",
         title: "You've been assigned as a substitute teacher",
         body: `Cover period ${slot.period_no} on ${date.toISOString().slice(0, 10)}`,
+        link: "/routine",
+      });
+    }
+    // Notify the original (absent) teacher too, not just the substitute
+    // (Plan Fourteen, Phase C2) — they were previously never told.
+    if (originalStaff) {
+      await createInAppNotification({
+        userId: originalStaff.user_id,
+        type: "ROUTINE_UPDATED",
+        title: "A substitute has been arranged for your period",
+        body: `Your period ${slot.period_no} on ${date.toISOString().slice(0, 10)} is being covered by ${substituteStaff?.name_en ?? "a substitute teacher"}`,
         link: "/routine",
       });
     }

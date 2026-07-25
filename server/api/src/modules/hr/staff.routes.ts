@@ -738,3 +738,35 @@ hrStaffRouter.delete(
     res.status(204).send();
   }),
 );
+
+// "Substitutions Covered" (Plan Fourteen, Phase C4) — read-only record of
+// both directions: periods this staff member was absent for (covered by
+// someone else) and periods they covered for someone else. Same
+// STAFF_READ_ROLES gate as the main profile GET, since this is display-only
+// historical data, not something requiring HR_MANAGE_ROLES to view.
+hrStaffRouter.get(
+  "/:id/substitutions",
+  authorize(STAFF_READ_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const [asOriginal, asSubstitute] = await Promise.all([
+      prisma.routineSubstitution.findMany({
+        where: { original_teacher_id: id },
+        include: {
+          substitute_teacher: { select: { name_en: true } },
+          routine_slot: { include: { class: { select: { name_en: true } }, section: { select: { name: true } }, subject: { select: { name_en: true } } } },
+        },
+        orderBy: { date: "desc" },
+      }),
+      prisma.routineSubstitution.findMany({
+        where: { substitute_teacher_id: id },
+        include: {
+          original_teacher: { select: { name_en: true } },
+          routine_slot: { include: { class: { select: { name_en: true } }, section: { select: { name: true } }, subject: { select: { name_en: true } } } },
+        },
+        orderBy: { date: "desc" },
+      }),
+    ]);
+    res.json({ success: true, data: { as_original: asOriginal, as_substitute: asSubstitute } });
+  }),
+);

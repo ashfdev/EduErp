@@ -83,6 +83,14 @@ interface StaffReferenceRow {
   address: string | null;
   phone: string | null;
 }
+interface SubstitutionHistoryRow {
+  id: string;
+  date: string;
+  reason: string | null;
+  original_teacher?: { name_en: string };
+  substitute_teacher?: { name_en: string };
+  routine_slot: { period_no: number; class: { name_en: string }; section: { name: string } | null; subject: { name_en: string } | null };
+}
 
 interface LeaveType {
   id: string;
@@ -275,6 +283,12 @@ export default function StaffDetailPage() {
   const { data: referenceRows } = useQuery<StaffReferenceRow[]>({
     queryKey: ["hr", "staff", id, "reference"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/reference`)).data.data,
+  });
+
+  // ── Substitutions Covered (Plan Fourteen, Phase C4) ────────────────────
+  const { data: substitutionData } = useQuery<{ as_original: SubstitutionHistoryRow[]; as_substitute: SubstitutionHistoryRow[] }>({
+    queryKey: ["hr", "staff", id, "substitutions"],
+    queryFn: async () => (await api.get(`/api/hr/staff/${id}/substitutions`)).data.data,
   });
 
   const emptyExperienceForm = { institution_name: "", designation: "", location: "", responsibility: "", start_date: "", end_date: "" };
@@ -764,6 +778,40 @@ export default function StaffDetailPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="space-y-3 pt-6">
+              <p className="font-medium">Substitutions Covered</p>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Covered for this staff member (was absent)</p>
+                {!substitutionData?.as_original.length && <p className="text-sm text-muted-foreground">No periods covered by others on file</p>}
+                {!!substitutionData?.as_original.length && (
+                  <div className="space-y-2">
+                    {substitutionData.as_original.map((s) => (
+                      <div key={s.id} className="rounded-md border p-2 text-sm">
+                        <span className="font-medium">{new Date(s.date).toLocaleDateString()}</span> — {s.routine_slot.class.name_en}{s.routine_slot.section ? ` · ${s.routine_slot.section.name}` : ""} · {s.routine_slot.subject?.name_en ?? "—"} (Period {s.routine_slot.period_no}) covered by <span className="font-medium">{s.substitute_teacher?.name_en}</span>
+                        {s.reason && <span className="text-muted-foreground"> — {s.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">Covered for someone else</p>
+                {!substitutionData?.as_substitute.length && <p className="text-sm text-muted-foreground">No substitutions covered on file</p>}
+                {!!substitutionData?.as_substitute.length && (
+                  <div className="space-y-2">
+                    {substitutionData.as_substitute.map((s) => (
+                      <div key={s.id} className="rounded-md border p-2 text-sm">
+                        <span className="font-medium">{new Date(s.date).toLocaleDateString()}</span> — {s.routine_slot.class.name_en}{s.routine_slot.section ? ` · ${s.routine_slot.section.name}` : ""} · {s.routine_slot.subject?.name_en ?? "—"} (Period {s.routine_slot.period_no}) for <span className="font-medium">{s.original_teacher?.name_en}</span>
+                        {s.reason && <span className="text-muted-foreground"> — {s.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
