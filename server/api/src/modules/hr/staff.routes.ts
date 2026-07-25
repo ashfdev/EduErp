@@ -12,7 +12,8 @@ import { parse } from "csv-parse/sync";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
-import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema } from "@education-erp/validators";
+import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema, staffResignSchema, staffRejoinSchema } from "@education-erp/validators";
+import { logAudit } from "../../lib/audit-log";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -502,6 +503,64 @@ hrStaffRouter.delete(
     const staff = await prisma.staff.update({ where: { id }, data: { deleted_at: new Date(), is_active: false } });
     await prisma.user.update({ where: { id: staff.user_id }, data: { is_active: false } });
     res.status(204).send();
+  }),
+);
+
+// Resign/rejoin (Plan Fourteen, Phase I) — deliberately alongside is_active,
+// not a replacement for it: is_active stays the real login/active gate,
+// these two new fields are the HR record-keeping layer on top. Unlike the
+// hard-delete route above (which soft-deletes via deleted_at and disables
+// login permanently), resign preserves the staff record in full working
+// order — a resigned staff member can rejoin at any time via the paired
+// route below.
+hrStaffRouter.post(
+  "/:id/resign",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = staffResignSchema.parse(req.body);
+    const staff = await prisma.staff.findUnique({ where: { id } });
+    if (!staff) throw notFound("Staff member not found");
+
+    const updated = await prisma.staff.update({
+      where: { id },
+      data: { is_active: false, resignation_date: body.resignation_date, resignation_reason: body.resignation_reason },
+    });
+    await prisma.user.update({ where: { id: staff.user_id }, data: { is_active: false } });
+
+    await logAudit("STAFF_RESIGN", {
+      userId: req.user!.sub,
+      targetType: "Staff",
+      targetId: id,
+      metadata: { resignation_date: body.resignation_date, resignation_reason: body.resignation_reason },
+      req,
+    });
+
+    res.json({ success: true, data: updated });
+  }),
+);
+
+hrStaffRouter.post(
+  "/:id/rejoin",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = staffRejoinSchema.parse(req.body);
+    const staff = await prisma.staff.findUnique({ where: { id } });
+    if (!staff) throw notFound("Staff member not found");
+
+    // The prior resignation cycle isn't retained beyond this point (a full
+    // history log is a natural follow-on if repeat cycles ever need
+    // tracking, not built here — see the schema comment on these fields).
+    const updated = await prisma.staff.update({
+      where: { id },
+      data: { is_active: true, rejoin_date: body.rejoin_date, resignation_date: null, resignation_reason: null },
+    });
+    await prisma.user.update({ where: { id: staff.user_id }, data: { is_active: true } });
+
+    await logAudit("STAFF_REJOIN", { userId: req.user!.sub, targetType: "Staff", targetId: id, metadata: { rejoin_date: body.rejoin_date }, req });
+
+    res.json({ success: true, data: updated });
   }),
 );
 

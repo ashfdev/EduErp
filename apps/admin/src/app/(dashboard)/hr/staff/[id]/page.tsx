@@ -15,6 +15,9 @@ interface StaffDetail {
   designation: string;
   photo_url: string | null;
   is_active: boolean;
+  resignation_date: string | null;
+  resignation_reason: string | null;
+  rejoin_date: string | null;
   gender: string | null;
   religion: string | null;
   date_of_birth: string | null;
@@ -468,6 +471,32 @@ export default function StaffDetailPage() {
     a.click();
   }
 
+  const [resignOpen, setResignOpen] = useState(false);
+  const [resignDate, setResignDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [resignReason, setResignReason] = useState("");
+  const resignMutation = useMutation({
+    mutationFn: () => api.post(`/api/hr/staff/${id}/resign`, { resignation_date: resignDate, resignation_reason: resignReason }),
+    onSuccess: () => {
+      toast.success("Staff member marked as resigned");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
+      setResignOpen(false);
+      setResignReason("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record resignation"),
+  });
+
+  const [rejoinOpen, setRejoinOpen] = useState(false);
+  const [rejoinDate, setRejoinDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const rejoinMutation = useMutation({
+    mutationFn: () => api.post(`/api/hr/staff/${id}/rejoin`, { rejoin_date: rejoinDate }),
+    onSuccess: () => {
+      toast.success("Staff member marked as rejoined");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", "detail", id] });
+      setRejoinOpen(false);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record rejoin"),
+  });
+
   if (!staff) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   return (
@@ -479,7 +508,7 @@ export default function StaffDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{staff.name_en}</h1>
-            <StatusBadge status={staff.is_active ? "ACTIVE" : "INACTIVE"} />
+            <StatusBadge status={staff.is_active ? "ACTIVE" : staff.resignation_date ? "RESIGNED" : "INACTIVE"} />
             {staff._count.documents === 0 && <Badge variant="warning">No documents on file</Badge>}
             {!staff.salary_structure_id && <Badge variant="warning">No salary structure</Badge>}
           </div>
@@ -487,9 +516,59 @@ export default function StaffDetailPage() {
           <p className="text-sm text-muted-foreground">
             {staff.designation} {staff.department && `· ${staff.department.name_en}`} {staff.program && `· ${staff.program.name_en}`}
           </p>
+          {staff.resignation_date && (
+            <p className="mt-1 text-xs text-amber-700">
+              Resigned {new Date(staff.resignation_date).toLocaleDateString()}
+              {staff.resignation_reason && ` — ${staff.resignation_reason}`}
+            </p>
+          )}
         </div>
         <Button size="sm" variant="outline" onClick={downloadIdCard}>Download ID Card</Button>
+        {staff.is_active ? (
+          <Button size="sm" variant="destructive" onClick={() => setResignOpen(true)}>Resign</Button>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setRejoinOpen(true)}>Rejoin</Button>
+        )}
       </div>
+
+      <Dialog open={resignOpen} onOpenChange={setResignOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mark {staff.name_en} as Resigned</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This disables their login immediately. They can be marked as rejoined at any time from this page, which
+            re-enables their login.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Resignation Date</Label>
+            <Input type="date" value={resignDate} onChange={(e) => setResignDate(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reason</Label>
+            <Textarea value={resignReason} onChange={(e) => setResignReason(e.target.value)} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => resignMutation.mutate()} disabled={resignMutation.isPending || !resignReason.trim()}>
+              {resignMutation.isPending ? "Saving..." : "Confirm Resignation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejoinOpen} onOpenChange={setRejoinOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Mark {staff.name_en} as Rejoined</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This re-enables their login and clears the resignation record.</p>
+          <div className="space-y-1.5">
+            <Label>Rejoin Date</Label>
+            <Input type="date" value={rejoinDate} onChange={(e) => setRejoinDate(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button onClick={() => rejoinMutation.mutate()} disabled={rejoinMutation.isPending}>
+              {rejoinMutation.isPending ? "Saving..." : "Confirm Rejoin"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="profile">
         <TabsList>

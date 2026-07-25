@@ -16,6 +16,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   LATE: "warning",
   QUEUED: "warning",
   INACTIVE: "secondary",
+  RESIGNED: "outline",
   SKIPPED: "secondary",
   OVERDUE: "destructive",
   FAILED: "destructive",

@@ -73,6 +73,15 @@ export const staffReferenceSchema = z.object({
   phone: z.string().optional().nullable(),
 });
 
+export const staffResignSchema = z.object({
+  resignation_date: z.coerce.date(),
+  resignation_reason: z.string().min(1),
+});
+
+export const staffRejoinSchema = z.object({
+  rejoin_date: z.coerce.date(),
+});
+
 export const leaveTypeSchema = z.object({
   name: z.string().min(1),
   days_allowed: z.number().int().min(0),

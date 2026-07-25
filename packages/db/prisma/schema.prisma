@@ -918,6 +918,15 @@ model Staff {
   salary_structure    SalaryStructure?           @relation(fields: [salary_structure_id], references: [id])
   show_on_website     Boolean                    @default(false)
   is_active           Boolean                    @default(true)
+  // HR record-keeping layer (Plan Fourteen, Phase I) -- deliberately
+  // alongside, not instead of, is_active (the real login/active gate).
+  // rejoin_date sets is_active back to true and clears the two
+  // resignation fields; the prior cycle isn't retained beyond that (a
+  // full history log is a natural follow-on if repeat cycles ever need
+  // to be tracked, not built here).
+  resignation_date    DateTime?
+  resignation_reason  String?
+  rejoin_date         DateTime?
   deleted_at          DateTime?
   created_at          DateTime                   @default(now())
   updated_at          DateTime                   @updatedAt

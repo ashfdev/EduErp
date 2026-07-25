@@ -21,6 +21,7 @@ interface StaffRow {
   designation: string;
   photo_url: string | null;
   is_active: boolean;
+  resignation_date: string | null;
   department: { name_en: string } | null;
   user: { role: string } | null;
   _count: { documents: number };
@@ -188,7 +189,7 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
                     </TableCell>
                     <TableCell>{s.designation}</TableCell>
                     <TableCell>{s.department?.name_en ?? "-"}</TableCell>
-                    <TableCell><StatusBadge status={s.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
+                    <TableCell><StatusBadge status={s.is_active ? "ACTIVE" : s.resignation_date ? "RESIGNED" : "INACTIVE"} /></TableCell>
                     <TableCell className="text-right">
                       <Link href={`/hr/staff/${s.id}`}>
                         <Button size="sm" variant="outline">View</Button>

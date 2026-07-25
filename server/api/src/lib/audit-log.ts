@@ -33,7 +33,9 @@ export type AuditAction =
   | "PERMISSION_UPDATE"
   | "DOCUMENT_REQUEST_REVIEWED"
   | "ADMIT_CARD_OVERRIDE"
-  | "PAYMENT_GATEWAY_CONFIG_UPDATE";
+  | "PAYMENT_GATEWAY_CONFIG_UPDATE"
+  | "STAFF_RESIGN"
+  | "STAFF_REJOIN";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.
