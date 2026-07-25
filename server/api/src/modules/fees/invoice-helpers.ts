@@ -67,6 +67,7 @@ export async function createMonthlyInvoiceIfMissing(
       fee_structure_id: structure.id,
       academic_year_id: structure.academic_year_id,
       category: structure.category,
+      fee_sub_category_id: structure.fee_sub_category_id,
       description: structure.name,
       amount_due: structure.amount,
       due_date: dueDate,
@@ -123,8 +124,16 @@ export async function invoiceReadmissionFeeIfConfigured(
   destinationClassId: string,
   destinationAcademicYearId: string,
 ): Promise<{ created: boolean }> {
+  // Multi-class-aware (Phase N3) -- a READMISSION structure scoped via
+  // FeeStructureClass rows (the `classes` relation) matches here exactly
+  // like one scoped via the legacy class_id scalar.
   const structure = await tx.feeStructure.findFirst({
-    where: { class_id: destinationClassId, academic_year_id: destinationAcademicYearId, category: "READMISSION", is_active: true },
+    where: {
+      academic_year_id: destinationAcademicYearId,
+      category: "READMISSION",
+      is_active: true,
+      OR: [{ class_id: destinationClassId }, { classes: { some: { class_id: destinationClassId } } }],
+    },
   });
   if (!structure) return { created: false };
 
@@ -140,6 +149,7 @@ export async function invoiceReadmissionFeeIfConfigured(
       fee_structure_id: structure.id,
       academic_year_id: destinationAcademicYearId,
       category: "READMISSION",
+      fee_sub_category_id: structure.fee_sub_category_id,
       description: structure.name,
       amount_due: structure.amount,
       due_date: new Date(),

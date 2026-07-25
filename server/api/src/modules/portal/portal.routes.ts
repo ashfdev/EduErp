@@ -17,6 +17,7 @@ import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { syncOverdueInvoices } from "../fees/invoice-helpers";
+import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
@@ -363,18 +364,20 @@ portalRouter.get(
     const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
     if (!activeYear) return res.json({ success: true, data: [] });
 
+    // Multi-class-aware (Phase N3) -- deliberately NOT filtered by class_id
+    // in the DB query itself: a multi-class structure has its legacy
+    // class_id scalar enforced null too, so a naive `OR: [{class_id:null},
+    // ...]` here would wrongly match every multi-class structure against
+    // every class. feeStructureAppliesToStudent resolves each candidate's
+    // true scope (join-table rows first, legacy scalar fallback) instead.
     const structures = await prisma.feeStructure.findMany({
-      where: {
-        academic_year_id: activeYear.id,
-        is_active: true,
-        OR: [{ class_id: null }, { class_id: student.current_class_id }],
-      },
+      where: { academic_year_id: activeYear.id, is_active: true },
     });
 
     const now = new Date();
     const projected: { category: string; name: string; amount: number; frequency: string }[] = [];
     for (const structure of structures) {
-      if (structure.section_id && structure.section_id !== student.current_section_id) continue;
+      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id))) continue;
 
       if (structure.frequency === "MONTHLY") {
         const existing = await prisma.invoice.findFirst({

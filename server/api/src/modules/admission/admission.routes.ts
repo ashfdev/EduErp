@@ -27,6 +27,7 @@ import {
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { createMonthlyInvoiceIfMissing } from "../fees/invoice-helpers";
+import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
@@ -891,17 +892,18 @@ admissionRouter.post(
       // reuses that same idempotent create-if-missing check, so if bulk
       // generation for this month already ran (or runs again later), this
       // never produces a duplicate invoice for the same student+structure.
+      // Multi-class-aware (Phase N3) -- deliberately NOT filtered by class_id
+      // in the DB query itself: a multi-class structure has its legacy
+      // class_id scalar enforced null too, so a naive `OR: [{class_id:null},
+      // ...]` here would wrongly match every multi-class structure against
+      // every class. feeStructureAppliesToStudent resolves each candidate's
+      // true scope (join-table rows first, legacy scalar fallback) instead.
       const now = new Date();
       const monthlyStructures = await tx.feeStructure.findMany({
-        where: {
-          academic_year_id: application.cycle.academic_year_id,
-          frequency: "MONTHLY",
-          is_active: true,
-          OR: [{ class_id: null }, { class_id: application.cycle.class_id }],
-        },
+        where: { academic_year_id: application.cycle.academic_year_id, frequency: "MONTHLY", is_active: true },
       });
       for (const structure of monthlyStructures) {
-        if (structure.section_id && structure.section_id !== body.section_id) continue;
+        if (!(await feeStructureAppliesToStudent(tx, structure, application.cycle.class_id, body.section_id ?? null))) continue;
         await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
       }
 

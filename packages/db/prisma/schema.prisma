@@ -303,6 +303,7 @@ model AcademicYear {
   fee_structures            FeeStructure[]
   course_enrollments        CourseEnrollment[]
   student_waivers           StudentWaiver[]
+  fee_fine_rules            FeeFineRule[]
 }
 
 model Shift {
@@ -382,6 +383,8 @@ model Class {
   academic_histories StudentAcademicHistory[]
   exam_session_classes ExamSessionClass[]
   visitors         Visitor[]
+  fee_structure_classes FeeStructureClass[]
+  fee_fine_rule_classes FeeFineRuleClass[]
 
   @@index([academic_year_id])
   @@index([program_id])
@@ -1355,6 +1358,13 @@ model FeeStructure {
   id               String       @id @default(cuid())
   academic_year_id String
   academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
+  // class_id/section_id stay as the permanent, correct representation of
+  // the (overwhelmingly common) single-class case -- not a transitional
+  // shim. When FeeStructureClass rows exist for this structure, they win
+  // and this scalar is enforced null at write time; otherwise every read
+  // site falls back to this scalar exactly as before multi-class existed
+  // (see resolveFeeStructureClassIds in fee-fine-engine.ts, the one shared
+  // helper every one of the 5 read call sites must use identically).
   class_id         String?
   section_id       String?
   // University fee scoping (Phase 27 F.1, folded into this migration since
@@ -1363,6 +1373,11 @@ model FeeStructure {
   program_id       String?
   program          Program?     @relation(fields: [program_id], references: [id])
   category         FeeCategory
+  // Plan Fourteen, Phase N1 -- optional finer-grained catalog entry under
+  // category (e.g. TUITION -> "Lab Fee"). Null = the structure is just a
+  // plain category-level fee, unchanged from before this existed.
+  fee_sub_category_id String?
+  fee_sub_category FeeSubCategory? @relation(fields: [fee_sub_category_id], references: [id])
   name             String
   amount           Float
   frequency        FeeFrequency
@@ -1370,8 +1385,10 @@ model FeeStructure {
   is_active        Boolean      @default(true)
   created_at       DateTime     @default(now())
   invoices         Invoice[]
+  classes          FeeStructureClass[]
 
   @@index([program_id])
+  @@index([fee_sub_category_id])
 }
 
 model Invoice {
@@ -1383,10 +1400,20 @@ model Invoice {
   fee_structure    FeeStructure? @relation(fields: [fee_structure_id], references: [id])
   academic_year_id String
   category         FeeCategory
+  // Denormalized copy of FeeStructure.fee_sub_category_id at invoice-
+  // creation time -- same convention as the existing `category` copy, so a
+  // structure's sub-category can change later without rewriting history.
+  fee_sub_category_id String?
+  fee_sub_category FeeSubCategory? @relation(fields: [fee_sub_category_id], references: [id])
   description      String
   amount_due       Float
   amount_paid      Float         @default(0)
   fine_amount      Float         @default(0)
+  // True only for a fine line created directly via the "Add Fine" ad-hoc
+  // action (fee_structure_id: null) -- distinguishes a manually-added fine
+  // invoice from fine_amount (the late-fee/fine-engine surcharge computed
+  // against a real fee invoice). Purely a display/reporting flag.
+  is_manual_fine   Boolean       @default(false)
   due_date         DateTime
   status           InvoiceStatus @default(PENDING)
   month            Int?
@@ -1398,6 +1425,98 @@ model Invoice {
 
   @@index([student_id])
   @@index([status])
+  @@index([fee_sub_category_id])
+}
+
+// Plan Fourteen, Phase N1 -- optional finer-grained catalog entry nested
+// under a FeeCategory (e.g. TUITION -> "Lab Fee", "Computer Fee"). No
+// hard-delete route, is_active toggle only -- mirrors WaiverType's exact
+// lifecycle, since a historically-referenced catalog row must never
+// disappear out from under old FeeStructure/Invoice rows.
+model FeeSubCategory {
+  id          String      @id @default(cuid())
+  category    FeeCategory
+  name        String
+  description String?
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+
+  fee_structures FeeStructure[]
+  invoices       Invoice[]
+  fine_rules     FeeFineRule[]
+
+  @@unique([category, name])
+}
+
+// Plan Fourteen, Phase N3 -- multi-class assignment for a single
+// FeeStructure. When rows exist for a structure, they win over its legacy
+// class_id/section_id scalar (which is enforced null at write time in that
+// case); when none exist, every read site falls back to the legacy scalar
+// unchanged. Section-level narrowing is deliberately unsupported here (the
+// legacy single-class-with-section form stays available for that case).
+model FeeStructureClass {
+  id               String       @id @default(cuid())
+  fee_structure_id String
+  fee_structure    FeeStructure @relation(fields: [fee_structure_id], references: [id])
+  class_id         String
+  class            Class        @relation(fields: [class_id], references: [id])
+  created_at       DateTime     @default(now())
+
+  @@unique([fee_structure_id, class_id])
+}
+
+// Plan Fourteen, Phase N2 -- category/sub-category/class-scoped fine
+// engine. Reuses the single institution-wide FeeRules.grace_period_days
+// rather than duplicating a second grace-window concept -- only the fine
+// amount/type becomes overridable per category/sub-category/class. The
+// resolver (resolveFineForInvoice in fee-fine-engine.ts) finds the most
+// specific matching active rule and falls back to the completely
+// unmodified calculateLateFee() when nothing matches, guaranteeing
+// byte-identical behavior for every invoice/category that never opts in.
+model FeeFineRule {
+  id                  String            @id @default(cuid())
+  academic_year_id    String
+  academic_year       AcademicYear      @relation(fields: [academic_year_id], references: [id])
+  scope_mode          FineScopeMode
+  fee_category        FeeCategory
+  fee_sub_category_id String?
+  fee_sub_category    FeeSubCategory?   @relation(fields: [fee_sub_category_id], references: [id])
+  fine_value_type     FineValueType
+  fine_value          Float
+  applicable_for      FineApplicableFor @default(ALL_CLASSES)
+  is_active           Boolean           @default(true)
+  created_at          DateTime          @default(now())
+  updated_at          DateTime          @updatedAt
+  classes             FeeFineRuleClass[]
+
+  @@index([academic_year_id])
+  @@index([fee_sub_category_id])
+}
+
+model FeeFineRuleClass {
+  id           String      @id @default(cuid())
+  fine_rule_id String
+  fine_rule    FeeFineRule @relation(fields: [fine_rule_id], references: [id])
+  class_id     String
+  class        Class       @relation(fields: [class_id], references: [id])
+
+  @@unique([fine_rule_id, class_id])
+}
+
+enum FineScopeMode {
+  CATEGORY_FINE
+  SUB_CATEGORY_FINE
+}
+
+enum FineValueType {
+  FIXED
+  PERCENTAGE
+}
+
+enum FineApplicableFor {
+  ALL_CLASSES
+  SPECIFIC_CLASSES
 }
 
 // Full reusable Waiver Type system (Plan Thirteen, Phase F) -- a template
@@ -1468,6 +1587,9 @@ enum InvoiceGenerationTrigger {
   BULK_MONTHLY
   PROMOTION
   ADMISSION
+  // Plan Fourteen, Phase N4 -- the new "Generate Fees of [name]" on-demand
+  // action from the redesigned Fee Collection workspace.
+  STUDENT_ON_DEMAND
 }
 
 // One row per invoice a waiver actually discounted -- traced per-invoice
@@ -1507,8 +1629,21 @@ model Payment {
   notes           String?
   collected_by_id String?
   created_at      DateTime       @default(now())
+  // Plan Fourteen, Phase N4 -- a batch "Receive Fee" submission groups N
+  // Payment rows under one shared key for display/reporting, but each row
+  // still gets its own unique receipt_no (a single shared receipt *number*
+  // across a batch would need a bigger change to receipt_no's uniqueness
+  // semantics -- out of scope here, flagged not silently decided).
+  receipt_batch_id      String?
+  // Line-level discount applied at collection time (ad-hoc, staff-entered)
+  // -- distinct from a WaiverType/StudentWaiver discount, which is applied
+  // at invoice-creation time via InvoiceWaiverApplication instead. Stays
+  // un-journaled, matching the waiver system's own existing precedent.
+  discount_amount        Float?
+  secondary_receipt_no   String?
 
   @@index([invoice_id])
+  @@index([receipt_batch_id])
 }
 
 // ─────────────────────────────────────────────

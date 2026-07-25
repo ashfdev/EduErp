@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const feeCategorySchema = z.enum([
-  "ADMISSION", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER",
+  "ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER",
 ]);
 
 export const feeStructureSchema = z.object({
@@ -9,12 +9,45 @@ export const feeStructureSchema = z.object({
   class_id: z.string().optional().nullable(),
   section_id: z.string().optional().nullable(),
   category: feeCategorySchema,
+  fee_sub_category_id: z.string().optional().nullable(),
   name: z.string().min(1),
   amount: z.number().min(0),
   frequency: z.enum(["MONTHLY", "YEARLY", "ONE_TIME"]),
   due_day: z.number().int().min(1).max(28).optional().nullable(),
 });
 export type FeeStructureInput = z.infer<typeof feeStructureSchema>;
+
+// Plan Fourteen, Phase N1 -- optional finer-grained catalog entry nested
+// under a FeeCategory (e.g. TUITION -> "Lab Fee").
+export const feeSubCategorySchema = z.object({
+  category: feeCategorySchema,
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+export type FeeSubCategoryInput = z.infer<typeof feeSubCategorySchema>;
+
+// Plan Fourteen, Phase N2 -- category/sub-category/class-scoped fine engine.
+export const feeFineRuleSchema = z.object({
+  academic_year_id: z.string().min(1),
+  scope_mode: z.enum(["CATEGORY_FINE", "SUB_CATEGORY_FINE"]),
+  fee_category: feeCategorySchema,
+  fee_sub_category_id: z.string().optional().nullable(),
+  fine_value_type: z.enum(["FIXED", "PERCENTAGE"]),
+  fine_value: z.number().min(0),
+  applicable_for: z.enum(["ALL_CLASSES", "SPECIFIC_CLASSES"]).default("ALL_CLASSES"),
+  class_ids: z.array(z.string()).optional().default([]),
+  is_active: z.boolean().optional(),
+});
+export type FeeFineRuleInput = z.infer<typeof feeFineRuleSchema>;
+
+// Plan Fourteen, Phase N3 -- full-replace multi-class assignment for a
+// single FeeStructure.
+export const assignFeeStructureClassesSchema = z.object({
+  class_ids: z.array(z.string()).min(1),
+  override_overlap: z.boolean().optional(),
+});
+export type AssignFeeStructureClassesInput = z.infer<typeof assignFeeStructureClassesSchema>;
 
 export const generateInvoiceSchema = z.object({
   fee_structure_id: z.string().min(1),
@@ -65,3 +98,36 @@ export const initiatePaymentSchema = z.object({
   invoice_id: z.string().min(1),
   gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"]),
 });
+
+// Plan Fourteen, Phase N4 -- Fee Collection redesign. Multi-line "Receive
+// Fee" submit -- one $transaction, reuses the existing single-invoice
+// /collect logic per line (fine resolution via the new engine, existing
+// advance-payment/credit-balance handling untouched).
+const collectBatchLineSchema = z.object({
+  invoice_id: z.string().min(1),
+  amount: z.number().min(0.01),
+  discount_amount: z.number().min(0).optional(),
+});
+export const collectBatchSchema = z.object({
+  lines: z.array(collectBatchLineSchema).min(1),
+  gateway: z.enum(["CASH", "BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET"]),
+  notes: z.string().optional(),
+  secondary_receipt_no: z.string().optional(),
+  send_sms: z.boolean().optional(),
+});
+export type CollectBatchInput = z.infer<typeof collectBatchSchema>;
+
+// "Add One-Time Fee" / "Add Fine" ad-hoc invoice -- fee_structure_id stays
+// null (already schema-legal today), category/sub-category/amount/
+// description are staff-entered directly rather than resolved from a
+// FeeStructure row.
+export const adHocInvoiceSchema = z.object({
+  student_id: z.string().min(1),
+  category: feeCategorySchema,
+  fee_sub_category_id: z.string().optional().nullable(),
+  description: z.string().min(1),
+  amount: z.number().min(0.01),
+  due_date: z.coerce.date().optional(),
+  is_manual_fine: z.boolean().optional(),
+});
+export type AdHocInvoiceInput = z.infer<typeof adHocInvoiceSchema>;

@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import {
+  Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, Label,
+  PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
@@ -33,14 +37,23 @@ interface StudentBasic {
   name_en: string;
   student_uid: string;
 }
-interface Invoice {
-  id: string;
+interface WorkspaceLine {
+  invoice_id: string;
+  category: string;
+  sub_category: string | null;
   description: string;
+  period: string;
   amount_due: number;
   amount_paid: number;
   fine_amount: number;
-  status: string;
-  due_date: string;
+  outstanding: number;
+  is_manual_fine: boolean;
+  waivers: { waiver_name: string; discount_amount: number }[];
+}
+interface Workspace {
+  student: StudentBasic;
+  credit_balance: number;
+  lines: WorkspaceLine[];
 }
 
 const GATEWAYS = [
@@ -50,6 +63,7 @@ const GATEWAYS = [
   { value: "NAGAD", label: "Nagad (manual)" },
   { value: "ROCKET", label: "Rocket (manual)" },
 ];
+const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
 function rosterStatusBadge(status: RosterStudent["status"]) {
   if (status === "PAID") return <Badge variant="success">Paid</Badge>;
@@ -190,93 +204,245 @@ async function downloadReceiptPdf(paymentId: string, receiptNo: string) {
   URL.revokeObjectURL(url);
 }
 
+function AdHocFeeForm({ studentId, isFine, onDone }: { studentId: string; isFine: boolean; onDone: () => void }) {
+  const [category, setCategory] = useState("TUITION");
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.post("/api/fees/invoices/ad-hoc", {
+        student_id: studentId,
+        category,
+        description: description || (isFine ? "Fine" : "One-Time Fee"),
+        amount: Number(amount),
+        is_manual_fine: isFine,
+      }),
+    onSuccess: () => {
+      toast.success(isFine ? "Fine added" : "Fee added");
+      onDone();
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add"),
+  });
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded-md border border-dashed p-3">
+      {!isFine && (
+        <div className="space-y-1">
+          <Label className="text-xs">Category</Label>
+          <select className="rounded-md border px-2 py-1.5 text-sm" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      )}
+      <div className="space-y-1">
+        <Label className="text-xs">Remarks</Label>
+        <Input className="w-40" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={isFine ? "Reason for fine" : "Description"} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Amount</Label>
+        <Input type="number" className="w-28" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+      <Button size="sm" disabled={!amount || mutation.isPending} onClick={() => mutation.mutate()}>
+        {mutation.isPending ? "Adding..." : isFine ? "Add Fine" : "Add Fee"}
+      </Button>
+    </div>
+  );
+}
+
 function CollectDialog({ student, onClose }: { student: StudentBasic | null; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [amounts, setAmounts] = useState<Record<string, number>>({});
-  const [gateways, setGateways] = useState<Record<string, string>>({});
-  const [lastPayment, setLastPayment] = useState<{ id: string; receipt_no: string } | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [discounts, setDiscounts] = useState<Record<string, number>>({});
+  const [gateway, setGateway] = useState("CASH");
+  const [secondaryReceiptNo, setSecondaryReceiptNo] = useState("");
+  const [sendSms, setSendSms] = useState(true);
+  const [showAdHoc, setShowAdHoc] = useState<"fee" | "fine" | null>(null);
+  const [lastBatch, setLastBatch] = useState<{ receipt_batch_id: string; payments: { id: string; receipt_no: string }[] } | null>(null);
 
-  const { data: invoices } = useQuery<Invoice[]>({
-    queryKey: ["fees", "invoices", "student", student?.id],
-    queryFn: async () => (await api.get("/api/fees/invoices", { params: { student_id: student?.id } })).data.data,
+  const { data: workspace, isFetching } = useQuery<Workspace>({
+    queryKey: ["fees", "collect-workspace", student?.id],
+    queryFn: async () => (await api.get(`/api/fees/collect-workspace/${student?.id}`)).data.data,
     enabled: !!student,
   });
 
-  const collectMutation = useMutation({
-    mutationFn: ({ invoiceId, amount, gateway }: { invoiceId: string; amount: number; gateway: string }) =>
-      api.post("/api/fees/collect", { invoice_id: invoiceId, amount, gateway }),
-    onSuccess: (res, { invoiceId }) => {
-      toast.success("Payment collected");
-      setAmounts((prev) => ({ ...prev, [invoiceId]: 0 }));
-      setLastPayment({ id: res.data.data.payment.id, receipt_no: res.data.data.payment.receipt_no });
-      queryClient.invalidateQueries({ queryKey: ["fees", "invoices", "student", student?.id] });
-      queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
+  useEffect(() => {
+    setSelected(new Set());
+    setDiscounts({});
+    setLastBatch(null);
+  }, [student?.id]);
+
+  const generateMutation = useMutation({
+    mutationFn: () => api.post(`/api/fees/generate-for-student/${student?.id}`),
+    onSuccess: (res) => {
+      const created = res.data.data.created as number;
+      toast.success(created > 0 ? `Generated ${created} fee(s) for ${student?.name_en}` : "No new fees to generate — already up to date");
+      queryClient.invalidateQueries({ queryKey: ["fees", "collect-workspace", student?.id] });
     },
-    onError: (err: unknown) => {
-      const message = extractErrorMessage(err) ?? "Failed to collect payment";
-      toast.error(message);
-    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate fees"),
   });
 
-  const unpaid = invoices?.filter((i) => i.status !== "PAID" && i.status !== "WAIVED") ?? [];
+  const collectBatchMutation = useMutation({
+    mutationFn: () => {
+      const lines = [...selected].map((invoiceId) => {
+        const line = workspace!.lines.find((l) => l.invoice_id === invoiceId)!;
+        const discount = discounts[invoiceId] ?? 0;
+        const receivable = Math.max(0, line.outstanding - discount);
+        return { invoice_id: invoiceId, amount: receivable, discount_amount: discount || undefined };
+      });
+      return api.post("/api/fees/collect-batch", { lines, gateway, secondary_receipt_no: secondaryReceiptNo || undefined, send_sms: sendSms });
+    },
+    onSuccess: (res) => {
+      toast.success("Payment recorded");
+      setLastBatch(res.data.data);
+      setSelected(new Set());
+      setDiscounts({});
+      queryClient.invalidateQueries({ queryKey: ["fees", "collect-workspace", student?.id] });
+      queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record payment"),
+  });
+
+  const lines = workspace?.lines ?? [];
+  const total = [...selected].reduce((sum, id) => {
+    const line = lines.find((l) => l.invoice_id === id);
+    if (!line) return sum;
+    const discount = discounts[id] ?? 0;
+    return sum + Math.max(0, line.outstanding - discount);
+  }, 0);
+
+  function toggleLine(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <Dialog open={!!student} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Collect Fee — {student?.name_en} <span className="font-mono text-xs text-muted-foreground">{student?.student_uid}</span></DialogTitle>
         </DialogHeader>
-        {lastPayment && (
-          <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
-            <span>Payment recorded — receipt <span className="font-mono">{lastPayment.receipt_no}</span></span>
-            <Button size="sm" variant="outline" onClick={() => downloadReceiptPdf(lastPayment.id, lastPayment.receipt_no)}>
-              Download Receipt
-            </Button>
+
+        {workspace && workspace.credit_balance > 0 && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Credit balance: ৳{workspace.credit_balance} (auto-applied to future invoices)
           </div>
         )}
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto">
-          {!unpaid.length && <EmptyState title="No outstanding invoices" />}
-          {unpaid.map((inv) => (
-            <Card key={inv.id}>
-              <CardContent className="space-y-2 pt-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">{inv.description}</p>
-                    <p className="text-sm text-muted-foreground">Due ৳{inv.amount_due} · Paid ৳{inv.amount_paid} · Fine ৳{inv.fine_amount}</p>
-                  </div>
-                  <StatusBadge status={inv.status} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="rounded-md border px-2 py-2 text-sm"
-                    value={gateways[inv.id] ?? "CASH"}
-                    onChange={(e) => setGateways((prev) => ({ ...prev, [inv.id]: e.target.value }))}
-                  >
-                    {GATEWAYS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-                  </select>
-                  <Input
-                    type="number"
-                    className="w-28"
-                    placeholder="Amount"
-                    value={amounts[inv.id] || ""}
-                    onChange={(e) => setAmounts((prev) => ({ ...prev, [inv.id]: Number(e.target.value) }))}
-                  />
-                  <Button
-                    size="sm"
-                    disabled={!amounts[inv.id] || collectMutation.isPending}
-                    onClick={() => collectMutation.mutate({ invoiceId: inv.id, amount: amounts[inv.id]!, gateway: gateways[inv.id] ?? "CASH" })}
-                  >
-                    Collect
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {(gateways[inv.id] ?? "CASH") === "CASH" || (gateways[inv.id] ?? "CASH") === "BANK_TRANSFER"
-                    ? "Recorded immediately as received at the counter."
-                    : "Manual entry — use only for a wallet payment you've already confirmed by other means (not the guardian's self-service online payment flow)."}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+
+        {lastBatch && (
+          <div className="space-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+            <p>Payment recorded — {lastBatch.payments.length} receipt(s)</p>
+            <div className="flex flex-wrap gap-2">
+              {lastBatch.payments.map((p) => (
+                <Button key={p.id} size="sm" variant="outline" onClick={() => downloadReceiptPdf(p.id, p.receipt_no)}>
+                  Receipt {p.receipt_no}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <Button size="sm" variant="outline" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+            {generateMutation.isPending ? "Generating..." : `Generate Fees of ${student?.name_en ?? "student"}`}
+          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowAdHoc(showAdHoc === "fee" ? null : "fee")}>+ Add One-Time Fee</Button>
+            <Button size="sm" variant="outline" onClick={() => setShowAdHoc(showAdHoc === "fine" ? null : "fine")}>+ Add Fine</Button>
+          </div>
+        </div>
+
+        {showAdHoc && student && (
+          <AdHocFeeForm
+            studentId={student.id}
+            isFine={showAdHoc === "fine"}
+            onDone={() => { setShowAdHoc(null); queryClient.invalidateQueries({ queryKey: ["fees", "collect-workspace", student.id] }); }}
+          />
+        )}
+
+        <div className="max-h-[45vh] overflow-y-auto rounded-md border">
+          {isFetching && !lines.length && <p className="p-4 text-sm text-muted-foreground">Loading...</p>}
+          {!isFetching && !lines.length && <EmptyState title="No outstanding invoices" />}
+          {!!lines.length && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead></TableHead>
+                  <TableHead>Particular</TableHead>
+                  <TableHead>Receivable</TableHead>
+                  <TableHead>Discount</TableHead>
+                  <TableHead>Net</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((line) => (
+                  <Fragment key={line.invoice_id}>
+                    <TableRow>
+                      <TableCell>
+                        <Checkbox checked={selected.has(line.invoice_id)} onCheckedChange={() => toggleLine(line.invoice_id)} disabled={line.outstanding <= 0} />
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium">{line.description}{line.is_manual_fine && <Badge variant="destructive" className="ml-2">Fine</Badge>}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {line.category}{line.sub_category ? ` · ${line.sub_category}` : ""} · {line.period}
+                          {line.fine_amount > 0 && ` · Fine ৳${line.fine_amount}`}
+                        </p>
+                      </TableCell>
+                      <TableCell>৳{line.outstanding}</TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          className="w-20"
+                          value={discounts[line.invoice_id] ?? ""}
+                          onChange={(e) => setDiscounts((prev) => ({ ...prev, [line.invoice_id]: Number(e.target.value) }))}
+                          disabled={!selected.has(line.invoice_id)}
+                        />
+                      </TableCell>
+                      <TableCell>৳{Math.max(0, line.outstanding - (discounts[line.invoice_id] ?? 0))}</TableCell>
+                    </TableRow>
+                    {line.waivers.map((w, i) => (
+                      <TableRow key={`${line.invoice_id}-waiver-${i}`}>
+                        <TableCell></TableCell>
+                        <TableCell colSpan={4} className="italic text-red-600">
+                          Waiver applied — {w.waiver_name} (৳{w.discount_amount} deducted from fund)
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Payment Method</Label>
+              <Select value={gateway} onValueChange={setGateway}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>{GATEWAYS.map((g) => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Secondary Receipt No.</Label>
+              <Input className="w-40" value={secondaryReceiptNo} onChange={(e) => setSecondaryReceiptNo(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={sendSms} onCheckedChange={setSendSms} />
+              <Label className="text-xs">Send SMS</Label>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-lg font-semibold">Total: ৳{total}</p>
+            <Button disabled={!selected.size || collectBatchMutation.isPending} onClick={() => collectBatchMutation.mutate()}>
+              {collectBatchMutation.isPending ? "Receiving..." : "Receive Fee"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,20 +1,29 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import ExcelJS from "exceljs";
+import type { Payment, Invoice } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { feeStructureSchema, generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema } from "@education-erp/validators";
-import { calculateLateFee } from "../../utils/late-fee";
+import {
+  feeStructureSchema, feeCategorySchema, feeSubCategorySchema, feeFineRuleSchema, assignFeeStructureClassesSchema,
+  generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, collectBatchSchema, adHocInvoiceSchema,
+  waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema,
+} from "@education-erp/validators";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice } from "./invoice-helpers";
+import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
+import { resolveFineForInvoice } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
-import { badRequest, conflict, notFound } from "../../lib/errors";
+import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const feesRouter = Router();
 feesRouter.use(authenticate);
@@ -28,6 +37,10 @@ feesRouter.get(
     const query = z.object({ academic_year_id: z.string().optional(), class_id: z.string().optional() }).parse(req.query);
     const structures = await prisma.feeStructure.findMany({
       where: { ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.class_id && { class_id: query.class_id }) },
+      include: {
+        fee_sub_category: { select: { id: true, name: true } },
+        classes: { include: { class: { select: { id: true, name_en: true } } } },
+      },
       orderBy: { created_at: "desc" },
     });
     res.json({ success: true, data: structures });
@@ -67,6 +80,154 @@ feesRouter.delete(
   }),
 );
 
+// Full-replace multi-class assignment for a single FeeStructure (Plan
+// Fourteen, Phase N3) -- when rows exist here they win over the legacy
+// class_id/section_id scalar, which is enforced null at write time below.
+// Soft-warning-with-override overlap check mirrors section-capacity.ts's
+// exact pattern (an error.code the frontend recognizes + resubmit-with-
+// override, never a silent allow or a hard dead-end).
+feesRouter.put(
+  "/structures/:id/classes",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = assignFeeStructureClassesSchema.parse(req.body);
+    const structure = await prisma.feeStructure.findUnique({ where: { id } });
+    if (!structure) throw notFound("Fee structure not found");
+
+    if (!body.override_overlap) {
+      const overlapping = await prisma.feeStructureClass.findMany({
+        where: {
+          class_id: { in: body.class_ids },
+          fee_structure_id: { not: id },
+          fee_structure: { is_active: true, category: structure.category, fee_sub_category_id: structure.fee_sub_category_id },
+        },
+        include: { class: { select: { name_en: true } } },
+      });
+      if (overlapping.length > 0) {
+        const names = [...new Set(overlapping.map((o) => o.class.name_en))].join(", ");
+        throw new ApiError(400, "FEE_STRUCTURE_CLASS_OVERLAP", `${names} already assigned to another active "${structure.category}" fee structure. Continue anyway?`);
+      }
+    }
+
+    const classes = await prisma.$transaction(async (tx) => {
+      await tx.feeStructureClass.deleteMany({ where: { fee_structure_id: id } });
+      await tx.feeStructureClass.createMany({ data: body.class_ids.map((class_id) => ({ fee_structure_id: id, class_id })) });
+      await tx.feeStructure.update({ where: { id }, data: { class_id: null, section_id: null } });
+      return tx.feeStructureClass.findMany({ where: { fee_structure_id: id }, include: { class: { select: { id: true, name_en: true } } } });
+    });
+
+    res.json({ success: true, data: classes });
+  }),
+);
+
+// ── Fee Sub-Categories (Plan Fourteen, Phase N1) ──────────────────
+// No hard-delete route, is_active toggle only -- mirrors WaiverType's exact
+// lifecycle, since a historically-referenced catalog row must never
+// disappear out from under old FeeStructure/Invoice rows.
+
+feesRouter.get(
+  "/sub-categories",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ category: feeCategorySchema.optional(), active_only: z.string().optional() }).parse(req.query);
+    const subCategories = await prisma.feeSubCategory.findMany({
+      where: { ...(query.category && { category: query.category }), ...(query.active_only === "true" && { is_active: true }) },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    });
+    res.json({ success: true, data: subCategories });
+  }),
+);
+
+feesRouter.post(
+  "/sub-categories",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = feeSubCategorySchema.parse(req.body);
+    const subCategory = await prisma.feeSubCategory.create({ data: body });
+    res.status(201).json({ success: true, data: subCategory });
+  }),
+);
+
+feesRouter.put(
+  "/sub-categories/:id",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = feeSubCategorySchema.partial().parse(req.body);
+    const subCategory = await prisma.feeSubCategory.update({ where: { id }, data: body });
+    res.json({ success: true, data: subCategory });
+  }),
+);
+
+// ── Fee Fine Rules (Plan Fourteen, Phase N2) ──────────────────────
+// No hard-delete route, is_active toggle only -- same lifecycle as
+// FeeSubCategory above.
+
+feesRouter.get(
+  "/fine-rules",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+    const rules = await prisma.feeFineRule.findMany({
+      where: { ...(query.academic_year_id && { academic_year_id: query.academic_year_id }) },
+      include: {
+        fee_sub_category: { select: { id: true, name: true } },
+        classes: { include: { class: { select: { id: true, name_en: true } } } },
+      },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: rules });
+  }),
+);
+
+feesRouter.post(
+  "/fine-rules",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = feeFineRuleSchema.parse(req.body);
+    if (body.scope_mode === "SUB_CATEGORY_FINE" && !body.fee_sub_category_id) {
+      throw badRequest("A sub-category must be selected when Setup Fine For is Sub-Category");
+    }
+    if (body.applicable_for === "SPECIFIC_CLASSES" && !body.class_ids.length) {
+      throw badRequest("Select at least one class for a class-specific fine rule");
+    }
+    const rule = await prisma.feeFineRule.create({
+      data: {
+        academic_year_id: body.academic_year_id,
+        scope_mode: body.scope_mode,
+        fee_category: body.fee_category,
+        fee_sub_category_id: body.scope_mode === "SUB_CATEGORY_FINE" ? body.fee_sub_category_id : null,
+        fine_value_type: body.fine_value_type,
+        fine_value: body.fine_value,
+        applicable_for: body.applicable_for,
+        is_active: body.is_active,
+        classes: body.applicable_for === "SPECIFIC_CLASSES" ? { create: body.class_ids.map((class_id) => ({ class_id })) } : undefined,
+      },
+      include: { classes: { include: { class: { select: { id: true, name_en: true } } } } },
+    });
+    res.status(201).json({ success: true, data: rule });
+  }),
+);
+
+feesRouter.put(
+  "/fine-rules/:id",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = feeFineRuleSchema.partial().parse(req.body);
+    const { class_ids, ...rest } = body;
+    const rule = await prisma.$transaction(async (tx) => {
+      if (class_ids !== undefined) {
+        await tx.feeFineRuleClass.deleteMany({ where: { fine_rule_id: id } });
+        if (class_ids.length) await tx.feeFineRuleClass.createMany({ data: class_ids.map((class_id) => ({ fine_rule_id: id, class_id })) });
+      }
+      return tx.feeFineRule.update({ where: { id }, data: rest, include: { classes: { include: { class: { select: { id: true, name_en: true } } } } } });
+    });
+    res.json({ success: true, data: rule });
+  }),
+);
+
 // ── Invoice Generation ──────────────────────────────────────────
 
 async function getFeeRules() {
@@ -81,12 +242,16 @@ feesRouter.post(
     const structure = await prisma.feeStructure.findUnique({ where: { id: body.fee_structure_id } });
     if (!structure) throw notFound("Fee structure not found");
 
+    // Multi-class-aware (Phase N3) -- when FeeStructureClass rows exist for
+    // this structure they win over the legacy class_id scalar; section
+    // filtering only applies to the legacy single-class form.
+    const classIds = await resolveFeeStructureClassIds(prisma, structure);
     const students = await prisma.student.findMany({
       where: {
         deleted_at: null,
         status: "ACTIVE",
         ...(body.student_ids?.length ? { id: { in: body.student_ids } } : {}),
-        ...(structure.class_id && { current_class_id: structure.class_id }),
+        ...(classIds && { current_class_id: { in: classIds } }),
         ...(structure.section_id && { current_section_id: structure.section_id }),
       },
     });
@@ -111,6 +276,7 @@ feesRouter.post(
           fee_structure_id: structure.id,
           academic_year_id: structure.academic_year_id,
           category: structure.category,
+          fee_sub_category_id: structure.fee_sub_category_id,
           description: structure.name,
           amount_due: structure.amount,
           due_date: dueDate,
@@ -145,11 +311,14 @@ feesRouter.post(
     let created = 0;
     let skipped = 0;
     for (const structure of structures) {
+      // Multi-class-aware (Phase N3) -- see /invoices/generate for the same
+      // resolution logic.
+      const classIds = await resolveFeeStructureClassIds(prisma, structure);
       const students = await prisma.student.findMany({
         where: {
           deleted_at: null,
           status: "ACTIVE",
-          ...(structure.class_id && { current_class_id: structure.class_id }),
+          ...(classIds && { current_class_id: { in: classIds } }),
           ...(structure.section_id && { current_section_id: structure.section_id }),
         },
       });
@@ -399,8 +568,12 @@ feesRouter.post(
     if (!invoice) throw notFound("Invoice not found");
     if (invoice.status === "PAID") throw badRequest("Invoice is already fully paid");
 
+    const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
     const rules = await getFeeRules();
-    const fine = calculateLateFee(invoice.amount_due, invoice.due_date, rules);
+    // Class/sub-category-scoped fine engine (Phase N2) -- falls back to the
+    // unmodified calculateLateFee() when no FeeFineRule matches, so a
+    // category/class that never opts in sees byte-identical behavior.
+    const fine = await resolveFineForInvoice(prisma, invoice, student?.current_class_id ?? null, rules);
 
     // An amount beyond what's actually owed on this invoice is an
     // overpayment, not a bigger payment against it — Invoice.amount_paid
@@ -442,7 +615,6 @@ feesRouter.post(
 
     await createFeeReceiptJournal(payment, updated, appliedToInvoice);
 
-    const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
     if (student?.father_phone) {
       await sendSms(
         student.father_phone,
@@ -453,6 +625,231 @@ feesRouter.post(
     }
 
     res.json({ success: true, data: { payment, invoice: updated, credit_applied: overflow } });
+  }),
+);
+
+// ── Fee Collection workspace (Plan Fourteen, Phase N4) ────────────
+// The redesigned Fee Collection page's data source -- due lines with
+// computed period labels, receivable amounts (fine resolved via the new
+// engine), and existing waiver applications shown as distinct read-only
+// rows with a "why" annotation. This route is purely additive; the
+// existing single-invoice /collect route above stays completely untouched
+// as a fallback.
+
+feesRouter.get(
+  "/collect-workspace/:student_id",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "student_id");
+    const student = await prisma.student.findFirst({
+      where: { id: studentId, deleted_at: null },
+      select: { id: true, name_en: true, student_uid: true, current_class_id: true, current_section_id: true, credit_balance: true },
+    });
+    if (!student) throw notFound("Student not found");
+
+    await syncOverdueInvoices(prisma, studentId);
+    const rules = await getFeeRules();
+
+    const invoices = await prisma.invoice.findMany({
+      where: { student_id: studentId, status: { notIn: ["PAID", "WAIVED"] } },
+      include: {
+        fee_sub_category: { select: { name: true } },
+        waiver_applications: { include: { student_waiver: { include: { waiver_type: { select: { name: true } } } } } },
+      },
+      orderBy: { due_date: "asc" },
+    });
+
+    const lines = await Promise.all(
+      invoices.map(async (inv) => {
+        const fine = await resolveFineForInvoice(prisma, inv, student.current_class_id, rules);
+        const outstanding = Math.max(0, inv.amount_due + fine - inv.amount_paid);
+        const period = inv.month && inv.year ? `${MONTH_NAMES[inv.month - 1]} ${inv.year}` : inv.year ? `${inv.year}` : "One-time";
+        return {
+          invoice_id: inv.id,
+          category: inv.category,
+          sub_category: inv.fee_sub_category?.name ?? null,
+          description: inv.description,
+          period,
+          amount_due: inv.amount_due,
+          amount_paid: inv.amount_paid,
+          fine_amount: fine,
+          outstanding,
+          is_manual_fine: inv.is_manual_fine,
+          waivers: inv.waiver_applications.map((w) => ({ waiver_name: w.student_waiver.waiver_type.name, discount_amount: w.discount_amount })),
+        };
+      }),
+    );
+
+    res.json({
+      success: true,
+      data: { student: { id: student.id, name_en: student.name_en, student_uid: student.student_uid }, credit_balance: student.credit_balance, lines },
+    });
+  }),
+);
+
+// "Generate Fees of [name]" -- idempotent via the unmodified
+// createMonthlyInvoiceIfMissing, logs a new STUDENT_ON_DEMAND
+// InvoiceGenerationRun trigger.
+feesRouter.post(
+  "/generate-for-student/:student_id",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "student_id");
+    const student = await prisma.student.findFirst({ where: { id: studentId, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+    if (!student.current_class_id) throw badRequest("This student has no current class assigned");
+
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    if (!activeYear) throw badRequest("No active academic year configured");
+
+    const structures = await prisma.feeStructure.findMany({ where: { academic_year_id: activeYear.id, is_active: true, frequency: "MONTHLY" } });
+    const now = new Date();
+    let created = 0;
+    let skipped = 0;
+    for (const structure of structures) {
+      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id))) continue;
+      const result = await createMonthlyInvoiceIfMissing(prisma, studentId, structure, now.getMonth() + 1, now.getFullYear());
+      if (result.created) created++;
+      else skipped++;
+    }
+
+    await prisma.invoiceGenerationRun.create({
+      data: {
+        run_by_id: req.user!.sub, trigger: "STUDENT_ON_DEMAND", created_count: created, skipped_count: skipped,
+        academic_year_id: activeYear.id, month: now.getMonth() + 1, year: now.getFullYear(),
+      },
+    });
+
+    res.json({ success: true, data: { created, skipped_duplicates: skipped } });
+  }),
+);
+
+// Multi-line "Receive Fee" submit -- one $transaction across every line,
+// reusing the same fine-engine resolution and advance-credit handling as
+// the single-invoice /collect route above. N Payment rows share one new
+// receipt_batch_id grouping key; each still gets its own unique receipt_no
+// (a single shared receipt *number* across a batch would need a bigger
+// change to receipt_no's uniqueness semantics -- out of scope here).
+// Journal entries fire once the batch commits, one per line, matching the
+// established sequencing already used by the single-invoice route above
+// (createFeeReceiptJournal always runs against the plain prisma client,
+// never nested inside a $transaction).
+feesRouter.post(
+  "/collect-batch",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = collectBatchSchema.parse(req.body);
+    const rules = await getFeeRules();
+    const batchId = randomUUID();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const lines: { payment: Payment; invoice: Invoice; overflow: number }[] = [];
+      let studentId: string | null = null;
+
+      for (const line of body.lines) {
+        const invoice = await tx.invoice.findUnique({ where: { id: line.invoice_id } });
+        if (!invoice) throw notFound(`Invoice ${line.invoice_id} not found`);
+        if (invoice.status === "PAID") throw badRequest(`"${invoice.description}" is already fully paid`);
+        studentId = invoice.student_id;
+
+        const invStudent = await tx.student.findUnique({ where: { id: invoice.student_id }, select: { current_class_id: true } });
+        const fine = await resolveFineForInvoice(tx, invoice, invStudent?.current_class_id ?? null, rules);
+
+        const discount = Math.min(line.discount_amount ?? 0, invoice.amount_due);
+        const effectiveAmountDue = Math.max(0, invoice.amount_due - discount);
+        const outstanding = Math.max(0, effectiveAmountDue + fine - invoice.amount_paid);
+        if (line.amount > outstanding && !rules.advance_payment_allowed) {
+          throw badRequest(`Amount for "${invoice.description}" exceeds the outstanding balance (৳${outstanding}).`);
+        }
+        const appliedToInvoice = Math.min(line.amount, outstanding);
+        const overflow = line.amount - appliedToInvoice;
+
+        const payment = await tx.payment.create({
+          data: {
+            receipt_no: await generateReceiptNo(tx),
+            invoice_id: invoice.id,
+            gateway: body.gateway,
+            amount: line.amount,
+            status: "COMPLETED",
+            paid_at: new Date(),
+            notes: body.notes,
+            collected_by_id: req.user!.sub,
+            receipt_batch_id: batchId,
+            discount_amount: discount > 0 ? discount : null,
+            secondary_receipt_no: body.secondary_receipt_no,
+          },
+        });
+
+        const newAmountPaid = invoice.amount_paid + appliedToInvoice;
+        const newStatus = newAmountPaid >= effectiveAmountDue + fine ? "PAID" : newAmountPaid > 0 ? "PARTIAL" : invoice.status;
+
+        const updated = await tx.invoice.update({
+          where: { id: invoice.id },
+          data: { amount_due: effectiveAmountDue, amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
+        });
+
+        if (overflow > 0) {
+          await tx.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
+        }
+
+        lines.push({ payment, invoice: updated, overflow });
+      }
+
+      return { lines, studentId };
+    });
+
+    let totalOverflow = 0;
+    for (const { payment, invoice, overflow } of result.lines) {
+      await createFeeReceiptJournal(payment, invoice, payment.amount - overflow);
+      totalOverflow += overflow;
+    }
+
+    if (body.send_sms && result.studentId) {
+      const smsStudent = await prisma.student.findUnique({ where: { id: result.studentId } });
+      if (smsStudent?.father_phone) {
+        const total = body.lines.reduce((sum, l) => sum + l.amount, 0);
+        await sendSms(smsStudent.father_phone, `Payment of ৳${total} received for ${smsStudent.name_en} (${result.lines.length} item(s)). Thank you.`);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { receipt_batch_id: batchId, payments: result.lines.map((l) => l.payment), credit_applied: totalOverflow },
+    });
+  }),
+);
+
+// "Add One-Time Fee" / "Add Fine" -- creates a fee_structure_id: null
+// invoice (already schema-legal today). Deliberately skips the waiver
+// auto-apply: this is a one-off, staff-typed amount for a specific case,
+// not a recurring structure-driven invoice a standing waiver should
+// silently discount.
+feesRouter.post(
+  "/invoices/ad-hoc",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = adHocInvoiceSchema.parse(req.body);
+    const student = await prisma.student.findFirst({ where: { id: body.student_id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    if (!activeYear) throw badRequest("No active academic year configured");
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoice_no: await generateInvoiceNo(prisma),
+        student_id: body.student_id,
+        academic_year_id: activeYear.id,
+        category: body.category,
+        fee_sub_category_id: body.fee_sub_category_id ?? null,
+        description: body.description,
+        amount_due: body.amount,
+        due_date: body.due_date ?? new Date(),
+        is_manual_fine: body.is_manual_fine ?? false,
+      },
+    });
+
+    res.status(201).json({ success: true, data: invoice });
   }),
 );
 
