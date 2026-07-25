@@ -465,14 +465,21 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries, display] = await Promise.all([
-    prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } } } }),
+  const [exam, student, entries, display, subjectConfigs] = await Promise.all([
+    prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: true } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
     prisma.marksheetDisplaySettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
+    prisma.examSubjectConfig.findMany({ where: { exam_id: examId } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
+
+  // Per-component (Written/Practical) full/pass marks come from this exam's
+  // own subject configuration, not the Subject's static defaults -- the
+  // same values already used to grade the entry, and what the redesigned
+  // marksheet table needs to render a Written/Practical row split.
+  const configBySubject = new Map(subjectConfigs.map((c) => [c.subject_id, c]));
 
   const totalMarks = entries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
   const hasFailed = entries.some((e) => e.grade_letter === "F" || e.is_absent);
@@ -533,21 +540,48 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     };
   }
 
+  // Real subject-wise attendance (Plan Twelve), scoped to the exam's own
+  // academic year -- gated the same way `needsPosition` is above, so a
+  // school with attendance display off doesn't pay the extra query.
+  // Previously only computed for REPORT_CARD even though
+  // MarksheetDisplaySettings.show_attendance_info already existed and
+  // defaults to true for MARKSHEET too -- a real, latent gap this closes.
+  let attendance: { total_days: number; present: number; absent: number; percentage: number } | null = null;
+  if (display.show_attendance_info) {
+    const dateRange = { gte: exam.academic_year.start_date, lte: exam.academic_year.end_date };
+    const summary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
+    attendance = {
+      total_days: summary.overall.total,
+      present: summary.overall.present,
+      absent: summary.overall.total - summary.overall.present,
+      percentage: summary.overall.total ? summary.overall.percentage : 0,
+    };
+  }
+
   return {
     student,
     exam_name: exam.name,
     academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
-    subjects: entries.map((e) => ({
-      name_en: e.subject.name_en,
-      code: e.subject.code,
-      full_marks: e.subject.full_marks,
-      pass_marks: e.subject.pass_marks,
-      marks_theory: e.marks_theory,
-      marks_practical: e.marks_practical,
-      marks_total: e.is_absent ? null : e.marks_total,
-      grade_letter: e.is_absent ? "Abs" : e.grade_letter,
-      grade_point: e.grade_point,
-    })),
+    attendance,
+    subjects: entries.map((e) => {
+      const config = configBySubject.get(e.subject_id);
+      return {
+        name_en: e.subject.name_en,
+        code: e.subject.code,
+        full_marks: e.subject.full_marks,
+        pass_marks: e.subject.pass_marks,
+        full_marks_theory: config?.full_marks_theory ?? e.subject.full_marks,
+        full_marks_practical: config?.full_marks_practical ?? 0,
+        pass_marks_theory: config?.pass_marks_theory ?? e.subject.pass_marks,
+        pass_marks_practical: config?.pass_marks_practical ?? 0,
+        has_practical: (config?.full_marks_practical ?? 0) > 0,
+        marks_theory: e.marks_theory,
+        marks_practical: e.marks_practical,
+        marks_total: e.is_absent ? null : e.marks_total,
+        grade_letter: e.is_absent ? "Abs" : e.grade_letter,
+        grade_point: e.grade_point,
+      };
+    }),
     total_marks: totalMarks,
     total_gpa: totalGpa,
     overall_grade: hasFailed ? "F" : entries[0]?.grade_letter ?? "",
@@ -833,6 +867,12 @@ documentsRouter.get(
 
 // ───────────────────────── Finance Documents ─────────────────────────
 
+function receiptCopyLabel(copy: unknown): string | undefined {
+  if (copy === "admin") return "Admin Copy";
+  if (copy === "student") return "Student Copy";
+  return undefined;
+}
+
 documentsRouter.get(
   "/fee/receipt/:payment_id",
   allowIframeEmbed,
@@ -855,8 +895,48 @@ documentsRouter.get(
       transaction_id: payment.transaction_id,
       is_invoice: false,
       qr_code: qr,
+      copy_label: receiptCopyLabel(req.query.copy),
     });
     sendPdf(res, pdf, `receipt-${payment.id}.pdf`, req.query.download === "true");
+  }),
+);
+
+// A batch "Receive Fee" submission (Plan Fourteen, Phase N4) creates one
+// Payment row per invoice line, each keeping its own unique receipt_no for
+// accounting -- but the parent/guardian expects ONE printed receipt for
+// the whole transaction, not one per line. This route renders exactly
+// that: every payment sharing a receipt_batch_id, combined into one
+// document under the FIRST payment's receipt_no, with a per-line
+// Particulars row and one grand total -- reusing the exact same
+// FEE_RECEIPT template/items[] shape the single-payment route above
+// already uses, just with more than one row.
+documentsRouter.get(
+  "/fee/receipt/batch/:receipt_batch_id",
+  allowIframeEmbed,
+  asyncHandler(async (req, res) => {
+    const batchId = reqParam(req, "receipt_batch_id");
+    const payments = await prisma.payment.findMany({
+      where: { receipt_batch_id: batchId },
+      include: { invoice: { include: { student: { include: { current_class: true, current_section: true } } } } },
+      orderBy: { created_at: "asc" },
+    });
+    if (!payments.length) throw notFound("Receipt batch not found");
+    const first = payments[0]!;
+
+    const qr = await generateQrDataUrl(`receipt-batch:${batchId}`);
+    const pdf = await renderDocument("FEE_RECEIPT", {
+      receipt_no: first.receipt_no ?? first.id,
+      date: first.paid_at ?? first.created_at,
+      student: first.invoice.student,
+      items: payments.map((p) => ({ category: p.invoice.category, description: p.invoice.description, amount: p.amount, fine: 0 })),
+      total: payments.reduce((sum, p) => sum + p.amount, 0),
+      payment_method: first.gateway,
+      transaction_id: first.transaction_id,
+      is_invoice: false,
+      qr_code: qr,
+      copy_label: receiptCopyLabel(req.query.copy),
+    });
+    sendPdf(res, pdf, `receipt-${first.receipt_no ?? batchId}.pdf`, req.query.download === "true");
   }),
 );
 

@@ -4,52 +4,65 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
-  body { margin: 0; padding: 10mm; font-size: 12px; }
-  .header { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
-  .letterhead-brand { display: flex; align-items: center; gap: 8px; }
-  .header img { height: 12mm; }
-  .letterhead-text h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
-  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
-  .header .title { margin-left: auto; font-size: 14px; font-weight: 700; }
-  .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 11px; }
-  table.details { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  body { margin: 0; padding: 12mm; font-size: 12px; color: #333; }
+  .copy-label { text-align: right; font-size: 9px; color: #999; margin-bottom: 4px; }
+  .header { text-align: center; margin-bottom: 8px; }
+  .header img { height: 18mm; width: 18mm; border-radius: 50%; object-fit: cover; margin-bottom: 4px; }
+  .header h1 { margin: 0; font-size: 19px; color: {{institution.primary_color}}; font-weight: 700; }
+  .header p { margin: 2px 0 0; font-size: 10px; color: #555; }
+  .badge-wrap { text-align: center; margin: 10px 0; }
+  .badge { display: inline-block; padding: 4px 28px; border-radius: 4px; background: {{institution.primary_color}}; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; }
+  .meta { display: flex; justify-content: space-between; margin: 10px 0 6px; font-size: 11px; font-weight: 600; }
+  table.details { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 11px; }
   table.details td { padding: 2px 4px; }
-  table.items { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  table.items th, table.items td { border: 1px solid #999; padding: 5px; font-size: 11px; }
-  table.items th { background: {{institution.primary_color}}; color: #fff; }
-  .total-row { font-weight: 700; }
-  .payment { margin-top: 10px; font-size: 11px; }
-  .footer { display: flex; justify-content: space-between; margin-top: 30px; align-items: flex-end; }
+  table.details td.label { font-weight: 600; color: #555; width: 16%; }
+  table.items { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.items th { background: {{institution.primary_color}}; color: #fff; border: 1px solid {{institution.primary_color}}; padding: 6px; font-size: 11px; text-align: left; }
+  table.items td { border: 1px solid #ccc; padding: 6px; font-size: 11px; }
+  table.items .sl { width: 10%; text-align: center; }
+  table.items .amt { width: 22%; text-align: right; }
+  .total-row td { font-weight: 700; background: #f7f7f7; }
+  .words-row { display: flex; margin-top: 6px; border: 1px solid #ccc; font-size: 11px; align-items: stretch; }
+  .words-row .label { background: {{institution.primary_color}}; color: #fff; font-weight: 700; padding: 6px 10px; white-space: nowrap; }
+  .words-row .value { padding: 6px 10px; }
+  .note { margin-top: 10px; font-size: 9px; color: #777; }
+  .footer { display: flex; justify-content: flex-end; margin-top: 30px; }
   .signature-block { text-align: center; }
   .sig-image { max-height: 12mm; max-width: 40mm; display: block; margin: 0 auto; }
   .sig-line { border-top: 1px solid #333; width: 60px; margin-bottom: 2px; }
   .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
   .sig-designation, .sig-label { font-size: 9px; color: #555; }
-  .note { text-align: center; font-size: 9px; color: #777; margin-top: 14px; }
-  .qr { height: 24mm; width: 24mm; }
 </style>
 </head>
 <body>
-  <div class="header"><div class="letterhead-brand">{{> letterhead}}</div><span class="title">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
+  {{#if copy_label}}<p class="copy-label">{{copy_label}}</p>{{/if}}
+  <div class="header">
+    {{#if institution.logo_url}}<img src="{{institution.logo_url}}" alt="logo" />{{/if}}
+    <h1>{{institution.name_en}}</h1>
+    {{#if institution.address}}<p>{{institution.address}}</p>{{/if}}
+    {{#if institution.email}}<p>{{institution.email}}</p>{{/if}}
+  </div>
+  <div class="badge-wrap"><span class="badge">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
   <div class="meta"><span>Receipt No: {{receipt_no}}</span><span>Date: {{banglaDate date}}</span></div>
   <table class="details">
-    <tr><td>Student Name</td><td>{{student.name_en}}</td><td>Student ID</td><td>{{student.student_uid}}</td></tr>
-    <tr><td>Class</td><td>{{student.current_class.name_en}}</td><td>Section</td><td>{{student.current_section.name}}</td></tr>
+    <tr><td class="label">Name</td><td>{{student.name_en}}</td><td class="label">Id</td><td>{{student.student_uid}}</td></tr>
+    <tr><td class="label">Class</td><td>{{student.current_class.name_en}}</td><td class="label">Section</td><td>{{student.current_section.name}}</td></tr>
+    <tr><td class="label">Roll No</td><td colspan="3">{{formatMarks student.current_roll_no}}</td></tr>
   </table>
   <table class="items">
-    <thead><tr><th>Category</th><th>Description</th><th>Amount</th><th>Fine</th></tr></thead>
+    <thead><tr><th class="sl">Serial</th><th>Particulars</th><th class="amt">Amount</th></tr></thead>
     <tbody>
       {{#each items}}
-      <tr><td>{{this.category}}</td><td>{{this.description}}</td><td>৳{{this.amount}}</td><td>৳{{this.fine}}</td></tr>
+      <tr><td class="sl">{{inc @index}}</td><td>{{this.description}}{{#if this.fine}} (Fine: ৳{{this.fine}}){{/if}}</td><td class="amt">৳{{this.amount}}</td></tr>
       {{/each}}
-      <tr class="total-row"><td colspan="2">Total</td><td colspan="2">৳{{total}}</td></tr>
+      <tr class="total-row"><td colspan="2">Total</td><td class="amt">৳{{total}}</td></tr>
     </tbody>
   </table>
+  <div class="words-row"><span class="label">In Words</span><span class="value">{{amountInWords total}} Taka Only</span></div>
   <p class="payment">Payment Method: {{payment_method}} {{#if transaction_id}}| Transaction ID: {{transaction_id}}{{/if}}</p>
+  <p class="note">Note: Receipts should be kept in custody, so that it can be shown if necessary.</p>
   <div class="footer">
     {{signatureBlock 1}}
-    {{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}
   </div>
-  <p class="note">This is a system-generated receipt.</p>
 </body>
 </html>

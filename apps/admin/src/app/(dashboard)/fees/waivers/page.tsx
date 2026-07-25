@@ -8,6 +8,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  MultiRecordPickerDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -28,19 +29,28 @@ interface StudentWaiverRow {
   assigned_at: string;
   revoked_at: string | null;
 }
-interface StudentRow {
+interface RosterStudent {
   id: string;
   name_en: string;
   student_uid: string;
+  current_roll_no: string | null;
+  current_class?: { name_en: string } | null;
+  current_section?: { name: string } | null;
+}
+interface ClassOption {
+  id: string;
+  name_en: string;
+  sections?: { id: string; name: string }[];
 }
 
-const CATEGORIES = ["ADMISSION", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
+const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
 export default function WaiverSetupPage() {
   const queryClient = useQueryClient();
 
   const { data: types } = useQuery<WaiverType[]>({ queryKey: ["fees", "waiver-types"], queryFn: async () => (await api.get("/api/fees/waiver-types")).data.data });
   const { data: assignments } = useQuery<StudentWaiverRow[]>({ queryKey: ["fees", "student-waivers"], queryFn: async () => (await api.get("/api/fees/student-waivers")).data.data });
+  const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
 
   // Waiver Type create dialog
   const [typeOpen, setTypeOpen] = useState(false);
@@ -68,25 +78,34 @@ export default function WaiverSetupPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create waiver type"),
   });
 
-  // Assign Waiver dialog
+  // Assign Waiver dialog -- roster picker (Class/Section filter, real
+  // name/class/section/roll detail per row), multi-select so one or many
+  // students can be assigned the same waiver in a single action.
   const [assignOpen, setAssignOpen] = useState(false);
-  const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
+  const [assignClassId, setAssignClassId] = useState("");
+  const [assignSectionId, setAssignSectionId] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [selectedStudentLabels, setSelectedStudentLabels] = useState<Record<string, string>>({});
   const [selectedTypeId, setSelectedTypeId] = useState("");
+  const assignClassSections = classes?.find((c) => c.id === assignClassId)?.sections ?? [];
 
-  const { data: studentResults } = useQuery<StudentRow[]>({
-    queryKey: ["students", "search", studentSearch],
-    queryFn: async () => (await api.get("/api/students", { params: { search: studentSearch, limit: 5 } })).data.data,
-    enabled: studentSearch.length > 1 && !selectedStudent,
-  });
+  function resetAssignDialog() {
+    setAssignClassId("");
+    setAssignSectionId("");
+    setSelectedStudentIds([]);
+    setSelectedStudentLabels({});
+    setSelectedTypeId("");
+  }
 
-  const assignMutation = useMutation({
-    mutationFn: () => api.post("/api/fees/student-waivers", { student_id: selectedStudent!.id, waiver_type_id: selectedTypeId }),
-    onSuccess: () => {
-      toast.success("Waiver assigned");
+  const bulkAssignMutation = useMutation({
+    mutationFn: () =>
+      api.post("/api/fees/student-waivers/bulk", { student_ids: selectedStudentIds, waiver_type_id: selectedTypeId }),
+    onSuccess: (res) => {
+      const { created, skipped } = res.data.data as { created: number; skipped: string[] };
+      toast.success(`Waiver assigned to ${created} student(s)${skipped.length ? ` — ${skipped.length} skipped` : ""}`);
       queryClient.invalidateQueries({ queryKey: ["fees", "student-waivers"] });
       setAssignOpen(false);
-      setSelectedStudent(null); setStudentSearch(""); setSelectedTypeId("");
+      resetAssignDialog();
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to assign waiver"),
   });
@@ -233,28 +252,10 @@ export default function WaiverSetupPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={assignOpen} onOpenChange={(v) => { setAssignOpen(v); if (!v) { setSelectedStudent(null); setStudentSearch(""); setSelectedTypeId(""); } }}>
+      <Dialog open={assignOpen} onOpenChange={(v) => { setAssignOpen(v); if (!v) resetAssignDialog(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Assign Waiver</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>Student</Label>
-              {selectedStudent ? (
-                <div className="flex items-center justify-between rounded-md border p-2 text-sm">
-                  <span>{selectedStudent.name_en} ({selectedStudent.student_uid})</span>
-                  <Button size="sm" variant="outline" onClick={() => setSelectedStudent(null)}>Change</Button>
-                </div>
-              ) : (
-                <>
-                  <Input placeholder="Search student..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
-                  {studentResults?.map((s) => (
-                    <button key={s.id} onClick={() => setSelectedStudent(s)} className="block w-full rounded-md border p-2 text-left text-sm hover:bg-accent">
-                      {s.name_en} ({s.student_uid})
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
             <div className="space-y-1.5">
               <Label>Waiver Type</Label>
               <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
@@ -268,14 +269,103 @@ export default function WaiverSetupPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>Students ({selectedStudentIds.length} selected)</Label>
+              {!!selectedStudentIds.length && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedStudentIds.map((id) => (
+                    <Badge key={id} variant="secondary">{selectedStudentLabels[id] ?? id}</Badge>
+                  ))}
+                </div>
+              )}
+              <MultiPickerLauncher
+                classes={classes ?? []}
+                classId={assignClassId}
+                setClassId={setAssignClassId}
+                sectionId={assignSectionId}
+                setSectionId={setAssignSectionId}
+                sections={assignClassSections}
+                selectedIds={selectedStudentIds}
+                onToggle={(s: RosterStudent) => {
+                  setSelectedStudentIds((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]));
+                  setSelectedStudentLabels((prev) => ({ ...prev, [s.id]: `${s.name_en} (${s.student_uid})` }));
+                }}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button disabled={!selectedStudent || !selectedTypeId || assignMutation.isPending} onClick={() => assignMutation.mutate()}>
-              {assignMutation.isPending ? "Assigning..." : "Assign"}
+            <Button disabled={!selectedStudentIds.length || !selectedTypeId || bulkAssignMutation.isPending} onClick={() => bulkAssignMutation.mutate()}>
+              {bulkAssignMutation.isPending ? "Assigning..." : `Assign to ${selectedStudentIds.length || ""} Student${selectedStudentIds.length === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageWrapper>
+  );
+}
+
+// Small wrapper bundling the "Choose Students…" trigger + the roster
+// picker dialog itself, since both need the Class/Section filter state
+// that lives on the parent (the filter values are also what the picker's
+// fetchResults call needs to read on every open).
+function MultiPickerLauncher({
+  classes, classId, setClassId, sectionId, setSectionId, sections, selectedIds, onToggle,
+}: {
+  classes: ClassOption[];
+  classId: string;
+  setClassId: (v: string) => void;
+  sectionId: string;
+  setSectionId: (v: string) => void;
+  sections: { id: string; name: string }[];
+  selectedIds: string[];
+  onToggle: (s: RosterStudent) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  return (
+    <>
+      <Button type="button" variant="outline" onClick={() => setPickerOpen(true)}>Choose Students…</Button>
+      <MultiRecordPickerDialog<RosterStudent>
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        title="Choose Students"
+        searchPlaceholder="Search by name or student ID..."
+        getKey={(s) => s.id}
+        selected={selectedIds}
+        onToggle={onToggle}
+        filters={
+          <>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
+              <option value="">All Classes</option>
+              {classes.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
+              <option value="">All Sections</option>
+              {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </>
+        }
+        fetchResults={async ({ search, page }) =>
+          (
+            await api.get("/api/students", {
+              params: { search: search || undefined, class_id: classId || undefined, section_id: sectionId || undefined, page, limit: 10 },
+            })
+          ).data
+        }
+        renderRow={(s) => (
+          <div>
+            <p className="font-medium">{s.name_en}</p>
+            <p className="text-xs text-muted-foreground">
+              {s.student_uid}
+              {s.current_class && ` · ${s.current_class.name_en}`}
+              {s.current_section && ` ${s.current_section.name}`}
+              {s.current_roll_no && ` · Roll ${s.current_roll_no}`}
+            </p>
+          </div>
+        )}
+        confirmLabel={`Done (${selectedIds.length} selected)`}
+        onConfirm={() => setPickerOpen(false)}
+      />
+    </>
   );
 }

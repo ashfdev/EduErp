@@ -11,8 +11,8 @@ import { reqParam } from "../../lib/req-param";
 import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import {
   feeStructureSchema, feeCategorySchema, feeSubCategorySchema, feeFineRuleSchema, assignFeeStructureClassesSchema,
-  generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, collectBatchSchema, adHocInvoiceSchema,
-  waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema,
+  generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, collectBatchSchema, adHocInvoiceSchema, adHocInvoiceBulkSchema,
+  waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema, assignStudentWaiverBulkSchema,
 } from "@education-erp/validators";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
@@ -473,6 +473,42 @@ feesRouter.post(
   }),
 );
 
+// Bulk assign -- same create logic as the single-student route above, one
+// row per selected student, never erroring out the whole batch over a
+// single bad id (a roster picker can't guarantee every id is still valid
+// by submit time) -- skipped ids are reported back, not silently dropped.
+feesRouter.post(
+  "/student-waivers/bulk",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = assignStudentWaiverBulkSchema.parse(req.body);
+    const waiverType = await prisma.waiverType.findUnique({ where: { id: body.waiver_type_id } });
+    if (!waiverType) throw notFound("Waiver type not found");
+
+    const students = await prisma.student.findMany({ where: { id: { in: body.student_ids }, deleted_at: null }, select: { id: true } });
+    const validIds = new Set(students.map((s) => s.id));
+    const skipped = body.student_ids.filter((id) => !validIds.has(id));
+
+    const created = await prisma.$transaction(
+      [...validIds].map((studentId) =>
+        prisma.studentWaiver.create({
+          data: { student_id: studentId, waiver_type_id: body.waiver_type_id, academic_year_id: body.academic_year_id ?? null, assigned_by_id: req.user!.sub },
+        }),
+      ),
+    );
+
+    await logAudit("FEE_WAIVE", {
+      userId: req.user!.sub,
+      targetType: "StudentWaiver",
+      targetId: "bulk",
+      metadata: { waiver_type_id: body.waiver_type_id, student_count: created.length, skipped },
+      req,
+    });
+
+    res.status(201).json({ success: true, data: { created: created.length, skipped } });
+  }),
+);
+
 feesRouter.put(
   "/student-waivers/:id/revoke",
   authorize(FEE_COLLECTION_ROLES),
@@ -852,6 +888,45 @@ feesRouter.post(
     });
 
     res.status(201).json({ success: true, data: invoice });
+  }),
+);
+
+// Bulk variant -- one ad-hoc invoice per selected student, same fields
+// applied identically to every row (e.g. "fine every student in this
+// section ৳100 for the same reason"). Skipped/invalid ids are reported
+// back rather than failing the whole batch.
+feesRouter.post(
+  "/invoices/ad-hoc/bulk",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = adHocInvoiceBulkSchema.parse(req.body);
+    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+    if (!activeYear) throw badRequest("No active academic year configured");
+
+    const students = await prisma.student.findMany({ where: { id: { in: body.student_ids }, deleted_at: null }, select: { id: true } });
+    const validIds = students.map((s) => s.id);
+    const skipped = body.student_ids.filter((id) => !validIds.includes(id));
+
+    const invoices = [];
+    for (const studentId of validIds) {
+      invoices.push(
+        await prisma.invoice.create({
+          data: {
+            invoice_no: await generateInvoiceNo(prisma),
+            student_id: studentId,
+            academic_year_id: activeYear.id,
+            category: body.category,
+            fee_sub_category_id: body.fee_sub_category_id ?? null,
+            description: body.description,
+            amount_due: body.amount,
+            due_date: body.due_date ?? new Date(),
+            is_manual_fine: body.is_manual_fine ?? false,
+          },
+        }),
+      );
+    }
+
+    res.status(201).json({ success: true, data: { created: invoices.length, skipped } });
   }),
 );
 

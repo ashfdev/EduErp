@@ -32,7 +32,7 @@
       <span class="title">TRANSPORT</span>
     </div>
     <div class="body">
-      <img class="photo" src="{{student.photo_url}}" />
+      {{#if student.photo_url}}<img class="photo" src="{{student.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}
       <div class="info">
         <p class="student-name">{{student.name_en}}</p>
         <p class="badge">{{student.student_uid}}</p>

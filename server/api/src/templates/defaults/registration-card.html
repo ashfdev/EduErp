@@ -35,7 +35,7 @@
     <div class="title">ADMISSION TEST<br/>REGISTRATION CARD</div>
   </div>
 
-  <img class="photo" src="{{applicant.photo_url}}" />
+  {{#if applicant.photo_url}}<img class="photo" src="{{applicant.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}
   <table class="info">
     <tr><td>Name</td><td>{{applicant.name}}</td><td>Admission Roll</td><td>{{applicant.roll}}</td></tr>
     <tr><td>Father's Name</td><td>{{applicant.father_name}}</td><td>Mother's Name</td><td>{{applicant.mother_name}}</td></tr>

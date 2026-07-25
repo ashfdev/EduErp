@@ -1,7 +1,20 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const prisma = new PrismaClient();
+
+// A small placeholder institution logo, embedded as a data URI rather than
+// uploaded through server/api's storage pipeline -- packages/db has no
+// dependency on server/api (and seed data isn't routed through the real
+// API at all, per this file's own existing convention for e.g. Invoice's
+// invoice_no), so this is the only reproducible way to seed a real logo_url
+// value on a fresh install. A data: URI also needs no file-serving
+// infrastructure at all (no local-uploads dependency, no CORP/CORS
+// concerns), so it renders identically whether or not Azure Blob Storage
+// is ever configured.
+const PLACEHOLDER_LOGO_DATA_URI = `data:image/png;base64,${readFileSync(join(__dirname, "seed-assets", "logo.b64.txt"), "utf-8").trim()}`;
 
 // Deterministic placeholder photography for demo content — picsum.photos
 // returns the same image for the same seed key every time, so re-running
@@ -25,6 +38,15 @@ const BD_BOARD_RANGES = [
   { min_marks: 33, max_marks: 39.99, grade_letter: "D", grade_point: 1.0, remarks: "Pass", display_order: 6 },
   { min_marks: 0, max_marks: 32.99, grade_letter: "F", grade_point: 0.0, remarks: "Fail", display_order: 7 },
 ];
+
+// Small inline mirror of the real grading engine's range lookup (packages/db
+// has no dependency on server/api, so this isn't imported) -- used only to
+// derive a plausible grade_letter/grade_point for seeded demo MarkEntry
+// rows from BD_BOARD_RANGES above.
+function gradeFor(marks: number): { grade_letter: string; grade_point: number } {
+  const range = BD_BOARD_RANGES.find((r) => marks >= r.min_marks && marks <= r.max_marks) ?? BD_BOARD_RANGES[BD_BOARD_RANGES.length - 1]!;
+  return { grade_letter: range.grade_letter, grade_point: range.grade_point };
+}
 
 const ACCOUNT_GROUPS = [
   { id: "grp-assets", name: "Assets", type: "ASSET" as const, display_order: 1 },
@@ -210,6 +232,10 @@ async function main() {
       eiin: "123456",
       board: "Chittagong",
       primary_color: "#1a3c4a",
+      // Same "never clobber an admin's real value on reseed" reasoning as
+      // the fields above — a real institution's uploaded logo must survive
+      // a reseed untouched, so this is create-only too.
+      logo_url: PLACEHOLDER_LOGO_DATA_URI,
       ...INSTITUTION_PROFILE_CONTENT,
     },
   });
@@ -699,8 +725,12 @@ async function main() {
   // dashboards/reports have something real to show on a fresh seed.
   const classNine = classes[9];
   const sectionNineA = await prisma.section.findUniqueOrThrow({ where: { id: "class-9-A" } });
+  // is_active filter matters on an already-populated database: without it,
+  // a deactivated/test-garbage Subject row for this class (confirmed the
+  // hard way -- two stray rows literally named "a"/"aa" from earlier ad-hoc
+  // testing) still gets inherited by every newly-seeded demo student.
   const compulsorySubjectIds = await prisma.subject
-    .findMany({ where: { class_id: classNine.id, is_compulsory: true }, select: { id: true } })
+    .findMany({ where: { class_id: classNine.id, is_compulsory: true, is_active: true }, select: { id: true } })
     .then((rows) => rows.map((r) => r.id));
 
   for (const [index, s] of DEMO_STUDENTS.entries()) {
@@ -768,6 +798,129 @@ async function main() {
         status: index % 2 === 0 ? "PAID" : "PENDING",
         month: 1,
         year: 2026,
+      },
+    });
+  }
+
+  // ── Demo exam with entered marks + a published result (for testing
+  // marksheet/report-card/result-lookup PDF generation end to end without
+  // needing to hand-build an exam through the UI first) ──
+  const halfYearlyType = await prisma.examTypeConfig.findUniqueOrThrow({ where: { code: "HALF" } });
+  const demoAdmin = await prisma.user.findUniqueOrThrow({ where: { phone: "01700000000" } });
+  const demoExam = await prisma.exam.upsert({
+    where: { id: "seed-demo-half-yearly-2026" },
+    update: {},
+    create: {
+      id: "seed-demo-half-yearly-2026",
+      academic_year_id: academicYear.id,
+      exam_type_config_id: halfYearlyType.id,
+      grading_scale_id: gradingScale.id,
+      name: "Half Yearly Exam 2026",
+      start_date: new Date("2026-06-01"),
+      end_date: new Date("2026-06-15"),
+      status: "PUBLISHED",
+    },
+  });
+
+  for (const subjectId of compulsorySubjectIds) {
+    await prisma.examSubjectConfig.upsert({
+      where: { exam_id_subject_id: { exam_id: demoExam.id, subject_id: subjectId } },
+      update: {},
+      create: {
+        exam_id: demoExam.id,
+        subject_id: subjectId,
+        full_marks_theory: 100,
+        full_marks_practical: 0,
+        pass_marks_theory: 33,
+        pass_marks_practical: 0,
+        pass_marks_combined: 33,
+      },
+    });
+  }
+
+  // Targeted by student_uid, NOT by current class/section membership -- a
+  // class/section query would also match every other real or test student
+  // who happens to share that section on an already-populated database
+  // (confirmed the hard way: this pulled in 57 unrelated students before
+  // this fix). A demo student who has since been promoted out of Class 9
+  // correctly gets no marks for this Class 9 exam -- not a bug to work
+  // around.
+  const demoClassNineStudents = await prisma.student.findMany({
+    where: { student_uid: { in: DEMO_STUDENTS.map((_, i) => `ALh-26-${String(i + 1).padStart(4, "0")}`) }, current_class_id: classNine.id },
+  });
+  // Per-student baseline spans the real grade range on purpose (one clear
+  // fail included) so a generated marksheet/result actually exercises every
+  // visual state (A+, mid-range, FAILED) instead of looking suspiciously
+  // uniform.
+  const STUDENT_MARK_BASELINE = [88, 62, 91, 51, 28];
+  for (const [studentIndex, student] of demoClassNineStudents.entries()) {
+    const baseline = STUDENT_MARK_BASELINE[studentIndex % STUDENT_MARK_BASELINE.length]!;
+    for (const [subjectIndex, subjectId] of compulsorySubjectIds.entries()) {
+      const marks = Math.max(0, Math.min(100, baseline + ((subjectIndex * 7) % 15) - 7));
+      const { grade_letter, grade_point } = gradeFor(marks);
+      await prisma.markEntry.upsert({
+        where: { exam_id_student_id_subject_id: { exam_id: demoExam.id, student_id: student.id, subject_id: subjectId } },
+        update: {},
+        create: {
+          exam_id: demoExam.id,
+          student_id: student.id,
+          subject_id: subjectId,
+          marks_theory: marks,
+          marks_total: marks,
+          grade_letter,
+          grade_point,
+          status: "APPROVED",
+          entered_by_id: demoAdmin.id,
+        },
+      });
+    }
+  }
+
+  // Prisma's compound @@unique can't target a NULL group_id directly (the
+  // DB enforces that case via a partial unique index instead, per this
+  // model's own schema comment) -- findFirst + conditional create instead
+  // of .upsert() here.
+  const existingResultPublication = await prisma.resultPublication.findFirst({
+    where: { exam_id: demoExam.id, class_id: classNine.id, group_id: null },
+  });
+  if (!existingResultPublication) {
+    await prisma.resultPublication.create({
+      data: {
+        exam_id: demoExam.id,
+        class_id: classNine.id,
+        group_id: null,
+        is_published: true,
+        published_at: new Date("2026-06-20"),
+        published_by_id: demoAdmin.id,
+        is_public: true,
+      },
+    });
+  }
+
+  // ── Demo waiver: a reusable template + one active assignment, so Waiver
+  // Setup / the Fee Collection workspace's waiver-line display both have
+  // something real to show out of the box ──
+  const demoWaiverType = await prisma.waiverType.upsert({
+    where: { id: "seed-demo-waiver-sibling" },
+    update: {},
+    create: {
+      id: "seed-demo-waiver-sibling",
+      name: "Sibling Discount",
+      description: "10% tuition discount for a second enrolled sibling",
+      discount_type: "PERCENTAGE",
+      discount_value: 10,
+      applicable_categories: ["TUITION"],
+    },
+  });
+  if (demoClassNineStudents[0]) {
+    await prisma.studentWaiver.upsert({
+      where: { id: "seed-demo-waiver-assignment" },
+      update: {},
+      create: {
+        id: "seed-demo-waiver-assignment",
+        student_id: demoClassNineStudents[0].id,
+        waiver_type_id: demoWaiverType.id,
+        assigned_by_id: demoAdmin.id,
       },
     });
   }

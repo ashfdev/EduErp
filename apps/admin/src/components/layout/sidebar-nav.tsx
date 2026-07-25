@@ -64,6 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/fees/waivers", key: "waiverSetup", icon: Wallet },
       { href: "/fees/sub-categories", key: "feeSubCategories", icon: Tags },
       { href: "/fees/fine-rules", key: "feeFineRules", icon: Percent },
+      { href: "/fees/bulk-fine", key: "bulkFeeOrFine", icon: Percent },
     ],
   },
   {

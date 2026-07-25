@@ -94,6 +94,31 @@ export const assignStudentWaiverSchema = z.object({
 });
 export type AssignStudentWaiverInput = z.infer<typeof assignStudentWaiverSchema>;
 
+// Bulk variant -- same shape, a roster of students instead of one. Existing
+// waiver-per-student rows already tolerate multiple independent waivers per
+// student, so a student re-selected in a later bulk run just gets a second
+// (still independently revocable) assignment rather than erroring.
+export const assignStudentWaiverBulkSchema = z.object({
+  student_ids: z.array(z.string()).min(1),
+  waiver_type_id: z.string().min(1),
+  academic_year_id: z.string().optional().nullable(),
+});
+export type AssignStudentWaiverBulkInput = z.infer<typeof assignStudentWaiverBulkSchema>;
+
+// Bulk ad-hoc fee/fine -- same shape as adHocInvoiceSchema below, applied to
+// a roster of students at once (e.g. "fine every student in Class 9 who was
+// late submitting a form ৳100").
+export const adHocInvoiceBulkSchema = z.object({
+  student_ids: z.array(z.string()).min(1),
+  category: feeCategorySchema,
+  fee_sub_category_id: z.string().optional().nullable(),
+  description: z.string().min(1),
+  amount: z.number().min(0.01),
+  due_date: z.coerce.date().optional(),
+  is_manual_fine: z.boolean().optional(),
+});
+export type AdHocInvoiceBulkInput = z.infer<typeof adHocInvoiceBulkSchema>;
+
 export const initiatePaymentSchema = z.object({
   invoice_id: z.string().min(1),
   gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"]),

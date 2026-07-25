@@ -50,7 +50,7 @@
   {{/if}}
 
   {{#if display.show_qr_code}}{{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}{{/if}}
-  {{#if display.show_student_image}}<img class="photo" src="{{student.photo_url}}" />{{/if}}
+  {{#if display.show_student_image}}{{#if student.photo_url}}<img class="photo" src="{{student.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}{{/if}}
   <table class="info">
     <tr><td>Name</td><td>{{student.name_en}}</td><td>Roll No</td><td>{{student.current_roll_no}}</td></tr>
     <tr><td>Class / Section</td><td>{{student.current_class.name_en}} / {{student.current_section.name}}</td><td>Conduct</td><td>{{conduct_grade}}</td></tr>

@@ -31,7 +31,7 @@
       <span class="name">{{institution.name_en}}</span>
     </div>
     <div class="body">
-      <img class="photo" src="{{staff.photo_url}}" />
+      {{#if staff.photo_url}}<img class="photo" src="{{staff.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}
       <div class="info">
         <p class="staff-name">{{staff.name_en}}</p>
         <p class="badge">{{staff.staff_uid}}</p>

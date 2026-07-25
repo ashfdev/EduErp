@@ -195,12 +195,16 @@ export default function CollectFeePage() {
   );
 }
 
-async function downloadReceiptPdf(paymentId: string, receiptNo: string) {
-  const res = await api.get(`/api/documents/fee/receipt/${paymentId}`, { responseType: "blob" });
+// A batch "Receive Fee" submission may create several Payment rows (one per
+// invoice line paid together), but the parent/guardian expects ONE printed
+// receipt for the whole transaction -- this hits the combined batch-receipt
+// route instead of downloading one PDF per line.
+async function downloadBatchReceiptPdf(receiptBatchId: string, receiptNo: string, copy?: "admin" | "student") {
+  const res = await api.get(`/api/documents/fee/receipt/batch/${receiptBatchId}`, { responseType: "blob", params: copy ? { copy } : undefined });
   const url = URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Receipt_${receiptNo}.pdf`;
+  a.download = `Receipt_${receiptNo}${copy ? `_${copy}` : ""}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -336,13 +340,14 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
 
         {lastBatch && (
           <div className="space-y-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
-            <p>Payment recorded — {lastBatch.payments.length} receipt(s)</p>
+            <p>Payment recorded — receipt <span className="font-mono">{lastBatch.payments[0]?.receipt_no}</span> ({lastBatch.payments.length} item{lastBatch.payments.length > 1 ? "s" : ""})</p>
             <div className="flex flex-wrap gap-2">
-              {lastBatch.payments.map((p) => (
-                <Button key={p.id} size="sm" variant="outline" onClick={() => downloadReceiptPdf(p.id, p.receipt_no)}>
-                  Receipt {p.receipt_no}
-                </Button>
-              ))}
+              <Button size="sm" variant="outline" onClick={() => downloadBatchReceiptPdf(lastBatch.receipt_batch_id, lastBatch.payments[0]?.receipt_no ?? "", "admin")}>
+                Download Admin Copy
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => downloadBatchReceiptPdf(lastBatch.receipt_batch_id, lastBatch.payments[0]?.receipt_no ?? "", "student")}>
+                Download Student Copy
+              </Button>
             </div>
           </div>
         )}

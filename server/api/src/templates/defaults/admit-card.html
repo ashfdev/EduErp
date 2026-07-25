@@ -35,7 +35,7 @@
     <div class="title">ADMIT CARD</div>
   </div>
 
-  <img class="photo" src="{{student.photo_url}}" />
+  {{#if student.photo_url}}<img class="photo" src="{{student.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}
   <table class="info">
     <tr><td>Name</td><td>{{student.name_en}}</td><td>Exam</td><td>{{exam_name}}</td></tr>
     <tr><td>Father's Name</td><td>{{student.father_name}}</td><td>Academic Year</td><td>{{academic_year_label}}</td></tr>

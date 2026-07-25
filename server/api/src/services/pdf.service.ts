@@ -35,6 +35,50 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   ROUTINE: "routine",
 };
 
+const ONES = [
+  "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+  "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen",
+];
+const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+function twoDigitsToWords(n: number): string {
+  if (n < 20) return ONES[n] ?? "";
+  const tens = Math.floor(n / 10);
+  const ones = n % 10;
+  return `${TENS[tens]}${ones ? ` ${ONES[ones]}` : ""}`;
+}
+
+function threeDigitsToWords(n: number): string {
+  const hundreds = Math.floor(n / 100);
+  const rest = n % 100;
+  const parts: string[] = [];
+  if (hundreds) parts.push(`${ONES[hundreds]} Hundred`);
+  if (rest) parts.push(twoDigitsToWords(rest));
+  return parts.join(" ");
+}
+
+// Indian/BD numbering system (Crore/Lakh/Thousand/Hundred) -- matches the
+// convention used on printed BD school fee receipts, e.g. "One Hundred
+// Taka Only". Whole numbers only (no paisa unit); falls back to the plain
+// digits above 99,999,999 or below 0 rather than guessing a label.
+function numberToWords(amount: number): string {
+  if (amount === 0) return "Zero";
+  if (amount >= 100000000 || amount < 0) return String(amount);
+
+  const crore = Math.floor(amount / 10000000);
+  const lakh = Math.floor((amount % 10000000) / 100000);
+  const thousand = Math.floor((amount % 100000) / 1000);
+  const hundred = amount % 1000;
+
+  const parts: string[] = [];
+  if (crore) parts.push(`${twoDigitsToWords(crore)} Crore`);
+  if (lakh) parts.push(`${twoDigitsToWords(lakh)} Lakh`);
+  if (thousand) parts.push(`${twoDigitsToWords(thousand)} Thousand`);
+  if (hundred) parts.push(threeDigitsToWords(hundred));
+
+  return parts.join(" ");
+}
+
 let helpersRegistered = false;
 
 function registerHelpers() {
@@ -68,6 +112,17 @@ function registerHelpers() {
     if (marks === null || marks === undefined || marks === "") return "--";
     return String(marks);
   });
+
+  // 1-based row numbering for a `{{#each}}` loop's built-in 0-based @index
+  // (e.g. a receipt's "Serial" column).
+  Handlebars.registerHelper("inc", (index: unknown) => Number(index) + 1);
+
+  // English amount-in-words for a printed receipt's "In Words" line (e.g.
+  // "One Hundred Taka Only") -- matches the BD school-receipt convention
+  // directly requested against the reference design. Whole-taka only
+  // (paisa isn't a real unit in this system's Float amounts); values above
+  // 99,999,999 fall back to the plain number rather than guessing a label.
+  Handlebars.registerHelper("amountInWords", (amount: unknown) => new Handlebars.SafeString(numberToWords(Math.round(Number(amount) || 0))));
 
   Handlebars.registerHelper("institutionLogo", function (this: unknown, options: Handlebars.HelperOptions) {
     const root = options.data?.root as { institution?: { logo_url?: string | null; name_en?: string } } | undefined;
@@ -135,6 +190,7 @@ async function getInstitutionBranding() {
     eiin: profile?.eiin ?? "",
     address: profile?.address ?? "",
     phone: profile?.phone_primary ?? "",
+    email: profile?.email_primary ?? "",
     primary_color: profile?.primary_color ?? "#1a3c4a",
     secondary_color: profile?.secondary_color ?? "#2e7d9a",
     // Institution-type-aware terminology, reused by the card designer's
