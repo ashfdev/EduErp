@@ -42,6 +42,16 @@ export default function FeesDashboardPage() {
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{defaulters?.length ?? 0}</p><p className="text-sm text-muted-foreground">{t("defaulters")}</p></CardContent></Card>
         <Card><CardContent className="pt-6 space-y-1"><Link href="/fees/invoices" className="block text-primary hover:underline">{t("viewInvoices")}</Link><Link href="/fees/reports" className="block text-primary hover:underline">{t("viewReports")}</Link><Link href="/fees/bank-transfers" className="block text-primary hover:underline">{t("verifyBankTransfers")}</Link></CardContent></Card>
       </div>
+
+      <Card>
+        <CardContent className="flex items-center justify-between gap-4 pt-6">
+          <div>
+            <p className="font-medium">{t("manageWaivers")}</p>
+            <p className="text-sm text-muted-foreground">{t("waiverHint")}</p>
+          </div>
+          <Link href="/fees/waivers"><Button variant="outline">{t("manageWaivers")}</Button></Link>
+        </CardContent>
+      </Card>
     </PageWrapper>
   );
 }

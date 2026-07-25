@@ -231,6 +231,8 @@
     "defaulters": "Defaulters (30+ days)",
     "viewInvoices": "View Invoices →",
     "viewReports": "View Reports →",
-    "verifyBankTransfers": "Verify Bank Transfers →"
+    "verifyBankTransfers": "Verify Bank Transfers →",
+    "manageWaivers": "Manage Waivers →",
+    "waiverHint": "Set up reusable discount/scholarship types and assign them to students"
   }
 }
