@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -17,6 +17,13 @@ interface PayrollRow {
   deductions: number;
   net_salary: number;
   status: string;
+  overtime_pay: number;
+  late_deduction: number;
+  substitution_bonus: number;
+  pf_amount: number;
+  tds_amount: number;
+  absent_deduction: number;
+  advance_deducted: number;
 }
 interface DepartmentOption {
   id: string;
@@ -85,6 +92,8 @@ export default function PayrollPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Void failed"),
   });
 
+  const [breakdownTarget, setBreakdownTarget] = useState<PayrollRow | null>(null);
+
   const hasDraft = records?.some((r) => r.status === "DRAFT");
   const hasFinalized = records?.some((r) => r.status === "FINALIZED");
 
@@ -114,6 +123,7 @@ export default function PayrollPage() {
         breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Payroll" }]}
         action={
           <div className="flex gap-2">
+            <Link href="/hr/payroll/reports"><Button variant="outline">Reports</Button></Link>
             <Link href="/hr/salary-structures"><Button variant="outline">Salary Structures</Button></Link>
             <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
           </div>
@@ -179,7 +189,13 @@ export default function PayrollPage() {
                     <TableCell className="font-medium">৳{r.net_salary.toFixed(0)}</TableCell>
                     <TableCell><StatusBadge status={r.status} /></TableCell>
                     <TableCell>
-                      {r.status !== "DRAFT" && <button onClick={() => downloadPayslip(r.id)} className="text-primary hover:underline">Download</button>}
+                      <button onClick={() => setBreakdownTarget(r)} className="text-primary hover:underline">View Breakdown</button>
+                      {r.status !== "DRAFT" && (
+                        <>
+                          {" · "}
+                          <button onClick={() => downloadPayslip(r.id)} className="text-primary hover:underline">Download</button>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>
                       {r.status === "PAID" && (
@@ -195,6 +211,38 @@ export default function PayrollPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={breakdownTarget !== null} onOpenChange={(open) => !open && setBreakdownTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Salary Breakdown — {breakdownTarget?.staff.name_en}</DialogTitle></DialogHeader>
+          {breakdownTarget && (
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="mb-1 font-medium text-muted-foreground">Earnings</p>
+                <div className="space-y-1">
+                  <div className="flex justify-between"><span>Gross Salary</span><span>৳{breakdownTarget.gross_salary.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Overtime</span><span>৳{breakdownTarget.overtime_pay.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Substitution Bonus</span><span>৳{breakdownTarget.substitution_bonus.toFixed(2)}</span></div>
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 font-medium text-muted-foreground">Deductions</p>
+                <div className="space-y-1">
+                  <div className="flex justify-between"><span>Provident Fund</span><span>৳{breakdownTarget.pf_amount.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>TDS</span><span>৳{breakdownTarget.tds_amount.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Absence</span><span>৳{breakdownTarget.absent_deduction.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Late</span><span>৳{breakdownTarget.late_deduction.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Advance Recovery</span><span>৳{breakdownTarget.advance_deducted.toFixed(2)}</span></div>
+                  <div className="flex justify-between font-medium"><span>Total Deductions</span><span>৳{breakdownTarget.deductions.toFixed(2)}</span></div>
+                </div>
+              </div>
+              <div className="flex justify-between border-t pt-2 text-base font-semibold">
+                <span>Net Salary</span><span>৳{breakdownTarget.net_salary.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={voidTarget !== null}

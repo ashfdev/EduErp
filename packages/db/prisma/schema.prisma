@@ -2161,6 +2161,12 @@ model SalaryStructure {
   transport      Float    @default(0)
   pf_percentage  Float    @default(0)
   tds_percentage Float    @default(0)
+  // New payroll-depth fields (Plan Fourteen, Phase J) -- all default 0,
+  // purely additive: a structure that never sets these produces byte-
+  // identical payroll output to before this phase existed.
+  overtime_rate_per_hour        Float @default(0)
+  late_deduction_per_day        Float @default(0)
+  substitution_bonus_per_period Float @default(0)
   // Pre-selected on the Add Staff form and used as the CSV bulk-import
   // fallback when a row's salary_structure_name is blank/unmatched — "only
   // one default" is enforced in application logic (salary.routes.ts), not a
@@ -2189,6 +2195,15 @@ model PayrollRecord {
   deductions       Float
   net_salary       Float
   advance_deducted Float         @default(0)
+  // Itemized breakdown (Plan Fourteen, Phase J) -- stored so the itemized
+  // payslip can render each component without recomputing after the fact;
+  // all default 0, purely additive.
+  overtime_pay       Float @default(0)
+  late_deduction     Float @default(0)
+  substitution_bonus Float @default(0)
+  pf_amount          Float @default(0)
+  tds_amount         Float @default(0)
+  absent_deduction   Float @default(0)
   status           PayrollStatus @default(DRAFT)
   payslip_url      String?
   processed_by_id  String?
@@ -2199,6 +2214,22 @@ model PayrollRecord {
   paid_at          DateTime?
 
   @@unique([staff_id, month, year])
+}
+
+// One row per real POST /calculate run (Plan Fourteen, Phase J4) -- mirrors
+// InvoiceGenerationRun's exact precedent; today only transient counts were
+// ever returned, never persisted anywhere for later audit/reporting.
+model PayrollGenerationRun {
+  id              String   @id @default(cuid())
+  run_by_id       String
+  run_at          DateTime @default(now())
+  month           Int
+  year            Int
+  department_id   String?
+  processed_count Int
+  total_payable   Float
+
+  @@index([run_at])
 }
 
 model JobPosting {

@@ -15,6 +15,7 @@
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   th, td { border: 1px solid #999; padding: 5px; font-size: 11px; }
   th { background: {{institution.primary_color}}; color: #fff; }
+  .total-row td { font-weight: 700; background: #f7f7f7; }
   .net { text-align: center; font-size: 18px; font-weight: 700; margin-top: 12px; }
   .days { display: flex; justify-content: space-around; margin-top: 8px; font-size: 11px; }
   .footer { display: flex; justify-content: space-between; margin-top: 30px; }
@@ -33,8 +34,13 @@
   <div class="meta"><span>{{staff.name_en}} ({{staff.staff_uid}})</span><span>{{staff.designation}}</span></div>
   <table>
     <tr><th colspan="2">Earnings</th><th colspan="2">Deductions</th></tr>
-    <tr><td>Gross Salary</td><td>৳{{gross_salary}}</td><td>Total Deductions</td><td>৳{{deductions}}</td></tr>
-    <tr><td>Advance Recovery</td><td>৳{{advance_deducted}}</td><td></td><td></td></tr>
+    <tr><td>Basic</td><td>৳{{basic}}</td><td>Provident Fund</td><td>৳{{pf_amount}}</td></tr>
+    <tr><td>House Rent</td><td>৳{{house_rent}}</td><td>TDS</td><td>৳{{tds_amount}}</td></tr>
+    <tr><td>Medical</td><td>৳{{medical}}</td><td>Absence</td><td>৳{{absent_deduction}}</td></tr>
+    <tr><td>Transport</td><td>৳{{transport}}</td><td>Late</td><td>৳{{late_deduction}}</td></tr>
+    <tr><td>Overtime</td><td>৳{{overtime_pay}}</td><td>Advance Recovery</td><td>৳{{advance_deducted}}</td></tr>
+    <tr><td>Substitution Bonus</td><td>৳{{substitution_bonus}}</td><td></td><td></td></tr>
+    <tr class="total-row"><td>Gross Salary</td><td>৳{{gross_salary}}</td><td>Total Deductions</td><td>৳{{deductions}}</td></tr>
   </table>
   <p class="net">Net Salary: ৳{{net_salary}}</p>
   <div class="days"><span>Working Days: {{working_days}}</span><span>Present Days: {{present_days}}</span></div>

@@ -11,6 +11,7 @@ import { markAttendanceSchema, markStaffAttendanceSchema } from "@education-erp/
 import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { computeOvertime } from "../../utils/overtime";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
 // actually attached to — either as the section's class teacher, or via a
@@ -259,15 +260,6 @@ attendanceRouter.get(
     function computeWorkingHours(checkIn: Date | null, checkOut: Date | null): number | null {
       if (!checkIn || !checkOut) return null;
       return Math.round(((checkOut.getTime() - checkIn.getTime()) / 3_600_000) * 100) / 100;
-    }
-
-    function computeOvertime(checkOut: Date | null, shiftEndTime: string | undefined): number {
-      if (!checkOut || !shiftEndTime) return 0;
-      const [h, m] = shiftEndTime.split(":").map(Number);
-      const shiftEnd = new Date(checkOut);
-      shiftEnd.setHours(h ?? 0, m ?? 0, 0, 0);
-      const diffHours = (checkOut.getTime() - shiftEnd.getTime()) / 3_600_000;
-      return diffHours > 0 ? Math.round(diffHours * 100) / 100 : 0;
     }
 
     const rows = staff.map((s) => {

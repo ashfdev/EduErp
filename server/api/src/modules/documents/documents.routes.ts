@@ -5,7 +5,9 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, EXAM_MANAGE_ROLES } from "../../lib/roles";
+import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, EXAM_MANAGE_ROLES, PAYROLL_MANAGE_ROLES } from "../../lib/roles";
+import { resolveOwnStaffId } from "../../lib/own-staff";
+import { buildPayslipData } from "../hr/payroll.routes";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
@@ -901,24 +903,25 @@ documentsRouter.get(
   }),
 );
 
+// Real, confirmed gap found during Plan Fourteen Phase J research: this
+// route had no scoping beyond the router-level STAFF_ONLY_ROLES gate,
+// letting any staff role (Librarian, Class Teacher, etc.) fetch any other
+// employee's payslip PDF by ID. Now mirrors payroll.routes.ts's own
+// (already-fixed) copy of this route exactly: PAYROLL_MANAGE_ROLES may
+// fetch any record, everyone else only their own.
 documentsRouter.get(
   "/payroll/payslip/:payroll_record_id",
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "payroll_record_id");
-    const record = await prisma.payrollRecord.findUnique({ where: { id }, include: { staff: true } });
+    const record = await prisma.payrollRecord.findUnique({ where: { id }, include: { staff: { include: { salary_structure: true } } } });
     if (!record) throw notFound("Payroll record not found");
 
-    const pdf = await renderDocument("PAYSLIP", {
-      staff: record.staff,
-      month: record.month,
-      year: record.year,
-      gross_salary: record.gross_salary,
-      deductions: record.deductions,
-      advance_deducted: record.advance_deducted,
-      net_salary: record.net_salary,
-      working_days: record.working_days,
-      present_days: record.present_days,
-    });
+    if (!PAYROLL_MANAGE_ROLES.includes(req.user!.role as UserRole)) {
+      const ownStaffId = await resolveOwnStaffId(req.user!.sub);
+      if (ownStaffId !== record.staff_id) throw notFound("Payroll record not found");
+    }
+
+    const pdf = await renderDocument("PAYSLIP", buildPayslipData(record) as unknown as Record<string, unknown>);
     sendPdf(res, pdf, `payslip-${record.staff.staff_uid}-${record.month}-${record.year}.pdf`, req.query.download === "true");
   }),
 );

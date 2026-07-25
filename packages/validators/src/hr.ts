@@ -108,6 +108,9 @@ export const salaryStructureSchema = z.object({
   transport: z.number().min(0).default(0),
   pf_percentage: z.number().min(0).max(100).default(0),
   tds_percentage: z.number().min(0).max(100).default(0),
+  overtime_rate_per_hour: z.number().min(0).default(0),
+  late_deduction_per_day: z.number().min(0).default(0),
+  substitution_bonus_per_period: z.number().min(0).default(0),
   is_default: z.boolean().default(false),
 });
 
