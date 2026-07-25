@@ -777,7 +777,7 @@ portalRouter.post(
     await assertAccess(req.user!.sub, req.user!.role, invoice.student_id);
 
     const adapter = getPaymentAdapter(body.gateway);
-    if (!adapter.isConfigured()) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
+    if (!(await adapter.isConfigured())) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
 
     const transactionId = randomUUID();
     const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });

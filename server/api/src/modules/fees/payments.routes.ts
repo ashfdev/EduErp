@@ -80,7 +80,7 @@ paymentsRouter.post(
     if (!invoice) throw notFound("Invoice not found");
 
     const adapter = getPaymentAdapter(body.gateway);
-    if (!adapter.isConfigured()) {
+    if (!(await adapter.isConfigured())) {
       throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
     }
 

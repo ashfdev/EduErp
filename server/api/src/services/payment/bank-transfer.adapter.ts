@@ -9,7 +9,7 @@ import type { InitiatePaymentInput, InitiatePaymentResult, PaymentGatewayAdapter
 // completion logic the other gateways' webhook callback runs.
 export const bankTransferAdapter: PaymentGatewayAdapter = {
   name: "BANK_TRANSFER",
-  isConfigured: () => true,
+  isConfigured: async () => true,
   async initiatePayment(_input: InitiatePaymentInput): Promise<InitiatePaymentResult> {
     return { status: "INITIATED" };
   },

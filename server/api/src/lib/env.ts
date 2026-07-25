@@ -17,6 +17,9 @@ const envSchema = z.object({
   DEVICE_SERVICE_URL: z.string().url().optional(),
   DEVICE_SERVICE_SECRET: z.string().optional(),
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
+  // Key material for at-rest encryption of sensitive Settings-stored
+  // credentials (payment gateway app_secret/password, lib/crypto.ts).
+  ENCRYPTION_KEY: z.string().optional(),
 });
 
 // Fail fast on a missing/malformed critical var rather than surfacing a
@@ -42,4 +45,15 @@ export function resolveBaseUrl(varName: string, value: string | undefined, devFa
     throw new Error(`${varName} must be set in production — refusing to fall back to a localhost URL`);
   }
   return devFallback;
+}
+
+// Same fail-loud-in-production, dev-only-fallback convention as
+// resolveBaseUrl above, applied to the key material backing at-rest secret
+// encryption (lib/crypto.ts) instead of a URL.
+export function resolveEncryptionKey(): string {
+  if (env.ENCRYPTION_KEY) return env.ENCRYPTION_KEY;
+  if (env.NODE_ENV === "production") {
+    throw new Error("ENCRYPTION_KEY must be set in production — refusing to use a dev-only fallback for at-rest secret encryption");
+  }
+  return "dev-only-insecure-encryption-key-do-not-use-in-prod";
 }

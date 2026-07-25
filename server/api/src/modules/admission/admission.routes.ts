@@ -458,7 +458,7 @@ admissionRouter.post(
     if (!application) throw notFound("Application not found");
 
     const adapter = getPaymentAdapter(body.gateway);
-    if (!adapter.isConfigured()) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
+    if (!(await adapter.isConfigured())) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
 
     const transactionId = randomUUID();
     const result = await adapter.initiatePayment({ invoice_id: application.id, amount: application.cycle.app_fee, transaction_id: transactionId });

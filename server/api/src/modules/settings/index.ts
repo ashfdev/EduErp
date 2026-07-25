@@ -13,6 +13,7 @@ import { programsRouter, coursesRouter } from "./university.routes";
 import { usersRouter } from "./users.routes";
 import { auditLogRouter } from "./audit-log.routes";
 import { permissionsRouter } from "./permissions.routes";
+import { paymentGatewaysRouter } from "./payment-gateways.routes";
 
 export const settingsRouter = Router();
 
@@ -40,3 +41,4 @@ settingsRouter.use("/courses", coursesRouter);
 settingsRouter.use("/users", usersRouter);
 settingsRouter.use("/audit-log", auditLogRouter);
 settingsRouter.use("/permissions", permissionsRouter);
+settingsRouter.use("/payment-gateways", paymentGatewaysRouter);

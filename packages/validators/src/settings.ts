@@ -254,3 +254,15 @@ export const createUserSchema = z.object({
 export const adminResetPasswordSchema = z.object({
   login_password: passwordSchema.optional(),
 });
+
+// Every field is optional -- an omitted/blank credential field means "leave
+// the stored value unchanged", never "clear it" (Plan Fourteen, Phase D2).
+export const paymentGatewayConfigSchema = z.object({
+  app_key: z.string().optional(),
+  app_secret: z.string().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  sandbox_mode: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+});
+export type PaymentGatewayConfigInput = z.infer<typeof paymentGatewayConfigSchema>;

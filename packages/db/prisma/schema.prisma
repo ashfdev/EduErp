@@ -3290,6 +3290,36 @@ enum PaymentGateway {
   CREDIT_BALANCE
 }
 
+enum PaymentGatewayProvider {
+  BKASH
+  NAGAD
+  SSLCOMMERZ
+  ROCKET
+}
+
+// Admin-editable, encrypted-at-rest credential storage for the payment
+// gateway adapters (Plan Fourteen, Phase D2). The adapters themselves stay
+// non-functional stubs -- real bKash/Nagad/SSLCommerz/Rocket integration
+// remains deferred per the standing decision -- this only changes where a
+// credential can come from (DB first, falling back to env vars), so a real
+// merchant account activates isConfigured() the moment its details are
+// entered here, with no env-var deploy needed. app_secret/password are
+// AES-256-GCM encrypted at rest (see lib/crypto.ts); GET responses never
+// return the plaintext or ciphertext, only a has-value indicator.
+model PaymentGatewayConfig {
+  id            String                 @id @default(cuid())
+  provider      PaymentGatewayProvider @unique
+  app_key       String?
+  app_secret    String?
+  username      String?
+  password      String?
+  sandbox_mode  Boolean                @default(true)
+  is_active     Boolean                @default(false)
+  updated_by_id String?
+  updated_at    DateTime               @updatedAt
+  created_at    DateTime               @default(now())
+}
+
 enum PaymentStatus {
   INITIATED
   COMPLETED

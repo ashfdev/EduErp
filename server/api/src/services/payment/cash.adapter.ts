@@ -3,7 +3,7 @@ import type { InitiatePaymentInput, InitiatePaymentResult, PaymentGatewayAdapter
 /** CASH is always "completed" immediately — there's no external gateway round-trip. */
 export const cashAdapter: PaymentGatewayAdapter = {
   name: "CASH",
-  isConfigured: () => true,
+  isConfigured: async () => true,
   async initiatePayment(_input: InitiatePaymentInput): Promise<InitiatePaymentResult> {
     return { status: "COMPLETED" };
   },

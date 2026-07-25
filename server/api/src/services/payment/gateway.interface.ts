@@ -12,7 +12,10 @@ export interface InitiatePaymentResult {
 
 export interface PaymentGatewayAdapter {
   name: string;
-  isConfigured(): boolean;
+  // Async because a DB-stored, admin-entered credential (Settings -> Payment
+  // Gateways) is checked before falling back to env vars (Plan Fourteen,
+  // Phase D2).
+  isConfigured(): Promise<boolean>;
   initiatePayment(input: InitiatePaymentInput): Promise<InitiatePaymentResult>;
   verifyCallback(payload: unknown): Promise<{ transaction_id: string; success: boolean }>;
 }
