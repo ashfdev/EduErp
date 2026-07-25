@@ -6,8 +6,10 @@
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
   body { margin: 0; padding: 10mm; font-size: 12px; }
   .header { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .letterhead-brand { display: flex; align-items: center; gap: 8px; }
   .header img { height: 12mm; }
-  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .letterhead-text h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
   .header .title { margin-left: auto; font-size: 14px; font-weight: 700; }
   .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 11px; }
   table.details { width: 100%; border-collapse: collapse; margin-top: 8px; }
@@ -28,7 +30,7 @@
 </style>
 </head>
 <body>
-  <div class="header">{{institutionLogo}}<h1>{{institution.name_en}}</h1><span class="title">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
+  <div class="header"><div class="letterhead-brand">{{> letterhead}}</div><span class="title">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
   <div class="meta"><span>Receipt No: {{receipt_no}}</span><span>Date: {{banglaDate date}}</span></div>
   <table class="details">
     <tr><td>Student Name</td><td>{{student.name_en}}</td><td>Student ID</td><td>{{student.student_uid}}</td></tr>

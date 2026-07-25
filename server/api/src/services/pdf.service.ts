@@ -8,6 +8,7 @@ import type { DocumentType } from "@education-erp/types";
 import { cardDesignSchema, SIZE_PRESETS, FIELD_CATALOG, type CardDesign } from "@education-erp/validators";
 
 const DEFAULT_TEMPLATES_DIR = join(__dirname, "..", "templates", "defaults");
+const PARTIALS_DIR = join(__dirname, "..", "templates", "partials");
 
 const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   STUDENT_ID_CARD: "student-id-card",
@@ -86,6 +87,16 @@ function registerHelpers() {
       `<div class="signature-block">${img}<div class="sig-line"></div><p class="sig-name">${match.display_name}</p><p class="sig-designation">${match.designation}</p></div>`,
     );
   });
+
+  // Shared header block (logo + institution name + address/phone/EIIN line,
+  // Plan Fourteen Phase K) -- registered once, included via {{> letterhead}}
+  // by every doc-type template instead of each one hand-rolling its own
+  // copy. Deliberately just the brand text block, not styling: each
+  // template's own <style> block still controls layout (flex row vs.
+  // centered column) and logo sizing via its existing `.header img`-style
+  // selector, so the partial only needs to live inside that same wrapper
+  // div to pick up the right look -- nothing here overrides per-template CSS.
+  Handlebars.registerPartial("letterhead", readFileSync(join(PARTIALS_DIR, "letterhead.html"), "utf-8"));
 }
 
 interface SignatureSlot {

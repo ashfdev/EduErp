@@ -6,9 +6,10 @@
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
   body { margin: 0; padding: 12mm; font-size: 12px; }
   .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .letterhead-brand { display: flex; align-items: center; gap: 8px; text-align: center; }
   .header img { height: 16mm; }
-  .header .center { text-align: center; }
-  .header .center h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .letterhead-text h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
   .photo { width: 22mm; height: 28mm; object-fit: cover; border: 1px solid #999; float: right; }
   table.info { width: 100%; border-collapse: collapse; margin-top: 10px; }
   table.info td { padding: 3px 6px; }
@@ -27,8 +28,7 @@
 </head>
 <body>
   <div class="header">
-    {{institutionLogo}}
-    <div class="center"><h1>{{institution.name_en}}</h1><p>EIIN: {{institution.eiin}} | {{institution.address}}</p></div>
+    <div class="letterhead-brand">{{> letterhead}}</div>
     <div><strong>{{exam_name}}</strong><br />{{academic_year_label}}</div>
   </div>
 

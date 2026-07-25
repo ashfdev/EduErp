@@ -5,8 +5,12 @@
 <style>
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
   body { margin: 0; padding: 10mm; font-size: 12px; }
-  .header { text-align: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
-  .header h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .header { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .letterhead-brand { display: flex; align-items: center; gap: 8px; }
+  .header img { height: 16mm; }
+  .letterhead-text h1 { margin: 0; font-size: 14px; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
+  .payslip-subtitle { margin-left: auto; font-size: 11px; text-align: right; }
   .meta { display: flex; justify-content: space-between; margin: 8px 0; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   th, td { border: 1px solid #999; padding: 5px; font-size: 11px; }
@@ -22,7 +26,10 @@
 </style>
 </head>
 <body>
-  <div class="header"><h1>{{institution.name_en}}</h1><p>Payslip — {{month}}/{{year}}</p></div>
+  <div class="header">
+    <div class="letterhead-brand">{{> letterhead}}</div>
+    <p class="payslip-subtitle">Payslip — {{month}}/{{year}}</p>
+  </div>
   <div class="meta"><span>{{staff.name_en}} ({{staff.staff_uid}})</span><span>{{staff.designation}}</span></div>
   <table>
     <tr><th colspan="2">Earnings</th><th colspan="2">Deductions</th></tr>

@@ -7,8 +7,8 @@
   body { margin: 0; padding: 18mm; font-size: 13px; line-height: 1.8; }
   .letterhead { text-align: center; border-bottom: 3px double {{institution.primary_color}}; padding-bottom: 10px; margin-bottom: 24px; }
   .letterhead img { height: 20mm; }
-  .letterhead h1 { margin: 4px 0; color: {{institution.primary_color}}; }
-  .letterhead p { margin: 2px 0; font-size: 11px; }
+  .letterhead-text h1 { margin: 4px 0; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0; font-size: 11px; }
   .title { text-align: center; font-size: 16px; font-weight: 700; text-decoration: underline; margin-bottom: 20px; }
   .body-text { text-align: justify; }
   .footer { display: flex; justify-content: space-between; margin-top: 50px; }
@@ -20,9 +20,7 @@
 </head>
 <body>
   <div class="letterhead">
-    {{institutionLogo}}
-    <h1>{{institution.name_en}}</h1>
-    <p>{{institution.address}} | Phone: {{institution.phone}} | EIIN: {{institution.eiin}}</p>
+    {{> letterhead}}
   </div>
   <p class="title">TESTIMONIAL</p>
   <p class="body-text">
