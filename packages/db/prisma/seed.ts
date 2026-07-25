@@ -361,6 +361,12 @@ async function main() {
     create: { id: "singleton" },
   });
 
+  await prisma.marksheetDisplaySettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+  });
+
   const examTypes = [
     { code: "CT", name: "Class Test", display_order: 1, weight_in_annual: 10 },
     { code: "HALF", name: "Half Yearly", display_order: 2, weight_in_annual: 30 },

@@ -4,21 +4,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
-  body { margin: 0; padding: 12mm; font-size: 12px; }
+  body { margin: 0; padding: 10mm; font-size: 12px; position: relative; }
+  .content { position: relative; z-index: 1; }
   .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid {{institution.primary_color}}; padding-bottom: 6px; }
+  .letterhead-brand { display: flex; align-items: center; gap: 8px; text-align: center; }
   .header img { height: 16mm; }
-  .header .center { text-align: center; }
-  .header .center h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .letterhead-text h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
   .photo { width: 22mm; height: 28mm; object-fit: cover; border: 1px solid #999; float: right; }
+  .qr { height: 18mm; width: 18mm; float: right; margin-left: 8px; }
   table.info { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  table.info td { padding: 3px 6px; }
+  table.info td { padding: 2px 6px; }
   table.results { width: 100%; border-collapse: collapse; margin-top: 14px; }
-  table.results th, table.results td { border: 1px solid #999; padding: 5px; font-size: 11px; text-align: center; }
+  table.results th, table.results td { border: 1px solid #999; padding: 3px 5px; font-size: 11px; text-align: center; }
   table.results th { background: {{institution.primary_color}}; color: #fff; }
   .attendance-box { margin-top: 12px; border: 1px solid #999; padding: 8px; display: flex; justify-content: space-around; font-size: 11px; }
   .remarks { margin-top: 12px; font-size: 11px; }
+  .stats-legend { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; }
+  .stats { font-size: 10px; }
+  .stats table { border-collapse: collapse; }
+  .stats td { padding: 1px 6px 1px 0; }
+  .legend { font-size: 10px; }
+  .legend table { border-collapse: collapse; }
+  .legend th, .legend td { border: 1px solid #ccc; padding: 2px 6px; text-align: center; }
+  .legend th { background: #f0f0f0; }
+  .published-date { font-size: 9px; color: #777; font-weight: normal; }
   .footer-note { margin-top: 20px; text-align: center; font-size: 9px; color: #777; }
-  .signatures { display: flex; justify-content: space-between; margin-top: 24px; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 16px; }
   .signature-block { text-align: center; width: 30%; }
   .sig-line { border-top: 1px solid #333; margin-top: 24px; }
   .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
@@ -26,35 +38,91 @@
 </style>
 </head>
 <body>
+  {{#if display.show_institute_banner}}{{watermark}}{{/if}}
+  <div class="content">
+  {{#if display.show_institute_banner}}
   <div class="header">
-    {{institutionLogo}}
-    <div class="center"><h1>{{institution.name_en}}</h1><p>Report Card — {{exam_name}}</p></div>
-    <div>{{academic_year_label}}</div>
+    <div class="letterhead-brand">{{> letterhead}}</div>
+    <div><strong>Report Card — {{exam_name}}</strong><br />{{academic_year_label}}{{#if display.show_published_date}}<br /><span class="published-date">Published: {{banglaDate published_date}}</span>{{/if}}</div>
   </div>
+  {{else}}
+  <div class="header"><div><strong>Report Card — {{exam_name}}</strong> — {{academic_year_label}}{{#if display.show_published_date}} — <span class="published-date">Published: {{banglaDate published_date}}</span>{{/if}}</div></div>
+  {{/if}}
 
-  <img class="photo" src="{{student.photo_url}}" />
+  {{#if display.show_qr_code}}{{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}{{/if}}
+  {{#if display.show_student_image}}<img class="photo" src="{{student.photo_url}}" />{{/if}}
   <table class="info">
     <tr><td>Name</td><td>{{student.name_en}}</td><td>Roll No</td><td>{{student.current_roll_no}}</td></tr>
     <tr><td>Class / Section</td><td>{{student.current_class.name_en}} / {{student.current_section.name}}</td><td>Conduct</td><td>{{conduct_grade}}</td></tr>
   </table>
 
   <table class="results">
-    <thead><tr><th>Subject</th><th>Full Marks</th><th>Total</th><th>Grade</th><th>Remarks</th></tr></thead>
+    <thead>
+      <tr>
+        <th>Subject</th>
+        {{#if display.show_subject_full_marks}}<th>Full Marks</th>{{/if}}
+        {{#if display.show_subject_pass_marks}}<th>Pass Marks</th>{{/if}}
+        <th>Total</th><th>Grade</th><th>Remarks</th>
+      </tr>
+    </thead>
     <tbody>
       {{#each subjects}}
-      <tr><td>{{this.name_en}}</td><td>{{this.full_marks}}</td><td>{{formatMarks this.marks_total}}</td><td style="color: {{gradeColor this.grade_letter}}">{{this.grade_letter}}</td><td>{{this.remark}}</td></tr>
+      <tr>
+        <td>{{this.name_en}}</td>
+        {{#if ../display.show_subject_full_marks}}<td>{{this.full_marks}}</td>{{/if}}
+        {{#if ../display.show_subject_pass_marks}}<td>{{this.pass_marks}}</td>{{/if}}
+        <td>{{formatMarks this.marks_total}}</td>
+        <td style="color: {{gradeColor this.grade_letter}}">{{this.grade_letter}}</td>
+        <td>{{this.remark}}</td>
+      </tr>
       {{/each}}
     </tbody>
   </table>
 
+  {{#if display.show_attendance_info}}
   <div class="attendance-box">
     <span>Total Days: {{attendance.total_days}}</span>
     <span>Present: {{attendance.present}}</span>
     <span>Absent: {{attendance.absent}}</span>
     <span>Attendance %: {{attendance.percentage}}</span>
   </div>
+  {{/if}}
 
   <p class="remarks"><strong>Overall Remarks:</strong> {{overall_remarks}}</p>
+
+  <div class="stats-legend">
+    <div class="stats">
+      {{#if position}}
+      <table>
+        {{#if display.show_position_in_class}}<tr><td>Position in Class:</td><td><strong>{{position.position_in_class}}</strong></td></tr>{{/if}}
+        {{#if display.show_position_in_section}}<tr><td>Position in Section:</td><td><strong>{{position.position_in_section}}</strong></td></tr>{{/if}}
+        {{#if display.show_highest_in_class}}<tr><td>Highest in Class:</td><td>{{position.highest_in_class}}</td></tr>{{/if}}
+        {{#if display.show_highest_in_section}}<tr><td>Highest in Section:</td><td>{{position.highest_in_section}}</td></tr>{{/if}}
+        {{#if display.show_average_marks}}<tr><td>Class Average Marks:</td><td>{{position.class_average_marks}}</td></tr>{{/if}}
+        {{#if display.show_average_grade_point}}<tr><td>Class Average GPA:</td><td>{{position.class_average_gpa}}</td></tr>{{/if}}
+      </table>
+      {{/if}}
+    </div>
+    <div class="legend">
+      {{#if grading_legend}}
+      <table>
+        <thead><tr><th>Marks</th><th>Grade</th><th>GPA</th></tr></thead>
+        <tbody>
+          {{#each grading_legend}}
+          <tr><td>{{this.range}}</td><td>{{this.grade_letter}}</td><td>{{this.grade_point}}</td></tr>
+          {{/each}}
+        </tbody>
+      </table>
+      {{/if}}
+    </div>
+  </div>
+
+  {{#if display.show_general_ability_table}}
+  <table class="results" style="margin-top: 10px;">
+    <thead><tr><th>Punctuality</th><th>Discipline</th><th>Sports</th><th>Co-curricular</th></tr></thead>
+    <tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody>
+  </table>
+  {{/if}}
 
   <div class="signatures">
     {{signatureBlock 1}}
@@ -63,5 +131,6 @@
   </div>
 
   <p class="footer-note">This is a computer-generated document.</p>
+  </div>
 </body>
 </html>

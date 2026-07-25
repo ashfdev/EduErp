@@ -18,6 +18,7 @@ const GROUPS = [
       { href: "/settings/student-id", label: "Student ID Format" },
       { href: "/settings/grading", label: "Grading System" },
       { href: "/settings/exam-types", label: "Exam Types" },
+      { href: "/settings/marksheet-display", label: "Marksheet Display" },
       { href: "/settings/fee-rules", label: "Fee Rules" },
       { href: "/settings/attendance-rules", label: "Attendance Rules" },
       { href: "/settings/leave-types", label: "Leave Types" },

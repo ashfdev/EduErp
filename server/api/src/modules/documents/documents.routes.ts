@@ -10,6 +10,7 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
+import { calculatePositions } from "../../utils/grading.engine";
 import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
@@ -462,10 +463,11 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries] = await Promise.all([
-    prisma.exam.findUnique({ where: { id: examId } }),
+  const [exam, student, entries, display] = await Promise.all([
+    prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } } } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
+    prisma.marksheetDisplaySettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
@@ -473,6 +475,61 @@ export async function buildMarksheetData(examId: string, studentId: string) {
   const totalMarks = entries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
   const hasFailed = entries.some((e) => e.grade_letter === "F" || e.is_absent);
   const totalGpa = entries.length ? Math.round((entries.reduce((s, e) => s + (e.grade_point ?? 0), 0) / entries.length) * 100) / 100 : 0;
+
+  // A marks-range -> grade-letter -> GPA legend (Plan Fourteen, Phase L2),
+  // sourced from the exam's own already-active grading scale -- a display
+  // addition, not new grading logic.
+  const gradingLegend = (exam.grading_scale?.ranges ?? []).map((r) => ({
+    range: `${r.min_marks}-${r.max_marks}`,
+    grade_letter: r.grade_letter,
+    grade_point: r.grade_point,
+  }));
+
+  // Position/highest/average stats are a real per-class computation --
+  // only run it when at least one relevant display toggle is actually on,
+  // so a school that never enables these doesn't pay the extra query cost
+  // on every marksheet print (Plan Fourteen, Phase L3).
+  const needsPosition =
+    display.show_position_in_class ||
+    display.show_position_in_section ||
+    display.show_highest_in_class ||
+    display.show_highest_in_section ||
+    display.show_average_position ||
+    display.show_average_percentage ||
+    display.show_average_marks ||
+    display.show_average_grade_point;
+
+  let position: {
+    position_in_class: number | null;
+    position_in_section: number | null;
+    highest_in_class: number | null;
+    highest_in_section: number | null;
+    class_average_marks: number | null;
+    class_average_gpa: number | null;
+  } | null = null;
+
+  if (needsPosition && student.current_class_id) {
+    const classResults = await computeClassResults(examId, student.current_class_id);
+    const positionByStudent = new Map(classResults.map((r) => [r.student.id, r.position]));
+    const sectionResults = classResults.filter((r) => r.student.current_section_id === student.current_section_id);
+    const sectionPositioned = calculatePositions(
+      sectionResults.map((r) => ({ student_id: r.student.id, total_gpa: r.result.total_gpa, total_marks: r.total_marks })),
+    );
+    const sectionPositionByStudent = new Map(sectionPositioned.map((p) => [p.student_id, p.position]));
+
+    position = {
+      position_in_class: positionByStudent.get(studentId) ?? null,
+      position_in_section: sectionPositionByStudent.get(studentId) ?? null,
+      highest_in_class: classResults.length ? Math.max(...classResults.map((r) => r.total_marks)) : null,
+      highest_in_section: sectionResults.length ? Math.max(...sectionResults.map((r) => r.total_marks)) : null,
+      class_average_marks: classResults.length
+        ? Math.round((classResults.reduce((s, r) => s + r.total_marks, 0) / classResults.length) * 100) / 100
+        : null,
+      class_average_gpa: classResults.length
+        ? Math.round((classResults.reduce((s, r) => s + r.result.total_gpa, 0) / classResults.length) * 100) / 100
+        : null,
+    };
+  }
 
   return {
     student,
@@ -482,6 +539,7 @@ export async function buildMarksheetData(examId: string, studentId: string) {
       name_en: e.subject.name_en,
       code: e.subject.code,
       full_marks: e.subject.full_marks,
+      pass_marks: e.subject.pass_marks,
       marks_theory: e.marks_theory,
       marks_practical: e.marks_practical,
       marks_total: e.is_absent ? null : e.marks_total,
@@ -493,6 +551,10 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     overall_grade: hasFailed ? "F" : entries[0]?.grade_letter ?? "",
     has_failed: hasFailed,
     next_class_name: "",
+    display,
+    grading_legend: gradingLegend,
+    position,
+    published_date: new Date(),
   };
 }
 
@@ -502,7 +564,8 @@ documentsRouter.get(
     const examId = reqParam(req, "exam_id");
     const studentId = reqParam(req, "student_id");
     const data = await buildMarksheetData(examId, studentId);
-    const pdf = await renderDocument("MARKSHEET", data as unknown as Record<string, unknown>);
+    const qrCode = data.display.show_qr_code ? await generateQrDataUrl(`marksheet:${examId}:${studentId}`) : undefined;
+    const pdf = await renderDocument("MARKSHEET", { ...data, qr_code: qrCode } as unknown as Record<string, unknown>);
     sendPdf(res, pdf, `marksheet-${data.student.student_uid}.pdf`, req.query.download === "true");
   }),
 );
@@ -520,6 +583,7 @@ documentsRouter.get(
     const exam = await prisma.exam.findUnique({ where: { id: examId }, include: { academic_year: true } });
     const dateRange = exam ? { gte: exam.academic_year.start_date, lte: exam.academic_year.end_date } : undefined;
     const attendanceSummary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
+    const qrCode = base.display.show_qr_code ? await generateQrDataUrl(`report-card:${examId}:${studentId}`) : undefined;
 
     const pdf = await renderDocument("REPORT_CARD", {
       student: base.student,
@@ -534,6 +598,11 @@ documentsRouter.get(
         percentage: attendanceSummary.overall.total ? attendanceSummary.overall.percentage : 0,
       },
       overall_remarks: base.has_failed ? "Needs improvement" : "Good performance",
+      display: base.display,
+      grading_legend: base.grading_legend,
+      position: base.position,
+      published_date: base.published_date,
+      qr_code: qrCode,
     } as unknown as Record<string, unknown>);
     sendPdf(res, pdf, `report-card-${base.student.student_uid}.pdf`, req.query.download === "true");
   }),
@@ -547,7 +616,13 @@ documentsRouter.get(
     const students = await prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null }, orderBy: { current_roll_no: "asc" } });
     if (!students.length) throw badRequest("No students found in this class");
 
-    const dataList = await Promise.all(students.map((s) => buildMarksheetData(examId, s.id)));
+    const dataList = await Promise.all(
+      students.map(async (s) => {
+        const data = await buildMarksheetData(examId, s.id);
+        const qrCode = data.display.show_qr_code ? await generateQrDataUrl(`marksheet:${examId}:${s.id}`) : undefined;
+        return { ...data, qr_code: qrCode };
+      }),
+    );
     const pdf = await renderDocumentBatch("MARKSHEET", dataList as unknown as Record<string, unknown>[]);
     sendPdf(res, pdf, `marksheets-class-${classId}.pdf`, req.query.download === "true");
   }),

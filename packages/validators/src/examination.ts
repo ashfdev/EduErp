@@ -84,3 +84,24 @@ export const submitMarksSchema = z.object({
   ),
 });
 export type SubmitMarksInput = z.infer<typeof submitMarksSchema>;
+
+export const marksheetDisplaySettingsSchema = z.object({
+  show_institute_banner: z.boolean(),
+  show_qr_code: z.boolean(),
+  show_general_ability_table: z.boolean(),
+  show_student_image: z.boolean(),
+  show_attendance_info: z.boolean(),
+  show_subject_full_marks: z.boolean(),
+  show_subject_pass_marks: z.boolean(),
+  show_highest_in_class: z.boolean(),
+  show_highest_in_section: z.boolean(),
+  show_position_in_class: z.boolean(),
+  show_position_in_section: z.boolean(),
+  show_average_position: z.boolean(),
+  show_average_percentage: z.boolean(),
+  show_average_marks: z.boolean(),
+  show_average_grade_point: z.boolean(),
+  show_average_remarks: z.boolean(),
+  show_published_date: z.boolean(),
+});
+export type MarksheetDisplaySettingsInput = z.infer<typeof marksheetDisplaySettingsSchema>;

@@ -150,6 +150,38 @@ model FeeRules {
   updated_at               DateTime    @updatedAt
 }
 
+// Admin-editable checklist controlling which blocks render on the
+// Marksheet/Report Card PDFs (Plan Fourteen, Phase L3) -- singleton row,
+// same convention as FeeRules/AttendanceRules above. Every toggle defaults
+// to whatever the templates already rendered before this model existed
+// (banner/student image/attendance/subject full marks/published date =
+// on; the heavier computed blocks -- general ability, pass marks,
+// highest-in-class/section, position, averages -- default off, an
+// opt-in the admin turns on deliberately, matching this codebase's
+// "unset means off" convention elsewhere (weekly_periods,
+// max_credit_hours_per_semester, etc).
+model MarksheetDisplaySettings {
+  id                         String   @id @default(cuid())
+  show_institute_banner      Boolean  @default(true)
+  show_qr_code               Boolean  @default(true)
+  show_general_ability_table Boolean  @default(false)
+  show_student_image         Boolean  @default(true)
+  show_attendance_info       Boolean  @default(true)
+  show_subject_full_marks    Boolean  @default(true)
+  show_subject_pass_marks    Boolean  @default(false)
+  show_highest_in_class      Boolean  @default(false)
+  show_highest_in_section    Boolean  @default(false)
+  show_position_in_class     Boolean  @default(false)
+  show_position_in_section   Boolean  @default(false)
+  show_average_position      Boolean  @default(false)
+  show_average_percentage    Boolean  @default(false)
+  show_average_marks         Boolean  @default(false)
+  show_average_grade_point   Boolean  @default(false)
+  show_average_remarks       Boolean  @default(false)
+  show_published_date        Boolean  @default(true)
+  updated_at                 DateTime @updatedAt
+}
+
 model AttendanceRules {
   id                          String   @id @default(cuid())
   min_attendance_percentage   Float    @default(75)

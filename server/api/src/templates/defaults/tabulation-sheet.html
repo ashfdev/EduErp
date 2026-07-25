@@ -11,6 +11,7 @@
   .letterhead-text h1 { margin: 0; font-size: 15px; color: {{institution.primary_color}}; }
   .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
   .tabulation-subtitle { margin-left: auto; text-align: right; font-size: 10px; }
+  .content { position: relative; z-index: 1; }
   table { width: 100%; border-collapse: collapse; }
   th, td { border: 1px solid #999; padding: 3px 4px; text-align: center; }
   th { background: {{institution.primary_color}}; color: #fff; }
@@ -24,6 +25,8 @@
 </style>
 </head>
 <body>
+  {{watermark}}
+  <div class="content">
   <div class="header">
     <div class="letterhead-brand">{{> letterhead}}</div>
     <p class="tabulation-subtitle">Tabulation Sheet<br />{{exam_name}} — {{class_name}} {{#if section_name}}({{section_name}}){{/if}}<br />{{academic_year_label}}</p>
@@ -46,6 +49,7 @@
   <div class="signatures">
     {{signatureBlock 1}}
     {{signatureBlock 2}}
+  </div>
   </div>
 </body>
 </html>

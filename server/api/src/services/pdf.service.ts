@@ -76,6 +76,23 @@ function registerHelpers() {
     return new Handlebars.SafeString(`<img src="${logo}" alt="logo" class="institution-logo" />`);
   });
 
+  // Low-opacity, centered institution-logo watermark (Plan Fourteen, Phase
+  // L1) -- `position: fixed` (not `absolute`) is deliberate: Chromium's
+  // print/PDF pagination repeats a fixed-position element on every printed
+  // page, which is what makes this tile across a multi-page document
+  // (tabulation sheets routinely span several pages) instead of only
+  // appearing once at a single point in the document's flow. Templates
+  // that don't call this helper are unaffected; no relative-positioning
+  // wrapper is required on the caller's side.
+  Handlebars.registerHelper("watermark", function (this: unknown, options: Handlebars.HelperOptions) {
+    const root = options.data?.root as { institution?: { logo_url?: string | null } } | undefined;
+    const logo = root?.institution?.logo_url;
+    if (!logo) return new Handlebars.SafeString("");
+    return new Handlebars.SafeString(
+      `<img src="${logo}" alt="" class="watermark" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;max-width:120mm;opacity:0.08;z-index:0;pointer-events:none;" />`,
+    );
+  });
+
   Handlebars.registerHelper("signatureBlock", function (this: unknown, slot: unknown, options: Handlebars.HelperOptions) {
     const root = options.data?.root as { signatures?: SignatureSlot[] } | undefined;
     const match = root?.signatures?.find((s) => s.slot === Number(slot));
