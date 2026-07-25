@@ -174,9 +174,12 @@ export default function ExamDetailPage() {
           <div className="flex gap-2">
             <Link href={`/examination/${id}/seat-plan`}><Button variant="outline">Seat Plan</Button></Link>
             {exam.status === "COMPLETED" && (
-              <Button variant="outline" onClick={() => setConfirmReopen(true)} disabled={reopenMutation.isPending}>
-                Reopen for Correction
-              </Button>
+              <>
+                <Link href="/examination/mark-corrections"><Button variant="outline">Mark Corrections</Button></Link>
+                <Button variant="outline" onClick={() => setConfirmReopen(true)} disabled={reopenMutation.isPending}>
+                  Reopen for Correction
+                </Button>
+              </>
             )}
             {transition && (
               <Button onClick={() => setConfirmTransition(true)} disabled={statusMutation.isPending}>

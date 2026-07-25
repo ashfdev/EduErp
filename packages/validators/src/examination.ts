@@ -105,3 +105,20 @@ export const marksheetDisplaySettingsSchema = z.object({
   show_published_date: z.boolean(),
 });
 export type MarksheetDisplaySettingsInput = z.infer<typeof marksheetDisplaySettingsSchema>;
+
+export const createMarkCorrectionRequestSchema = z.object({
+  exam_id: z.string().min(1),
+  subject_id: z.string().min(1),
+  section_id: z.string().optional().nullable(),
+  reason: z.string().min(1),
+});
+export type CreateMarkCorrectionRequestInput = z.infer<typeof createMarkCorrectionRequestSchema>;
+
+export const approveMarkCorrectionSchema = z.object({
+  expires_at: z.coerce.date().optional().nullable(),
+  decision_note: z.string().optional(),
+});
+
+export const rejectMarkCorrectionSchema = z.object({
+  decision_note: z.string().min(1),
+});

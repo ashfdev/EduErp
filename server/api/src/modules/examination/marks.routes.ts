@@ -15,6 +15,7 @@ import { createInAppNotification } from "../../services/in-app-notification.serv
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { invalidateCacheNamespace } from "../../lib/cache";
+import { isTeacherAssignedToSubjects, syncExpiredMarkCorrections } from "../../utils/mark-correction";
 
 export const marksRouter = Router();
 marksRouter.use(authenticate);
@@ -193,6 +194,33 @@ marksRouter.get(
       componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
     }
 
+    // Per-subject correction_status (Plan Fourteen, Phase M) — only ever
+    // meaningful once the exam is COMPLETED (mark entry is otherwise simply
+    // open/editable already); "NONE" for every caller with no correction
+    // history for a given subject, including every role other than the
+    // calling teacher's own requests.
+    const correctionStatusBySubject = new Map<string, string>();
+    if (exam.status === "COMPLETED") {
+      await syncExpiredMarkCorrections();
+      const callerStaff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
+      if (callerStaff) {
+        const requests = await prisma.markCorrectionRequest.findMany({
+          where: {
+            exam_id: examId,
+            teacher_id: callerStaff.id,
+            subject_id: { in: subjects.map((s) => s.id) },
+            OR: [{ section_id: sectionId }, { section_id: null }],
+          },
+          orderBy: { created_at: "desc" },
+        });
+        for (const r of requests) {
+          if (!correctionStatusBySubject.has(r.subject_id)) {
+            correctionStatusBySubject.set(r.subject_id, r.status === "APPROVED" ? "APPROVED_ACTIVE" : r.status);
+          }
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -206,6 +234,7 @@ marksRouter.get(
           config: configBySubject.get(s.id),
           components: componentsBySubject.get(s.id) ?? [],
           editable: assignedSubjectIds ? assignedSubjectIds.has(s.id) : true,
+          correction_status: correctionStatusBySubject.get(s.id) ?? "NONE",
         })),
         students: students.map((s) => ({
           id: s.id,
@@ -229,17 +258,64 @@ marksRouter.post(
 
     const exam = await prisma.exam.findUnique({ where: { id: body.exam_id }, include: { grading_scale: { include: { ranges: true } } } });
     if (!exam) throw notFound("Exam not found");
-    if (exam.status !== "MARK_ENTRY") throw badRequest("Mark entry is not open for this exam");
-    if (exam.mark_entry_closes_at && exam.mark_entry_closes_at < new Date()) throw badRequest("Mark entry window has closed");
+
+    // Two-tier gate (Plan Fourteen, Phase M): MARK_ENTRY proceeds exactly as
+    // before (including the closes_at check below); DRAFT/ACTIVE/PUBLISHED
+    // stay hard-blocked exactly as before; COMPLETED gets a new narrow path
+    // — only entries covered by the calling teacher's own APPROVED, still-
+    // active MarkCorrectionRequest may proceed. A caller with zero approved
+    // corrections sees the exact same error message as the old exam-wide
+    // block, so this is byte-identical behavior for any exam/class that
+    // never uses this feature.
+    if (exam.status === "MARK_ENTRY") {
+      if (exam.mark_entry_closes_at && exam.mark_entry_closes_at < new Date()) throw badRequest("Mark entry window has closed");
+    } else if (exam.status === "COMPLETED") {
+      const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
+      const genericBlockMessage = "Mark entry is not open for this exam";
+      if (!staff) throw badRequest(genericBlockMessage);
+
+      const subjectIdsForGate = [...new Set(body.entries.map((e) => e.subject_id))];
+      const studentIdsForGate = [...new Set(body.entries.map((e) => e.student_id))];
+      const [gateSubjects, gateStudents] = await Promise.all([
+        prisma.subject.findMany({ where: { id: { in: subjectIdsForGate } }, select: { id: true } }),
+        prisma.student.findMany({ where: { id: { in: studentIdsForGate } }, select: { id: true, current_section_id: true } }),
+      ]);
+      if (gateSubjects.length !== subjectIdsForGate.length) throw badRequest(genericBlockMessage);
+      const sectionByStudent = new Map(gateStudents.map((s) => [s.id, s.current_section_id]));
+
+      await syncExpiredMarkCorrections();
+      const activeCorrections = await prisma.markCorrectionRequest.findMany({
+        where: {
+          exam_id: body.exam_id,
+          teacher_id: staff.id,
+          subject_id: { in: subjectIdsForGate },
+          status: "APPROVED",
+        },
+      });
+      const coverageBySubject = new Map<string, { wholeClass: boolean; sections: Set<string> }>();
+      for (const c of activeCorrections) {
+        const entry = coverageBySubject.get(c.subject_id) ?? { wholeClass: false, sections: new Set<string>() };
+        if (c.section_id === null) entry.wholeClass = true;
+        else entry.sections.add(c.section_id);
+        coverageBySubject.set(c.subject_id, entry);
+      }
+
+      const uncovered = body.entries.some((e) => {
+        const coverage = coverageBySubject.get(e.subject_id);
+        if (!coverage) return true;
+        if (coverage.wholeClass) return false;
+        const studentSection = sectionByStudent.get(e.student_id);
+        return !(studentSection && coverage.sections.has(studentSection));
+      });
+      if (uncovered) throw badRequest(genericBlockMessage);
+    } else {
+      throw badRequest("Mark entry is not open for this exam");
+    }
 
     if (req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "CLASS_TEACHER") {
       const subjectIds = [...new Set(body.entries.map((e) => e.subject_id))];
-      const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
-      const assignments = await prisma.subjectTeacherAssignment.findMany({ where: { staff_id: staff?.id, subject_id: { in: subjectIds } } });
-      const assignedSubjectIds = new Set(assignments.map((a) => a.subject_id));
-      if (subjectIds.some((id) => !assignedSubjectIds.has(id))) {
-        throw forbidden("You can only submit marks for subjects assigned to you");
-      }
+      const { assigned } = await isTeacherAssignedToSubjects(req.user!.sub, subjectIds);
+      if (!assigned) throw forbidden("You can only submit marks for subjects assigned to you");
     }
 
     const subjectIds = [...new Set(body.entries.map((e) => e.subject_id))];

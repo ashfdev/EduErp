@@ -21,6 +21,7 @@ import { attendanceRouter } from "./modules/attendance/attendance.routes";
 import { subjectAttendanceRouter } from "./modules/attendance/subject-attendance.routes";
 import { examsRouter } from "./modules/examination/exams.routes";
 import { marksRouter } from "./modules/examination/marks.routes";
+import { markCorrectionRouter } from "./modules/examination/mark-correction.routes";
 import { resultsRouter } from "./modules/results/results.routes";
 import { feesRouter } from "./modules/fees/fees.routes";
 import { paymentsRouter } from "./modules/fees/payments.routes";
@@ -107,6 +108,7 @@ export function createApp(): Express {
   app.use("/api/attendance/subject-wise", subjectAttendanceRouter);
   app.use("/api/exams", examsRouter);
   app.use("/api/marks", marksRouter);
+  app.use("/api/mark-corrections", markCorrectionRouter);
   app.use("/api/results", resultsRouter);
   app.use("/api/fees", feesRouter);
   app.use("/api/payments", paymentsRouter);

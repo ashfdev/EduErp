@@ -162,7 +162,16 @@
     "approvedBadgeTitle": "Already approved — editing will require re-approval",
     "confirmRevertApproved": "{count} of your pending change(s) touch mark(s) that were already approved. Saving will revert them back to Submitted, and they will need to be re-approved before results can be published. Continue?",
     "confirmRevertTitle": "Re-approval required",
-    "continue": "Continue"
+    "continue": "Continue",
+    "lockedRequestCorrection": "Locked — Request correction",
+    "correctionRequestedBadge": "Correction requested",
+    "correctionApprovedActive": "Unlocked for correction",
+    "requestCorrectionTitle": "Request a mark correction — {subject}",
+    "requestCorrectionHelp": "This exam is completed and marks are locked. Explain why you need to correct a mark for this subject — an exam controller will review and can unlock it for you, optionally for a limited time.",
+    "reasonLabel": "Reason",
+    "submitRequest": "Submit Request",
+    "correctionRequested": "Correction request submitted",
+    "correctionRequestFailed": "Failed to submit correction request"
   },
   "ptm": {
     "title": "Parent-Teacher Meetings",

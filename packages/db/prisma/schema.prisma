@@ -1230,6 +1230,49 @@ model MarkEntry {
   @@index([exam_id, student_id])
 }
 
+enum MarkCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
+}
+
+// Per-teacher/per-class mark-entry correction request (Plan Fourteen,
+// Phase M) — the precise, single-teacher/single-subject alternative to the
+// existing exam-wide POST /exams/:id/reopen (which stays exactly as-is, the
+// right tool for bulk/whole-exam corrections; this is for the narrower
+// case). Every FK-like field below is a plain scalar, no Prisma @relation
+// (mirrors PayrollGenerationRun's own precedent) -- this is a request/audit
+// record, not something callers need to Prisma-`include` through; routes
+// resolve subject/teacher/exam names via small targeted lookups instead.
+// section_id null means "covers every section of this class", mirroring
+// SubjectTeacherAssignment's exact same null-means-every-section
+// convention. expires_at is reviewer-set at approval time (no hardcoded
+// default duration, no new Settings surface) -- syncExpiredMarkCorrections()
+// lazily flips a past-expiry APPROVED row to EXPIRED on next read, the same
+// convention syncOverdueInvoices() already uses for Invoice.status.
+model MarkCorrectionRequest {
+  id             String               @id @default(cuid())
+  exam_id        String
+  class_id       String
+  section_id     String?
+  subject_id     String
+  teacher_id     String
+  reason         String
+  status         MarkCorrectionStatus @default(PENDING)
+  reviewed_by_id String?
+  reviewed_at    DateTime?
+  decision_note  String?
+  expires_at     DateTime?
+  revoked_by_id  String?
+  revoked_at     DateTime?
+  created_at     DateTime             @default(now())
+
+  @@index([exam_id, subject_id, teacher_id])
+  @@index([status])
+}
+
 model ExamSeatPlan {
   id             String    @id @default(cuid())
   exam_id        String
@@ -3498,6 +3541,9 @@ enum InAppNotificationType {
   EXAM_SCHEDULED
   JOURNAL_POST_FAILED
   STAFF_MISSING_SALARY_STRUCTURE
+  MARK_CORRECTION_REQUESTED
+  MARK_CORRECTION_APPROVED
+  MARK_CORRECTION_REJECTED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

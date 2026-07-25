@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { TeacherShell } from "@/components/teacher-shell";
-import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, Textarea, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface MarkComponent {
@@ -20,6 +20,9 @@ interface Subject {
   config?: { full_marks_theory: number; full_marks_practical: number };
   components?: MarkComponent[];
   editable: boolean;
+  // NONE/PENDING/APPROVED_ACTIVE/REJECTED/REVOKED/EXPIRED — only meaningful
+  // once the exam is COMPLETED (Plan Fourteen, Phase M).
+  correction_status: string;
 }
 interface MarkEntryData {
   entry_deadline_info: { is_open: boolean; closes_at: string | null };
@@ -113,6 +116,30 @@ export default function TeacherMarkEntryGridPage() {
     return !!data?.students.find((s) => s.id === studentId)?.enrolled_subject_ids.includes(subjectId);
   }
 
+  // A subject stays editable once the exam is COMPLETED only if this
+  // specific teacher has an approved, still-active correction for it
+  // (Plan Fourteen, Phase M) — mirrors the exact server-side gate in
+  // POST /marks/submit, so the UI never offers an input that would fail.
+  function effectiveEditable(s: Subject): boolean {
+    if (!s.editable) return false;
+    if (exam?.status === "COMPLETED") return s.correction_status === "APPROVED_ACTIVE";
+    return true;
+  }
+
+  const [correctionTarget, setCorrectionTarget] = useState<Subject | null>(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const requestCorrectionMutation = useMutation({
+    mutationFn: () =>
+      api.post("/api/mark-corrections", { exam_id, subject_id: correctionTarget!.id, section_id, reason: correctionReason }),
+    onSuccess: () => {
+      toast.success(t("correctionRequested"));
+      setCorrectionTarget(null);
+      setCorrectionReason("");
+      queryClient.invalidateQueries({ queryKey: ["marks", exam_id, class_id, section_id] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? t("correctionRequestFailed")),
+  });
+
   const submitMutation = useMutation({
     mutationFn: () => {
       const entries = Object.entries(edits).map(([k, v]) => {
@@ -188,6 +215,21 @@ export default function TeacherMarkEntryGridPage() {
                         {!s.editable && (
                           <span className="ml-1 text-[10px] font-normal normal-case text-muted-foreground">({t("viewOnlyColumn")})</span>
                         )}
+                        {s.editable && exam?.status === "COMPLETED" && (
+                          <div className="mt-1">
+                            {s.correction_status === "APPROVED_ACTIVE" && (
+                              <Badge variant="success" className="text-[10px] font-normal normal-case">{t("correctionApprovedActive")}</Badge>
+                            )}
+                            {s.correction_status === "PENDING" && (
+                              <Badge variant="warning" className="text-[10px] font-normal normal-case">{t("correctionRequestedBadge")}</Badge>
+                            )}
+                            {(s.correction_status === "NONE" || s.correction_status === "REJECTED" || s.correction_status === "REVOKED" || s.correction_status === "EXPIRED") && (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] font-normal normal-case" onClick={() => setCorrectionTarget(s)}>
+                                {t("lockedRequestCorrection")}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                         {s.components && s.components.length > 0 ? (
                           <div className="flex flex-wrap gap-1 text-[10px] font-normal normal-case text-muted-foreground">
                             {s.components.map((comp) => <span key={comp.key} className="w-14">{comp.label}/{comp.max_marks}</span>)}
@@ -239,7 +281,7 @@ export default function TeacherMarkEntryGridPage() {
                                       title={t("labelOutOf", { label: comp.label, max: comp.max_marks })}
                                       placeholder={comp.label}
                                       className="h-8 w-14 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                      disabled={!s.editable || v.is_absent}
+                                      disabled={!effectiveEditable(s) || v.is_absent}
                                       value={v.component_marks?.[comp.key] ?? ""}
                                       onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
                                     />
@@ -253,7 +295,7 @@ export default function TeacherMarkEntryGridPage() {
                                   max={s.config?.full_marks_theory}
                                   title={s.config ? t("theoryOutOf", { max: s.config.full_marks_theory }) : undefined}
                                   className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                  disabled={!s.editable || v.is_absent}
+                                  disabled={!effectiveEditable(s) || v.is_absent}
                                   value={v.marks_theory ?? ""}
                                   onChange={(e) =>
                                     setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
@@ -267,7 +309,7 @@ export default function TeacherMarkEntryGridPage() {
                                   max={s.config.full_marks_practical}
                                   title={t("practicalOutOf", { max: s.config.full_marks_practical })}
                                   className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                  disabled={!s.editable || v.is_absent}
+                                  disabled={!effectiveEditable(s) || v.is_absent}
                                   value={v.marks_practical ?? ""}
                                   onChange={(e) =>
                                     setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
@@ -276,7 +318,7 @@ export default function TeacherMarkEntryGridPage() {
                               )}
                               <label className="flex items-center gap-1 text-xs">
                                 <Checkbox
-                                  disabled={!s.editable}
+                                  disabled={!effectiveEditable(s)}
                                   checked={v.is_absent ?? false}
                                   onCheckedChange={(checked) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, is_absent: checked === true } }))}
                                 />
@@ -294,11 +336,11 @@ export default function TeacherMarkEntryGridPage() {
           </Card>
         )}
 
-        {data && data.subjects.length > 0 && data.students.length > 0 && !data.subjects.some((s) => s.editable) && (
+        {data && data.subjects.length > 0 && data.students.length > 0 && !data.subjects.some(effectiveEditable) && (
           <p className="text-sm text-muted-foreground">{t("readOnlyNote")}</p>
         )}
 
-        {data && data.subjects.length > 0 && data.students.length > 0 && data.subjects.some((s) => s.editable) && (
+        {data && data.subjects.length > 0 && data.students.length > 0 && data.subjects.some(effectiveEditable) && (
           <div className="flex items-center gap-3">
             <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length}>
               {submitMutation.isPending ? t("submitting") : t("submitMarks")}
@@ -319,6 +361,22 @@ export default function TeacherMarkEntryGridPage() {
             submitMutation.mutate();
           }}
         />
+
+        <Dialog open={correctionTarget !== null} onOpenChange={(open) => !open && setCorrectionTarget(null)}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>{t("requestCorrectionTitle", { subject: correctionTarget?.name_en ?? "" })}</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">{t("requestCorrectionHelp")}</p>
+            <div className="space-y-1.5">
+              <Label>{t("reasonLabel")}</Label>
+              <Textarea value={correctionReason} onChange={(e) => setCorrectionReason(e.target.value)} rows={3} />
+            </div>
+            <DialogFooter>
+              <Button onClick={() => requestCorrectionMutation.mutate()} disabled={requestCorrectionMutation.isPending || !correctionReason.trim()}>
+                {requestCorrectionMutation.isPending ? t("submitting") : t("submitRequest")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </PageWrapper>
     </TeacherShell>
   );
