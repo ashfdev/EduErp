@@ -31,12 +31,27 @@ interface SalaryStructureOption {
 const TEACHING_ROLES = ["CLASS_TEACHER", "SUBJECT_TEACHER", "HEAD_OF_DEPT"];
 const NON_TEACHING_ROLES = ["ACCOUNTANT", "LIBRARIAN", "TRANSPORT_MANAGER", "HOSTEL_MANAGER", "PROCTOR", "REGISTRAR", "IT_ADMIN", "VICE_PRINCIPAL", "PRINCIPAL"];
 const DOC_TYPES = ["CERTIFICATE", "NID", "TIN", "CONTRACT", "OTHER"] as const;
-const STEPS = ["Personal & Photo", "Contact & Address", "Employment", "Documents", "Review"];
+const STEPS = ["Personal & Photo", "Contact & Address", "Employment", "Documents & History", "Review"];
 
 interface StagedDoc {
   file: File;
   doc_type: (typeof DOC_TYPES)[number];
   title: string;
+}
+interface StagedExperience {
+  institution_name: string;
+  designation: string;
+  location: string;
+  responsibility: string;
+  start_date: string;
+  end_date: string;
+}
+interface StagedReference {
+  name: string;
+  designation: string;
+  relation: string;
+  address: string;
+  phone: string;
 }
 
 export default function NewStaffPage() {
@@ -83,6 +98,14 @@ export default function NewStaffPage() {
   const [newDocTitle, setNewDocTitle] = useState("");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
+  const emptyExperienceRow: StagedExperience = { institution_name: "", designation: "", location: "", responsibility: "", start_date: "", end_date: "" };
+  const [stagedExperience, setStagedExperience] = useState<StagedExperience[]>([]);
+  const [newExperience, setNewExperience] = useState<StagedExperience>(emptyExperienceRow);
+
+  const emptyReferenceRow: StagedReference = { name: "", designation: "", relation: "", address: "", phone: "" };
+  const [stagedReference, setStagedReference] = useState<StagedReference[]>([]);
+  const [newReference, setNewReference] = useState<StagedReference>(emptyReferenceRow);
+
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
   const { data: programs } = useQuery<Program[]>({ queryKey: ["settings", "programs"], queryFn: async () => (await api.get("/api/settings/programs")).data.data });
   const { data: salaryStructures } = useQuery<SalaryStructureOption[]>({ queryKey: ["hr", "salary-structures"], queryFn: async () => (await api.get("/api/hr/salary-structures")).data.data });
@@ -109,6 +132,18 @@ export default function NewStaffPage() {
     setStagedDocs((prev) => [...prev, { file: newDocFile, doc_type: newDocType, title: newDocTitle }]);
     setNewDocFile(null);
     setNewDocTitle("");
+  }
+
+  function addStagedExperience() {
+    if (!newExperience.institution_name) return;
+    setStagedExperience((prev) => [...prev, newExperience]);
+    setNewExperience(emptyExperienceRow);
+  }
+
+  function addStagedReference() {
+    if (!newReference.name) return;
+    setStagedReference((prev) => [...prev, newReference]);
+    setNewReference(emptyReferenceRow);
   }
 
   const createMutation = useMutation({
@@ -156,6 +191,33 @@ export default function NewStaffPage() {
       }
       if (failedCount > 0) {
         toast(`${failedCount} document(s) failed to upload — add them manually from the Documents tab.`);
+      }
+      for (const exp of stagedExperience) {
+        try {
+          await api.post(`/api/hr/staff/${staffId}/experience`, {
+            institution_name: exp.institution_name,
+            designation: exp.designation || undefined,
+            location: exp.location || undefined,
+            responsibility: exp.responsibility || undefined,
+            start_date: exp.start_date || undefined,
+            end_date: exp.end_date || undefined,
+          });
+        } catch {
+          // Non-blocking — the profile page's Experience section lets it be added manually.
+        }
+      }
+      for (const ref of stagedReference) {
+        try {
+          await api.post(`/api/hr/staff/${staffId}/reference`, {
+            name: ref.name,
+            designation: ref.designation || undefined,
+            relation: ref.relation || undefined,
+            address: ref.address || undefined,
+            phone: ref.phone || undefined,
+          });
+        } catch {
+          // Non-blocking — the profile page's Reference section lets it be added manually.
+        }
       }
       if (res.data.data.temp_password) {
         setCredentialModal({ staffId, name: nameEn, phone, password: res.data.data.temp_password });
@@ -336,6 +398,43 @@ export default function NewStaffPage() {
                 <div className="space-y-1.5"><Label>File</Label><Input type="file" onChange={(e) => setNewDocFile(e.target.files?.[0] ?? null)} /></div>
                 <Button type="button" variant="outline" disabled={!newDocFile || !newDocTitle} onClick={addStagedDoc}>+ Add</Button>
               </div>
+
+              <p className="pt-2 text-sm font-medium">Experience (optional)</p>
+              <div className="space-y-2">
+                {stagedExperience.map((exp, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                    <span>{exp.institution_name}{exp.designation ? ` — ${exp.designation}` : ""}</span>
+                    <Button size="sm" variant="outline" onClick={() => setStagedExperience((prev) => prev.filter((_, idx) => idx !== i))}>Remove</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3 rounded-md border p-3">
+                <div className="space-y-1.5"><Label>Institution</Label><Input value={newExperience.institution_name} onChange={(e) => setNewExperience({ ...newExperience, institution_name: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Designation</Label><Input value={newExperience.designation} onChange={(e) => setNewExperience({ ...newExperience, designation: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Location</Label><Input value={newExperience.location} onChange={(e) => setNewExperience({ ...newExperience, location: e.target.value })} /></div>
+                <div className="col-span-2 space-y-1.5"><Label>Responsibility</Label><Input value={newExperience.responsibility} onChange={(e) => setNewExperience({ ...newExperience, responsibility: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={newExperience.start_date} onChange={(e) => setNewExperience({ ...newExperience, start_date: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={newExperience.end_date} onChange={(e) => setNewExperience({ ...newExperience, end_date: e.target.value })} /></div>
+                <Button type="button" variant="outline" disabled={!newExperience.institution_name} onClick={addStagedExperience}>+ Add</Button>
+              </div>
+
+              <p className="pt-2 text-sm font-medium">Reference (optional)</p>
+              <div className="space-y-2">
+                {stagedReference.map((ref, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                    <span>{ref.name}{ref.designation ? ` — ${ref.designation}` : ""}{ref.relation ? ` (${ref.relation})` : ""}</span>
+                    <Button size="sm" variant="outline" onClick={() => setStagedReference((prev) => prev.filter((_, idx) => idx !== i))}>Remove</Button>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-3 rounded-md border p-3">
+                <div className="space-y-1.5"><Label>Name</Label><Input value={newReference.name} onChange={(e) => setNewReference({ ...newReference, name: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Designation</Label><Input value={newReference.designation} onChange={(e) => setNewReference({ ...newReference, designation: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Relation</Label><Input value={newReference.relation} onChange={(e) => setNewReference({ ...newReference, relation: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label>Phone</Label><Input value={newReference.phone} onChange={(e) => setNewReference({ ...newReference, phone: e.target.value })} /></div>
+                <div className="col-span-2 space-y-1.5"><Label>Address</Label><Input value={newReference.address} onChange={(e) => setNewReference({ ...newReference, address: e.target.value })} /></div>
+                <Button type="button" variant="outline" disabled={!newReference.name} onClick={addStagedReference}>+ Add</Button>
+              </div>
             </div>
           )}
 
@@ -360,6 +459,7 @@ export default function NewStaffPage() {
                 Department: {departments?.find((d) => d.id === departmentId)?.name_en ?? "—"} · Employment: {employmentType}
               </p>
               <p className="text-sm text-muted-foreground">Documents staged: {stagedDocs.length}</p>
+              <p className="text-sm text-muted-foreground">Experience entries: {stagedExperience.length} · Reference entries: {stagedReference.length}</p>
             </div>
           )}
 

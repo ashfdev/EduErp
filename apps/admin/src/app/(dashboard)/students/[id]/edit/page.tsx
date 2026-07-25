@@ -19,6 +19,7 @@ import {
   SelectContent,
   SelectItem,
   ConfirmDialog,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
@@ -37,6 +38,7 @@ interface StudentProfile {
     name_bn: string | null;
     middle_name: string | null;
     nick_name: string | null;
+    photo_url: string | null;
     gender: string;
     date_of_birth: string | null;
     religion: string | null;
@@ -53,9 +55,11 @@ interface StudentProfile {
     father_name: string | null;
     father_phone: string | null;
     father_occupation: string | null;
+    father_photo_url: string | null;
     mother_name: string | null;
     mother_phone: string | null;
     mother_occupation: string | null;
+    mother_photo_url: string | null;
   };
   academic: {
     current: {
@@ -110,6 +114,12 @@ export default function EditStudentPage() {
   const [form, setForm] = useState(emptyForm);
   const [loaded, setLoaded] = useState(false);
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [fatherPhotoUrl, setFatherPhotoUrl] = useState<string | null>(null);
+  const [fatherPhotoUploading, setFatherPhotoUploading] = useState(false);
+  const [motherPhotoUrl, setMotherPhotoUrl] = useState<string | null>(null);
+  const [motherPhotoUploading, setMotherPhotoUploading] = useState(false);
 
   const { data: profile } = useQuery<StudentProfile>({
     queryKey: ["students", id],
@@ -154,8 +164,26 @@ export default function EditStudentPage() {
       current_roll_no: a.roll_no ?? "",
       registration_no: a.registration_no ?? "",
     });
+    setPhotoUrl(p.photo_url);
+    setFatherPhotoUrl(p.father_photo_url);
+    setMotherPhotoUrl(p.mother_photo_url);
     setLoaded(true);
   }, [profile, loaded]);
+
+  async function uploadPhoto(file: File | null, setUploading: (v: boolean) => void, setUrl: (v: string) => void) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await api.post("/api/students/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setUrl(res.data.data.photo_url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err) ?? "Failed to upload photo");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const selectedClass = classes?.find((c) => c.id === form.current_class_id);
   const originalClassId = profile?.academic.current.class?.id ?? "";
@@ -171,6 +199,9 @@ export default function EditStudentPage() {
       api.put(`/api/students/${id}`, {
         ...form,
         override,
+        photo_url: photoUrl || undefined,
+        father_photo_url: fatherPhotoUrl || undefined,
+        mother_photo_url: motherPhotoUrl || undefined,
         name_bn: form.name_bn || undefined,
         middle_name: form.middle_name || undefined,
         nick_name: form.nick_name || undefined,
@@ -225,6 +256,25 @@ export default function EditStudentPage() {
         <CardContent className="space-y-6 pt-6">
           <div>
             <p className="mb-3 text-sm font-semibold">Personal Information</p>
+            <div className="mb-4 flex items-center gap-4">
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="Student photo" className="h-16 w-16 rounded-full border object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border bg-muted text-xs text-muted-foreground">No photo</div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Student Photo</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled={photoUploading}
+                  onChange={(e) => uploadPhoto(e.target.files?.[0] ?? null, setPhotoUploading, setPhotoUrl)}
+                  className="max-w-xs"
+                />
+                {photoUploading && <p className="text-xs text-muted-foreground">Uploading...</p>}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Name (English) *</Label><Input value={form.name_en} onChange={(e) => set("name_en", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Name (Bangla)</Label><Input value={form.name_bn} onChange={(e) => set("name_bn", e.target.value)} /></div>
@@ -296,10 +346,41 @@ export default function EditStudentPage() {
               <div className="space-y-1.5"><Label>Father&apos;s Name</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Occupation</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
-              <div />
+              <div className="flex items-center gap-3">
+                {fatherPhotoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={fatherPhotoUrl} alt="Father's photo" className="h-10 w-10 rounded-full border object-cover" />
+                )}
+                <div className="space-y-1.5">
+                  <Label>Father&apos;s Photo (optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={fatherPhotoUploading}
+                    onChange={(e) => uploadPhoto(e.target.files?.[0] ?? null, setFatherPhotoUploading, setFatherPhotoUrl)}
+                    className="max-w-xs"
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5"><Label>Mother&apos;s Name</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Phone</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Occupation</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
+              <div className="flex items-center gap-3">
+                {motherPhotoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={motherPhotoUrl} alt="Mother's photo" className="h-10 w-10 rounded-full border object-cover" />
+                )}
+                <div className="space-y-1.5">
+                  <Label>Mother&apos;s Photo (optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={motherPhotoUploading}
+                    onChange={(e) => uploadPhoto(e.target.files?.[0] ?? null, setMotherPhotoUploading, setMotherPhotoUrl)}
+                    className="max-w-xs"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

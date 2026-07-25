@@ -108,6 +108,10 @@ export default function NewStudentPage() {
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [fatherPhotoUrl, setFatherPhotoUrl] = useState<string | null>(null);
+  const [fatherPhotoUploading, setFatherPhotoUploading] = useState(false);
+  const [motherPhotoUrl, setMotherPhotoUrl] = useState<string | null>(null);
+  const [motherPhotoUploading, setMotherPhotoUploading] = useState(false);
   const [stagedDocs, setStagedDocs] = useState<StagedDoc[]>([]);
   const [newDocType, setNewDocType] = useState<(typeof DOC_TYPES)[number]>("BIRTH_CERTIFICATE");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
@@ -151,6 +155,21 @@ export default function NewStudentPage() {
     }
   }
 
+  async function uploadParentPhoto(file: File | null, setUploading: (v: boolean) => void, setUrl: (v: string) => void) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await api.post("/api/students/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setUrl(res.data.data.photo_url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err) ?? "Failed to upload photo");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   function addStagedDoc() {
     if (!newDocFile) return;
     setStagedDocs((prev) => [...prev, { file: newDocFile, doc_type: newDocType }]);
@@ -164,6 +183,8 @@ export default function NewStudentPage() {
         date_of_birth: form.date_of_birth || undefined,
         group_id: form.group_id || undefined,
         photo_url: photoUrl,
+        father_photo_url: fatherPhotoUrl || undefined,
+        mother_photo_url: motherPhotoUrl || undefined,
         selected_optional_subject_ids: selectedOptional,
         override,
       }),
@@ -344,10 +365,42 @@ export default function NewStudentPage() {
               <div className="space-y-1.5"><Label>Father&apos;s Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
               <div className="space-y-1.5"><Label>Father&apos;s NID *</Label><Input value={form.father_nid} onChange={(e) => set("father_nid", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Occupation *</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
+              <div className="flex items-center gap-3">
+                {fatherPhotoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={fatherPhotoUrl} alt="Father's photo" className="h-10 w-10 rounded-full border object-cover" />
+                )}
+                <div className="space-y-1.5">
+                  <Label>Father&apos;s Photo (optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={fatherPhotoUploading}
+                    onChange={(e) => uploadParentPhoto(e.target.files?.[0] ?? null, setFatherPhotoUploading, setFatherPhotoUrl)}
+                    className="max-w-xs"
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5"><Label>Mother&apos;s Name *</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Phone *</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s NID *</Label><Input value={form.mother_nid} onChange={(e) => set("mother_nid", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Occupation *</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
+              <div className="flex items-center gap-3">
+                {motherPhotoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={motherPhotoUrl} alt="Mother's photo" className="h-10 w-10 rounded-full border object-cover" />
+                )}
+                <div className="space-y-1.5">
+                  <Label>Mother&apos;s Photo (optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={motherPhotoUploading}
+                    onChange={(e) => uploadParentPhoto(e.target.files?.[0] ?? null, setMotherPhotoUploading, setMotherPhotoUrl)}
+                    className="max-w-xs"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -499,8 +552,20 @@ export default function NewStudentPage() {
 
               <div className="rounded-md border p-3">
                 <p className="mb-2 text-sm font-medium">Guardian</p>
-                <p className="text-sm text-muted-foreground">Father: {form.father_name} · {form.father_phone} · NID {form.father_nid} · {form.father_occupation}</p>
-                <p className="text-sm text-muted-foreground">Mother: {form.mother_name} · {form.mother_phone} · NID {form.mother_nid} · {form.mother_occupation}</p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {fatherPhotoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={fatherPhotoUrl} alt="Father's photo" className="h-8 w-8 rounded-full border object-cover" />
+                  )}
+                  <span>Father: {form.father_name} · {form.father_phone} · NID {form.father_nid} · {form.father_occupation}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  {motherPhotoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={motherPhotoUrl} alt="Mother's photo" className="h-8 w-8 rounded-full border object-cover" />
+                  )}
+                  <span>Mother: {form.mother_name} · {form.mother_phone} · NID {form.mother_nid} · {form.mother_occupation}</span>
+                </div>
               </div>
 
               <div className="rounded-md border p-3">

@@ -32,8 +32,10 @@ interface StudentProfile {
     address_permanent?: string | null;
     father_name?: string | null;
     father_phone?: string | null;
+    father_photo_url?: string | null;
     mother_name?: string | null;
     mother_phone?: string | null;
+    mother_photo_url?: string | null;
     documents_count: number;
   };
   academic: {
@@ -161,6 +163,19 @@ export default function StudentProfilePage() {
       toast.success("Document removed");
       queryClient.invalidateQueries({ queryKey: ["students", id, "documents"] });
     },
+  });
+
+  const replaceDocMutation = useMutation({
+    mutationFn: ({ docId, file }: { docId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.put(`/api/students/${id}/documents/${docId}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Document replaced");
+      queryClient.invalidateQueries({ queryKey: ["students", id, "documents"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to replace document"),
   });
 
   async function downloadStudentDocument(docId: string) {
@@ -346,8 +361,20 @@ export default function StudentProfilePage() {
               <div><span className="text-muted-foreground">Blood Group:</span> {personal.blood_group ?? "—"}</div>
               <div><span className="text-muted-foreground">Phone:</span> {personal.phone ?? "—"}</div>
               <div><span className="text-muted-foreground">Address:</span> {personal.address_permanent ?? "—"}</div>
-              <div><span className="text-muted-foreground">Father:</span> {personal.father_name} ({personal.father_phone})</div>
-              <div><span className="text-muted-foreground">Mother:</span> {personal.mother_name ?? "—"} ({personal.mother_phone ?? "—"})</div>
+              <div className="flex items-center gap-2">
+                {personal.father_photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={personal.father_photo_url} alt="Father's photo" className="h-8 w-8 rounded-full border object-cover" />
+                )}
+                <span><span className="text-muted-foreground">Father:</span> {personal.father_name} ({personal.father_phone})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {personal.mother_photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={personal.mother_photo_url} alt="Mother's photo" className="h-8 w-8 rounded-full border object-cover" />
+                )}
+                <span><span className="text-muted-foreground">Mother:</span> {personal.mother_name ?? "—"} ({personal.mother_phone ?? "—"})</span>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -650,6 +677,18 @@ export default function StudentProfilePage() {
                         <TableCell>{new Date(d.uploaded_at).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
                           <button onClick={() => downloadStudentDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
+                          <label className="cursor-pointer text-primary hover:underline">
+                            Replace
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) replaceDocMutation.mutate({ docId: d.id, file });
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>{" "}
                           <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
                         </TableCell>
                       </TableRow>

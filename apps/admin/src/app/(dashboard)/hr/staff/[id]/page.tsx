@@ -66,6 +66,24 @@ interface StaffDocumentRow {
   uploaded_at: string;
 }
 
+interface StaffExperienceRow {
+  id: string;
+  institution_name: string;
+  designation: string | null;
+  location: string | null;
+  responsibility: string | null;
+  start_date: string | null;
+  end_date: string | null;
+}
+interface StaffReferenceRow {
+  id: string;
+  name: string;
+  designation: string | null;
+  relation: string | null;
+  address: string | null;
+  phone: string | null;
+}
+
 interface LeaveType {
   id: string;
   name: string;
@@ -133,6 +151,8 @@ export default function StaffDetailPage() {
     tin: string;
     address: string;
   } | null>(null);
+  const [corePhotoUrl, setCorePhotoUrl] = useState<string | null>(null);
+  const [corePhotoUploading, setCorePhotoUploading] = useState(false);
 
   function startEditingCore(s: StaffDetail) {
     setCoreDraft({
@@ -152,6 +172,22 @@ export default function StaffDetailPage() {
       tin: s.tin ?? "",
       address: s.address ?? "",
     });
+    setCorePhotoUrl(s.photo_url);
+  }
+
+  async function handleCorePhotoSelect(file: File | null) {
+    if (!file) return;
+    setCorePhotoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await api.post("/api/hr/staff/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setCorePhotoUrl(res.data.data.photo_url);
+    } catch (err) {
+      toast.error(extractErrorMessage(err) ?? "Failed to upload photo");
+    } finally {
+      setCorePhotoUploading(false);
+    }
   }
 
   const updateCoreProfileMutation = useMutation({
@@ -172,6 +208,7 @@ export default function StaffDetailPage() {
         nid: coreDraft!.nid || undefined,
         tin: coreDraft!.tin || undefined,
         address: coreDraft!.address || undefined,
+        photo_url: corePhotoUrl || undefined,
       }),
     onSuccess: () => {
       toast.success("Staff details updated");
@@ -230,6 +267,120 @@ export default function StaffDetailPage() {
     },
   });
 
+  // ── Experience & Reference (Plan Fourteen, Phase B4) ──────────────────
+  const { data: experienceRows } = useQuery<StaffExperienceRow[]>({
+    queryKey: ["hr", "staff", id, "experience"],
+    queryFn: async () => (await api.get(`/api/hr/staff/${id}/experience`)).data.data,
+  });
+  const { data: referenceRows } = useQuery<StaffReferenceRow[]>({
+    queryKey: ["hr", "staff", id, "reference"],
+    queryFn: async () => (await api.get(`/api/hr/staff/${id}/reference`)).data.data,
+  });
+
+  const emptyExperienceForm = { institution_name: "", designation: "", location: "", responsibility: "", start_date: "", end_date: "" };
+  const [experienceDialogOpen, setExperienceDialogOpen] = useState(false);
+  const [editingExperienceId, setEditingExperienceId] = useState<string | null>(null);
+  const [experienceForm, setExperienceForm] = useState(emptyExperienceForm);
+
+  function openAddExperience() {
+    setEditingExperienceId(null);
+    setExperienceForm(emptyExperienceForm);
+    setExperienceDialogOpen(true);
+  }
+  function openEditExperience(row: StaffExperienceRow) {
+    setEditingExperienceId(row.id);
+    setExperienceForm({
+      institution_name: row.institution_name,
+      designation: row.designation ?? "",
+      location: row.location ?? "",
+      responsibility: row.responsibility ?? "",
+      start_date: row.start_date ? row.start_date.slice(0, 10) : "",
+      end_date: row.end_date ? row.end_date.slice(0, 10) : "",
+    });
+    setExperienceDialogOpen(true);
+  }
+
+  const saveExperienceMutation = useMutation({
+    mutationFn: () => {
+      const body = {
+        institution_name: experienceForm.institution_name,
+        designation: experienceForm.designation || undefined,
+        location: experienceForm.location || undefined,
+        responsibility: experienceForm.responsibility || undefined,
+        start_date: experienceForm.start_date || undefined,
+        end_date: experienceForm.end_date || undefined,
+      };
+      return editingExperienceId
+        ? api.put(`/api/hr/staff/${id}/experience/${editingExperienceId}`, body)
+        : api.post(`/api/hr/staff/${id}/experience`, body);
+    },
+    onSuccess: () => {
+      toast.success(editingExperienceId ? "Experience updated" : "Experience added");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "experience"] });
+      setExperienceDialogOpen(false);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save experience"),
+  });
+
+  const deleteExperienceMutation = useMutation({
+    mutationFn: (rowId: string) => api.delete(`/api/hr/staff/${id}/experience/${rowId}`),
+    onSuccess: () => {
+      toast.success("Experience removed");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "experience"] });
+    },
+  });
+
+  const emptyReferenceForm = { name: "", designation: "", relation: "", address: "", phone: "" };
+  const [referenceDialogOpen, setReferenceDialogOpen] = useState(false);
+  const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
+  const [referenceForm, setReferenceForm] = useState(emptyReferenceForm);
+
+  function openAddReference() {
+    setEditingReferenceId(null);
+    setReferenceForm(emptyReferenceForm);
+    setReferenceDialogOpen(true);
+  }
+  function openEditReference(row: StaffReferenceRow) {
+    setEditingReferenceId(row.id);
+    setReferenceForm({
+      name: row.name,
+      designation: row.designation ?? "",
+      relation: row.relation ?? "",
+      address: row.address ?? "",
+      phone: row.phone ?? "",
+    });
+    setReferenceDialogOpen(true);
+  }
+
+  const saveReferenceMutation = useMutation({
+    mutationFn: () => {
+      const body = {
+        name: referenceForm.name,
+        designation: referenceForm.designation || undefined,
+        relation: referenceForm.relation || undefined,
+        address: referenceForm.address || undefined,
+        phone: referenceForm.phone || undefined,
+      };
+      return editingReferenceId
+        ? api.put(`/api/hr/staff/${id}/reference/${editingReferenceId}`, body)
+        : api.post(`/api/hr/staff/${id}/reference`, body);
+    },
+    onSuccess: () => {
+      toast.success(editingReferenceId ? "Reference updated" : "Reference added");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "reference"] });
+      setReferenceDialogOpen(false);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save reference"),
+  });
+
+  const deleteReferenceMutation = useMutation({
+    mutationFn: (rowId: string) => api.delete(`/api/hr/staff/${id}/reference/${rowId}`),
+    onSuccess: () => {
+      toast.success("Reference removed");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "reference"] });
+    },
+  });
+
   const { data: documents } = useQuery<StaffDocumentRow[]>({
     queryKey: ["hr", "staff", id, "documents"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/documents`)).data.data,
@@ -265,6 +416,19 @@ export default function StaffDetailPage() {
       toast.success("Document removed");
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "documents"] });
     },
+  });
+
+  const replaceDocMutation = useMutation({
+    mutationFn: ({ docId, file }: { docId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.put(`/api/hr/staff/${id}/documents/${docId}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    },
+    onSuccess: () => {
+      toast.success("Document replaced");
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "documents"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to replace document"),
   });
 
   async function downloadStaffDocument(docId: string) {
@@ -354,6 +518,25 @@ export default function StaffDetailPage() {
 
               {coreDraft && (
                 <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    {corePhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={corePhotoUrl} alt="Staff photo" className="h-16 w-16 rounded-full border object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full border bg-muted text-xs text-muted-foreground">No photo</div>
+                    )}
+                    <div className="space-y-1.5">
+                      <Label>Photo</Label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        disabled={corePhotoUploading}
+                        onChange={(e) => handleCorePhotoSelect(e.target.files?.[0] ?? null)}
+                        className="max-w-xs"
+                      />
+                      {corePhotoUploading && <p className="text-xs text-muted-foreground">Uploading...</p>}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5"><Label>Full Name</Label><Input value={coreDraft.name_en} onChange={(e) => setCoreDraft({ ...coreDraft, name_en: e.target.value })} /></div>
                     <div className="space-y-1.5"><Label>Designation</Label><Input value={coreDraft.designation} onChange={(e) => setCoreDraft({ ...coreDraft, designation: e.target.value })} /></div>
@@ -527,6 +710,62 @@ export default function StaffDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <Card className="mt-4">
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">Experience</p>
+                <Button size="sm" variant="outline" onClick={openAddExperience}>+ Add Experience</Button>
+              </div>
+              {!experienceRows?.length && <EmptyState title="No prior employment on file" />}
+              {!!experienceRows?.length && (
+                <div className="space-y-2">
+                  {experienceRows.map((row) => (
+                    <div key={row.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                      <div>
+                        <p className="font-medium">{row.institution_name}{row.designation ? ` — ${row.designation}` : ""}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {row.location && `${row.location} · `}
+                          {row.start_date ? new Date(row.start_date).toLocaleDateString() : "—"} to {row.end_date ? new Date(row.end_date).toLocaleDateString() : "Present"}
+                          {row.responsibility && ` · ${row.responsibility}`}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditExperience(row)}>Edit</Button>
+                        <Button size="sm" variant="outline" onClick={() => deleteExperienceMutation.mutate(row.id)}>Remove</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-4">
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">Reference</p>
+                <Button size="sm" variant="outline" onClick={openAddReference}>+ Add Reference</Button>
+              </div>
+              {!referenceRows?.length && <EmptyState title="No references on file" />}
+              {!!referenceRows?.length && (
+                <div className="space-y-2">
+                  {referenceRows.map((row) => (
+                    <div key={row.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                      <div>
+                        <p className="font-medium">{row.name}{row.designation ? ` — ${row.designation}` : ""}{row.relation ? ` (${row.relation})` : ""}</p>
+                        <p className="text-xs text-muted-foreground">{[row.phone, row.address].filter(Boolean).join(" · ") || "—"}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditReference(row)}>Edit</Button>
+                        <Button size="sm" variant="outline" onClick={() => deleteReferenceMutation.mutate(row.id)}>Remove</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="subjects">
@@ -652,6 +891,18 @@ export default function StaffDetailPage() {
                       <TableCell>{new Date(d.uploaded_at).toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
                         <button onClick={() => downloadStaffDocument(d.id)} className="text-primary hover:underline">Download</button>{" "}
+                        <label className="cursor-pointer text-primary hover:underline">
+                          Replace
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) replaceDocMutation.mutate({ docId: d.id, file });
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>{" "}
                         <button onClick={() => deleteDocMutation.mutate(d.id)} className="text-destructive hover:underline">Delete</button>
                       </TableCell>
                     </TableRow>
@@ -708,6 +959,51 @@ export default function StaffDetailPage() {
           <DialogFooter>
             <Button disabled={!leaveTypeId || !fromDate || !toDate || !reason || applyLeaveMutation.isPending} onClick={() => applyLeaveMutation.mutate()}>
               Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={experienceDialogOpen} onOpenChange={setExperienceDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingExperienceId ? "Edit Experience" : "Add Experience"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label>Institution Name *</Label><Input value={experienceForm.institution_name} onChange={(e) => setExperienceForm({ ...experienceForm, institution_name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Designation</Label><Input value={experienceForm.designation} onChange={(e) => setExperienceForm({ ...experienceForm, designation: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Location</Label><Input value={experienceForm.location} onChange={(e) => setExperienceForm({ ...experienceForm, location: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Responsibility</Label><Input value={experienceForm.responsibility} onChange={(e) => setExperienceForm({ ...experienceForm, responsibility: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={experienceForm.start_date} onChange={(e) => setExperienceForm({ ...experienceForm, start_date: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={experienceForm.end_date} onChange={(e) => setExperienceForm({ ...experienceForm, end_date: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!experienceForm.institution_name || saveExperienceMutation.isPending} onClick={() => saveExperienceMutation.mutate()}>
+              {saveExperienceMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={referenceDialogOpen} onOpenChange={setReferenceDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingReferenceId ? "Edit Reference" : "Add Reference"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Name *</Label><Input value={referenceForm.name} onChange={(e) => setReferenceForm({ ...referenceForm, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Designation</Label><Input value={referenceForm.designation} onChange={(e) => setReferenceForm({ ...referenceForm, designation: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Relation</Label><Input value={referenceForm.relation} onChange={(e) => setReferenceForm({ ...referenceForm, relation: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Phone</Label><Input value={referenceForm.phone} onChange={(e) => setReferenceForm({ ...referenceForm, phone: e.target.value })} /></div>
+            </div>
+            <div className="space-y-1.5"><Label>Address</Label><Input value={referenceForm.address} onChange={(e) => setReferenceForm({ ...referenceForm, address: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!referenceForm.name || saveReferenceMutation.isPending} onClick={() => saveReferenceMutation.mutate()}>
+              {saveReferenceMutation.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

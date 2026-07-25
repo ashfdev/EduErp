@@ -545,10 +545,14 @@ model Student {
   father_phone          String?
   father_nid            String?
   father_occupation     String?
+  // Optional — explicitly not mandatory, unlike the student's own photo_url
+  // below (Plan Fourteen, Phase B3).
+  father_photo_url      String?
   mother_name           String?
   mother_phone          String?
   mother_nid            String?
   mother_occupation     String?
+  mother_photo_url      String?
   address_permanent     String?
   address_current       String?
   district              String?
@@ -932,6 +936,8 @@ model Staff {
   student_leave_approvals StudentLeaveApproval[]
   original_teacher_substitutions   RoutineSubstitution[] @relation("OriginalTeacherSubstitutions")
   substitute_teacher_substitutions RoutineSubstitution[] @relation("SubstituteTeacherSubstitutions")
+  experience          StaffExperience[]
+  references          StaffReference[]
 
   @@index([department_id])
   @@index([program_id])
@@ -2035,6 +2041,42 @@ model StaffDocument {
   uploaded_at     DateTime     @default(now())
   verified_by_id  String?
   verified_at     DateTime?
+
+  @@index([staff_id])
+}
+
+// Repeatable prior-employment rows (Plan Fourteen, Phase B4) -- matches this
+// codebase's established staged-repeatable-row UI pattern (Inventory
+// Purchases' poItems, the Add Staff wizard's staged documents). No
+// verification/status concept, unlike StaffDocument -- these are
+// self-reported history, not staff-uploaded certificates.
+model StaffExperience {
+  id               String    @id @default(cuid())
+  staff_id         String
+  staff            Staff     @relation(fields: [staff_id], references: [id])
+  institution_name String
+  designation      String?
+  location         String?
+  responsibility   String?
+  start_date       DateTime?
+  end_date         DateTime?
+  created_at       DateTime  @default(now())
+
+  @@index([staff_id])
+}
+
+// Referee contact info (Plan Fourteen, Phase B4) -- same repeatable-row
+// shape as StaffExperience, entirely optional.
+model StaffReference {
+  id          String   @id @default(cuid())
+  staff_id    String
+  staff       Staff    @relation(fields: [staff_id], references: [id])
+  name        String
+  designation String?
+  relation    String?
+  address     String?
+  phone       String?
+  created_at  DateTime @default(now())
 
   @@index([staff_id])
 }

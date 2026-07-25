@@ -12,7 +12,7 @@ import { parse } from "csv-parse/sync";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
-import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema } from "@education-erp/validators";
+import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema } from "@education-erp/validators";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -600,6 +600,35 @@ hrStaffRouter.post(
   }),
 );
 
+// Replaces a document's file content in place (Plan Fourteen, Phase B2) --
+// preserves id/doc_type/title/uploaded_at history rather than losing it to a
+// delete-then-recreate round-trip.
+hrStaffRouter.put(
+  "/:id/documents/:doc_id",
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
+    const existing = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });
+    if (!existing) throw notFound("Document not found");
+    if (!req.file) throw badRequest("A file is required");
+    const body = staffDocumentSchema.partial().parse(req.body);
+
+    const { blobKey } = await uploadBuffer("staff-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const document = await prisma.staffDocument.update({
+      where: { id: existing.id },
+      data: {
+        ...(body.doc_type && { doc_type: body.doc_type }),
+        ...(body.title && { title: body.title }),
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        mime_type: req.file.mimetype,
+      },
+    });
+    res.json({ success: true, data: document });
+  }),
+);
+
 hrStaffRouter.get(
   "/:id/documents/:doc_id/download",
   asyncHandler(async (req, res) => {
@@ -618,6 +647,94 @@ hrStaffRouter.delete(
     const document = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });
     if (!document) throw notFound("Document not found");
     await prisma.staffDocument.delete({ where: { id: document.id } });
+    res.status(204).send();
+  }),
+);
+
+// ── Staff Experience & Reference (Plan Fourteen, Phase B4) ───────────────
+// HR-managed only (unlike Documents above, no self-service path) --
+// repeatable prior-employment/referee rows entered during onboarding.
+
+hrStaffRouter.get(
+  "/:id/experience",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const rows = await prisma.staffExperience.findMany({ where: { staff_id: reqParam(req, "id") }, orderBy: { start_date: "desc" } });
+    res.json({ success: true, data: rows });
+  }),
+);
+
+hrStaffRouter.post(
+  "/:id/experience",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = staffExperienceSchema.parse(req.body);
+    const row = await prisma.staffExperience.create({ data: { staff_id: reqParam(req, "id"), ...body } });
+    res.status(201).json({ success: true, data: row });
+  }),
+);
+
+hrStaffRouter.put(
+  "/:id/experience/:row_id",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.staffExperience.findFirst({ where: { id: reqParam(req, "row_id"), staff_id: reqParam(req, "id") } });
+    if (!existing) throw notFound("Experience entry not found");
+    const body = staffExperienceSchema.partial().parse(req.body);
+    const row = await prisma.staffExperience.update({ where: { id: existing.id }, data: body });
+    res.json({ success: true, data: row });
+  }),
+);
+
+hrStaffRouter.delete(
+  "/:id/experience/:row_id",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.staffExperience.findFirst({ where: { id: reqParam(req, "row_id"), staff_id: reqParam(req, "id") } });
+    if (!existing) throw notFound("Experience entry not found");
+    await prisma.staffExperience.delete({ where: { id: existing.id } });
+    res.status(204).send();
+  }),
+);
+
+hrStaffRouter.get(
+  "/:id/reference",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const rows = await prisma.staffReference.findMany({ where: { staff_id: reqParam(req, "id") }, orderBy: { created_at: "desc" } });
+    res.json({ success: true, data: rows });
+  }),
+);
+
+hrStaffRouter.post(
+  "/:id/reference",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = staffReferenceSchema.parse(req.body);
+    const row = await prisma.staffReference.create({ data: { staff_id: reqParam(req, "id"), ...body } });
+    res.status(201).json({ success: true, data: row });
+  }),
+);
+
+hrStaffRouter.put(
+  "/:id/reference/:row_id",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.staffReference.findFirst({ where: { id: reqParam(req, "row_id"), staff_id: reqParam(req, "id") } });
+    if (!existing) throw notFound("Reference entry not found");
+    const body = staffReferenceSchema.partial().parse(req.body);
+    const row = await prisma.staffReference.update({ where: { id: existing.id }, data: body });
+    res.json({ success: true, data: row });
+  }),
+);
+
+hrStaffRouter.delete(
+  "/:id/reference/:row_id",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.staffReference.findFirst({ where: { id: reqParam(req, "row_id"), staff_id: reqParam(req, "id") } });
+    if (!existing) throw notFound("Reference entry not found");
+    await prisma.staffReference.delete({ where: { id: existing.id } });
     res.status(204).send();
   }),
 );

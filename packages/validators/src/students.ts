@@ -48,10 +48,14 @@ export const createStudentSchema = z.object({
   father_phone: z.string().regex(/^01\d{9}$/, "Father's phone must be 11 digits starting with 01"),
   father_nid: z.string().min(1, "Father's NID is required"),
   father_occupation: z.string().min(1, "Father's occupation is required"),
+  // Optional (Plan Fourteen, Phase B3) — explicitly not mandatory, unlike
+  // the student's own photo_url above.
+  father_photo_url: z.string().url().optional().nullable(),
   mother_name: z.string().min(1, "Mother's name is required"),
   mother_phone: z.string().regex(/^01\d{9}$/, "Mother's phone must be 11 digits starting with 01"),
   mother_nid: z.string().min(1, "Mother's NID is required"),
   mother_occupation: z.string().min(1, "Mother's occupation is required"),
+  mother_photo_url: z.string().url().optional().nullable(),
 
   current_class_id: z.string().min(1, "Class is required"),
   current_section_id: z.string().optional().nullable(),

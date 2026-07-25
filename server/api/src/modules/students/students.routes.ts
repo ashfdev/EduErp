@@ -322,9 +322,11 @@ studentsRouter.get(
           father_name: student.father_name,
           father_phone: student.father_phone,
           father_occupation: student.father_occupation,
+          father_photo_url: student.father_photo_url,
           mother_name: student.mother_name,
           mother_phone: student.mother_phone,
           mother_occupation: student.mother_occupation,
+          mother_photo_url: student.mother_photo_url,
           // Powers the "No documents on file" warning badge (Plan Thirteen,
           // Phase N), mirroring Staff/Faculty's identical pattern (Plan Eight).
           documents_count: student._count.documents,
@@ -440,10 +442,12 @@ studentsRouter.post(
           father_phone: body.father_phone,
           father_nid: body.father_nid,
           father_occupation: body.father_occupation,
+          father_photo_url: body.father_photo_url,
           mother_name: body.mother_name,
           mother_phone: body.mother_phone,
           mother_nid: body.mother_nid,
           mother_occupation: body.mother_occupation,
+          mother_photo_url: body.mother_photo_url,
           address_permanent: body.address_permanent,
           address_current: body.address_current,
           district: body.district,
@@ -1105,6 +1109,34 @@ studentsRouter.post(
       },
     });
     res.status(201).json({ success: true, data: document });
+  }),
+);
+
+// Replaces a document's file content in place (Plan Fourteen, Phase B2) --
+// preserves id/doc_type/uploaded_at history rather than losing it to a
+// delete-then-recreate round-trip. doc_type may optionally be corrected too.
+studentsRouter.put(
+  "/:id/documents/:doc_id",
+  documentUpload.single("file"),
+  verifyDocumentMagicBytes,
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const existing = await prisma.studentDocument.findFirst({ where: { id: reqParam(req, "doc_id"), student_id: id } });
+    if (!existing) throw notFound("Document not found");
+    if (!req.file) throw badRequest("A file is required");
+    const body = studentDocumentSchema.partial().parse(req.body);
+
+    const { blobKey } = await uploadBuffer("student-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const document = await prisma.studentDocument.update({
+      where: { id: existing.id },
+      data: {
+        ...(body.doc_type && { doc_type: body.doc_type }),
+        blob_key: blobKey,
+        original_filename: req.file.originalname,
+        mime_type: req.file.mimetype,
+      },
+    });
+    res.json({ success: true, data: document });
   }),
 );
 

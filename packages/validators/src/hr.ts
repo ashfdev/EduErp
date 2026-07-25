@@ -56,6 +56,23 @@ export const staffDocumentSchema = z.object({
   title: z.string().min(1),
 });
 
+export const staffExperienceSchema = z.object({
+  institution_name: z.string().min(1),
+  designation: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  responsibility: z.string().optional().nullable(),
+  start_date: z.coerce.date().optional().nullable(),
+  end_date: z.coerce.date().optional().nullable(),
+});
+
+export const staffReferenceSchema = z.object({
+  name: z.string().min(1),
+  designation: z.string().optional().nullable(),
+  relation: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+});
+
 export const leaveTypeSchema = z.object({
   name: z.string().min(1),
   days_allowed: z.number().int().min(0),
