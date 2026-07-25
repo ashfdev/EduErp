@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -22,6 +22,9 @@ function canWaive(status: string) {
   return status !== "PAID" && status !== "WAIVED";
 }
 interface YearOption { id: string; is_active: boolean }
+interface ClassOption { id: string; name_en: string }
+
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 async function downloadInvoicePdf(invoiceId: string) {
   const res = await api.get(`/api/documents/fee/invoice/${invoiceId}`, { responseType: "blob" });
@@ -33,15 +36,32 @@ async function downloadInvoicePdf(invoiceId: string) {
   URL.revokeObjectURL(url);
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
+
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
+  const [classId, setClassId] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
   const pdfPreview = usePdfPreview();
   const { data: invoices } = useQuery<Invoice[]>({
-    queryKey: ["fees", "invoices", status],
-    queryFn: async () => (await api.get("/api/fees/invoices", { params: { status: status || undefined } })).data.data,
+    queryKey: ["fees", "invoices", status, classId, monthFilter, yearFilter],
+    queryFn: async () =>
+      (
+        await api.get("/api/fees/invoices", {
+          params: {
+            status: status || undefined,
+            class_id: classId || undefined,
+            month: monthFilter || undefined,
+            year: yearFilter || undefined,
+          },
+        })
+      ).data.data,
   });
 
+  const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   const activeYear = years?.find((y) => y.is_active) ?? years?.[0];
 
@@ -77,14 +97,40 @@ export default function InvoicesPage() {
         action={<Button onClick={() => bulkGenerateMutation.mutate()} disabled={bulkGenerateMutation.isPending || !activeYear}>Generate Monthly Invoices</Button>}
       />
 
-      <select className="w-48 rounded-md border px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">All Status</option>
-        <option value="PENDING">Pending</option>
-        <option value="PARTIAL">Partial</option>
-        <option value="PAID">Paid</option>
-        <option value="OVERDUE">Overdue</option>
-        <option value="WAIVED">Waived</option>
-      </select>
+      <div className="flex flex-wrap gap-3">
+        <select className="w-44 rounded-md border px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">All Status</option>
+          <option value="PENDING">Pending</option>
+          <option value="PARTIAL">Partial</option>
+          <option value="PAID">Paid</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="WAIVED">Waived</option>
+        </select>
+
+        <Select value={classId || "all"} onValueChange={(v) => setClassId(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="All Classes" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Classes</SelectItem>
+            {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={monthFilter || "all"} onValueChange={(v) => setMonthFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="All Months" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Months</SelectItem>
+            {MONTH_NAMES.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={yearFilter || "all"} onValueChange={(v) => setYearFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="All Years" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {YEAR_OPTIONS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
 
       {!invoices?.length && <EmptyState title="No invoices found" />}
       <Card>
