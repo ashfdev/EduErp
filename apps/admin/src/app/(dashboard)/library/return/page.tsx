@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, SearchInput, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Issue {
@@ -12,6 +12,8 @@ interface Issue {
   book: { title: string; author: string };
   person_id: string;
   person_type: string;
+  person_name: string | null;
+  person_uid: string | null;
 }
 
 export default function ReturnBookPage() {
@@ -32,12 +34,16 @@ export default function ReturnBookPage() {
     },
   });
 
-  const filtered = issues?.filter((i) => !search || i.book.title.toLowerCase().includes(search.toLowerCase()));
+  const filtered = issues?.filter((i) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return i.book.title.toLowerCase().includes(q) || (i.person_name ?? "").toLowerCase().includes(q) || (i.person_uid ?? "").toLowerCase().includes(q);
+  });
 
   return (
     <PageWrapper>
       <PageHeader title="Return Book" breadcrumbs={[{ label: "Library", href: "/library" }, { label: "Return" }]} />
-      <Input placeholder="Filter by book title..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+      <SearchInput placeholder="Filter by book title or borrower name..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
 
       {!filtered?.length && <EmptyState title="No books currently issued" />}
       {!!filtered?.length && (
@@ -45,7 +51,7 @@ export default function ReturnBookPage() {
           <CardContent className="pt-6">
             <Table>
               <TableHeader>
-                <TableRow><TableHead>Book</TableHead><TableHead>Due Date</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
+                <TableRow><TableHead>Book</TableHead><TableHead>Borrower</TableHead><TableHead>Due Date</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((i) => {
@@ -53,6 +59,7 @@ export default function ReturnBookPage() {
                   return (
                     <TableRow key={i.id}>
                       <TableCell>{i.book.title} — {i.book.author}</TableCell>
+                      <TableCell>{i.person_name ?? "-"} <span className="font-mono text-xs text-muted-foreground">{i.person_uid}</span></TableCell>
                       <TableCell>{new Date(i.due_date).toLocaleDateString()}</TableCell>
                       <TableCell>{overdue ? <StatusBadge status="OVERDUE" /> : <StatusBadge status="ISSUED" />}</TableCell>
                       <TableCell><Button size="sm" onClick={() => returnMutation.mutate(i.id)}>Mark Returned</Button></TableCell>

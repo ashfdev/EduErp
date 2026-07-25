@@ -133,7 +133,20 @@ libraryRouter.get(
       include: { book: true },
       orderBy: { issued_at: "desc" },
     });
-    res.json({ success: true, data: issues });
+
+    const studentIds = issues.filter((i) => i.person_type === "STUDENT").map((i) => i.person_id);
+    const staffIds = issues.filter((i) => i.person_type === "STAFF").map((i) => i.person_id);
+    const [students, staff] = await Promise.all([
+      prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name_en: true, student_uid: true } }),
+      prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name_en: true, staff_uid: true } }),
+    ]);
+    const nameById = new Map<string, { name: string; uid: string }>([
+      ...students.map((s) => [s.id, { name: s.name_en, uid: s.student_uid }] as const),
+      ...staff.map((s) => [s.id, { name: s.name_en, uid: s.staff_uid }] as const),
+    ]);
+    const withNames = issues.map((i) => ({ ...i, person_name: nameById.get(i.person_id)?.name ?? null, person_uid: nameById.get(i.person_id)?.uid ?? null }));
+
+    res.json({ success: true, data: withNames });
   }),
 );
 

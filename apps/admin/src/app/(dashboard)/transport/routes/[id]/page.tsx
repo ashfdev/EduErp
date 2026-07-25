@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, EmptyState, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Route {
@@ -27,6 +28,7 @@ interface StudentAssignment {
 
 export default function RouteManifestPage() {
   const { id } = useParams<{ id: string }>();
+  const [search, setSearch] = useState("");
 
   const { data: routes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
   const route = routes?.find((r) => r.id === id);
@@ -35,6 +37,11 @@ export default function RouteManifestPage() {
   const routeVehicles = vehicles?.filter((v) => v.route_id === id);
 
   const { data: students } = useQuery<StudentAssignment[]>({ queryKey: ["transport", "routes", id, "students"], queryFn: async () => (await api.get(`/api/transport/routes/${id}/students`)).data.data });
+  const filteredStudents = students?.filter((s) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return s.student.name_en.toLowerCase().includes(q) || s.student.student_uid.toLowerCase().includes(q) || (s.student.current_class?.name_en ?? "").toLowerCase().includes(q);
+  });
 
   if (!route) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
@@ -65,7 +72,12 @@ export default function RouteManifestPage() {
 
       <Card>
         <CardContent className="pt-6 print:p-0">
-          <p className="mb-2 font-medium">Passenger Manifest ({students?.length ?? 0})</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="font-medium">Passenger Manifest ({students?.length ?? 0})</p>
+            {!!students?.length && (
+              <SearchInput placeholder="Filter by name, ID, or class..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs print:hidden" />
+            )}
+          </div>
           {!students?.length && <EmptyState title="No students assigned to this route" />}
           {!!students?.length && (
             <Table>
@@ -73,7 +85,7 @@ export default function RouteManifestPage() {
                 <TableRow><TableHead>Student</TableHead><TableHead>ID</TableHead><TableHead>Class</TableHead><TableHead>Pickup Stop</TableHead></TableRow>
               </TableHeader>
               <TableBody>
-                {students.map((s) => (
+                {filteredStudents?.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell>{s.student.name_en}</TableCell>
                     <TableCell className="font-mono text-xs">{s.student.student_uid}</TableCell>

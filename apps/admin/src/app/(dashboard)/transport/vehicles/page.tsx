@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState,
+  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState, SearchInput,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@education-erp/ui";
@@ -31,9 +31,15 @@ export default function VehiclesPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ vehicle_no: "", type: "Bus", capacity: 40, driver_name: "", driver_phone: "", route_id: "" });
   const [revealedKey, setRevealedKey] = useState<{ vehicle_no: string; key: string } | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: vehicles } = useQuery<Vehicle[]>({ queryKey: ["transport", "vehicles"], queryFn: async () => (await api.get("/api/transport/vehicles")).data.data });
   const { data: routes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
+  const filteredVehicles = vehicles?.filter((v) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return v.vehicle_no.toLowerCase().includes(q) || (v.driver_name ?? "").toLowerCase().includes(q) || (v.route?.name ?? "").toLowerCase().includes(q);
+  });
 
   async function downloadExcel() {
     const res = await api.get("/api/transport/vehicles/export", { responseType: "blob" });
@@ -115,8 +121,11 @@ export default function VehiclesPage() {
       </Card>
 
       {!vehicles?.length && <EmptyState title="No vehicles added yet" />}
+      {!!vehicles?.length && (
+        <SearchInput placeholder="Filter by vehicle no., driver, or route..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+      )}
       <div className="space-y-3">
-        {vehicles?.map((v) => (
+        {filteredVehicles?.map((v) => (
           <Card key={v.id}>
             <CardContent className="flex items-center justify-between pt-6">
               <div>
