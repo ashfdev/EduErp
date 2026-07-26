@@ -25,7 +25,8 @@
     "passwordLabel": "Password",
     "signingIn": "Signing in...",
     "signIn": "Sign In",
-    "invalidCredentials": "Invalid Student ID / phone or password."
+    "invalidCredentials": "Invalid Student ID / phone or password.",
+    "poweredBy": "Powered by AshDevs"
   },
   "home": {
     "goodMorning": "Good morning",

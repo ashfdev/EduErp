@@ -25,7 +25,8 @@
     "passwordLabel": "পাসওয়ার্ড",
     "signingIn": "সাইন ইন হচ্ছে...",
     "signIn": "সাইন ইন",
-    "invalidCredentials": "স্টুডেন্ট আইডি / ফোন অথবা পাসওয়ার্ড সঠিক নয়।"
+    "invalidCredentials": "স্টুডেন্ট আইডি / ফোন অথবা পাসওয়ার্ড সঠিক নয়।",
+    "poweredBy": "Powered by AshDevs"
   },
   "home": {
     "goodMorning": "শুভ সকাল",

@@ -192,7 +192,7 @@ export default function HomePage() {
       {openCycles.length > 0 && (
         <section 
           className="w-full py-10 sm:py-12 border-y border-slate-100"
-          style={{ backgroundColor: (institution as any)?.admission_bg_color || "transparent" }}
+          style={{ backgroundColor: (institution as { admission_bg_color?: string } | null)?.admission_bg_color || "transparent" }}
         >
           <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
             <div className="mb-10 flex flex-col items-center text-center">

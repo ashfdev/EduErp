@@ -26,7 +26,8 @@
     "passwordLabel": "পাসওয়ার্ড",
     "signingIn": "সাইন ইন হচ্ছে...",
     "signIn": "সাইন ইন",
-    "invalidCredentials": "ফোন/ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।"
+    "invalidCredentials": "ফোন/ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।",
+    "poweredBy": "Powered by AshDevs"
   },
   "home": {
     "welcome": "স্বাগতম, {name}",

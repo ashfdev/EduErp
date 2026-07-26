@@ -49,8 +49,7 @@ export default function ContactPage() {
   const googleMapUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyC-vh-mYwgSjPd3tn08IeQbckKWeM5NohY&q=${mapQuery}`;
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   
-  // Use student_login_bg_url safely
-  const bgImage = (institution as { student_login_bg_url?: string })?.student_login_bg_url ?? `${portalUrl}/assets/login-illustration.png`;
+  const bgImage = institution?.student_login_bg_url ?? `${portalUrl}/assets/login-illustration.png`;
 
   const inputCls = "w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary/40 focus:bg-white focus:outline-none transition-all";
   const labelCls = "block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2";

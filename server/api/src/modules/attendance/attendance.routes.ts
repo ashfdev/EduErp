@@ -12,6 +12,7 @@ import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeOvertime } from "../../utils/overtime";
+import { dateOnlyFrom } from "../../lib/date-only";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
 // actually attached to — either as the section's class teacher, or via a
@@ -52,8 +53,15 @@ attendanceRouter.use(authenticate);
 // mark attendance.
 attendanceRouter.use(authorize(STAFF_ONLY_ROLES));
 
+// Real, deterministic bug fix (not a defensive guess): this server runs in
+// Bangladesh time (UTC+6), and Prisma serializes `@db.Date` columns
+// (AttendanceRecord.date) using the UTC calendar date of a JS Date's
+// underlying instant. The previous local-constructor version of this
+// function shifted every write/filter one calendar day early, every single
+// time — confirmed directly against this project's real Prisma client. See
+// lib/date-only.ts for the full explanation.
 function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  return dateOnlyFrom(d);
 }
 
 // NOTE: holiday-calendar validation is skipped — the given schema has no

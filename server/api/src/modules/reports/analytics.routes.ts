@@ -13,6 +13,7 @@ import { notFound, badRequest } from "../../lib/errors";
 import { ANALYTICS_MESSAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { accountBalance } from "../accounts/accounts.routes";
+import { dateOnlyDayRange, dateOnlyMonthRange } from "../../lib/date-only";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -88,6 +89,17 @@ analyticsRouter.get(
     const { start: monthStart, end: monthEnd } = monthRange();
     const now = new Date();
 
+    // AttendanceRecord.date and Voucher.date are both `@db.Date` columns —
+    // Prisma serializes those using the UTC calendar date of a JS Date's
+    // underlying instant, not its local calendar date, so on this
+    // Bangladesh (UTC+6) server a local-constructed midnight boundary
+    // (todayRange()/monthRange() above, correct for the plain-DateTime
+    // fields also queried below) would shift these two @db.Date filters
+    // one calendar day early. See lib/date-only.ts for the full
+    // explanation and empirical confirmation.
+    const { start: todayStartUtc, end: todayEndUtc } = dateOnlyDayRange(now);
+    const { start: monthStartUtc, end: monthEndUtc } = dateOnlyMonthRange(now);
+
     const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
     const newThisYearWhere = activeYear
       ? { created_at: { gte: activeYear.start_date, lte: activeYear.end_date } }
@@ -112,17 +124,17 @@ analyticsRouter.get(
       prisma.student.count({ where: { deleted_at: null } }),
       prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
       prisma.student.count({ where: { deleted_at: null, ...newThisYearWhere } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "PRESENT" } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "ABSENT" } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "LATE" } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd }, status: "LEAVE" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "PRESENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "ABSENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LATE" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LEAVE" } }),
       prisma.student.groupBy({ by: ["gender"], where: { deleted_at: null, status: "ACTIVE" }, _count: { _all: true } }),
       prisma.staff.count({ where: { deleted_at: null } }),
       prisma.staff.count({ where: { deleted_at: null, is_active: true } }),
       prisma.leaveRequest.count({ where: { status: "APPROVED", from_date: { lte: todayEnd }, to_date: { gte: todayStart } } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "PRESENT" } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "ABSENT" } }),
-      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStart, lt: todayEnd }, status: "LATE" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "PRESENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "ABSENT" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LATE" } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: todayStart, lt: todayEnd } }, select: { amount: true } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
       prisma.invoice.findMany({ where: { status: { notIn: ["PAID", "WAIVED"] } }, select: { amount_due: true, amount_paid: true, fine_amount: true } }),
@@ -139,8 +151,8 @@ analyticsRouter.get(
       }),
       prisma.admissionApplication.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.payrollRecord.aggregate({ where: { status: "PAID", paid_at: { gte: todayStart, lt: todayEnd } }, _sum: { net_salary: true } }),
-      expenseTotal(todayStart, todayEnd),
-      expenseTotal(monthStart, monthEnd),
+      expenseTotal(todayStartUtc, todayEndUtc),
+      expenseTotal(monthStartUtc, monthEndUtc),
     ]);
 
     const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);

@@ -6,6 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { ACCOUNTS_MANAGE_ROLES } from "../../lib/roles";
 import { notFound } from "../../lib/errors";
+import { dateOnlyDayRange } from "../../lib/date-only";
 
 export const accountsReportsRouter = Router();
 // Every route in this file is a financial report (day-book, trial balance,
@@ -38,8 +39,11 @@ accountsReportsRouter.get(
   "/day-book",
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.coerce.date(), voucher_type: z.string().optional() }).parse(req.query);
-    const start = new Date(query.date.getFullYear(), query.date.getMonth(), query.date.getDate());
-    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    // Voucher.date is a `@db.Date` column — Date.UTC()-anchored, not a
+    // local-midnight-plus-24h instant, for the same reason documented in
+    // lib/date-only.ts (a local-constructed boundary shifts one calendar
+    // day early on this UTC+6 server once Prisma serializes it).
+    const { start, end } = dateOnlyDayRange(query.date);
 
     const vouchers = await prisma.voucher.findMany({
       where: { status: "POSTED", date: { gte: start, lt: end }, ...(query.voucher_type && { voucher_type: query.voucher_type as never }) },

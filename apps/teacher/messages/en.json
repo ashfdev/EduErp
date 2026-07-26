@@ -26,7 +26,8 @@
     "passwordLabel": "Password",
     "signingIn": "Signing in...",
     "signIn": "Sign In",
-    "invalidCredentials": "Invalid phone/email or password."
+    "invalidCredentials": "Invalid phone/email or password.",
+    "poweredBy": "Powered by AshDevs"
   },
   "home": {
     "welcome": "Welcome, {name}",

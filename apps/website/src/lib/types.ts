@@ -21,6 +21,7 @@ export interface Institution {
   principal_name: string | null;
   principal_designation: string | null;
   working_days: number[];
+  student_login_bg_url?: string | null;
 }
 
 export interface Slider {
