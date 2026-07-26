@@ -81,7 +81,7 @@ export default function HomePage() {
                   {s.subtitle && <p className="text-lg sm:text-xl lg:text-2xl text-slate-200 max-w-2xl mx-auto">{s.subtitle}</p>}
                   {s.btn_text && s.btn_link && (
                     <Button asChild size="lg" className="mt-8 rounded-full text-base px-8 h-14 font-semibold">
-                      <a href={s.btn_link}>{s.btn_text} <ArrowRight className="ml-2 h-5 w-5" /></a>
+                      <a href={s.btn_link}>{s.btn_text}</a>
                     </Button>
                   )}
                 </div>
@@ -129,9 +129,9 @@ export default function HomePage() {
       </div>
 
 
-      {/* ── About Institution + Notice Board ── */}
-      <section className="bg-slate-50 py-12 sm:py-16">
-        <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+      {/* ── About Institution + Chairman Message ── */}
+      <section className="bg-slate-50 py-12 sm:py-16 overflow-hidden relative">
+        <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
 
             {/* About Institution (2/3) */}
@@ -148,15 +148,15 @@ export default function HomePage() {
               </div>
 
               {/* Overlapping White Card */}
-              <div className="relative flex flex-col justify-center sm:ml-[45%] bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-100 sm:my-8 sm:mr-4 z-10 -mt-12 sm:mt-0 mx-4 sm:mx-0">
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-6 inline-block relative self-start">
+              <div className="relative flex flex-col justify-center sm:ml-[45%] bg-white p-8 sm:p-12 min-h-[350px] sm:min-h-[420px] rounded-2xl shadow-xl border border-slate-100 sm:my-8 sm:mr-4 z-10 -mt-12 mx-4 sm:mx-0">
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mb-6 inline-block relative self-start">
                   {tf("aboutUs")}
                   <span className="absolute -bottom-2 left-0 h-1 w-12 bg-primary"></span>
                 </h2>
                 <p className="text-sm leading-relaxed text-slate-600 mb-8 whitespace-pre-line line-clamp-[8]">
                   {institution?.established_text || "Our institution is committed to providing quality education, nurturing young minds, and building a bright future for our students. We believe in holistic development and academic excellence."}
                 </p>
-                <div className="mt-auto self-start">
+                <div className="mt-auto self-start pt-4">
                   <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold rounded-full px-6 transition-all">
                     <Link href="/about">{t("readMore")}</Link>
                   </Button>
@@ -164,26 +164,150 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* Notice Board (1/3) */}
-            <section className="flex flex-col">
-              <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-100 flex-1 flex flex-col relative overflow-hidden">
-                <div className="flex items-center justify-center mb-6">
-                  <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                    <Megaphone className="h-5 w-5 text-red-500" />
-                    {t("noticeBoard")}
-                  </h2>
-                </div>
-                <div className="flex-1 overflow-hidden flex flex-col bg-transparent">
-                  <NoticeBoardWidget notices={notices} />
-                </div>
-                <div className="mt-6 text-center">
-                  <Button asChild className="bg-primary text-white hover:bg-primary/90 font-bold w-full rounded-md shadow-sm transition-all">
-                    <Link href="/notices">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+            {/* Chairman Message (1/3) - Half Circle */}
+            <section className="flex flex-col justify-center items-end relative min-h-[500px]">
+              {/* Perfect half-circle sticking to the right edge */}
+              <div className="bg-white shadow-[[-15px_0_30px_rgba(0,0,0,0.05)]] border-y border-l border-slate-100 flex flex-col items-center justify-center text-center
+                              w-[350px] sm:w-[400px] lg:w-[450px] 
+                              h-[700px] sm:h-[800px] lg:h-[900px] rounded-l-full
+                              absolute top-1/2 -translate-y-1/2 -right-4 sm:-right-6 lg:-right-8 z-10">
+                
+                {/* Content wrapper */}
+                <div className="w-[85%] sm:w-[80%] pr-4 sm:pr-8 pl-12 sm:pl-16 flex flex-col items-center">
+                  <div className="mb-6">
+                    <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full overflow-hidden border-4 border-primary/10 shadow-sm mx-auto">
+                       <Image src={institution?.logo_url || "https://picsum.photos/seed/chairman/200/200"} alt="Chairman" width={128} height={128} className="h-full w-full object-cover" />
+                    </div>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">{locale === "bn" ? "সভাপতির বাণী" : "Chairman's Message"}</h3>
+                  <p className="text-xs font-bold text-primary uppercase tracking-wider mb-6">Chairman Name</p>
+                  <p className="text-sm text-slate-600 line-clamp-6 mb-8 leading-relaxed">
+                    {locale === "bn" 
+                      ? "আমাদের শিক্ষা প্রতিষ্ঠানের ওয়েবসাইটে আপনাকে স্বাগতম। আমরা চাই শিক্ষার্থীরা স্কুল থেকে বেরিয়ে এসে একজন ভালো মানুষ হিসেবে পরিণত হবে।" 
+                      : "Welcome to our institution's website. Our goal is to provide quality education and nurture students to become great human beings."}
+                  </p>
+                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full text-sm font-bold shadow-sm transition-all px-6 h-11">
+                    <Link href="/about/chairman_message">{t("readMore")}</Link>
                   </Button>
                 </div>
               </div>
             </section>
 
+          </div>
+        </div>
+      </section>
+
+      {/* ── Messages & Updates Section ── */}
+      <section className="bg-slate-50 py-12 sm:py-16 border-t border-slate-200/60">
+        <div className="mx-auto max-w-[1536px] px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* Left Column: Messages Slider (lg:col-span-8) */}
+            <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">{locale === "bn" ? "স্কুল পরিচালকদের বাণী" : "Directors' Messages"}</h2>
+                <div className="hidden sm:flex gap-2">
+                   <button className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
+                     <ArrowRight className="h-4 w-4 rotate-180" />
+                   </button>
+                   <button className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
+                     <ArrowRight className="h-4 w-4" />
+                   </button>
+                </div>
+              </div>
+              
+              {/* Slider Container (Horizontal Flex with snap) */}
+              <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 hide-scrollbar pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+                 {/* Card 1: Principal */}
+                 <div className="w-[85vw] sm:w-[480px] lg:w-[500px] min-h-[450px] shrink-0 snap-center bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col gap-6">
+                    <div className="flex gap-5">
+                       <div className="h-28 w-24 shrink-0 rounded-xl overflow-hidden shadow-sm">
+                         <Image src="https://picsum.photos/seed/principal/200/240" alt="Principal" width={96} height={112} className="h-full w-full object-cover" />
+                       </div>
+                       <div className="flex flex-col pt-1">
+                         <span className="text-6xl font-serif text-primary leading-[0.5] block mb-5">&quot;</span>
+                         <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1">{locale === "bn" ? "অধ্যক্ষের বাণী" : "Principal's Message"}</h3>
+                         <p className="text-sm font-bold text-slate-600">Principal Name</p>
+                       </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed line-clamp-5">
+                       {(locale === "bn" ? principalMessage?.content_bn : principalMessage?.content_en) ? stripHtml((locale === "bn" ? principalMessage?.content_bn : principalMessage?.content_en)!) : (locale === "bn" ? "প্রিয় শিক্ষার্থীবৃন্দ, আজ আমি আপনাদের সামনে দাঁড়িয়েছি একজন শিক্ষক হিসেবে, একজন অভিভাবক হিসেবে, এবং একজন বন্ধু হিসেবে। আমি আপনাদেরকে বলতে চাই যে, আপনারা সকলেই সক্ষম।" : "Dear students, today I stand before you as a teacher, a guardian, and a friend. I want to tell you that you are all capable.")}
+                    </p>
+                    <div className="mt-auto pt-2">
+                      <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full px-5 text-xs font-bold transition-all h-9">
+                        <Link href="/about/principal_message">{locale === "bn" ? "আরো পড়ুন" : "Read More"}</Link>
+                      </Button>
+                    </div>
+                 </div>
+                 
+                 {/* Card 2: Vice Principal */}
+                 <div className="w-[85vw] sm:w-[480px] lg:w-[500px] min-h-[450px] shrink-0 snap-center bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col gap-6">
+                    <div className="flex gap-5">
+                       <div className="h-28 w-24 shrink-0 rounded-xl overflow-hidden shadow-sm">
+                         <Image src="https://picsum.photos/seed/vp/200/240" alt="Vice Principal" width={96} height={112} className="h-full w-full object-cover" />
+                       </div>
+                       <div className="flex flex-col pt-1">
+                         <span className="text-6xl font-serif text-primary leading-[0.5] block mb-5">&quot;</span>
+                         <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1">{locale === "bn" ? "উপাধ্যক্ষের বাণী" : "Vice Principal's Message"}</h3>
+                         <p className="text-sm font-bold text-slate-600">Vice Principal Name</p>
+                       </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed line-clamp-5">
+                       {locale === "bn" ? "আমাদের স্কুলের লক্ষ্য হল শিক্ষার্থীদের একটি সুন্দর ও সুস্থ পরিবেশে মানসম্মত শিক্ষা প্রদান করা। আমরা শিক্ষার্থীদেরকে একজন ভালো মানুষ হিসেবে গড়ে তোলার লক্ষ্যে কাজ করছি।" : "The goal of our school is to provide quality education in a beautiful and healthy environment. We are working to build students into good human beings."}
+                    </p>
+                    <div className="mt-auto pt-2">
+                      <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full px-5 text-xs font-bold transition-all h-9">
+                        <Link href="/about/vice_principal_message">{locale === "bn" ? "আরো পড়ুন" : "Read More"}</Link>
+                      </Button>
+                    </div>
+                 </div>
+                 
+                 {/* Card 3: Teacher Representative */}
+                 <div className="w-[85vw] sm:w-[480px] lg:w-[500px] min-h-[450px] shrink-0 snap-center bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col gap-6">
+                    <div className="flex gap-5">
+                       <div className="h-28 w-24 shrink-0 rounded-xl overflow-hidden shadow-sm">
+                         <Image src="https://picsum.photos/seed/teacher/200/240" alt="Teacher" width={96} height={112} className="h-full w-full object-cover" />
+                       </div>
+                       <div className="flex flex-col pt-1">
+                         <span className="text-6xl font-serif text-primary leading-[0.5] block mb-5">&quot;</span>
+                         <h3 className="text-lg font-bold text-slate-900 leading-tight mb-1">{locale === "bn" ? "শিক্ষক প্রতিনিধির বাণী" : "Teacher Representative"}</h3>
+                         <p className="text-sm font-bold text-slate-600">Teacher Name</p>
+                       </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed line-clamp-5">
+                       {locale === "bn" ? "আমাদের শিক্ষক মণ্ডলী সর্বদা শিক্ষার্থীদের সঠিক দিকনির্দেশনা ও শিক্ষা প্রদানে সচেষ্ট। আমরা শিক্ষার্থীদের উজ্জ্বল ভবিষ্যতের জন্য কাজ করে যাচ্ছি।" : "Our faculty is always committed to providing the right guidance and education to students. We are working for the bright future of our students."}
+                    </p>
+                    <div className="mt-auto pt-2">
+                      <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full px-5 text-xs font-bold transition-all h-9">
+                        <Link href="#">{locale === "bn" ? "আরো পড়ুন" : "Read More"}</Link>
+                      </Button>
+                    </div>
+                 </div>
+              </div>
+            </div>
+
+            {/* Right Column: Notice Board + Admissions (lg:col-span-4) */}
+            <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-8">
+              
+              {/* Notice Board */}
+              <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 flex flex-col relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                    <Megaphone className="h-5 w-5 text-red-500" />
+                    {t("noticeBoard")}
+                  </h2>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col bg-transparent min-h-[400px] max-h-[500px]">
+                  <NoticeBoardWidget notices={notices} />
+                </div>
+                <div className="mt-4 text-center">
+                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold w-full rounded-xl shadow-sm transition-all h-10">
+                    <Link href="/notices">{t("viewAll")}</Link>
+                  </Button>
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       </section>
@@ -208,7 +332,7 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-4 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-4 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 hide-scrollbar">
               {openCycles.map((c) => (
                 <div key={c.id} className="min-w-[85vw] sm:min-w-0 snap-center shrink-0 sm:shrink bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all flex flex-col group">
                   <div className="mb-5">
@@ -253,7 +377,7 @@ export default function HomePage() {
                 {t("governingBody")}
               </h2>
               <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 text-sm">
-                <Link href="/governing-body">{t("viewAll")} <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                <Link href="/governing-body">{t("viewAll")}</Link>
               </Button>
             </div>
 
@@ -292,7 +416,7 @@ export default function HomePage() {
                 {t("teachers")}
               </h2>
               <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 text-sm">
-                <Link href="/faculty">{t("viewAll")} <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                <Link href="/faculty">{t("viewAll")}</Link>
               </Button>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory scroll-smooth">
@@ -330,7 +454,7 @@ export default function HomePage() {
               {t("photoGallery")}
             </h2>
             <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 text-sm">
-              <Link href="/gallery">{t("viewGallery")} <ArrowRight className="ml-1 h-4 w-4" /></Link>
+              <Link href="/gallery">{t("viewGallery")}</Link>
             </Button>
           </div>
 
@@ -390,7 +514,7 @@ export default function HomePage() {
                   {t("upcomingEvents")}
                 </h2>
                 <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 text-sm">
-                  <Link href="/events">{t("viewAll")} <ArrowRight className="ml-1 h-4 w-4" /></Link>
+                  <Link href="/events">{t("viewAll")}</Link>
                 </Button>
               </div>
               <div className="flex flex-col gap-3">
