@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableBody, TableRow, TableCell } from "@education-erp/ui";
+import {
+  PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableBody, TableRow, TableCell,
+  Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface TrialBalanceRow { code: string; name: string; debit: number; credit: number }
@@ -105,6 +108,176 @@ function BalanceSheetView() {
   );
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+function monthStartStr() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+interface LedgerEntry { date: string; voucher_no: string; voucher_type: string; narration: string | null; debit: number; credit: number; running_balance: number }
+interface LedgerData {
+  account: { code: string; name: string };
+  opening_balance: { amount: number; type: "DR" | "CR" };
+  entries: LedgerEntry[];
+  closing_balance: { amount: number; type: "DR" | "CR" };
+  total_debit: number;
+  total_credit: number;
+}
+
+// Shared by Cash Book and Bank Book — both are just the general ledger view
+// for one fixed system account (accounts/reports.routes.ts's /cash-book and
+// /bank-book routes are thin 307 redirects to /api/accounts/ledger/:id,
+// which axios follows transparently on a GET) (Plan Fifteen, Phase F).
+function LedgerBookView({ endpoint }: { endpoint: string }) {
+  const [fromDate, setFromDate] = useState(monthStartStr());
+  const [toDate, setToDate] = useState(todayStr());
+  const { data } = useQuery<LedgerData>({
+    queryKey: ["accounts", endpoint, fromDate, toDate],
+    queryFn: async () => (await api.get(endpoint, { params: { from_date: fromDate, to_date: toDate } })).data.data,
+  });
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        <div className="flex items-end gap-3">
+          <div className="space-y-1.5"><Label className="text-xs">From</Label><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">To</Label><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-40" /></div>
+        </div>
+        {!data && <EmptyState title="Loading..." />}
+        {data && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {data.account.name} — Opening: ৳{data.opening_balance.amount.toLocaleString()} {data.opening_balance.type}
+            </p>
+            {!data.entries.length && <EmptyState title="No transactions in this range" />}
+            {!!data.entries.length && (
+              <Table>
+                <TableBody>
+                  {data.entries.map((e, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(e.date).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-mono text-xs">{e.voucher_no}</TableCell>
+                      <TableCell>{e.narration}</TableCell>
+                      <TableCell className="text-right">{e.debit ? `৳${e.debit.toLocaleString()}` : ""}</TableCell>
+                      <TableCell className="text-right">{e.credit ? `৳${e.credit.toLocaleString()}` : ""}</TableCell>
+                      <TableCell className="text-right font-medium">৳{e.running_balance.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            <div className="flex justify-between border-t pt-2 font-medium">
+              <span>Total: ৳{data.total_debit.toLocaleString()} / ৳{data.total_credit.toLocaleString()}</span>
+              <span>Closing: ৳{data.closing_balance.amount.toLocaleString()} {data.closing_balance.type}</span>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface DayBookVoucher {
+  id: string;
+  voucher_no: string;
+  voucher_type: string;
+  date: string;
+  narration: string | null;
+  journal_entries: { amount: number; debit_account: { code: string; name: string }; credit_account: { code: string; name: string } }[];
+}
+
+function DayBookView() {
+  const [date, setDate] = useState(todayStr());
+  const { data } = useQuery<DayBookVoucher[]>({
+    queryKey: ["accounts", "day-book", date],
+    queryFn: async () => (await api.get("/api/accounts/reports/day-book", { params: { date } })).data.data,
+  });
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        <div className="space-y-1.5 w-40"><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        {!data?.length && <EmptyState title="No vouchers posted on this date" />}
+        {!!data?.length && (
+          <div className="space-y-3">
+            {data.map((v) => (
+              <div key={v.id} className="rounded-md border p-3">
+                <div className="flex justify-between text-sm font-medium">
+                  <span className="font-mono">{v.voucher_no} · {v.voucher_type}</span>
+                  <span className="text-muted-foreground">{v.narration}</span>
+                </div>
+                <Table>
+                  <TableBody>
+                    {v.journal_entries.map((je, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{je.debit_account.name} (Dr)</TableCell>
+                        <TableCell>{je.credit_account.name} (Cr)</TableCell>
+                        <TableCell className="text-right">৳{je.amount.toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface BudgetOption { id: string; name: string; status: string }
+interface BudgetVsActualRow { code: string; name: string; budgeted: number; actual: number; variance: number; percent_used: number; over_budget: boolean }
+interface BudgetVsActualData { budget: { id: string; name: string; status: string }; rows: BudgetVsActualRow[] }
+
+function BudgetVsActualView() {
+  const { data: budgets } = useQuery<BudgetOption[]>({ queryKey: ["accounts", "budgets"], queryFn: async () => (await api.get("/api/accounts/budgets")).data.data });
+  const [budgetId, setBudgetId] = useState("");
+  const { data } = useQuery<BudgetVsActualData>({
+    queryKey: ["accounts", "budget-vs-actual", budgetId],
+    queryFn: async () => (await api.get("/api/accounts/reports/budget-vs-actual", { params: { budget_id: budgetId } })).data.data,
+    enabled: !!budgetId,
+  });
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 pt-6">
+        <div className="space-y-1.5 w-64">
+          <Label className="text-xs">Budget</Label>
+          <Select value={budgetId} onValueChange={setBudgetId}>
+            <SelectTrigger><SelectValue placeholder="Select a budget..." /></SelectTrigger>
+            <SelectContent>
+              {budgets?.map((b) => <SelectItem key={b.id} value={b.id}>{b.name} ({b.status})</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {!budgetId && <EmptyState title="Select a budget to compare against actuals" />}
+        {budgetId && !data && <EmptyState title="Loading..." />}
+        {data && (
+          <Table>
+            <TableBody>
+              {data.rows.map((r) => (
+                <TableRow key={r.code}>
+                  <TableCell className="font-mono text-muted-foreground">{r.code}</TableCell>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell className="text-right">৳{r.budgeted.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">৳{r.actual.toLocaleString()}</TableCell>
+                  <TableCell className={`text-right ${r.variance < 0 ? "text-red-600" : "text-green-700"}`}>৳{r.variance.toLocaleString()}</TableCell>
+                  <TableCell className="text-right">
+                    <span className={r.over_budget ? "font-medium text-red-600" : ""}>{r.percent_used}%</span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AccountsReportsPage() {
   const [tab, setTab] = useState("trial-balance");
 
@@ -116,12 +289,19 @@ export default function AccountsReportsPage() {
           <TabsTrigger value="trial-balance">Trial Balance</TabsTrigger>
           <TabsTrigger value="income-expenditure">Income & Expenditure</TabsTrigger>
           <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+          <TabsTrigger value="day-book">Day Book</TabsTrigger>
+          <TabsTrigger value="cash-book">Cash Book</TabsTrigger>
+          <TabsTrigger value="bank-book">Bank Book</TabsTrigger>
+          <TabsTrigger value="budget-vs-actual">Budget vs Actual</TabsTrigger>
         </TabsList>
         <TabsContent value="trial-balance"><TrialBalanceView /></TabsContent>
         <TabsContent value="income-expenditure"><IncomeExpenditureView /></TabsContent>
         <TabsContent value="balance-sheet"><BalanceSheetView /></TabsContent>
+        <TabsContent value="day-book"><DayBookView /></TabsContent>
+        <TabsContent value="cash-book"><LedgerBookView endpoint="/api/accounts/reports/cash-book" /></TabsContent>
+        <TabsContent value="bank-book"><LedgerBookView endpoint="/api/accounts/reports/bank-book" /></TabsContent>
+        <TabsContent value="budget-vs-actual"><BudgetVsActualView /></TabsContent>
       </Tabs>
-      <Card><CardContent className="pt-6"><EmptyState title="More reports via API" description="Day book, cash book, bank book, account summary, and budget-vs-actual are all available via the API but don't yet have dedicated report pages here." /></CardContent></Card>
     </PageWrapper>
   );
 }

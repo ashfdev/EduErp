@@ -29,6 +29,51 @@ interface ExamType extends ExamTypeConfigInput {
   id: string;
   is_active: boolean;
 }
+interface InstitutionConfig {
+  result_calculation_mode: "TERM_BLEND" | "COURSE_GRADEBOOK" | null;
+}
+
+// Result Calculation Mode (Plan Fifteen, Phase I) — lives on this page since
+// it's directly about how the Exam Types below (specifically their Weight
+// in Annual %) get combined into a final result.
+function ResultModeCard() {
+  const queryClient = useQueryClient();
+  const { data: config } = useQuery<InstitutionConfig>({
+    queryKey: ["settings", "config"],
+    queryFn: async () => (await api.get("/api/settings/config")).data.data,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (mode: string) => api.put("/api/settings/config", { result_calculation_mode: mode === "auto" ? null : mode }),
+    onSuccess: () => {
+      toast.success("Result calculation mode updated");
+      queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
+    },
+    onError: () => toast.error("Failed to update"),
+  });
+
+  return (
+    <Card>
+      <CardContent className="space-y-2 pt-6">
+        <p className="font-medium">Result Calculation Mode</p>
+        <p className="text-sm text-muted-foreground">
+          Term-Based blends separate exams (Class Test, Half-Yearly, Annual — each weighted below) into one Combined Result.
+          Course-Based (university) computes each course&apos;s grade from weighted components (CT/Mid/Assignment/Final/Attendance) —
+          designed, not yet available in this build.
+        </p>
+        <select
+          className="w-64 rounded-md border px-3 py-2 text-sm"
+          value={config?.result_calculation_mode ?? "auto"}
+          onChange={(e) => saveMutation.mutate(e.target.value)}
+        >
+          <option value="auto">Auto (based on institution type)</option>
+          <option value="TERM_BLEND">Term-Based</option>
+          <option value="COURSE_GRADEBOOK">Course-Based (university)</option>
+        </select>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function ExamTypesPage() {
   const queryClient = useQueryClient();
@@ -71,6 +116,8 @@ export default function ExamTypesPage() {
         breadcrumbs={[{ label: "Settings" }, { label: "Exam Types" }]}
         action={<Button onClick={() => setOpen(true)}>+ Add Exam Type</Button>}
       />
+
+      <ResultModeCard />
 
       {!types?.length && <EmptyState title="No exam types yet" />}
 

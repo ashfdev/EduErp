@@ -29,9 +29,12 @@ interface NavGroup {
 // every future nav destination (Waiver Setup, Employee Attendance, Gate
 // Pass, Leave Requests, Proxy/Substitute — see Plan Thirteen) already has a
 // home instead of needing the nav restructured a second time.
-const DASHBOARD_ITEM: NavItem = { href: "/dashboard", key: "dashboard", icon: LayoutDashboard };
+export const DASHBOARD_ITEM: NavItem = { href: "/dashboard", key: "dashboard", icon: LayoutDashboard };
 
-const NAV_GROUPS: NavGroup[] = [
+// Exported so the global command-palette search (Plan Fifteen, Phase C) can
+// index every nav destination as a real searchable target instead of
+// hand-maintaining a second, separately-drifting copy of this same list.
+export const NAV_GROUPS: NavGroup[] = [
   {
     key: "academic",
     items: [
@@ -39,6 +42,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/examination", key: "examination", icon: FileSpreadsheet },
       { href: "/marks", key: "marks", icon: Edit3 },
       { href: "/results", key: "results", icon: Award },
+      { href: "/results/combined", key: "combinedResult", icon: Award },
       { href: "/course-enrollment", key: "courseEnrollment", icon: BookOpen },
     ],
   },

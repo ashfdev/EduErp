@@ -41,6 +41,7 @@ interface ClassOption {
   id: string;
   name_en: string;
   sections?: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 
 const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
@@ -84,14 +85,17 @@ export default function WaiverSetupPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignClassId, setAssignClassId] = useState("");
   const [assignSectionId, setAssignSectionId] = useState("");
+  const [assignGroupId, setAssignGroupId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [selectedStudentLabels, setSelectedStudentLabels] = useState<Record<string, string>>({});
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const assignClassSections = classes?.find((c) => c.id === assignClassId)?.sections ?? [];
+  const assignClassGroups = classes?.find((c) => c.id === assignClassId)?.groups ?? [];
 
   function resetAssignDialog() {
     setAssignClassId("");
     setAssignSectionId("");
+    setAssignGroupId("");
     setSelectedStudentIds([]);
     setSelectedStudentLabels({});
     setSelectedTypeId("");
@@ -122,6 +126,13 @@ export default function WaiverSetupPage() {
   function toggleCategory(cat: string) {
     setApplicableCategories((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
   }
+
+  // Blocks each dialog's default close-on-outside-click/Escape once the
+  // admin has actually started filling it in, so in-progress input (or a
+  // partially-built student selection) is never silently lost — requires
+  // the explicit Cancel/X action instead (Plan Fifteen, Phase E).
+  const typeDirty = typeName !== "" || typeDescription !== "" || discountValue !== "" || applicableCategories.length > 0;
+  const assignDirty = selectedStudentIds.length > 0 || selectedTypeId !== "";
 
   return (
     <PageWrapper>
@@ -207,7 +218,10 @@ export default function WaiverSetupPage() {
       </Card>
 
       <Dialog open={typeOpen} onOpenChange={setTypeOpen}>
-        <DialogContent>
+        <DialogContent
+          onEscapeKeyDown={(e) => typeDirty && e.preventDefault()}
+          onPointerDownOutside={(e) => typeDirty && e.preventDefault()}
+        >
           <DialogHeader><DialogTitle>New Waiver Type</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Name</Label><Input value={typeName} onChange={(e) => setTypeName(e.target.value)} placeholder="e.g. Staff Child" /></div>
@@ -253,7 +267,10 @@ export default function WaiverSetupPage() {
       </Dialog>
 
       <Dialog open={assignOpen} onOpenChange={(v) => { setAssignOpen(v); if (!v) resetAssignDialog(); }}>
-        <DialogContent>
+        <DialogContent
+          onEscapeKeyDown={(e) => assignDirty && e.preventDefault()}
+          onPointerDownOutside={(e) => assignDirty && e.preventDefault()}
+        >
           <DialogHeader><DialogTitle>Assign Waiver</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -285,6 +302,9 @@ export default function WaiverSetupPage() {
                 sectionId={assignSectionId}
                 setSectionId={setAssignSectionId}
                 sections={assignClassSections}
+                groupId={assignGroupId}
+                setGroupId={setAssignGroupId}
+                groups={assignClassGroups}
                 selectedIds={selectedStudentIds}
                 onToggle={(s: RosterStudent) => {
                   setSelectedStudentIds((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]));
@@ -309,7 +329,7 @@ export default function WaiverSetupPage() {
 // that lives on the parent (the filter values are also what the picker's
 // fetchResults call needs to read on every open).
 function MultiPickerLauncher({
-  classes, classId, setClassId, sectionId, setSectionId, sections, selectedIds, onToggle,
+  classes, classId, setClassId, sectionId, setSectionId, sections, groupId, setGroupId, groups, selectedIds, onToggle,
 }: {
   classes: ClassOption[];
   classId: string;
@@ -317,6 +337,9 @@ function MultiPickerLauncher({
   sectionId: string;
   setSectionId: (v: string) => void;
   sections: { id: string; name: string }[];
+  groupId: string;
+  setGroupId: (v: string) => void;
+  groups: { id: string; name_en: string }[];
   selectedIds: string[];
   onToggle: (s: RosterStudent) => void;
 }) {
@@ -335,7 +358,7 @@ function MultiPickerLauncher({
         onToggle={onToggle}
         filters={
           <>
-            <select className="rounded-md border px-2 py-1.5 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setGroupId(""); }}>
               <option value="">All Classes</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
@@ -343,12 +366,18 @@ function MultiPickerLauncher({
               <option value="">All Sections</option>
               {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {!!groups.length && (
+              <select className="rounded-md border px-2 py-1.5 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                <option value="">All Groups</option>
+                {groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            )}
           </>
         }
         fetchResults={async ({ search, page }) =>
           (
             await api.get("/api/students", {
-              params: { search: search || undefined, class_id: classId || undefined, section_id: sectionId || undefined, page, limit: 10 },
+              params: { search: search || undefined, class_id: classId || undefined, section_id: sectionId || undefined, group_id: groupId || undefined, page, limit: 10 },
             })
           ).data
         }

@@ -49,7 +49,7 @@ interface WorkspaceLine {
   fine_source: string | null;
   outstanding: number;
   is_manual_fine: boolean;
-  waivers: { waiver_name: string; discount_amount: number }[];
+  waivers: { id: string; waiver_name: string; discount_amount: number }[];
 }
 interface Workspace {
   student: StudentBasic;
@@ -259,6 +259,11 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [discounts, setDiscounts] = useState<Record<string, number>>({});
+  // Waivers are applied (checked) by default, matching today's standing
+  // behavior — unchecking one is a per-collection override ("collect the
+  // full amount for this one payment, ignoring the standing waiver just
+  // this once"), never a permanent revoke (Plan Fifteen, Phase E).
+  const [overriddenWaivers, setOverriddenWaivers] = useState<Set<string>>(new Set());
   const [gateway, setGateway] = useState("CASH");
   const [secondaryReceiptNo, setSecondaryReceiptNo] = useState("");
   const [sendSms, setSendSms] = useState(true);
@@ -274,8 +279,21 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
   useEffect(() => {
     setSelected(new Set());
     setDiscounts({});
+    setOverriddenWaivers(new Set());
     setLastBatch(null);
   }, [student?.id]);
+
+  function overriddenAmountFor(line: WorkspaceLine): number {
+    return line.waivers.filter((w) => overriddenWaivers.has(w.id)).reduce((s, w) => s + w.discount_amount, 0);
+  }
+  function toggleWaiverOverride(waiverId: string) {
+    setOverriddenWaivers((prev) => {
+      const next = new Set(prev);
+      if (next.has(waiverId)) next.delete(waiverId);
+      else next.add(waiverId);
+      return next;
+    });
+  }
 
   const generateMutation = useMutation({
     mutationFn: () => api.post(`/api/fees/generate-for-student/${student?.id}`),
@@ -292,8 +310,14 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
       const lines = [...selected].map((invoiceId) => {
         const line = workspace!.lines.find((l) => l.invoice_id === invoiceId)!;
         const discount = discounts[invoiceId] ?? 0;
-        const receivable = Math.max(0, line.outstanding - discount);
-        return { invoice_id: invoiceId, amount: receivable, discount_amount: discount || undefined };
+        const overriddenIds = line.waivers.filter((w) => overriddenWaivers.has(w.id)).map((w) => w.id);
+        const receivable = Math.max(0, line.outstanding + overriddenAmountFor(line) - discount);
+        return {
+          invoice_id: invoiceId,
+          amount: receivable,
+          discount_amount: discount || undefined,
+          override_waiver_application_ids: overriddenIds.length ? overriddenIds : undefined,
+        };
       });
       return api.post("/api/fees/collect-batch", { lines, gateway, secondary_receipt_no: secondaryReceiptNo || undefined, send_sms: sendSms });
     },
@@ -302,6 +326,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
       setLastBatch(res.data.data);
       setSelected(new Set());
       setDiscounts({});
+      setOverriddenWaivers(new Set());
       queryClient.invalidateQueries({ queryKey: ["fees", "collect-workspace", student?.id] });
       queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
     },
@@ -313,7 +338,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
     const line = lines.find((l) => l.invoice_id === id);
     if (!line) return sum;
     const discount = discounts[id] ?? 0;
-    return sum + Math.max(0, line.outstanding - discount);
+    return sum + Math.max(0, line.outstanding + overriddenAmountFor(line) - discount);
   }, 0);
 
   function toggleLine(id: string) {
@@ -387,11 +412,13 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
               <TableBody>
                 {lines.map((line) => {
                   const discount = discounts[line.invoice_id] ?? 0;
+                  const overridden = overriddenAmountFor(line);
+                  const receivable = line.outstanding + overridden;
                   return (
                     <Fragment key={line.invoice_id}>
                       <TableRow>
                         <TableCell>
-                          <Checkbox checked={selected.has(line.invoice_id)} onCheckedChange={() => toggleLine(line.invoice_id)} disabled={line.outstanding <= 0} />
+                          <Checkbox checked={selected.has(line.invoice_id)} onCheckedChange={() => toggleLine(line.invoice_id)} disabled={receivable <= 0} />
                         </TableCell>
                         <TableCell>
                           <p className="font-medium">{line.description}{line.is_manual_fine && <Badge variant="destructive" className="ml-2">Fine</Badge>}</p>
@@ -401,7 +428,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
                           </p>
                           {line.fine_amount > 0 && line.fine_source && <AdjustmentNote>{line.fine_source}</AdjustmentNote>}
                         </TableCell>
-                        <TableCell>৳{line.outstanding}</TableCell>
+                        <TableCell>৳{receivable}</TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -410,15 +437,23 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
                             onChange={(e) => setDiscounts((prev) => ({ ...prev, [line.invoice_id]: Number(e.target.value) }))}
                             disabled={!selected.has(line.invoice_id)}
                           />
-                          {selected.has(line.invoice_id) && discount > 0 && <AdjustmentNote>Staff discount — not journaled</AdjustmentNote>}
+                          {selected.has(line.invoice_id) && discount > 0 && (
+                            <AdjustmentNote>Manual discount — recorded on this receipt only, not posted to the accounts ledger.</AdjustmentNote>
+                          )}
                         </TableCell>
-                        <TableCell>৳{Math.max(0, line.outstanding - discount)}</TableCell>
+                        <TableCell>৳{Math.max(0, receivable - discount)}</TableCell>
                       </TableRow>
-                      {line.waivers.map((w, i) => (
-                        <TableRow key={`${line.invoice_id}-waiver-${i}`}>
-                          <TableCell></TableCell>
+                      {line.waivers.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell>
+                            <Checkbox checked={!overriddenWaivers.has(w.id)} onCheckedChange={() => toggleWaiverOverride(w.id)} />
+                          </TableCell>
                           <TableCell colSpan={4}>
-                            <AdjustmentNote>Waived — {w.waiver_name} fund (৳{w.discount_amount} deducted)</AdjustmentNote>
+                            {overriddenWaivers.has(w.id) ? (
+                              <AdjustmentNote>Overridden — {w.waiver_name} fund (৳{w.discount_amount}) will be collected in full for this payment. The waiver stays active for future invoices.</AdjustmentNote>
+                            ) : (
+                              <AdjustmentNote>Waived — {w.waiver_name} fund (৳{w.discount_amount} deducted). Uncheck to collect this amount in full instead, just for this payment.</AdjustmentNote>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}

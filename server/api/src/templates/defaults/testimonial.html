@@ -19,21 +19,12 @@
 </style>
 </head>
 <body>
+  {{watermark}}
   <div class="letterhead">
     {{> letterhead}}
   </div>
   <p class="title">TESTIMONIAL</p>
-  <p class="body-text">
-    This is to certify that <strong>{{student.name_en}}</strong>, son/daughter of <strong>{{student.father_name}}</strong>,
-    Roll No: <strong>{{student.current_roll_no}}</strong>, Registration No: <strong>{{student.registration_no}}</strong>,
-    was a student of this institution from <strong>{{banglaDate student.admission_date}}</strong> to <strong>{{banglaDate leaving_date}}</strong>.
-    {{#if student.cgpa}}
-    He/She has completed the academic program with a Cumulative Grade Point Average (CGPA) of <strong>{{student.cgpa}}</strong>.
-    {{else}}
-    He/She has appeared in the <strong>{{exam_name}}</strong> Examination in <strong>{{year}}</strong> from this institution.
-    {{/if}}
-    He/She bears good character and conduct. We wish him/her success in future.
-  </p>
+  <div class="body-text">{{{body_html}}}</div>
   <div class="footer">
     <div>Date: {{banglaDate issue_date}}<br />Institution Seal</div>
     {{signatureBlock 1}}

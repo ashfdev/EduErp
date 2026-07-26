@@ -12,6 +12,7 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
+import { computeCombinedResult } from "../results/combined-result";
 import { calculatePositions } from "../../utils/grading.engine";
 import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
@@ -39,6 +40,58 @@ async function getAcademicYearLabel(id?: string | null) {
   if (!id) return "";
   const year = await prisma.academicYear.findUnique({ where: { id } });
   return year?.label ?? "";
+}
+
+// Matches the `banglaDate` Handlebars helper's own dd/mm/yyyy formatting
+// exactly (pdf.service.ts) -- duplicated as a tiny plain function here rather
+// than reaching into Handlebars, since this runs before a PDF render (and
+// therefore before registerHelpers()) whenever only the draft JSON is being
+// built, not a document.
+function ddmmyyyy(date: unknown): string {
+  if (!date) return "";
+  const d = new Date(date as string | number | Date);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
+
+// The Testimonial/Transfer Certificate "Compose" step (item 14 of the owner's
+// batch report) needs a starting draft with every merge field already
+// resolved to real prose/values -- never raw {{mustache}} syntax -- so
+// editing feels like editing a real document, not a template. Both the GET
+// draft-fetch route and the legacy no-override GET generate route call this
+// same builder, so the default PDF a caller gets without ever visiting the
+// Compose step is byte-identical to before this feature existed.
+function buildTestimonialDefaultBody(
+  student: { name_en: string; father_name: string | null; current_roll_no: string | null; registration_no: string | null; admission_date: Date | null; cgpa: number | null },
+  examName: string,
+  year: number,
+  leavingDate: unknown,
+): string {
+  const performanceLine = student.cgpa
+    ? `He/She has completed the academic program with a Cumulative Grade Point Average (CGPA) of <strong>${student.cgpa}</strong>.`
+    : `He/She has appeared in the <strong>${examName}</strong> Examination in <strong>${year}</strong> from this institution.`;
+  return (
+    `<p>This is to certify that <strong>${student.name_en}</strong>, son/daughter of <strong>${student.father_name ?? ""}</strong>, ` +
+    `Roll No: <strong>${student.current_roll_no ?? ""}</strong>, Registration No: <strong>${student.registration_no ?? ""}</strong>, ` +
+    `was a student of this institution from <strong>${ddmmyyyy(student.admission_date)}</strong> to <strong>${ddmmyyyy(leavingDate)}</strong>. ` +
+    `${performanceLine} He/She bears good character and conduct. We wish him/her success in future.</p>`
+  );
+}
+
+// Resolves a real "Result of Last Examination" value from the student's most
+// recent exam with recorded marks, instead of the previously-hardcoded
+// "N/A" -- same simple grade_point-average shape buildMarksheetData already
+// uses, kept intentionally lightweight since this is only ever a starting
+// default a staff member reviews/edits before generating, not itself a
+// graded record.
+async function resolveLastExamResult(studentId: string): Promise<string> {
+  const latestExam = await prisma.exam.findFirst({ where: { mark_entries: { some: { student_id: studentId } } }, orderBy: { created_at: "desc" } });
+  if (!latestExam) return "N/A";
+  const entries = await prisma.markEntry.findMany({ where: { exam_id: latestExam.id, student_id: studentId } });
+  if (!entries.length) return "N/A";
+  if (entries.some((e) => e.grade_letter === "F" || e.is_absent)) return `Failed (${latestExam.name})`;
+  const avgGpa = Math.round((entries.reduce((s, e) => s + (e.grade_point ?? 0), 0) / entries.length) * 100) / 100;
+  return `GPA ${avgGpa} (${latestExam.name})`;
 }
 
 // ───────────────────────── Student Documents ─────────────────────────
@@ -69,17 +122,79 @@ documentsRouter.get(
     if (!student) throw notFound("Student not found");
 
     const latestExam = await prisma.exam.findFirst({ where: { mark_entries: { some: { student_id: id } } }, orderBy: { created_at: "desc" } });
+    const leavingDate = req.query.leaving_date ?? new Date();
 
     const pdf = await renderDocument("TESTIMONIAL", {
       student,
       exam_name: latestExam?.name ?? "N/A",
       year: new Date().getFullYear(),
-      leaving_date: req.query.leaving_date ?? new Date(),
+      leaving_date: leavingDate,
       issue_date: new Date(),
+      body_html: buildTestimonialDefaultBody(student, latestExam?.name ?? "N/A", new Date().getFullYear(), leavingDate),
     });
     sendPdf(res, pdf, `${student.student_uid}-testimonial.pdf`, download);
   }),
 );
+
+// Compose-and-edit draft (Plan Fifteen, Phase K): returns the same default
+// wording buildTestimonialDefaultBody() would otherwise bake straight into
+// the PDF, as real editable HTML the admin RichTextEditor seeds itself with
+// — every merge field already resolved to this specific student's real
+// values, never raw {{mustache}} syntax.
+documentsRouter.get(
+  "/student/:id/testimonial/draft",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+
+    const latestExam = await prisma.exam.findFirst({ where: { mark_entries: { some: { student_id: id } } }, orderBy: { created_at: "desc" } });
+    const leavingDate = new Date();
+
+    res.json({
+      success: true,
+      data: {
+        body_html: buildTestimonialDefaultBody(student, latestExam?.name ?? "N/A", leavingDate.getFullYear(), leavingDate),
+        leaving_date: leavingDate.toISOString().slice(0, 10),
+      },
+    });
+  }),
+);
+
+// Generates from the admin's own edited wording (Plan Fifteen, Phase K) —
+// a per-generation override only, never mutating the underlying
+// TESTIMONIAL DocumentTemplate, since different students' testimonials
+// routinely need individually different wording.
+documentsRouter.post(
+  "/student/:id/testimonial",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const download = req.query.download === "true";
+    const body = z.object({ body_html: z.string().min(1), leaving_date: z.coerce.date().optional() }).parse(req.body);
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+
+    const pdf = await renderDocument("TESTIMONIAL", {
+      student,
+      leaving_date: body.leaving_date ?? new Date(),
+      issue_date: new Date(),
+      body_html: body.body_html,
+    });
+    sendPdf(res, pdf, `${student.student_uid}-testimonial.pdf`, download);
+  }),
+);
+
+// Real "Result of Last Examination"/"Character and Conduct"/"Remarks"
+// defaults for the Transfer Certificate Compose step, resolved once and
+// shared by both the legacy no-override GET route (byte-identical default
+// output) and the new /draft route the frontend seeds its edit form from.
+async function resolveTransferCertDefaults(studentId: string) {
+  return {
+    conduct: "Good",
+    last_exam_result: await resolveLastExamResult(studentId),
+    remarks: "N/A",
+  };
+}
 
 documentsRouter.get(
   "/student/:id/transfer-cert",
@@ -90,15 +205,61 @@ documentsRouter.get(
     if (!student) throw notFound("Student not found");
 
     const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+    const defaults = await resolveTransferCertDefaults(id);
     const pdf = await renderDocument("TRANSFER_CERTIFICATE", {
       student,
       tc_number: `TC-${new Date().getFullYear()}-${String(tcCount + 1).padStart(4, "0")}`,
       issue_date: new Date(),
       leaving_date: req.query.leaving_date ?? new Date(),
       leaving_reason: req.query.reason ?? "N/A",
-      conduct: "Good",
-      last_exam_result: "N/A",
-      remarks: "N/A",
+      ...defaults,
+    });
+    sendPdf(res, pdf, `${student.student_uid}-transfer-certificate.pdf`, download);
+  }),
+);
+
+documentsRouter.get(
+  "/student/:id/transfer-cert/draft",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null } });
+    if (!student) throw notFound("Student not found");
+
+    const defaults = await resolveTransferCertDefaults(id);
+    res.json({
+      success: true,
+      data: { ...defaults, leaving_reason: "N/A", leaving_date: new Date().toISOString().slice(0, 10) },
+    });
+  }),
+);
+
+documentsRouter.post(
+  "/student/:id/transfer-cert",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const download = req.query.download === "true";
+    const body = z
+      .object({
+        conduct: z.string().min(1),
+        last_exam_result: z.string().min(1),
+        remarks: z.string().min(1),
+        leaving_reason: z.string().min(1),
+        leaving_date: z.coerce.date().optional(),
+      })
+      .parse(req.body);
+    const student = await prisma.student.findFirst({ where: { id, deleted_at: null }, include: { current_class: true } });
+    if (!student) throw notFound("Student not found");
+
+    const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+    const pdf = await renderDocument("TRANSFER_CERTIFICATE", {
+      student,
+      tc_number: `TC-${new Date().getFullYear()}-${String(tcCount + 1).padStart(4, "0")}`,
+      issue_date: new Date(),
+      leaving_date: body.leaving_date ?? new Date(),
+      leaving_reason: body.leaving_reason,
+      conduct: body.conduct,
+      last_exam_result: body.last_exam_result,
+      remarks: body.remarks,
     });
     sendPdf(res, pdf, `${student.student_uid}-transfer-certificate.pdf`, download);
   }),
@@ -466,12 +627,13 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries, display, subjectConfigs] = await Promise.all([
+  const [exam, student, entries, display, subjectConfigs, componentConfigs] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: true } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
     prisma.marksheetDisplaySettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
     prisma.examSubjectConfig.findMany({ where: { exam_id: examId } }),
+    prisma.markComponentConfig.findMany({ where: { exam_id: examId }, orderBy: { display_order: "asc" } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
@@ -481,6 +643,18 @@ export async function buildMarksheetData(examId: string, studentId: string) {
   // same values already used to grade the entry, and what the redesigned
   // marksheet table needs to render a Written/Practical row split.
   const configBySubject = new Map(subjectConfigs.map((c) => [c.subject_id, c]));
+
+  // Named mark-component breakdown (Plan Fifteen, Phase J) -- when a
+  // subject's Theory mark was entered via named components ("Theory Mark
+  // Breakdown", e.g. CT/MCQ/Written), show each one distinctly instead of
+  // only the summed total. Grouped by subject since components are
+  // configured per (exam, subject).
+  const componentConfigsBySubject = new Map<string, typeof componentConfigs>();
+  for (const c of componentConfigs) {
+    const list = componentConfigsBySubject.get(c.subject_id) ?? [];
+    list.push(c);
+    componentConfigsBySubject.set(c.subject_id, list);
+  }
 
   const totalMarks = entries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
   const hasFailed = entries.some((e) => e.grade_letter === "F" || e.is_absent);
@@ -516,10 +690,18 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     highest_in_section: number | null;
     class_average_marks: number | null;
     class_average_gpa: number | null;
+    class_average_percentage: number | null;
+    average_remarks: string | null;
+    standing_vs_average: string | null;
   } | null = null;
 
   if (needsPosition && student.current_class_id) {
-    const classResults = await computeClassResults(examId, student.current_class_id);
+    // Scopes automatically to this student's own group (Plan Fifteen, Phase
+    // A) -- a Science student's Position-in-Class/Class-Average must never
+    // be diluted by Commerce/Arts students taking entirely different
+    // subjects. `undefined` for an ungrouped student is a no-op filter,
+    // byte-identical to before this param existed.
+    const classResults = await computeClassResults(examId, student.current_class_id, student.group_id ?? undefined);
     const positionByStudent = new Map(classResults.map((r) => [r.student.id, r.position]));
     const sectionResults = classResults.filter((r) => r.student.current_section_id === student.current_section_id);
     const sectionPositioned = calculatePositions(
@@ -527,17 +709,47 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     );
     const sectionPositionByStudent = new Map(sectionPositioned.map((p) => [p.student_id, p.position]));
 
+    const classAverageMarks = classResults.length
+      ? Math.round((classResults.reduce((s, r) => s + r.total_marks, 0) / classResults.length) * 100) / 100
+      : null;
+
+    // Denominator for a class-average PERCENTAGE: this student's own subject
+    // full-marks sum, the same approximation class_average_marks/GPA already
+    // make (computeClassResults doesn't guarantee every student shares an
+    // identical subject set, e.g. optional subjects) -- reasonable since a
+    // student's own printed marksheet is naturally read against their own
+    // subject load.
+    const totalFullMarks = entries.reduce((sum, e) => sum + (e.subject.full_marks ?? 0), 0);
+    const classAveragePercentage =
+      classAverageMarks !== null && totalFullMarks > 0 ? Math.round((classAverageMarks / totalFullMarks) * 10000) / 100 : null;
+
+    // A textual remark for the class's average performance, resolved by
+    // matching classAveragePercentage against the exam's own active grading
+    // scale (same ranges already used to grade every subject) -- reuses
+    // GradeRange.remarks rather than inventing new grading logic.
+    const matchingRange =
+      classAveragePercentage !== null
+        ? (exam.grading_scale?.ranges ?? []).find((r) => classAveragePercentage >= r.min_marks && classAveragePercentage <= r.max_marks)
+        : undefined;
+
+    let standingVsAverage: string | null = null;
+    if (classAverageMarks !== null) {
+      const diff = totalMarks - classAverageMarks;
+      standingVsAverage = Math.abs(diff) < 0.01 ? "At Class Average" : diff > 0 ? "Above Class Average" : "Below Class Average";
+    }
+
     position = {
       position_in_class: positionByStudent.get(studentId) ?? null,
       position_in_section: sectionPositionByStudent.get(studentId) ?? null,
       highest_in_class: classResults.length ? Math.max(...classResults.map((r) => r.total_marks)) : null,
       highest_in_section: sectionResults.length ? Math.max(...sectionResults.map((r) => r.total_marks)) : null,
-      class_average_marks: classResults.length
-        ? Math.round((classResults.reduce((s, r) => s + r.total_marks, 0) / classResults.length) * 100) / 100
-        : null,
+      class_average_marks: classAverageMarks,
       class_average_gpa: classResults.length
         ? Math.round((classResults.reduce((s, r) => s + r.result.total_gpa, 0) / classResults.length) * 100) / 100
         : null,
+      class_average_percentage: classAveragePercentage,
+      average_remarks: matchingRange?.remarks ?? null,
+      standing_vs_average: standingVsAverage,
     };
   }
 
@@ -566,6 +778,8 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     attendance,
     subjects: entries.map((e) => {
       const config = configBySubject.get(e.subject_id);
+      const components = componentConfigsBySubject.get(e.subject_id);
+      const enteredComponentMarks = e.component_marks as Record<string, number> | null;
       return {
         name_en: e.subject.name_en,
         code: e.subject.code,
@@ -581,6 +795,11 @@ export async function buildMarksheetData(examId: string, studentId: string) {
         marks_total: e.is_absent ? null : e.marks_total,
         grade_letter: e.is_absent ? "Abs" : e.grade_letter,
         grade_point: e.grade_point,
+        has_components: !!components?.length && !!enteredComponentMarks,
+        components:
+          components && enteredComponentMarks
+            ? components.map((c) => ({ label: c.label, marks: enteredComponentMarks[c.key] ?? null, max_marks: c.max_marks }))
+            : [],
       };
     }),
     total_marks: totalMarks,
@@ -650,7 +869,16 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const students = await prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null }, orderBy: { current_roll_no: "asc" } });
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    // Each student's own marksheet is already correctly self-scoped by
+    // buildMarksheetData (its position/average stats key off the student's
+    // own group_id) -- this filter is purely about which students end up in
+    // the batch at all, e.g. printing only a Science section's marksheets
+    // instead of the whole (multi-group) class every time.
+    const students = await prisma.student.findMany({
+      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      orderBy: { current_roll_no: "asc" },
+    });
     if (!students.length) throw badRequest("No students found in this class");
 
     const dataList = await Promise.all(
@@ -670,11 +898,12 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const [exam, classInfo, subjects, results] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
-      prisma.subject.findMany({ where: { class_id: classId } }),
-      computeClassResults(examId, classId),
+      prisma.subject.findMany({ where: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
+      computeClassResults(examId, classId, groupId),
     ]);
     if (!exam) throw notFound("Exam not found");
 
@@ -710,11 +939,18 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const [exam, classInfo, subjectConfigs, students] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
-      prisma.examSubjectConfig.findMany({ where: { exam_id: examId, subject: { class_id: classId } }, include: { subject: true } }),
-      prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null }, orderBy: { current_roll_no: "asc" } }),
+      prisma.examSubjectConfig.findMany({
+        where: { exam_id: examId, subject: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } },
+        include: { subject: true },
+      }),
+      prisma.student.findMany({
+        where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+        orderBy: { current_roll_no: "asc" },
+      }),
     ]);
     if (!exam) throw notFound("Exam not found");
     if (!subjectConfigs.length) throw badRequest("No subjects configured for this exam/class");
@@ -739,10 +975,11 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const [exam, classInfo, results] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
-      computeClassResults(examId, classId),
+      computeClassResults(examId, classId, groupId),
     ]);
     if (!exam) throw notFound("Exam not found");
 
@@ -758,6 +995,23 @@ documentsRouter.get(
       rows,
     });
     sendPdf(res, pdf, `merit-list-${classId}.pdf`, req.query.download === "true");
+  }),
+);
+
+// Combined/Annual Result Card (Plan Fifteen, Phase I) — the Term-Based
+// weighted blend of every ExamTypeConfig with a nonzero weight_in_annual,
+// per-subject breakdown showing each contributing exam's own score,
+// Attendance %/Extracurricular remarks shown as informational-only context
+// (confirmed Mode A design — never a numeric input to the blended grade).
+documentsRouter.get(
+  "/result/combined/:academic_year_id/:student_id",
+  asyncHandler(async (req, res) => {
+    const academicYearId = reqParam(req, "academic_year_id");
+    const studentId = reqParam(req, "student_id");
+    const data = await computeCombinedResult(studentId, academicYearId);
+    const qrCode = await generateQrDataUrl(`combined-result:${academicYearId}:${studentId}`);
+    const pdf = await renderDocument("COMBINED_RESULT", { ...data, qr_code: qrCode, published_date: new Date() } as unknown as Record<string, unknown>);
+    sendPdf(res, pdf, `combined-result-${data.student.student_uid}.pdf`, req.query.download === "true");
   }),
 );
 

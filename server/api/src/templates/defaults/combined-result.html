@@ -1,0 +1,129 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+  body { margin: 0; padding: 10mm; font-size: 11px; position: relative; }
+  .content { position: relative; z-index: 1; }
+  .header { display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+  .letterhead-brand { display: flex; align-items: center; gap: 8px; }
+  .header img { height: 16mm; }
+  .letterhead-text h1 { margin: 0; font-size: 16px; color: {{institution.primary_color}}; }
+  .letterhead-text p { margin: 2px 0 0; font-size: 9px; color: #555; }
+  .badge-wrap { text-align: center; margin: 8px 0; }
+  .badge { display: inline-block; padding: 4px 24px; border-radius: 4px; background: {{institution.primary_color}}; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 0.5px; }
+  .published-date { text-align: right; font-size: 9px; color: #777; margin-bottom: 4px; }
+  .qr { height: 16mm; width: 16mm; float: right; margin-left: 8px; }
+  table.info { border-collapse: collapse; font-size: 11px; margin: 6px 0; }
+  table.info td { padding: 2px 6px; }
+  table.info td.label { font-weight: 600; color: #555; }
+  .weights-note { font-size: 9px; color: #666; margin: 4px 0 8px; }
+  table.exams { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  table.exams th, table.exams td { border: 1px solid #999; padding: 3px 6px; font-size: 10px; text-align: center; }
+  table.exams th { background: {{institution.primary_color}}; color: #fff; }
+  table.results { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.results th, table.results td { border: 1px solid #999; padding: 3px 5px; font-size: 10px; text-align: center; }
+  table.results th { background: {{institution.primary_color}}; color: #fff; }
+  table.results td.subject-cell { text-align: left; font-weight: 600; vertical-align: middle; }
+  table.results .contribution-row td { font-size: 9px; color: #555; }
+  table.results .blended-row td { font-weight: 700; background: #f7f7f7; }
+  .total-row td { font-weight: 700; background: #f0f0f0; }
+  .promo { text-align: center; margin-top: 10px; font-size: 13px; font-weight: 700; }
+  .info-panels { display: flex; gap: 10px; margin-top: 10px; }
+  .info-panel { flex: 1; border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px; font-size: 10px; }
+  .info-panel .panel-title { font-weight: 700; margin-bottom: 4px; color: {{institution.primary_color}}; }
+  .info-note { font-style: italic; color: #777; font-size: 9px; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 18px; }
+  .signature-block { text-align: center; width: 30%; }
+  .sig-line { border-top: 1px solid #333; margin-top: 24px; }
+  .sig-name { font-size: 10px; font-weight: 600; margin: 2px 0 0; }
+  .sig-designation { font-size: 9px; color: #555; }
+</style>
+</head>
+<body>
+  {{watermark}}
+  <div class="content">
+    <p class="published-date">Published Date: {{banglaDate published_date}}</p>
+    <div class="header"><div class="letterhead-brand">{{> letterhead}}</div></div>
+    <div class="badge-wrap"><span class="badge">Combined / Annual Result — {{academic_year_label}}</span></div>
+
+    {{#if qr_code}}<img class="qr" src="{{qr_code}}" />{{/if}}
+    <table class="info">
+      <tr><td class="label">Student Name</td><td>{{student.name_en}}</td><td class="label">Student ID</td><td>{{student.student_uid}}</td></tr>
+      <tr><td class="label">Roll</td><td>{{formatMarks student.current_roll_no}}</td><td class="label">Session</td><td>{{academic_year_label}}</td></tr>
+    </table>
+
+    <table class="exams">
+      <thead><tr><th>Exam</th><th>Type</th><th>Weight</th><th>Status</th></tr></thead>
+      <tbody>
+        {{#each contributing_exams}}
+        <tr>
+          <td>{{this.name}}</td>
+          <td>{{this.exam_type_name}}</td>
+          <td>{{this.weight}}%</td>
+          <td>{{#if this.published}}Published{{else}}Not yet published{{/if}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+    <p class="weights-note">Each subject's blended result below is a weighted average of the published exams above, weighted exactly as configured in Settings → Exam Types. An exam not yet published is excluded from the blend rather than counted as zero.</p>
+
+    <table class="results">
+      <thead>
+        <tr><th>Subject</th><th>Contribution</th><th>Marks</th><th>%</th><th>Grade</th><th>GP</th></tr>
+      </thead>
+      <tbody>
+        {{#each subjects}}
+        {{#each this.contributions}}
+        <tr class="contribution-row">
+          {{#if @first}}<td class="subject-cell" rowspan="{{../contributions.length}}">{{../subject_name}}</td>{{/if}}
+          <td>{{this.exam_name}} ({{this.weight}}%)</td>
+          <td>{{formatMarks this.marks_total}} / {{this.full_marks}}</td>
+          <td>{{#if this.percentage}}{{this.percentage}}%{{else}}—{{/if}}</td>
+          <td colspan="2"></td>
+        </tr>
+        {{/each}}
+        <tr class="blended-row">
+          <td colspan="2">Blended</td>
+          <td colspan="2">{{#if this.blended_percentage}}{{this.blended_percentage}}%{{else}}—{{/if}}</td>
+          <td style="color: {{gradeColor this.blended_grade_letter}}">{{this.blended_grade_letter}}</td>
+          <td>{{this.blended_grade_point}}</td>
+        </tr>
+        {{/each}}
+        <tr class="total-row">
+          <td colspan="3">Overall</td>
+          <td>{{#if overall_percentage}}{{overall_percentage}}%{{else}}—{{/if}}</td>
+          <td style="color: {{gradeColor overall_grade_letter}}">{{#if has_failed}}F{{else}}{{overall_grade_letter}}{{/if}}</td>
+          <td>{{overall_gpa}}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="promo">{{#if has_failed}}Result: FAILED{{else}}Result: {{overall_grade_letter}} (GPA {{overall_gpa}}){{/if}}</p>
+
+    <div class="info-panels">
+      <div class="info-panel">
+        <p class="panel-title">Attendance</p>
+        {{#if attendance}}
+        <p>Working Days: <strong>{{attendance.total_days}}</strong> · Present: <strong>{{attendance.present}} ({{attendance.percentage}}%)</strong> · Absent: <strong>{{attendance.absent}}</strong></p>
+        {{else}}
+        <p class="info-note">No attendance data for this session.</p>
+        {{/if}}
+        <p class="info-note">Informational only — does not affect the blended grade above.</p>
+      </div>
+      <div class="info-panel">
+        <p class="panel-title">Extracurricular / Co-curricular Remarks</p>
+        {{#if extracurricular_remarks}}<p>{{extracurricular_remarks}}</p>{{else}}<p class="info-note">No remarks recorded.</p>{{/if}}
+        <p class="info-note">Informational only — does not affect the blended grade above.</p>
+      </div>
+    </div>
+
+    <div class="signatures">
+      {{signatureBlock 1}}
+      {{signatureBlock 2}}
+      {{signatureBlock 3}}
+    </div>
+  </div>
+</body>
+</html>

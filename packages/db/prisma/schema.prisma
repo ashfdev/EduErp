@@ -72,8 +72,21 @@ model InstitutionConfig {
   show_class_position           Boolean              @default(true)
   show_section_position         Boolean              @default(true)
   fourth_subject_rule           Boolean              @default(false)
+  // Term-Based (separate real exams blended by ExamTypeConfig.weight_in_annual)
+  // vs. Course-Based (per-course weighted components, university Faculty
+  // Gradebook — designed but not yet built) result computation (Plan
+  // Fifteen, Phase I). Nullable: null means "not yet explicitly set", in
+  // which case the effective mode is derived from InstitutionProfile.type
+  // at read time (resolveResultMode()) rather than baked into a migration
+  // default — never silently wrong for a fresh UNIVERSITY-type install.
+  result_calculation_mode       ResultCalculationMode?
   created_at                    DateTime             @default(now())
   updated_at                    DateTime             @updatedAt
+}
+
+enum ResultCalculationMode {
+  TERM_BLEND
+  COURSE_GRADEBOOK
 }
 
 model StudentIdConfig {
@@ -132,6 +145,28 @@ model ExamTypeConfig {
   exams                    Exam[]
   created_at               DateTime @default(now())
   updated_at               DateTime @updatedAt
+}
+
+// One free-text co-curricular remark per student per academic year (Plan
+// Fifteen, Phase I) — shown on the Combined/Annual Result Card as
+// informational-only context, per the confirmed Term-Based-mode design
+// (never a numeric contribution to any grade/GPA). Nothing existing in this
+// schema captures free-text co-curricular commentary; every other
+// "remarks"-shaped field here is either grade-derived (GradeRange.remarks)
+// or scoped to a single document (Invoice, DisciplineRecord), not a
+// standing per-student-per-year record.
+model ExtracurricularRemark {
+  id               String       @id @default(cuid())
+  student_id       String
+  student          Student      @relation(fields: [student_id], references: [id])
+  academic_year_id String
+  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
+  remarks          String
+  recorded_by_id   String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  @@unique([student_id, academic_year_id])
 }
 
 model FeeRules {
@@ -304,6 +339,7 @@ model AcademicYear {
   course_enrollments        CourseEnrollment[]
   student_waivers           StudentWaiver[]
   fee_fine_rules            FeeFineRule[]
+  extracurricular_remarks   ExtracurricularRemark[]
 }
 
 model Shift {
@@ -670,6 +706,7 @@ model Student {
   documents               StudentDocument[]
   waivers                 StudentWaiver[]
   leave_requests          StudentLeaveRequest[]
+  extracurricular_remarks ExtracurricularRemark[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -3638,6 +3675,7 @@ enum DocumentType {
   NOTICE
   VISITOR_SLIP
   ROUTINE
+  COMBINED_RESULT
 }
 
 enum NoticeAudience {

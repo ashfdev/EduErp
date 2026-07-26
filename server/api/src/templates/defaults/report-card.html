@@ -18,6 +18,7 @@
   table.results { width: 100%; border-collapse: collapse; margin-top: 14px; }
   table.results th, table.results td { border: 1px solid #999; padding: 3px 5px; font-size: 11px; text-align: center; }
   table.results th { background: {{institution.primary_color}}; color: #fff; }
+  .component-breakdown { font-size: 8px; color: #666; font-weight: 400; margin-top: 1px; }
   .attendance-box { margin-top: 12px; border: 1px solid #999; padding: 8px; display: flex; justify-content: space-around; font-size: 11px; }
   .remarks { margin-top: 12px; font-size: 11px; }
   .stats-legend { display: flex; justify-content: space-between; gap: 16px; margin-top: 12px; }
@@ -71,7 +72,12 @@
         <td>{{this.name_en}}</td>
         {{#if ../display.show_subject_full_marks}}<td>{{this.full_marks}}</td>{{/if}}
         {{#if ../display.show_subject_pass_marks}}<td>{{this.pass_marks}}</td>{{/if}}
-        <td>{{formatMarks this.marks_total}}</td>
+        <td>
+          {{formatMarks this.marks_total}}
+          {{#if this.has_components}}
+          <div class="component-breakdown">{{#each this.components}}{{this.label}}: {{formatMarks this.marks}}/{{this.max_marks}}{{#unless @last}} &middot; {{/unless}}{{/each}}</div>
+          {{/if}}
+        </td>
         <td style="color: {{gradeColor this.grade_letter}}">{{this.grade_letter}}</td>
         <td>{{this.remark}}</td>
       </tr>
@@ -100,6 +106,9 @@
         {{#if display.show_highest_in_section}}<tr><td>Highest in Section:</td><td>{{position.highest_in_section}}</td></tr>{{/if}}
         {{#if display.show_average_marks}}<tr><td>Class Average Marks:</td><td>{{position.class_average_marks}}</td></tr>{{/if}}
         {{#if display.show_average_grade_point}}<tr><td>Class Average GPA:</td><td>{{position.class_average_gpa}}</td></tr>{{/if}}
+        {{#if display.show_average_percentage}}<tr><td>Class Average Percentage:</td><td>{{position.class_average_percentage}}%</td></tr>{{/if}}
+        {{#if display.show_average_position}}<tr><td>Standing:</td><td>{{position.standing_vs_average}}</td></tr>{{/if}}
+        {{#if display.show_average_remarks}}<tr><td>Class Average Remark:</td><td>{{position.average_remarks}}</td></tr>{{/if}}
       </table>
       {{/if}}
     </div>

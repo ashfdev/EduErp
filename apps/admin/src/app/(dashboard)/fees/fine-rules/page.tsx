@@ -54,6 +54,12 @@ export default function FeeFineRulesPage() {
 
   const relevantSubCategories = subCategories?.filter((s) => s.category === form.fee_category) ?? [];
 
+  // Blocks the dialog's default close-on-outside-click/Escape once the admin
+  // has actually started filling the form, so in-progress input is never
+  // silently lost to a stray click or an unrelated background event —
+  // requires the explicit Cancel/X action instead (Plan Fifteen, Phase E).
+  const isDirty = form.academic_year_id !== "" || form.fine_value !== "" || form.class_ids.length > 0;
+
   const createMutation = useMutation({
     mutationFn: () =>
       api.post("/api/fees/fine-rules", {
@@ -127,7 +133,11 @@ export default function FeeFineRulesPage() {
       )}
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onEscapeKeyDown={(e) => isDirty && e.preventDefault()}
+          onPointerDownOutside={(e) => isDirty && e.preventDefault()}
+        >
           <DialogHeader><DialogTitle>Add Fine Rule</DialogTitle></DialogHeader>
           <div className="max-h-[70vh] space-y-3 overflow-y-auto">
             <div className="space-y-1.5">

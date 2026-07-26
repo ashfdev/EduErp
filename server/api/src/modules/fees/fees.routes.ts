@@ -713,7 +713,7 @@ feesRouter.get(
           fine_source: fineSource,
           outstanding,
           is_manual_fine: inv.is_manual_fine,
-          waivers: inv.waiver_applications.map((w) => ({ waiver_name: w.student_waiver.waiver_type.name, discount_amount: w.discount_amount })),
+          waivers: inv.waiver_applications.map((w) => ({ id: w.id, waiver_name: w.student_waiver.waiver_type.name, discount_amount: w.discount_amount })),
         };
       }),
     );
@@ -793,8 +793,33 @@ feesRouter.post(
         const invStudent = await tx.student.findUnique({ where: { id: invoice.student_id }, select: { current_class_id: true } });
         const fine = await resolveFineForInvoice(tx, invoice, invStudent?.current_class_id ?? null, rules);
 
-        const discount = Math.min(line.discount_amount ?? 0, invoice.amount_due);
-        const effectiveAmountDue = Math.max(0, invoice.amount_due - discount);
+        // Waiver override (Plan Fifteen, Phase E) — "collect the full amount
+        // for this one payment, ignoring the standing waiver just this
+        // once." Re-derived server-side from the caller-supplied ids (never
+        // trust a client-supplied amount), scoped defensively to THIS
+        // invoice so an id copy-pasted from a different invoice can't leak
+        // its discount in here. Adds the overridden discount(s) back onto
+        // the already-waiver-netted amount_due for this transaction only —
+        // this UI always collects a selected line's FULL outstanding in one
+        // shot (no partial-amount input exists), so the invoice necessarily
+        // reaches PAID for this line whenever an override is used, meaning
+        // persisting the un-waived amount_due below is always correct, never
+        // a partial-state corruption. The StudentWaiver/InvoiceWaiverApplication
+        // rows themselves are never touched — fully active again the moment
+        // a future invoice is generated for this student.
+        let overriddenWaiverAmount = 0;
+        let overriddenWaiverNames: string[] = [];
+        if (line.override_waiver_application_ids?.length) {
+          const overridden = await tx.invoiceWaiverApplication.findMany({
+            where: { id: { in: line.override_waiver_application_ids }, invoice_id: invoice.id },
+            include: { student_waiver: { include: { waiver_type: { select: { name: true } } } } },
+          });
+          overriddenWaiverAmount = overridden.reduce((s, w) => s + w.discount_amount, 0);
+          overriddenWaiverNames = overridden.map((w) => `${w.student_waiver.waiver_type.name} (৳${w.discount_amount})`);
+        }
+
+        const discount = Math.min(line.discount_amount ?? 0, invoice.amount_due + overriddenWaiverAmount);
+        const effectiveAmountDue = Math.max(0, invoice.amount_due + overriddenWaiverAmount - discount);
         const outstanding = Math.max(0, effectiveAmountDue + fine - invoice.amount_paid);
         if (line.amount > outstanding && !rules.advance_payment_allowed) {
           throw badRequest(`Amount for "${invoice.description}" exceeds the outstanding balance (৳${outstanding}).`);
@@ -802,6 +827,7 @@ feesRouter.post(
         const appliedToInvoice = Math.min(line.amount, outstanding);
         const overflow = line.amount - appliedToInvoice;
 
+        const overrideNote = overriddenWaiverNames.length ? `Waiver override — collected in full: ${overriddenWaiverNames.join(", ")}.` : null;
         const payment = await tx.payment.create({
           data: {
             receipt_no: await generateReceiptNo(tx),
@@ -810,7 +836,7 @@ feesRouter.post(
             amount: line.amount,
             status: "COMPLETED",
             paid_at: new Date(),
-            notes: body.notes,
+            notes: [body.notes, overrideNote].filter(Boolean).join(" ") || undefined,
             collected_by_id: req.user!.sub,
             receipt_batch_id: batchId,
             discount_amount: discount > 0 ? discount : null,

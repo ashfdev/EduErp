@@ -132,6 +132,12 @@ const collectBatchLineSchema = z.object({
   invoice_id: z.string().min(1),
   amount: z.number().min(0.01),
   discount_amount: z.number().min(0).optional(),
+  // Per-collection waiver override (Plan Fifteen, Phase E) — "collect the
+  // full amount for this one payment, ignoring the standing waiver just
+  // this once." Never a permanent revoke: the StudentWaiver assignment and
+  // its InvoiceWaiverApplication row(s) stay untouched and fully active for
+  // the student's next invoice.
+  override_waiver_application_ids: z.array(z.string().min(1)).optional(),
 });
 export const collectBatchSchema = z.object({
   lines: z.array(collectBatchLineSchema).min(1),

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
@@ -28,6 +28,8 @@ interface StudentRow {
   group?: { name_en: string } | null;
   guardian?: { phone: string } | null;
   _count: { documents: number };
+  is_historical?: boolean;
+  historical_year_label?: string;
 }
 
 interface ClassOption {
@@ -51,11 +53,23 @@ interface AcademicYearOption {
 
 export default function StudentsPage() {
   const t = useTranslations("students");
+  const router = useRouter();
   const { type, terms } = useInstitution();
   const isUniversity = type === "UNIVERSITY";
 
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
+
+  // Re-syncs from the URL on every navigation to this page, not just the
+  // initial mount — without this, a second `?search=` navigation while
+  // already on /students (e.g. an external link, not just the old header
+  // search box) silently left the search box/results stuck on the first
+  // term (Plan Fifteen, Phase C).
+  useEffect(() => {
+    const fromUrl = searchParams.get("search") ?? "";
+    setSearch(fromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [classId, setClassId] = useState<string>("");
   const [sectionId, setSectionId] = useState<string>("");
   const [groupId, setGroupId] = useState<string>("");
@@ -67,8 +81,14 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
 
   const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ["settings", "classes"],
-    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+    queryKey: ["settings", "classes", academicYearId],
+    // Class rows are recreated every academic year, so an unscoped list
+    // would let staff pick a stale prior-year Class row (or, for a
+    // historical Session lookup, the wrong year's classes entirely) — scope
+    // to the selected Session exactly like examination/new/page.tsx's Clone
+    // tab already does, falling back to every class when no Session is
+    // picked (unchanged default behavior).
+    queryFn: async () => (await api.get("/api/settings/classes", { params: { academic_year_id: academicYearId || undefined } })).data.data,
   });
   const { data: academicYears } = useQuery<AcademicYearOption[]>({
     queryKey: ["settings", "academic-years"],
@@ -218,6 +238,13 @@ export default function StudentsPage() {
         </Select>
       </div>
 
+      {!!students.length && students[0]?.is_historical && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Showing historical placement for <strong>{students[0].historical_year_label}</strong> — this was each student&apos;s class/section
+          in that past session, not necessarily their current one.
+        </div>
+      )}
+
       {!students.length && <EmptyState title={t("noStudentsFound")} description={t("noStudentsHint")} />}
 
       <Card>
@@ -237,7 +264,7 @@ export default function StudentsPage() {
             </TableHeader>
             <TableBody>
               {students.map((s) => (
-                <TableRow key={s.id}>
+                <TableRow key={s.id} className="cursor-pointer" onClick={() => router.push(`/students/${s.id}`)}>
                   <TableCell>
                     {s.photo_url ? (
                       <img src={s.photo_url} alt="" className="h-7 w-7 rounded-full object-cover" />
@@ -259,7 +286,7 @@ export default function StudentsPage() {
                   <TableCell>{s.current_roll_no ?? "—"}</TableCell>
                   <TableCell>{s.guardian?.phone ?? "—"}</TableCell>
                   <TableCell><StatusBadge status={s.status} /></TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0">

@@ -60,6 +60,11 @@ export const institutionConfigSchema = z.object({
   show_class_position: z.boolean().optional(),
   show_section_position: z.boolean().optional(),
   fourth_subject_rule: z.boolean().optional(),
+  // Term-Based vs Course-Based result computation (Plan Fifteen, Phase I) —
+  // nullable is intentional: "not yet explicitly set" is a real, distinct
+  // state from either mode, resolved to an institution-type-based default
+  // at read time rather than a migration-baked default.
+  result_calculation_mode: z.enum(["TERM_BLEND", "COURSE_GRADEBOOK"]).nullable().optional(),
 });
 
 export const studentIdConfigSchema = z.object({

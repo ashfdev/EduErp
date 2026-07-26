@@ -22,6 +22,7 @@ export * from "./components/confirm-dialog";
 export * from "./components/search-input";
 export * from "./components/record-picker-dialog";
 export * from "./components/multi-record-picker-dialog";
+export * from "./components/command-palette";
 export * from "./components/pdf-preview-modal";
 export * from "./components/rich-text-editor";
 export * from "./components/notification-bell";

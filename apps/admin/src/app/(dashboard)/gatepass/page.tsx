@@ -18,6 +18,13 @@ interface StudentRow {
   id: string;
   name_en: string;
   student_uid: string;
+  current_class: { id: string; name_en: string } | null;
+  current_section: { id: string; name: string } | null;
+}
+interface ClassOption {
+  id: string;
+  name_en: string;
+  sections?: { id: string; name: string }[];
 }
 interface VisitorRow {
   id: string;
@@ -57,6 +64,8 @@ export default function GatePassPage() {
   const [reason, setReason] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
+  const [pickerClassId, setPickerClassId] = useState("");
+  const [pickerSectionId, setPickerSectionId] = useState("");
 
   const { data: visitors } = useQuery<VisitorRow[]>({
     queryKey: ["gatepass", "visitors", activeOnly, dateFilter],
@@ -64,10 +73,21 @@ export default function GatePassPage() {
       (await api.get("/api/gatepass/visitors", { params: { active: activeOnly ? "true" : undefined, date: activeOnly ? undefined : dateFilter } })).data.data,
   });
 
+  const { data: classes } = useQuery<ClassOption[]>({
+    queryKey: ["settings", "classes"],
+    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const pickerClass = classes?.find((c) => c.id === pickerClassId);
+
   const { data: studentResults } = useQuery<StudentRow[]>({
-    queryKey: ["students", "search", studentSearch],
-    queryFn: async () => (await api.get("/api/students", { params: { search: studentSearch, limit: 5 } })).data.data,
-    enabled: studentSearch.length > 1 && !selectedStudent,
+    queryKey: ["students", "search", studentSearch, pickerClassId, pickerSectionId],
+    queryFn: async () =>
+      (
+        await api.get("/api/students", {
+          params: { search: studentSearch, class_id: pickerClassId || undefined, section_id: pickerSectionId || undefined, limit: 8 },
+        })
+      ).data.data,
+    enabled: (studentSearch.length > 1 || !!pickerClassId) && !selectedStudent,
   });
 
   function resetForm() {
@@ -79,6 +99,8 @@ export default function GatePassPage() {
     setReason("");
     setStudentSearch("");
     setSelectedStudent(null);
+    setPickerClassId("");
+    setPickerSectionId("");
   }
 
   const logInMutation = useMutation({
@@ -91,6 +113,8 @@ export default function GatePassPage() {
         relation: relation || undefined,
         reason,
         student_id: visitorType === "GUARDIAN" ? selectedStudent?.id : undefined,
+        class_id: visitorType === "GUARDIAN" ? (selectedStudent?.current_class?.id ?? undefined) : undefined,
+        section_id: visitorType === "GUARDIAN" ? (selectedStudent?.current_section?.id ?? undefined) : undefined,
       }),
     onSuccess: (res) => {
       toast.success("Visitor logged in");
@@ -174,7 +198,20 @@ export default function GatePassPage() {
                   <TableRow key={v.id}>
                     <TableCell className="font-medium">{v.visitor_name}</TableCell>
                     <TableCell>{v.visitor_type}</TableCell>
-                    <TableCell>{v.student ? `${v.student.name_en} (${v.student.student_uid})` : "—"}</TableCell>
+                    <TableCell>
+                      {v.student ? (
+                        <>
+                          {v.student.name_en} ({v.student.student_uid})
+                          {v.class && (
+                            <span className="block text-xs text-muted-foreground">
+                              {v.class.name_en}{v.section ? ` / ${v.section.name}` : ""}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
                     <TableCell>{v.relation ?? "—"}</TableCell>
                     <TableCell>{v.phone}</TableCell>
                     <TableCell className="max-w-[200px] truncate" title={v.reason}>{v.reason}</TableCell>
@@ -219,15 +256,42 @@ export default function GatePassPage() {
                 <Label>Student</Label>
                 {selectedStudent ? (
                   <div className="flex items-center justify-between rounded-md border p-2 text-sm">
-                    <span>{selectedStudent.name_en} ({selectedStudent.student_uid})</span>
+                    <span>
+                      {selectedStudent.name_en} ({selectedStudent.student_uid})
+                      {selectedStudent.current_class && (
+                        <span className="text-muted-foreground">
+                          {" — "}{selectedStudent.current_class.name_en}
+                          {selectedStudent.current_section ? ` / ${selectedStudent.current_section.name}` : ""}
+                        </span>
+                      )}
+                    </span>
                     <Button size="sm" variant="outline" onClick={() => setSelectedStudent(null)}>Change</Button>
                   </div>
                 ) : (
                   <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={pickerClassId || "all"} onValueChange={(v) => { setPickerClassId(v === "all" ? "" : v); setPickerSectionId(""); }}>
+                        <SelectTrigger><SelectValue placeholder="All Classes" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Classes</SelectItem>
+                          {classes?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name_en}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={pickerSectionId || "all"} onValueChange={(v) => setPickerSectionId(v === "all" ? "" : v)} disabled={!pickerClass?.sections?.length}>
+                        <SelectTrigger><SelectValue placeholder="All Sections" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Sections</SelectItem>
+                          {pickerClass?.sections?.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <Input placeholder="Search student..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
                     {studentResults?.map((s) => (
                       <button key={s.id} onClick={() => setSelectedStudent(s)} className="block w-full rounded-md border p-2 text-left text-sm hover:bg-accent">
                         {s.name_en} ({s.student_uid})
+                        {s.current_class && (
+                          <span className="text-muted-foreground"> — {s.current_class.name_en}{s.current_section ? ` / ${s.current_section.name}` : ""}</span>
+                        )}
                       </button>
                     ))}
                   </>

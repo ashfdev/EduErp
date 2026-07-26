@@ -11,14 +11,26 @@ import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, MARK_VIEW_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { calculateStudentResult, calculatePositions } from "../../utils/grading.engine";
 import { badRequest, notFound } from "../../lib/errors";
+import { computeCombinedResult } from "./combined-result";
 
 export const resultsRouter = Router();
 
-export async function computeClassResults(examId: string, classId: string) {
+// groupId is optional and purely additive (Plan Fifteen, Phase A) — when
+// omitted, every call site behaves byte-identically to before this param
+// existed (every group's students mixed into one roster, the original,
+// still-latent bug for any class-level report that doesn't pass it). When
+// supplied, the roster itself is scoped to that group, on top of the
+// per-subject group eligibility filter below (which already existed and
+// only ever affected which SUBJECTS counted for a student already in the
+// roster, not who was in the roster to begin with).
+export async function computeClassResults(examId: string, classId: string, groupId?: string) {
   const [exam, subjects, students] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: true } } } }),
     prisma.subject.findMany({ where: { class_id: classId } }),
-    prisma.student.findMany({ where: { current_class_id: classId, deleted_at: null }, orderBy: { current_roll_no: "asc" } }),
+    prisma.student.findMany({
+      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      orderBy: { current_roll_no: "asc" },
+    }),
   ]);
   if (!exam) throw notFound("Exam not found");
 
@@ -99,9 +111,9 @@ resultsRouter.get(
   authorize(MARK_VIEW_ROLES),
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
-    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional(), group_id: z.string().optional() }).parse(req.query);
 
-    let results = await computeClassResults(examId, query.class_id);
+    let results = await computeClassResults(examId, query.class_id, query.group_id);
     if (query.section_id) results = results.filter((r) => r.student.current_section_id === query.section_id);
 
     res.json({
@@ -212,8 +224,17 @@ resultsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const subjects = await prisma.subject.findMany({ where: { class_id: classId } });
-    const results = await computeClassResults(examId, classId);
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    // A group-scoped subject must never appear as a column when the sheet
+    // is for a DIFFERENT group than its own -- otherwise every student in a
+    // grouped class shows blank cells for every other group's subjects.
+    // Omitting group_id stays byte-identical to before this param existed
+    // (every group's subjects mixed together, the original class-level
+    // behavior every non-grouped class already relies on).
+    const subjects = await prisma.subject.findMany({
+      where: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) },
+    });
+    const results = await computeClassResults(examId, classId, groupId);
 
     res.json({
       success: true,
@@ -241,10 +262,11 @@ resultsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const [subjects, klass, results] = await Promise.all([
-      prisma.subject.findMany({ where: { class_id: classId } }),
+      prisma.subject.findMany({ where: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
       prisma.class.findUnique({ where: { id: classId } }),
-      computeClassResults(examId, classId),
+      computeClassResults(examId, classId, groupId),
     ]);
     const sorted = results.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
@@ -284,7 +306,8 @@ resultsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const results = await computeClassResults(examId, classId);
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    const results = await computeClassResults(examId, classId, groupId);
     res.json({
       success: true,
       data: results
@@ -302,7 +325,8 @@ resultsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const [klass, results] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId)]);
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    const [klass, results] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId, groupId)]);
     const merit = results
       .filter((r) => !r.result.has_failed)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
@@ -334,7 +358,15 @@ resultsRouter.get(
   asyncHandler(async (req, res) => {
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
-    const subjects = await prisma.subject.findMany({ where: { class_id: classId } });
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    // Filtering the SUBJECT list to the requested group is sufficient here
+    // (unlike computeClassResults, this route never touches the student
+    // roster directly) -- a group-scoped subject only ever has MarkEntry
+    // rows from that group's own students in the first place
+    // (inheritSubjectsForClass only ever enrolls a student into a subject
+    // whose group_id is null or their own), so once the subject itself is
+    // correctly scoped, its entries already are too.
+    const subjects = await prisma.subject.findMany({ where: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } });
     const entries = await prisma.markEntry.findMany({ where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } } });
 
     const analysis = subjects.map((s) => {
@@ -389,5 +421,42 @@ resultsRouter.get(
     }
 
     res.json({ success: true, data: summary });
+  }),
+);
+
+// ── Combined/Annual Result (Term-Based weighted blend, Plan Fifteen,
+// Phase I) — read-only, on-demand computation over already-published exam
+// results; see combined-result.ts for the full design note.
+resultsRouter.get(
+  "/combined/:academic_year_id/:student_id",
+  authenticate,
+  authorize(MARK_VIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const academicYearId = reqParam(req, "academic_year_id");
+    const studentId = reqParam(req, "student_id");
+    const data = await computeCombinedResult(studentId, academicYearId);
+    res.json({ success: true, data });
+  }),
+);
+
+// Editable per-student-per-year co-curricular remark (informational-only,
+// never a numeric grade input) — upserted directly since it's a single row
+// per (student, year) the reviewing staff member edits freely, matching
+// StudentWaiver-adjacent small-record conventions elsewhere in this module.
+resultsRouter.put(
+  "/combined/:academic_year_id/:student_id/extracurricular",
+  authenticate,
+  authorize(RESULT_PUBLISH_ROLES),
+  asyncHandler(async (req, res) => {
+    const academicYearId = reqParam(req, "academic_year_id");
+    const studentId = reqParam(req, "student_id");
+    const body = z.object({ remarks: z.string().max(2000) }).parse(req.body);
+
+    const remark = await prisma.extracurricularRemark.upsert({
+      where: { student_id_academic_year_id: { student_id: studentId, academic_year_id: academicYearId } },
+      update: { remarks: body.remarks },
+      create: { student_id: studentId, academic_year_id: academicYearId, remarks: body.remarks, recorded_by_id: req.user!.sub },
+    });
+    res.json({ success: true, data: remark });
   }),
 );

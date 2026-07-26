@@ -25,6 +25,31 @@ export const analyticsRouter = Router();
 // still applies on top of this and narrows further for those specific routes.
 analyticsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
+// Sum of debit-minus-credit across every EXPENSE-group account for a date
+// range, over POSTED vouchers only — the same shape
+// accounts/reports.routes.ts's `/income-expenditure` sectionTotal("EXPENSE")
+// already computes, reused here (not reimplemented as a second source of
+// truth) since payroll disbursement already auto-journals into a Salary
+// Expense account (CLAUDE.md's Accounts rules) — this single account-group
+// aggregation already includes payroll AND every other expense voucher with
+// no separate figure to double-count against (Plan Fifteen, Phase F).
+async function expenseTotal(start: Date, end: Date): Promise<number> {
+  const accounts = await prisma.account.findMany({ where: { account_group: { type: "EXPENSE" }, is_active: true }, select: { id: true } });
+  if (!accounts.length) return 0;
+  const accountIds = accounts.map((a) => a.id);
+  const [debitAgg, creditAgg] = await Promise.all([
+    prisma.journalEntry.aggregate({
+      where: { debit_account_id: { in: accountIds }, voucher: { status: "POSTED", date: { gte: start, lt: end } } },
+      _sum: { amount: true },
+    }),
+    prisma.journalEntry.aggregate({
+      where: { credit_account_id: { in: accountIds }, voucher: { status: "POSTED", date: { gte: start, lt: end } } },
+      _sum: { amount: true },
+    }),
+  ]);
+  return (debitAgg._sum.amount ?? 0) - (creditAgg._sum.amount ?? 0);
+}
+
 function todayRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -81,6 +106,8 @@ analyticsRouter.get(
       latestPublishedExam,
       admissionByStatus,
       salaryDisbursedToday,
+      todayExpense,
+      monthExpense,
     ] = await Promise.all([
       prisma.student.count({ where: { deleted_at: null } }),
       prisma.student.count({ where: { deleted_at: null, status: "ACTIVE" } }),
@@ -112,6 +139,8 @@ analyticsRouter.get(
       }),
       prisma.admissionApplication.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.payrollRecord.aggregate({ where: { status: "PAID", paid_at: { gte: todayStart, lt: todayEnd } }, _sum: { net_salary: true } }),
+      expenseTotal(todayStart, todayEnd),
+      expenseTotal(monthStart, monthEnd),
     ]);
 
     const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
@@ -173,6 +202,8 @@ analyticsRouter.get(
           total_outstanding: Math.round(totalOutstanding * 100) / 100,
           overdue_invoices: overdueInvoicesCount,
           current_fund_balance: currentFundBalance,
+          today_expense: Math.round(todayExpense * 100) / 100,
+          this_month_expense: Math.round(monthExpense * 100) / 100,
         },
         academic: {
           active_exams: activeExams,

@@ -128,54 +128,78 @@ function useActiveYear() {
   return years?.find((y) => y.is_active) ?? years?.[0];
 }
 
-function ClassSummaryTab() {
+// A real Session picker (Plan Fifteen, Phase B) — this and StudentSummaryTab
+// were previously hard-locked to whatever the active session happened to
+// be, with no way to look back at a past session's fee summary at all.
+function useSessionPicker() {
   const activeYear = useActiveYear();
-  const { data } = useQuery<{ class_id: string; class_name: string; generated: number; collected: number; due: number }[]>({
-    queryKey: ["fees", "reports", "class-wise-summary", activeYear?.id],
-    queryFn: async () => (await api.get("/api/fees/reports/class-wise-summary", { params: { academic_year_id: activeYear!.id } })).data.data,
-    enabled: !!activeYear,
-  });
-
-  if (!data?.length) return <EmptyState title="No data for the active session yet" />;
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <Table>
-          <TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Generated</TableHead><TableHead>Collected</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {data.map((c) => (
-              <TableRow key={c.class_id}>
-                <TableCell>{c.class_name}</TableCell>
-                <TableCell>৳{c.generated}</TableCell>
-                <TableCell>৳{c.collected}</TableCell>
-                <TableCell className="text-red-600">৳{c.due}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+  const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+  const [yearId, setYearId] = useState("");
+  const selectedYearId = yearId || activeYear?.id;
+  const picker = (
+    <select className="rounded-md border px-3 py-2 text-sm" value={yearId} onChange={(e) => setYearId(e.target.value)}>
+      {years?.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_active ? " (active)" : ""}</option>)}
+    </select>
   );
+  return { selectedYearId, picker };
 }
 
-function StudentSummaryTab() {
-  const activeYear = useActiveYear();
-  const [classId, setClassId] = useState("");
-  const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
-
-  const { data } = useQuery<{ student_id: string; name_en: string; student_uid: string; generated: number; collected: number; due: number }[]>({
-    queryKey: ["fees", "reports", "student-wise-summary", activeYear?.id, classId],
-    queryFn: async () => (await api.get("/api/fees/reports/student-wise-summary", { params: { academic_year_id: activeYear!.id, class_id: classId || undefined } })).data.data,
-    enabled: !!activeYear,
+function ClassSummaryTab() {
+  const { selectedYearId, picker } = useSessionPicker();
+  const { data } = useQuery<{ class_id: string; class_name: string; generated: number; collected: number; due: number }[]>({
+    queryKey: ["fees", "reports", "class-wise-summary", selectedYearId],
+    queryFn: async () => (await api.get("/api/fees/reports/class-wise-summary", { params: { academic_year_id: selectedYearId } })).data.data,
+    enabled: !!selectedYearId,
   });
 
   return (
     <div className="space-y-4">
-      <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => setClassId(e.target.value)}>
-        <option value="">All Classes</option>
-        {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-      </select>
-      {!data?.length && <EmptyState title="No data for the active session yet" />}
+      {picker}
+      {!data?.length && <EmptyState title="No data for this session" />}
+      {!!data?.length && (
+        <Card>
+          <CardContent className="pt-6">
+            <Table>
+              <TableHeader><TableRow><TableHead>Class</TableHead><TableHead>Generated</TableHead><TableHead>Collected</TableHead><TableHead>Due</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {data.map((c) => (
+                  <TableRow key={c.class_id}>
+                    <TableCell>{c.class_name}</TableCell>
+                    <TableCell>৳{c.generated}</TableCell>
+                    <TableCell>৳{c.collected}</TableCell>
+                    <TableCell className="text-red-600">৳{c.due}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function StudentSummaryTab() {
+  const { selectedYearId, picker } = useSessionPicker();
+  const [classId, setClassId] = useState("");
+  const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+
+  const { data } = useQuery<{ student_id: string; name_en: string; student_uid: string; generated: number; collected: number; due: number }[]>({
+    queryKey: ["fees", "reports", "student-wise-summary", selectedYearId, classId],
+    queryFn: async () => (await api.get("/api/fees/reports/student-wise-summary", { params: { academic_year_id: selectedYearId, class_id: classId || undefined } })).data.data,
+    enabled: !!selectedYearId,
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {picker}
+        <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => setClassId(e.target.value)}>
+          <option value="">All Classes</option>
+          {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+        </select>
+      </div>
+      {!data?.length && <EmptyState title="No data for this session" />}
       {!!data?.length && (
         <Card>
           <CardContent className="pt-6">

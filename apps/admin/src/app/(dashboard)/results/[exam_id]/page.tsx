@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 interface ClassOption {
   id: string;
   name_en: string;
+  groups?: { id: string; name_en: string }[];
 }
 
 interface MeritEntry {
@@ -43,28 +44,30 @@ interface StudentResult {
 export default function ExamResultsPage() {
   const { exam_id } = useParams<{ exam_id: string }>();
   const [classId, setClassId] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [search, setSearch] = useState("");
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
+  const selectedClass = classes?.find((c) => c.id === classId);
 
   const { data: merit } = useQuery<MeritEntry[]>({
-    queryKey: ["results", "merit-list", exam_id, classId],
-    queryFn: async () => (await api.get(`/api/results/reports/merit-list/${exam_id}/${classId}`)).data.data,
+    queryKey: ["results", "merit-list", exam_id, classId, groupId],
+    queryFn: async () => (await api.get(`/api/results/reports/merit-list/${exam_id}/${classId}`, { params: { group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
   });
 
   const { data: analysis } = useQuery<SubjectAnalysis[]>({
-    queryKey: ["results", "subject-analysis", exam_id, classId],
-    queryFn: async () => (await api.get(`/api/results/reports/subject-analysis/${exam_id}/${classId}`)).data.data,
+    queryKey: ["results", "subject-analysis", exam_id, classId, groupId],
+    queryFn: async () => (await api.get(`/api/results/reports/subject-analysis/${exam_id}/${classId}`, { params: { group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
   });
 
   const { data: allStudents } = useQuery<StudentResult[]>({
-    queryKey: ["results", "exam", exam_id, classId],
-    queryFn: async () => (await api.get(`/api/results/exam/${exam_id}`, { params: { class_id: classId } })).data.data,
+    queryKey: ["results", "exam", exam_id, classId, groupId],
+    queryFn: async () => (await api.get(`/api/results/exam/${exam_id}`, { params: { class_id: classId, group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
   });
 
@@ -76,7 +79,7 @@ export default function ExamResultsPage() {
 
   async function downloadExcel(kind: "tabulation" | "merit") {
     const path = kind === "tabulation" ? `/api/results/tabulation/${exam_id}/${classId}/export` : `/api/results/reports/merit-list/${exam_id}/${classId}/export`;
-    const res = await api.get(path, { responseType: "blob" });
+    const res = await api.get(path, { params: { group_id: groupId || undefined }, responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;
@@ -100,10 +103,18 @@ export default function ExamResultsPage() {
         }
       />
 
-      <select className="w-64 rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => setClassId(e.target.value)}>
-        <option value="">Select Class...</option>
-        {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-      </select>
+      <div className="flex gap-3">
+        <select className="w-64 rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setGroupId(""); }}>
+          <option value="">Select Class...</option>
+          {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+        </select>
+        {!!selectedClass?.groups?.length && (
+          <select className="w-48 rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <option value="">All Groups</option>
+            {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+          </select>
+        )}
+      </div>
 
       {classId && (
         <Tabs defaultValue="all">

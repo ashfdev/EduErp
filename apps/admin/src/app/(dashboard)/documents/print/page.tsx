@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, RichTextEditor, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -13,6 +13,7 @@ interface Option {
   name?: string;
   label?: string;
   sections?: { id: string; name: string }[];
+  groups?: { id: string; name_en: string }[];
 }
 
 // Must mirror server/api/src/lib/roles.ts's EXAM_MANAGE_ROLES exactly — a
@@ -56,7 +57,19 @@ interface StaffOption {
   designation: string;
 }
 
-type FieldKind = "text" | "select-class" | "select-section" | "select-exam" | "select-year" | "select-student" | "select-staff" | "date" | "month" | "year" | "number";
+interface TestimonialDraft {
+  body_html: string;
+  leaving_date: string;
+}
+interface TransferCertDraft {
+  conduct: string;
+  last_exam_result: string;
+  remarks: string;
+  leaving_reason: string;
+  leaving_date: string;
+}
+
+type FieldKind = "text" | "select-class" | "select-section" | "select-group" | "select-exam" | "select-year" | "select-student" | "select-staff" | "date" | "month" | "year" | "number";
 
 interface DocDef {
   key: string;
@@ -125,10 +138,11 @@ const DOC_TYPES: DocDef[] = [
     key: "marksheets-class",
     title: "Marksheets (Class)",
     description: "Bulk marksheets for every student in a class.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/marksheets/class/${p.class_id}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/marksheets/class/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
   {
@@ -145,30 +159,33 @@ const DOC_TYPES: DocDef[] = [
     key: "tabulation-sheet",
     title: "Tabulation Sheet",
     description: "All students × all subjects for a class (A3 landscape).",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/tabulation/${p.class_id}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/tabulation/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
   {
     key: "blank-marksheet",
     title: "Blank Marksheet",
     description: "Empty grid (all students × subjects) for manual mark entry, e.g. offline exam invigilation.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/blank-marksheet/${p.class_id}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/blank-marksheet/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
   {
     key: "merit-list",
     title: "Merit List",
     description: "Ranked merit list for a class exam.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/merit-list/${p.class_id}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/merit-list/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
   {
@@ -255,12 +272,46 @@ export default function DocumentPrintCenterPage() {
 
   const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const sections = classes?.find((c) => c.id === values.class_id)?.sections ?? [];
+  const groups = classes?.find((c) => c.id === values.class_id)?.groups ?? [];
   const { data: exams } = useQuery<Option[]>({ queryKey: ["exams"], queryFn: async () => (await api.get("/api/exams")).data.data });
 
   const { user } = useAuthStore();
   const canOverride = !!user && EXAM_MANAGE_ROLES.includes(user.role);
   const [overrideSelected, setOverrideSelected] = useState<Set<string>>(new Set());
   const [overrideReason, setOverrideReason] = useState("");
+
+  // Compose-and-edit step (Plan Fifteen, Phase K): Testimonial/Transfer
+  // Certificate get a real editable draft — pre-filled with this specific
+  // student's actual merge fields already resolved, never raw template
+  // syntax — instead of a search-then-download-blind flow.
+  const isTestimonial = doc.key === "testimonial";
+  const isTransferCert = doc.key === "transfer-cert";
+  const [composeBody, setComposeBody] = useState("");
+  const [composeTc, setComposeTc] = useState({ conduct: "", last_exam_result: "", remarks: "", leaving_reason: "" });
+  const [composeLeavingDate, setComposeLeavingDate] = useState("");
+
+  const { data: composeDraft } = useQuery<TestimonialDraft | TransferCertDraft>({
+    queryKey: ["documents", "compose-draft", doc.key, values.student_id],
+    queryFn: async () => (await api.get(`/api/documents/student/${values.student_id}/${doc.key}/draft`)).data.data,
+    enabled: (isTestimonial || isTransferCert) && !!values.student_id,
+  });
+
+  // Re-seeds from a fresh draft whenever the selected student (and therefore
+  // the draft query) changes, so a second generation for a different student
+  // always starts clean — never carries the previous student's edited text
+  // forward.
+  useEffect(() => {
+    if (isTestimonial && composeDraft) {
+      const d = composeDraft as TestimonialDraft;
+      setComposeBody(d.body_html);
+      setComposeLeavingDate(d.leaving_date);
+    }
+    if (isTransferCert && composeDraft) {
+      const d = composeDraft as TransferCertDraft;
+      setComposeTc({ conduct: d.conduct, last_exam_result: d.last_exam_result, remarks: d.remarks, leaving_reason: d.leaving_reason });
+      setComposeLeavingDate(d.leaving_date);
+    }
+  }, [composeDraft, isTestimonial, isTransferCert]);
 
   const isAdmitCards = doc.key === "admit-cards";
   const { data: clearanceStatus, isFetching: statusLoading } = useQuery<ClearanceStatusRow[]>({
@@ -301,24 +352,49 @@ export default function DocumentPrintCenterPage() {
     setValues({});
     setLabels({});
     setError(null);
+    setComposeBody("");
+    setComposeTc({ conduct: "", last_exam_result: "", remarks: "", leaving_reason: "" });
+    setComposeLeavingDate("");
   }
 
-  const canGenerate = doc.fields.filter((f) => f.required).every((f) => values[f.key]);
+  const canGenerate =
+    doc.fields.filter((f) => f.required).every((f) => values[f.key]) &&
+    !((isTestimonial || isTransferCert) && values.student_id && !composeDraft);
+
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  }
 
   async function download() {
     setGenerating(true);
     setError(null);
     try {
-      let path = doc.endpoint!(values);
-      if (isAdmitCards && overrideSelected.size > 0) {
-        path += `&override_student_ids=${encodeURIComponent([...overrideSelected].join(","))}&override_reason=${encodeURIComponent(overrideReason)}`;
+      if (isTestimonial) {
+        const res = await api.post(
+          `/api/documents/student/${values.student_id}/testimonial`,
+          { body_html: composeBody, leaving_date: composeLeavingDate || undefined },
+          { params: { download: "true" }, responseType: "blob" },
+        );
+        triggerDownload(res.data, `${doc.key}.pdf`);
+      } else if (isTransferCert) {
+        const res = await api.post(
+          `/api/documents/student/${values.student_id}/transfer-cert`,
+          { ...composeTc, leaving_date: composeLeavingDate || undefined },
+          { params: { download: "true" }, responseType: "blob" },
+        );
+        triggerDownload(res.data, `${doc.key}.pdf`);
+      } else {
+        let path = doc.endpoint!(values);
+        if (isAdmitCards && overrideSelected.size > 0) {
+          path += `&override_student_ids=${encodeURIComponent([...overrideSelected].join(","))}&override_reason=${encodeURIComponent(overrideReason)}`;
+        }
+        const res = await api.get(path, { params: { download: "true" }, responseType: "blob" });
+        triggerDownload(res.data, `${doc.key}.pdf`);
       }
-      const res = await api.get(path, { params: { download: "true" }, responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${doc.key}.pdf`;
-      a.click();
     } catch (err) {
       setError(extractErrorMessage(err) ?? "Failed to generate document — check the required fields and try again.");
     } finally {
@@ -377,6 +453,15 @@ export default function DocumentPrintCenterPage() {
                             {sections?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                           </select>
                         )}
+                        {f.kind === "select-group" && !!groups.length && (
+                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} disabled={!values.class_id}>
+                            <option value="">All Groups</option>
+                            {groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+                          </select>
+                        )}
+                        {f.kind === "select-group" && !groups.length && (
+                          <p className="pt-2 text-xs text-muted-foreground">{values.class_id ? "This class has no groups defined." : "Select a class first."}</p>
+                        )}
                         {f.kind === "select-exam" && (
                           <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
                             <option value="">Select...</option>
@@ -408,6 +493,40 @@ export default function DocumentPrintCenterPage() {
                       </div>
                     ))}
                   </div>
+
+                  {(isTestimonial || isTransferCert) && values.student_id && (
+                    <div className="space-y-3 rounded-md border p-3">
+                      <p className="text-sm font-medium">Compose — edit the wording before generating</p>
+                      {!composeDraft && <p className="text-sm text-muted-foreground">Loading draft...</p>}
+                      {isTestimonial && composeDraft && <RichTextEditor value={composeBody} onChange={setComposeBody} />}
+                      {isTransferCert && composeDraft && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Character and Conduct</Label>
+                            <Input value={composeTc.conduct} onChange={(e) => setComposeTc((p) => ({ ...p, conduct: e.target.value }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Result of Last Examination</Label>
+                            <Input value={composeTc.last_exam_result} onChange={(e) => setComposeTc((p) => ({ ...p, last_exam_result: e.target.value }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Reason for Leaving</Label>
+                            <Input value={composeTc.leaving_reason} onChange={(e) => setComposeTc((p) => ({ ...p, leaving_reason: e.target.value }))} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Remarks</Label>
+                            <Input value={composeTc.remarks} onChange={(e) => setComposeTc((p) => ({ ...p, remarks: e.target.value }))} />
+                          </div>
+                        </div>
+                      )}
+                      {composeDraft && (
+                        <div className="w-48 space-y-1.5">
+                          <Label>Date of Leaving</Label>
+                          <Input type="date" value={composeLeavingDate} onChange={(e) => setComposeLeavingDate(e.target.value)} />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {isAdmitCards && values.exam_id && values.class_id && (
                     <div className="space-y-3 rounded-md border p-3">

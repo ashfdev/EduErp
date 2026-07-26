@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { Receipt, Wallet, FileBarChart, PlusCircle } from "lucide-react";
 
 interface AccountGroup {
   id: string;
@@ -79,7 +80,27 @@ export default function AccountsDashboardPage() {
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Pending Approvals</p><p className="text-2xl font-semibold">{pendingApprovals.length}</p></CardContent></Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="mb-3 font-medium">Quick Actions</p>
+            <div className="space-y-2">
+              <Button variant="outline" asChild className="w-full justify-start">
+                <Link href="/accounts/vouchers/new"><PlusCircle className="mr-2 h-4 w-4 text-primary" />Add Voucher</Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full justify-start">
+                <Link href="/accounts/vouchers/new"><Receipt className="mr-2 h-4 w-4 text-rose-600" />Record Expense</Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full justify-start">
+                <Link href="/fees/collect"><Wallet className="mr-2 h-4 w-4 text-emerald-600" />Collect Fee</Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full justify-start">
+                <Link href="/accounts/reports"><FileBarChart className="mr-2 h-4 w-4 text-amber-600" />View Reports</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="pt-6">
             <p className="mb-3 font-medium">Recent Vouchers</p>

@@ -50,6 +50,83 @@ const STUDENT_LIST_SELECT = {
   _count: { select: { documents: true } },
 } as const;
 
+// Historical-session lookup (Plan Fifteen, Phase B): when the caller selects
+// a past Academic Year (not the currently active one), resolve via
+// StudentAcademicHistory instead of current_class_id — otherwise a student
+// who's since been promoted is invisible under their old class/section, even
+// though a full history record for that exact year still exists. Response
+// rows are shaped to match STUDENT_LIST_SELECT as closely as possible (same
+// field names) with `current_class`/`current_section` substituted for the
+// HISTORICAL placement and two new fields (`is_historical`,
+// `historical_year_label`) so the frontend can clearly label what it's
+// showing, never confusing it with the student's actual current placement.
+// Group isn't resolved here — Groups aren't tracked per-year historically.
+async function resolveHistoricalStudents(
+  query: { search?: string; class_id?: string; section_id?: string; status?: string; gender?: string; page: number; limit: number },
+  year: { id: string; label: string },
+) {
+  const studentFilter = {
+    ...(query.status && { status: query.status as never }),
+    ...(query.gender && { gender: query.gender as never }),
+    ...(query.search && {
+      OR: [
+        { name_en: { contains: query.search, mode: "insensitive" as const } },
+        { student_uid: { contains: query.search, mode: "insensitive" as const } },
+      ],
+    }),
+  };
+  const where = {
+    academic_year_id: year.id,
+    ...(query.class_id && { class_id: query.class_id }),
+    ...(query.section_id && { section_id: query.section_id }),
+    ...(Object.keys(studentFilter).length > 0 && { student: studentFilter }),
+  };
+
+  const [histories, total] = await Promise.all([
+    prisma.studentAcademicHistory.findMany({
+      where,
+      include: {
+        student: {
+          select: {
+            id: true, student_uid: true, name_en: true, name_bn: true, photo_url: true,
+            status: true, graduation_year: true, father_phone: true,
+            guardian: { select: { phone: true } },
+            _count: { select: { documents: true } },
+          },
+        },
+        class: { select: { id: true, name_en: true } },
+        section: { select: { id: true, name: true } },
+      },
+      skip: (query.page - 1) * query.limit,
+      take: query.limit,
+      orderBy: { created_at: "desc" },
+    }),
+    prisma.studentAcademicHistory.count({ where }),
+  ]);
+
+  return {
+    data: histories.map((h) => ({
+      id: h.student.id,
+      student_uid: h.student.student_uid,
+      name_en: h.student.name_en,
+      name_bn: h.student.name_bn,
+      photo_url: h.student.photo_url,
+      current_roll_no: h.roll_no,
+      status: h.student.status,
+      graduation_year: h.student.graduation_year,
+      father_phone: h.student.father_phone,
+      current_class: h.class,
+      current_section: h.section,
+      group: null,
+      guardian: h.student.guardian,
+      _count: h.student._count,
+      is_historical: true,
+      historical_year_label: year.label,
+    })),
+    meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+  };
+}
+
 studentsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -76,6 +153,15 @@ studentsRouter.get(
         limit: z.coerce.number().int().min(1).max(100).default(20),
       })
       .parse(req.query);
+
+    if (query.academic_year_id) {
+      const year = await prisma.academicYear.findUnique({ where: { id: query.academic_year_id } });
+      if (year && !year.is_active) {
+        const result = await resolveHistoricalStudents(query, year);
+        res.json({ success: true, data: result.data, meta: result.meta });
+        return;
+      }
+    }
 
     // Merged into one object rather than 3 separate `current_class: {...}`
     // spread entries — object-literal key collisions mean only the LAST
