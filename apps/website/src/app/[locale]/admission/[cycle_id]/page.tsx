@@ -201,7 +201,7 @@ export default function AdmissionApplyPage() {
             <div className="flex justify-between"><span className="text-xs font-semibold text-slate-500">Admission Roll</span><span className="font-mono font-bold text-lg text-slate-900">{submitted.admission_roll}</span></div>
             <div className="flex justify-between"><span className="text-xs font-semibold text-slate-500">Class</span><span className="text-sm font-semibold text-slate-700">{cycle.class.name_en}</span></div>
           </div>
-          <p className="text-xs text-slate-400 mb-6">Save your roll number — you'll need it to check your status.</p>
+          <p className="text-xs text-slate-400 mb-6">Save your roll number — you&apos;ll need it to check your status.</p>
           {submitted.app_fee > 0 && (
             <div className="border border-slate-100 rounded-2xl p-5 mb-5 text-left">
               <p className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Fee: ৳{submitted.app_fee}</p>

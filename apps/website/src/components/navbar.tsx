@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
-import type { Institution } from "@/lib/types";
-import { Menu, X, ChevronDown, UserCircle2 } from "lucide-react";
+import type { Institution, Notice } from "@/lib/types";
+import { Menu, X, ChevronDown, UserCircle2, Megaphone } from "lucide-react";
 import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@education-erp/ui";
 import { fetchContent } from "@/lib/content-api";
 import { NOTICES_LAST_VISIT_KEY, markNoticesVisited } from "@/lib/notices-visit";
@@ -67,7 +67,7 @@ const MEDIA_CHILDREN: NavLink[] = [
   { href: "/contact", key: "contact" },
 ];
 
-export function Navbar({ institution }: { institution: Institution | null }) {
+export function Navbar({ institution, notices = [] }: { institution: Institution | null, notices?: Notice[] }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
@@ -132,23 +132,37 @@ export function Navbar({ institution }: { institution: Institution | null }) {
   return (
     <header className="sticky top-0 z-50 w-full flex flex-col">
       {/* Top Bar (Secondary Actions) */}
-      <div className="bg-green-800 text-green-100 py-1.5 transition-colors relative z-20">
-        <div className="mx-auto flex w-full items-center justify-between px-4 sm:px-6 lg:px-12 xl:px-16 2xl:px-24 text-[11px] sm:text-xs font-medium">
-          {/* Top Left: Quick Links / Info */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            {/* Can add phone or email here later */}
+      <div className="bg-[#2C3E50] text-slate-200 py-2 relative z-20">
+        <div className="mx-auto flex w-full max-w-[96%] items-center justify-between px-4 sm:px-6 lg:px-8 text-[11px] sm:text-xs font-medium">
+          
+          {/* Top Left: Notices Ticker */}
+          <div className="w-[55%] flex items-center overflow-hidden">
+            {notices.length > 0 && (
+              <div className="flex animate-ticker gap-12 whitespace-nowrap hover:[animation-play-state:paused] text-slate-200">
+                {[...notices, ...notices].map((n, i) => (
+                  <Link key={`${n.id}-${i}`} href="/notices" className="flex items-center gap-2 hover:text-white transition-colors">
+                    {n.is_pinned ? (
+                      <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase font-bold text-white tracking-wider">Pinned</span>
+                    ) : (
+                      <Megaphone className="h-3.5 w-3.5 text-white/70" />
+                    )}
+                    <span className="font-semibold tracking-wide">{n.title}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Top Right: Actions & Language */}
-          <div className="flex items-center gap-4 sm:gap-6">
-            <Link href="/result" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-700 text-green-100 hover:text-white hover:bg-green-600 transition-colors font-semibold text-[11px] sm:text-xs border border-green-600/50">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <Link href="/result" className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-transparent text-slate-200 hover:text-white hover:bg-white/10 transition-colors font-semibold">
               {t("resultLookup")}
             </Link>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-700 text-green-100 hover:text-white hover:bg-green-600 transition-colors font-semibold text-[11px] sm:text-xs border border-green-600/50 outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-transparent text-slate-200 hover:text-white hover:bg-white/10 transition-colors font-semibold outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                   aria-label="Switch language"
                 >
                   {locale === "en" ? "English" : "বাংলা"}
@@ -175,8 +189,8 @@ export function Navbar({ institution }: { institution: Institution | null }) {
       </div>
 
       {/* Main Navbar */}
-      <div className={`w-full transition-all duration-300 px-4 sm:px-6 relative z-10 ${scrolled ? "py-2" : "py-4"}`}>
-        <div className={`mx-auto flex w-full max-w-[96%] items-center justify-between px-4 sm:px-6 lg:px-8 gap-4 rounded-full transition-all duration-300 border border-slate-200/60 bg-white/80 backdrop-blur-xl shadow-sm ${scrolled ? "shadow-md py-2" : "py-2.5 lg:py-3"}`}>
+      <div className={`w-full transition-all duration-300 relative z-10 bg-[#F5F7FA] border-b border-slate-200 ${scrolled ? "shadow-sm py-2" : "py-3 lg:py-4"}`}>
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
           
           {/* Logo (Left) */}
           <div className="flex-1 flex justify-start items-center min-w-0">
@@ -191,7 +205,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-green-700 transition-colors line-clamp-2">
+                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-primary transition-colors line-clamp-2">
                   {institution?.name_en ?? "Education ERP"}
                 </h1>
                 {institution?.tagline_en && !scrolled && (
@@ -205,7 +219,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
           <nav className="hidden lg:flex shrink-0 items-center justify-center gap-1 xl:gap-2">
             <Link
               href="/"
-              className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:text-green-700 hover:bg-green-50/80 ${pathname === "/" ? "text-green-700 bg-green-50/80" : "text-slate-600"
+              className={`px-3 py-2 text-[13px] xl:text-[15px] font-bold transition-all hover:text-primary ${pathname === "/" ? "text-primary" : "text-slate-800"
                 }`}
             >
               {t("home")}
@@ -215,7 +229,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
               return (
                 <div key={g.key} className="group/dropdown relative">
                   <button
-                    className={`relative flex items-center gap-1 px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${groupActive ? "text-green-700 bg-green-50/80" : "text-slate-600"
+                    className={`relative flex items-center gap-1 px-3 py-2 text-[13px] xl:text-[15px] font-bold transition-all hover:text-primary ${groupActive ? "text-primary" : "text-slate-800"
                       }`}
                   >
                     {t(g.key)}
@@ -237,7 +251,7 @@ export function Navbar({ institution }: { institution: Institution | null }) {
                             <Link
                               href={c.href}
                               onClick={g.key === "notices" ? clearNoticeBadge : undefined}
-                              className={`block rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all ${childActive ? "bg-green-50 text-green-700" : "text-slate-500 hover:bg-green-50 hover:text-green-700"
+                              className={`block px-3 py-2.5 text-[13px] font-semibold transition-all ${childActive ? "text-primary" : "text-slate-600 hover:text-primary"
                                 }`}
                             >
                               {label(c)}
@@ -251,26 +265,25 @@ export function Navbar({ institution }: { institution: Institution | null }) {
               );
             })}
             {/* Additional Direct Links */}
-            <Link href="/gallery" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/gallery" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
+            <Link href="/gallery" className={`px-3 py-2 text-[13px] xl:text-[15px] font-bold transition-all hover:text-primary ${pathname === "/gallery" ? "text-primary" : "text-slate-800"}`}>
               {t("gallery")}
             </Link>
-            <Link href="/careers" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/careers" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
+            <Link href="/careers" className={`px-3 py-2 text-[13px] xl:text-[15px] font-bold transition-all hover:text-primary ${pathname === "/careers" ? "text-primary" : "text-slate-800"}`}>
               {t("careers")}
             </Link>
-            <Link href="/contact" className={`px-3 py-2 text-[13px] xl:text-sm font-bold transition-all rounded-full hover:bg-green-50/80 hover:text-green-700 ${pathname === "/contact" ? "text-green-700 bg-green-50/80" : "text-slate-600"}`}>
+            <Link href="/contact" className={`px-3 py-2 text-[13px] xl:text-[15px] font-bold transition-all hover:text-primary ${pathname === "/contact" ? "text-primary" : "text-slate-800"}`}>
               {t("contact")}
             </Link>
           </nav>
 
           {/* Right Section (Portal Login) */}
-          <div className="flex lg:flex-1 shrink-0 justify-end items-center gap-2">
+          <div className="flex shrink-0 justify-end items-center gap-4">
             <a 
               href={portalUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="hidden lg:flex items-center gap-1.5 px-4 py-2 bg-green-700 text-white hover:bg-green-800 transition-colors rounded-full font-bold text-sm relative z-0"
+              className="hidden lg:flex items-center gap-1.5 px-6 py-2.5 bg-[#0B5ED7] text-white hover:bg-[#0A58CA] transition-colors rounded-md font-bold text-sm shadow-sm"
             >
-              <UserCircle2 className="h-4 w-4" />
               {t("portalLogin")}
             </a>
 

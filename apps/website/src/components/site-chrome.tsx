@@ -59,24 +59,12 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
       className="flex min-h-screen flex-col"
       style={
         {
-          "--primary": hexToHslTriplet(institution?.primary_color ?? "#1a3c4a"),
-          "--secondary": hexToHslTriplet(institution?.secondary_color ?? "#2e7d9a"),
+          "--primary": hexToHslTriplet(institution?.primary_color ?? "#0B5ED7"),
+          "--secondary": hexToHslTriplet(institution?.secondary_color ?? "#2563EB"),
         } as React.CSSProperties
       }
     >
-      {notices.length > 0 && (
-        <div className="bg-primary text-primary-foreground overflow-hidden py-2 text-sm font-medium">
-          <div className="flex animate-ticker gap-12 whitespace-nowrap px-4 hover:[animation-play-state:paused]">
-            {[...notices, ...notices].map((n, i) => (
-              <Link key={`${n.id}-${i}`} href="/notices" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                {n.is_pinned ? <span className="rounded bg-white/20 px-1.5 py-0.5 text-[10px] uppercase">Pinned</span> : <Megaphone className="h-3 w-3" />}
-                {n.title}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-      <Navbar institution={institution} />
+      <Navbar institution={institution} notices={notices} />
       <main className="flex-1">{children}</main>
       <Footer institution={institution} />
     </div>

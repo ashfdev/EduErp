@@ -50,7 +50,7 @@ export default function ContactPage() {
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   
   // Use student_login_bg_url safely
-  const bgImage = (institution as any)?.student_login_bg_url ?? `${portalUrl}/assets/login-illustration.png`;
+  const bgImage = (institution as { student_login_bg_url?: string })?.student_login_bg_url ?? `${portalUrl}/assets/login-illustration.png`;
 
   const inputCls = "w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary/40 focus:bg-white focus:outline-none transition-all";
   const labelCls = "block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2";
@@ -74,7 +74,7 @@ export default function ContactPage() {
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 mb-4">{t("title")}</h1>
             <p className="text-slate-500 mb-10 text-base leading-relaxed">
-              We'd love to hear from you. Please fill out the form or use the contact information below.
+              We&apos;d love to hear from you. Please fill out the form or use the contact information below.
             </p>
 
             <div className="space-y-6">

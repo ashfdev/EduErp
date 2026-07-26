@@ -8,11 +8,21 @@ import { fetchContent } from "@/lib/content-api";
 import { NoticeBoardWidget } from "@/components/notice-board-widget";
 import type { Institution, Slider, Notice, GalleryAlbum, EventItem, AdmissionCycleSummary, GoverningBodyMember, FacultyMember, StaticPageContent } from "@/lib/types";
 import {
-  Users, UserCheck, CalendarDays, BookOpen,
-  ChevronRight, Megaphone, ArrowRight, Image as ImageIcon,
-  GraduationCap, Download, MapPin, Building2, MessageSquare, Quote,
-  Link2, BookMarked, BadgeCheck, Landmark, School,
-  type LucideIcon
+  Users,
+  UserCheck,
+  CalendarDays,
+  ArrowRight,
+  Megaphone,
+  MapPin,
+  Building2,
+  BadgeCheck,
+  Landmark,
+  School,
+  GraduationCap,
+  Image as ImageIcon,
+  BookMarked,
+  Link2,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@education-erp/ui";
 
@@ -55,11 +65,8 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [sliders.length]);
 
-  const chairman = governingBody[0] ?? null;
-  const otherMembers = governingBody.slice(1);
-
   return (
-    <main className="min-h-screen bg-[#f0fdf4] pb-10">
+    <main className="min-h-screen bg-slate-50">
 
       {/* ── Hero Slider ── */}
       {sliders.length > 0 ? (
@@ -92,14 +99,14 @@ export default function HomePage() {
           )}
         </section>
       ) : (
-        <section className="relative flex h-[380px] sm:h-[480px] items-center justify-center bg-white overflow-hidden border-b border-green-100">
+        <section className="relative flex h-[380px] sm:h-[480px] items-center justify-center bg-white overflow-hidden border-b border-primary/20">
           <div
             className="absolute inset-0 z-0 opacity-[0.12]"
             style={{ backgroundImage: "radial-gradient(#16a34a 1.5px, transparent 1.5px)", backgroundSize: "28px 28px" }}
           />
           <div className="relative z-10 text-center px-4 max-w-3xl">
             {institution?.logo_url && (
-              <div className="mx-auto mb-6 h-24 w-24 overflow-hidden rounded-full bg-white p-1.5 shadow-xl ring-4 ring-green-100">
+              <div className="mx-auto mb-6 h-24 w-24 overflow-hidden rounded-full bg-white p-1.5 shadow-xl ring-4 ring-primary/20">
                 <Image src={institution.logo_url} alt="" width={96} height={96} className="h-full w-full rounded-full object-contain" />
               </div>
             )}
@@ -109,83 +116,125 @@ export default function HomePage() {
         </section>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
 
         {/* ── Stats Strip ── */}
         <section className="relative -mt-16 sm:-mt-24 mb-12 grid grid-cols-2 gap-4 md:grid-cols-4 z-20">
-          <StatCard icon={Users} label={t("students")} value={stats?.students ?? "-"} color="text-green-600" />
+          <StatCard icon={Users} label={t("students")} value={stats?.students ?? "-"} color="text-secondary" />
           <StatCard icon={UserCheck} label={t("teachers")} value={stats?.staff ?? "-"} color="text-emerald-600" />
           <StatCard icon={Building2} label={t("founded")} value={institution?.founded_year ?? "-"} color="text-teal-600" />
-          <StatCard icon={MapPin} label={t("eiin")} value={institution?.eiin ?? "-"} color="text-green-700" />
+          <StatCard icon={MapPin} label={t("eiin")} value={institution?.eiin ?? "-"} color="text-primary" />
         </section>
 
       </div>
 
-      {/* ── About the Institution ── */}
-      <section className="bg-white border-y border-green-100 py-8 mb-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            {/* Logo */}
-            <div className="shrink-0">
-              {institution?.logo_url ? (
-                <div className="h-20 w-20 overflow-hidden rounded-full ring-2 ring-green-200 shadow-sm bg-white">
-                  <Image src={institution.logo_url} alt="logo" width={80} height={80} className="h-full w-full object-contain p-1" />
+
+      {/* ── About Institution + Notice Board ── */}
+      <section className="bg-slate-50 py-12 sm:py-16">
+        <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+
+            {/* About Institution (2/3) */}
+            <section className="lg:col-span-2 flex flex-col sm:justify-center relative sm:min-h-[550px] gap-0">
+              {/* Background Image on Left */}
+              <div className="relative w-full aspect-video sm:absolute sm:left-0 sm:top-1/2 sm:-translate-y-1/2 sm:w-[55%] sm:aspect-[5/6] rounded-2xl overflow-hidden shadow-sm">
+                <Image
+                  src={(institution as { student_login_bg_url?: string })?.student_login_bg_url || institution?.logo_url || "https://picsum.photos/seed/institution/800/800"}
+                  alt="Institution Building"
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-slate-900/10" />
+              </div>
+
+              {/* Overlapping White Card */}
+              <div className="relative flex flex-col justify-center sm:ml-[45%] bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-slate-100 sm:my-8 sm:mr-4 z-10 -mt-12 sm:mt-0 mx-4 sm:mx-0">
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-6 inline-block relative self-start">
+                  {tf("aboutUs")}
+                  <span className="absolute -bottom-2 left-0 h-1 w-12 bg-primary"></span>
+                </h2>
+                <p className="text-sm leading-relaxed text-slate-600 mb-8 whitespace-pre-line line-clamp-[8]">
+                  {institution?.established_text || "Our institution is committed to providing quality education, nurturing young minds, and building a bright future for our students. We believe in holistic development and academic excellence."}
+                </p>
+                <div className="mt-auto self-start">
+                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold rounded-full px-6 transition-all">
+                    <Link href="/about">{t("readMore")}</Link>
+                  </Button>
                 </div>
-              ) : (
-                <div className="h-20 w-20 flex items-center justify-center rounded-full bg-green-50 ring-2 ring-green-200 text-3xl">🏫</div>
-              )}
-            </div>
-            {/* Info */}
-            <div className="flex-1 text-center sm:text-left">
-              <h2 className="text-lg font-bold text-slate-900 mb-1">{institution?.name_en ?? "Our Institution"}</h2>
-              <p className="text-sm italic text-slate-500 leading-relaxed line-clamp-2">
-                {institution?.mission_text ?? "Committed to academic excellence and holistic development of students."}
-              </p>
-            </div>
-            {/* Feature Pills */}
-            <div className="flex flex-wrap justify-center sm:justify-end gap-2 shrink-0">
-              {institution?.founded_year && (
-                <span className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">
-                  <Landmark className="h-3.5 w-3.5" /> Est. {institution.founded_year}
-                </span>
-              )}
-              <span className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">
-                <BadgeCheck className="h-3.5 w-3.5" /> Govt. Approved
-              </span>
-              <span className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">
-                <School className="h-3.5 w-3.5" /> SSC &amp; HSC
-              </span>
-            </div>
+              </div>
+            </section>
+
+            {/* Notice Board (1/3) */}
+            <section className="flex flex-col">
+              <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-100 flex-1 flex flex-col relative overflow-hidden">
+                <div className="flex items-center justify-center mb-6">
+                  <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                    <Megaphone className="h-5 w-5 text-red-500" />
+                    {t("noticeBoard")}
+                  </h2>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col bg-transparent">
+                  <NoticeBoardWidget notices={notices} />
+                </div>
+                <div className="mt-6 text-center">
+                  <Button asChild className="bg-primary text-white hover:bg-primary/90 font-bold w-full rounded-md shadow-sm transition-all">
+                    <Link href="/notices">{t("viewAll")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                  </Button>
+                </div>
+              </div>
+            </section>
+
           </div>
         </div>
       </section>
 
       {/* ── Admission Banner ── */}
       {openCycles.length > 0 && (
-        <section className="w-full bg-white py-8 sm:py-10 mb-10 border-y border-green-100">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mb-6">
-              <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 mb-2">
+        <section 
+          className="w-full py-10 sm:py-12 border-y border-slate-100"
+          style={{ backgroundColor: (institution as any)?.admission_bg_color || "transparent" }}
+        >
+          <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+            <div className="mb-10 flex flex-col items-center text-center">
+              <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-3 border border-primary/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mr-1.5 animate-pulse"></span>
                 {openCycles.length} Classes Open
               </span>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-                {t("admissionOpen", { className: "" }).replace(/[—\-]/g, "").trim()}
+              <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
+                {t("admissionOpen", { className: "" }).replace(/[—-]/g, "").trim()}
               </h2>
-              <p className="text-slate-500 text-sm mt-1">Select a class below to start your application</p>
+              <p className="text-slate-500 text-sm sm:text-base mt-3 max-w-xl">
+                Select a class below to start your application process
+              </p>
             </div>
-            <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${Math.min(openCycles.length, 3)}, minmax(0, 1fr))` }}>
+
+            <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-4 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               {openCycles.map((c) => (
-                <div key={c.id} className="bg-[#f0fdf4] rounded-2xl border border-green-100 p-5 flex flex-col gap-3 hover:shadow-md hover:border-green-200 transition-all group">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 group-hover:text-green-700 transition-colors">{c.class.name_en}</h3>
-                    <div className="text-sm text-slate-500 mt-1.5 flex flex-wrap items-center gap-3">
-                      <span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {c.seat_count} Seats</span>
-                      <span className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> {new Date(c.close_date).toLocaleDateString()}</span>
+                <div key={c.id} className="min-w-[85vw] sm:min-w-0 snap-center shrink-0 sm:shrink bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all flex flex-col group">
+                  <div className="mb-5">
+                    <h3 className="font-bold text-lg text-slate-900 group-hover:text-primary transition-colors">
+                      {c.class.name_en}
+                    </h3>
+                  </div>
+                  
+                  <div className="space-y-2.5 mb-6">
+                    <div className="flex items-center text-slate-600 text-sm">
+                      <Users className="h-4 w-4 mr-2.5 text-slate-400 group-hover:text-primary transition-colors" />
+                      <span>{c.seat_count} Seats Available</span>
+                    </div>
+                    <div className="flex items-center text-slate-600 text-sm">
+                      <CalendarDays className="h-4 w-4 mr-2.5 text-slate-400 group-hover:text-primary transition-colors" />
+                      <span>Deadline: {new Date(c.close_date).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <Button asChild variant="outline" className="w-full border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300 rounded-full font-semibold mt-auto">
-                    <Link href={`/admission/${c.id}`}>{t("applyNow")} <ArrowRight className="ml-2 h-4 w-4" /></Link>
-                  </Button>
+                  
+                  <div className="mt-auto pt-4 flex justify-center">
+                    <Button asChild className="bg-primary text-white hover:bg-primary/90 font-semibold shadow-sm transition-all rounded-full px-8">
+                      <Link href={`/admission/${c.id}`}>
+                        {t("applyNow")}
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -193,64 +242,10 @@ export default function HomePage() {
         </section>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
-        {/* ── Notice Board + Principal's Message ── */}
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 mb-14">
-
-          {/* Notice Board (2/3) */}
-          <section className="lg:col-span-2 flex flex-col">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                <Megaphone className="h-5 w-5 text-primary" />
-                {t("noticeBoard")}
-              </h2>
-              <Button variant="ghost" asChild className="text-primary hover:bg-primary/10 text-sm">
-                <Link href="/notices">{t("viewAll")} <ArrowRight className="ml-1 h-4 w-4" /></Link>
-              </Button>
-            </div>
-            <div className="rounded-2xl border border-green-100 bg-white shadow-sm overflow-hidden flex-1 flex flex-col">
-              <NoticeBoardWidget notices={notices} />
-            </div>
-          </section>
-
-          {/* Principal's Message (1/3) */}
-          <section className="flex flex-col">
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2 mb-5">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              {t("principalsMessage")}
-            </h2>
-            <div className="rounded-2xl border border-green-100 bg-white shadow-sm overflow-hidden flex-1 flex flex-col">
-              {/* Green top accent line */}
-              <div className="h-1 bg-primary w-full shrink-0" />
-              <div className="p-6 flex flex-col flex-1">
-                {/* Photo + Name */}
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="h-14 w-14 shrink-0 rounded-full overflow-hidden ring-2 ring-green-100 bg-green-50">
-                  <div className="h-full w-full flex items-center justify-center text-primary">
-                    <Quote className="h-6 w-6" />
-                  </div>
-                </div>
-                  <div>
-                    <p className="font-bold text-slate-900 leading-tight text-sm">{institution?.principal_name ?? t("principalFallback")}</p>
-                    <p className="text-xs font-semibold text-primary mt-0.5">{institution?.principal_designation ?? "Principal"}</p>
-                  </div>
-                </div>
-                {/* Quote */}
-                <p className="text-sm leading-relaxed text-slate-600 italic flex-1 line-clamp-6">
-                  &ldquo;{principalMessage?.content_en ? stripHtml(principalMessage.content_en) : (institution?.mission_text ?? t("welcomeMessage"))}&rdquo;
-                </p>
-                <Link href="/about/principal_message" className="inline-flex items-center text-sm font-semibold text-primary hover:text-primary/80 mt-4">
-                  {t("readMore")} <ChevronRight className="ml-1 h-4 w-4" />
-                </Link>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* ── Governing Body ── */}
-        {governingBody.length > 0 && (
-          <section className="mb-14">
+      {/* ── Governing Body ── */}
+      {governingBody.length > 0 && (
+        <section className="bg-[#F5F7FA] py-12 sm:py-16">
+          <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
             {/* Section title */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -263,9 +258,9 @@ export default function HomePage() {
             </div>
 
             {/* Simple card grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 pb-4 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               {governingBody.map((m) => (
-                <div key={m.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center text-center gap-3">
+                <div key={m.id} className="min-w-[45vw] sm:min-w-0 snap-center shrink-0 sm:shrink bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center text-center gap-3">
                   {/* Avatar */}
                   <div className="h-16 w-16 rounded-full overflow-hidden bg-slate-100 ring-2 ring-slate-200 shrink-0">
                     {m.photo_url ? (
@@ -279,18 +274,18 @@ export default function HomePage() {
                   {/* Name */}
                   <p className="text-sm font-semibold text-slate-800 leading-snug">{m.name}</p>
                   {/* Designation — bold, prominent */}
-                  <p className="text-xs font-bold text-green-700 uppercase tracking-wide">{m.designation}</p>
+                  <p className="text-xs font-bold text-primary uppercase tracking-wide">{m.designation}</p>
                 </div>
               ))}
             </div>
-          </section>
-        )}
+          </div>
+        </section>
+      )}
 
-
-
-        {/* ── Teachers (Horizontal Scroll) ── */}
-        {faculty.length > 0 && (
-          <section className="mb-14">
+      {/* ── Teachers (Horizontal Scroll) ── */}
+      {faculty.length > 0 && (
+        <section className="bg-white py-12 sm:py-16">
+          <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                 <GraduationCap className="h-5 w-5 text-primary" />
@@ -305,11 +300,11 @@ export default function HomePage() {
                 <Link
                   key={f.id}
                   href={`/faculty/${f.id}`}
-                  className="snap-start shrink-0 w-36 sm:w-40 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden hover:border-green-300 hover:shadow-md transition-all group"
+                  className="snap-start shrink-0 w-36 sm:w-40 bg-white rounded-2xl border border-primary/20 shadow-sm overflow-hidden hover:border-primary/40 hover:shadow-md transition-all group"
                 >
                   <div className="h-1 bg-primary w-full" />
                   <div className="p-4 text-center">
-                    <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full ring-2 ring-green-100 bg-green-50 group-hover:ring-green-300 transition-all">
+                    <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full ring-2 ring-primary/20 bg-primary/5 group-hover:ring-green-300 transition-all">
                       {f.photo_url ? (
                         <Image src={f.photo_url} alt={f.name_en} width={64} height={64} className="h-full w-full object-cover" />
                       ) : (
@@ -322,11 +317,13 @@ export default function HomePage() {
                 </Link>
               ))}
             </div>
-          </section>
-        )}
+          </div>
+        </section>
+      )}
 
-        {/* ── Gallery ── */}
-        <section className="mb-14">
+      {/* ── Gallery ── */}
+      <section className="bg-[#F5F7FA] py-12 sm:py-16">
+        <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
               <ImageIcon className="h-5 w-5 text-primary" />
@@ -346,7 +343,7 @@ export default function HomePage() {
                   {a.cover_url ? (
                     <Image src={a.cover_url} alt={a.name} fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover transition-transform duration-700 group-hover:scale-110" />
                   ) : (
-                    <div className="h-full w-full flex items-center justify-center bg-green-50">
+                    <div className="h-full w-full flex items-center justify-center bg-primary/5">
                       <ImageIcon className="h-10 w-10 text-green-200" />
                     </div>
                   )}
@@ -366,9 +363,9 @@ export default function HomePage() {
             </div>
           ) : (
             <Link href="/gallery"
-              className="group flex items-center gap-5 rounded-2xl border border-green-100 bg-white p-6 hover:border-green-300 hover:shadow-md transition-all"
+              className="group flex items-center gap-5 rounded-2xl border border-primary/20 bg-white p-6 hover:border-primary/40 hover:shadow-md transition-all"
             >
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-green-50 group-hover:bg-primary/10 transition-colors">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
                 <ImageIcon className="h-7 w-7 text-primary" />
               </div>
               <div>
@@ -378,9 +375,13 @@ export default function HomePage() {
               <ArrowRight className="ml-auto h-5 w-5 text-slate-400 group-hover:text-primary transition-colors shrink-0" />
             </Link>
           )}
-        </section>
-        {/* ── Events + Important Links ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        </div>
+      </section>
+
+      {/* ── Events + Important Links ── */}
+      <section className="bg-white py-12 sm:py-16">
+        <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Upcoming Events */}
             <section className="space-y-5">
               <div className="flex items-center justify-between">
@@ -394,8 +395,8 @@ export default function HomePage() {
               </div>
               <div className="flex flex-col gap-3">
                 {!events.length && (
-                  <Link href="/events" className="group flex items-center gap-5 rounded-2xl border border-green-100 bg-white p-5 hover:border-green-300 hover:shadow-md transition-all">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-green-50 group-hover:bg-primary/10 transition-colors">
+                  <Link href="/events" className="group flex items-center gap-5 rounded-2xl border border-primary/20 bg-white p-5 hover:border-primary/40 hover:shadow-md transition-all">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
                       <CalendarDays className="h-6 w-6 text-primary" />
                     </div>
                     <div>
@@ -406,8 +407,8 @@ export default function HomePage() {
                   </Link>
                 )}
                 {events.map((e) => (
-                  <Link key={e.id} href="/events" className="group flex items-center gap-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm transition-all hover:border-green-200 hover:shadow-md">
-                    <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-green-50 py-2 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                  <Link key={e.id} href="/events" className="group flex items-center gap-4 rounded-2xl border border-primary/20 bg-white p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
+                    <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/5 py-2 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
                       <span className="text-[9px] font-bold uppercase tracking-wider">
                         {new Date(e.date_from).toLocaleDateString(undefined, { month: "short" })}
                       </span>
@@ -424,7 +425,7 @@ export default function HomePage() {
                           : new Date(e.date_from).toLocaleDateString()}
                       </p>
                     </div>
-                    <span className="hidden sm:block shrink-0 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-green-700 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                    <span className="hidden sm:block shrink-0 rounded-full bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                       {e.type}
                     </span>
                   </Link>
@@ -433,7 +434,7 @@ export default function HomePage() {
             </section>
 
             {/* Important Links */}
-            <section className="space-y-3 bg-white p-5 sm:p-6 rounded-3xl border border-green-100 shadow-sm">
+            <section className="space-y-3 bg-white p-5 sm:p-6 rounded-3xl border border-primary/20 shadow-sm">
               <h2 className="text-lg font-bold tracking-tight text-slate-900 flex items-center gap-2 mb-4">
                 <BookMarked className="h-5 w-5 text-primary" />
                 {tf("importantLinks")}
@@ -450,32 +451,32 @@ export default function HomePage() {
                   { name_en: "Kishor Batayon", name_bn: "কিশোর বাতায়ন", url: "http://konnect.edu.bd" },
                 ].map((link, i) => (
                   <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 rounded-xl bg-[#f0fdf4] px-4 py-2.5 border border-green-100 transition-all hover:border-green-300 hover:bg-green-50 group"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-4 py-2.5 border border-primary/20 transition-all hover:border-primary/40 hover:bg-primary/5 group"
                   >
                     <div className="flex items-center gap-2.5 truncate">
                       <Link2 className="h-3.5 w-3.5 text-primary shrink-0 -rotate-45" />
-                      <span className="text-sm font-semibold text-slate-700 group-hover:text-green-800 transition-colors truncate">
+                      <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors truncate">
                         {locale === "bn" ? link.name_bn : link.name_en}
                       </span>
                     </div>
-                    <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-[10px] sm:text-xs font-bold text-green-700 ring-1 ring-green-200 group-hover:bg-green-100 transition-colors">
+                    <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-[10px] sm:text-xs font-bold text-primary ring-1 ring-primary/30 group-hover:bg-primary/15 transition-colors">
                       {locale === "bn" ? "ভিজিট করুন" : "Visit"}
                     </span>
                   </a>
                 ))}
               </div>
             </section>
+          </div>
         </div>
-
-      </div>
+      </section>
     </main>
   );
 }
 
 function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: LucideIcon; color: string }) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-md shadow-green-100 ring-1 ring-green-100 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-green-100">
-      <div className="absolute -right-4 -top-4 rounded-full bg-green-50 p-6 transition-transform duration-500 group-hover:scale-150">
+    <div className="group relative overflow-hidden rounded-2xl bg-white p-6 shadow-md shadow-primary/10 ring-1 ring-primary/20 transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-primary/10">
+      <div className="absolute -right-4 -top-4 rounded-full bg-primary/5 p-6 transition-transform duration-500 group-hover:scale-150">
         <Icon className={`h-8 w-8 opacity-20 ${color}`} />
       </div>
       <div className="relative z-10">
