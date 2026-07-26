@@ -190,10 +190,10 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
 
       {/* Main Navbar */}
       <div className={`w-full transition-all duration-300 relative z-10 bg-[#F5F7FA] border-b border-slate-200 ${scrolled ? "shadow-sm py-2" : "py-3 lg:py-4"}`}>
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
+        <div className="mx-auto flex w-full max-w-[96%] items-center justify-between px-4 sm:px-6 lg:px-8 gap-4">
           
           {/* Logo (Left) */}
-          <div className="flex-1 flex justify-start items-center min-w-0">
+          <div className="flex justify-start items-center min-w-0 shrink-0 max-w-[30%]">
             <Link href="/" className="flex items-center gap-3 group">
               {institution?.logo_url ? (
                 <div className={`relative shrink-0 overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-slate-100 group-hover:ring-primary/20 transition-all ${scrolled ? "h-10 w-10 sm:h-12 sm:w-12" : "h-12 w-12 sm:h-14 sm:w-14"}`}>
@@ -277,7 +277,7 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
           </nav>
 
           {/* Right Section (Portal Login) */}
-          <div className="flex shrink-0 justify-end items-center gap-4">
+          <div className="flex justify-end items-center gap-4 shrink-0">
             <a 
               href={portalUrl} 
               target="_blank" 

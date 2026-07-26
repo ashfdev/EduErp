@@ -159,10 +159,9 @@ export default function HomePage() {
       {/* ── About Institution + Chairman Message ── */}
       <section className="bg-slate-50 py-12 sm:py-16 overflow-hidden relative">
         <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-
-            {/* About Institution (2/3) */}
-            <section className="lg:col-span-2 flex flex-col sm:justify-center relative sm:min-h-[550px] gap-0">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+            {/* About Institution (3/4) */}
+            <section className="lg:col-span-3 flex flex-col sm:justify-center relative sm:min-h-[550px] gap-0">
               {/* Background Image on Left */}
               <div className="relative w-full aspect-video sm:absolute sm:left-0 sm:top-1/2 sm:-translate-y-1/2 sm:w-[55%] sm:aspect-[5/6] rounded-2xl overflow-hidden shadow-sm">
                 <Image
@@ -174,8 +173,8 @@ export default function HomePage() {
                 <div className="absolute inset-0 bg-slate-900/10" />
               </div>
 
-              {/* Overlapping White Card */}
-              <div className="relative flex flex-col justify-center sm:ml-[45%] bg-white p-8 sm:p-12 min-h-[350px] sm:min-h-[420px] rounded-2xl shadow-xl border border-slate-100 sm:my-8 sm:mr-4 z-10 -mt-12 mx-4 sm:mx-0">
+              {/* Overlapping Card */}
+              <div className="relative flex flex-col justify-center sm:ml-[45%] bg-white p-8 sm:p-12 sm:pr-16 lg:pr-24 min-h-[300px] sm:min-h-[320px] rounded-2xl shadow-[0_20px_50px_rgba(29,78,216,0.08)] border border-blue-50 sm:my-8 sm:-mr-8 lg:-mr-20 z-10 -mt-12 mx-4 sm:mx-0 hover:shadow-[0_20px_50px_rgba(29,78,216,0.12)] transition-shadow duration-300">
                 <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 mb-6 inline-block relative self-start">
                   {tf("aboutUs")}
                   <span className="absolute -bottom-2 left-0 h-1 w-12 bg-primary"></span>
@@ -184,7 +183,7 @@ export default function HomePage() {
                   {institution?.established_text || "Our institution is committed to providing quality education, nurturing young minds, and building a bright future for our students. We believe in holistic development and academic excellence."}
                 </p>
                 <div className="mt-auto self-start pt-4">
-                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold rounded-full px-6 transition-all">
+                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold rounded-full px-6 transition-all shadow-sm">
                     <Link href="/about">{t("readMore")}</Link>
                   </Button>
                 </div>
@@ -194,26 +193,29 @@ export default function HomePage() {
             {/* Chairman Message (1/3) - Half Circle */}
             <section className="flex flex-col justify-center items-end relative min-h-[500px]">
               {/* Perfect half-circle sticking to the right edge */}
-              <div className="bg-white shadow-[[-15px_0_30px_rgba(0,0,0,0.05)]] border-y border-l border-slate-100 flex flex-col items-center justify-center text-center
+              <div className="bg-slate-900 shadow-[[-15px_0_30px_rgba(0,0,0,0.2)]] border-y border-l border-slate-800 flex flex-col items-center justify-center text-center
                               w-[350px] sm:w-[400px] lg:w-[450px] 
                               h-[700px] sm:h-[800px] lg:h-[900px] rounded-l-full
-                              absolute top-1/2 -translate-y-1/2 -right-4 sm:-right-6 lg:-right-8 z-10">
+                              absolute top-1/2 -translate-y-1/2 -right-12 sm:-right-20 lg:-right-32 z-10">
                 
+                {/* Extension block to seamlessly cover the white gap on ultra-wide monitors */}
+                <div className="absolute inset-y-[-1px] left-[50%] w-[50vw] bg-slate-900 border-y border-slate-800 -z-10 hidden sm:block"></div>
+
                 {/* Content wrapper */}
-                <div className="w-[85%] sm:w-[80%] pr-4 sm:pr-8 pl-12 sm:pl-16 flex flex-col items-center">
+                <div className="w-[85%] sm:w-[85%] px-6 sm:px-12 flex flex-col items-center">
                   <div className="mb-6">
-                    <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full overflow-hidden border-4 border-primary/10 shadow-sm mx-auto">
+                    <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full overflow-hidden border-4 border-slate-800 shadow-sm mx-auto">
                        <Image src={institution?.logo_url || "https://picsum.photos/seed/chairman/200/200"} alt="Chairman" width={128} height={128} className="h-full w-full object-cover" />
                     </div>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">{locale === "bn" ? "সভাপতির বাণী" : "Chairman's Message"}</h3>
+                  <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">{locale === "bn" ? "সভাপতির বাণী" : "Chairman's Message"}</h3>
                   <p className="text-xs font-bold text-primary uppercase tracking-wider mb-6">Chairman Name</p>
-                  <p className="text-sm text-slate-600 line-clamp-6 mb-8 leading-relaxed">
+                  <p className="text-sm text-slate-300 line-clamp-6 mb-8 leading-relaxed">
                     {locale === "bn" 
                       ? "আমাদের শিক্ষা প্রতিষ্ঠানের ওয়েবসাইটে আপনাকে স্বাগতম। আমরা চাই শিক্ষার্থীরা স্কুল থেকে বেরিয়ে এসে একজন ভালো মানুষ হিসেবে পরিণত হবে।" 
                       : "Welcome to our institution's website. Our goal is to provide quality education and nurture students to become great human beings."}
                   </p>
-                  <Button asChild className="bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full text-sm font-bold shadow-sm transition-all px-6 h-11">
+                  <Button asChild className="bg-primary text-white hover:bg-primary/90 rounded-full text-sm font-bold shadow-sm transition-all px-6 h-11">
                     <Link href="/about/chairman_message">{t("readMore")}</Link>
                   </Button>
                 </div>
