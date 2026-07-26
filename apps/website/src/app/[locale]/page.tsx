@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
 import Image from "next/image";
@@ -59,11 +59,38 @@ export default function HomePage() {
     fetchContent<StaticPageContent>("/pages/principal_message").then(setPrincipalMessage).catch(() => { });
   }, []);
 
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-slide for Hero Banner
   useEffect(() => {
-    if (sliders.length < 2) return;
-    const interval = setInterval(() => setSlideIndex((i) => (i + 1) % sliders.length), 6000);
-    return () => clearInterval(interval);
+    if (sliders.length > 1) {
+      const interval = setInterval(() => {
+        setSlideIndex((prev) => (prev + 1) % sliders.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
   }, [sliders.length]);
+
+  // Auto-slide for Directors' Messages
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (messagesScrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = messagesScrollRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 10) {
+          messagesScrollRef.current.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          messagesScrollRef.current.scrollBy({ left: 500, behavior: "smooth" });
+        }
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const scrollMessages = (direction: "left" | "right") => {
+    if (messagesScrollRef.current) {
+      messagesScrollRef.current.scrollBy({ left: direction === "left" ? -500 : 500, behavior: "smooth" });
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -207,17 +234,17 @@ export default function HomePage() {
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">{locale === "bn" ? "স্কুল পরিচালকদের বাণী" : "Directors' Messages"}</h2>
                 <div className="hidden sm:flex gap-2">
-                   <button className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
+                   <button onClick={() => scrollMessages("left")} className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
                      <ArrowRight className="h-4 w-4 rotate-180" />
                    </button>
-                   <button className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
+                   <button onClick={() => scrollMessages("right")} className="h-8 w-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-primary hover:text-white transition-colors">
                      <ArrowRight className="h-4 w-4" />
                    </button>
                 </div>
               </div>
               
               {/* Slider Container (Horizontal Flex with snap) */}
-              <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 hide-scrollbar pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div ref={messagesScrollRef} className="flex overflow-x-auto snap-x snap-mandatory gap-6 hide-scrollbar pb-6 -mx-4 px-4 sm:mx-0 sm:px-0">
                  {/* Card 1: Principal */}
                  <div className="w-[85vw] sm:w-[480px] lg:w-[500px] min-h-[450px] shrink-0 snap-center bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-100 flex flex-col gap-6">
                     <div className="flex gap-5">
