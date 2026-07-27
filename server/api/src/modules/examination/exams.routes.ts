@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES, MARK_VIEW_ROLES } from "../../lib/roles";
-import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, examSessionSchema, examMarkComponentsSchema } from "@education-erp/validators";
+import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, examSessionSchema, examMarkComponentsSchema, bulkApplyMarkCompositionTemplateSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
 
@@ -362,6 +362,79 @@ examsRouter.put(
       orderBy: { display_order: "asc" },
     });
     res.json({ success: true, data: components });
+  }),
+);
+
+// Applies one saved MarkCompositionTemplate to several subjects at once —
+// each subject's own total must exactly match the template's own total
+// (same hard rule as the single-subject route above) or it's skipped with
+// a reason, never force-applied; a template's items are always MANUAL/
+// ATTENDANCE_PERCENTAGE only (enforced at the template-item validator
+// level), so there's no source_exams to carry over here.
+examsRouter.put(
+  "/:id/subject-config/bulk-mark-components",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = bulkApplyMarkCompositionTemplateSchema.parse(req.body);
+
+    const exam = await prisma.exam.findUnique({ where: { id } });
+    if (!exam) throw notFound("Exam not found");
+    if (exam.status !== "DRAFT" && exam.status !== "ACTIVE") {
+      throw badRequest("Mark composition can only be edited while the exam is Draft or Active");
+    }
+
+    const template = await prisma.markCompositionTemplate.findUnique({
+      where: { id: body.template_id },
+      include: { items: { orderBy: { display_order: "asc" } } },
+    });
+    if (!template) throw notFound("Template not found");
+    const templateTotal = Math.round(template.items.reduce((sum, it) => sum + it.max_marks, 0) * 100) / 100;
+
+    const configs = await prisma.examSubjectConfig.findMany({
+      where: { exam_id: id, subject_id: { in: body.subject_ids } },
+      include: { subject: { select: { name_en: true } } },
+    });
+    const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
+
+    const applied: { subject_id: string; subject_name: string }[] = [];
+    const skipped: { subject_id: string; subject_name: string; reason: string }[] = [];
+
+    for (const subjectId of body.subject_ids) {
+      const config = configBySubject.get(subjectId);
+      if (!config) {
+        skipped.push({ subject_id: subjectId, subject_name: subjectId, reason: "Subject is not configured for this exam" });
+        continue;
+      }
+      const subjectTotal = config.full_marks_theory + config.full_marks_practical;
+      if (Math.abs(templateTotal - subjectTotal) > 0.01) {
+        skipped.push({
+          subject_id: subjectId,
+          subject_name: config.subject.name_en,
+          reason: `Template sums to ${templateTotal}, subject total is ${subjectTotal}`,
+        });
+        continue;
+      }
+      await prisma.$transaction([
+        prisma.examMarkComponent.deleteMany({ where: { exam_id: id, subject_id: subjectId } }),
+        ...template.items.map((it, i) =>
+          prisma.examMarkComponent.create({
+            data: {
+              exam_id: id,
+              subject_id: subjectId,
+              key: it.key,
+              label: it.label,
+              max_marks: it.max_marks,
+              source_type: it.source_type,
+              display_order: it.display_order ?? i,
+            },
+          }),
+        ),
+      ]);
+      applied.push({ subject_id: subjectId, subject_name: config.subject.name_en });
+    }
+
+    res.json({ success: true, data: { applied, skipped } });
   }),
 );
 

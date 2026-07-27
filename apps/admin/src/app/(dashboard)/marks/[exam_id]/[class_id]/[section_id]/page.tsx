@@ -235,9 +235,13 @@ export default function MarkEntryGridPage() {
         <div className="flex gap-3">
           <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
           {!!klass?.groups?.length && (
-            <select className="rounded-md border px-3 py-2 text-sm" value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-              <option value="">All Groups</option>
-              {klass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+            <select
+              className="rounded-md border-2 border-primary/40 px-3 py-2 text-sm font-medium"
+              value={groupFilter}
+              onChange={(e) => setGroupFilter(e.target.value)}
+            >
+              <option value="">Group: All Groups</option>
+              {klass.groups.map((g) => <option key={g.id} value={g.id}>Group: {g.name_en}</option>)}
             </select>
           )}
         </div>

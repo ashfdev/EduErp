@@ -70,13 +70,22 @@ export default function MyMarkEntryPage() {
     return true;
   });
   const selectedClass = classes?.find((c) => c.id === classId);
+  const hasGroups = !!selectedClass?.groups?.length;
+
+  // Reserves a grid column for the Group select whenever it's actually
+  // shown, instead of letting a fixed 3/5-column grid wrap it onto its own
+  // orphaned row below the other filters — a real, confirmed reason this
+  // filter was hard to notice even though it was always functionally there.
+  const gridColsClass = isUniversity
+    ? hasGroups ? "grid-cols-6" : "grid-cols-5"
+    : hasGroups ? "grid-cols-4" : "grid-cols-3";
 
   return (
     <PageWrapper>
       <PageHeader title={t("title")} subtitle={t("subtitle")} breadcrumbs={[{ label: "Marks" }]} />
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div className={`grid gap-4 ${isUniversity ? "grid-cols-5" : "grid-cols-3"}`}>
+          <div className={`grid gap-4 ${gridColsClass}`}>
             <select className="rounded-md border px-3 py-2 text-sm" value={examId} onChange={(e) => setExamId(e.target.value)}>
               <option value="">{t("selectExam")}</option>
               {exams?.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -109,10 +118,14 @@ export default function MyMarkEntryPage() {
               <option value="">{t("selectSection")}</option>
               {selectedClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            {!!selectedClass?.groups?.length && (
-              <select className="rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                <option value="">All Groups</option>
-                {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+            {hasGroups && (
+              <select
+                className="rounded-md border-2 border-primary/40 px-3 py-2 text-sm font-medium"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+              >
+                <option value="">Group: All Groups</option>
+                {selectedClass!.groups!.map((g) => <option key={g.id} value={g.id}>Group: {g.name_en}</option>)}
               </select>
             )}
           </div>

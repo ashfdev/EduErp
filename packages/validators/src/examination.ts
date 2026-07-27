@@ -80,6 +80,12 @@ export type ExamMarkComponentInput = z.infer<typeof examMarkComponentSchema>;
 
 export const examMarkComponentsSchema = z.array(examMarkComponentSchema).max(20);
 
+export const bulkApplyMarkCompositionTemplateSchema = z.object({
+  subject_ids: z.array(z.string().min(1)).min(1),
+  template_id: z.string().min(1),
+});
+export type BulkApplyMarkCompositionTemplateInput = z.infer<typeof bulkApplyMarkCompositionTemplateSchema>;
+
 export const submitMarksSchema = z.object({
   exam_id: z.string().min(1),
   entries: z.array(

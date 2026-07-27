@@ -224,6 +224,51 @@ export default function ExamDetailPage() {
   const markCompSubjectTotal = markCompSubject ? markCompSubject.full_marks_theory + markCompSubject.full_marks_practical : 0;
   const markCompDraftTotal = Math.round(markCompDraft.reduce((sum, c) => sum + (c.max_marks || 0), 0) * 100) / 100;
 
+  // Bulk-apply a saved template to several subjects at once — the earlier
+  // per-subject "Apply Template" dropdown only ever pre-filled one subject's
+  // own dialog draft; this is a real, separate bulk action against the
+  // backend, not a client-side loop over the single-subject save route.
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
+  const [bulkTemplateId, setBulkTemplateId] = useState("");
+
+  function toggleBulkSelected(subjectId: string, checked: boolean) {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(subjectId);
+      else next.delete(subjectId);
+      return next;
+    });
+  }
+
+  const allVisibleSelected = visibleConfigs.length > 0 && visibleConfigs.every((c) => bulkSelected.has(c.subject_id));
+
+  const bulkApplyMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/exams/${id}/subject-config/bulk-mark-components`, {
+        subject_ids: [...bulkSelected],
+        template_id: bulkTemplateId,
+      }),
+    onSuccess: (res) => {
+      const { applied, skipped } = res.data.data as {
+        applied: { subject_id: string; subject_name: string }[];
+        skipped: { subject_id: string; subject_name: string; reason: string }[];
+      };
+      if (applied.length) toast.success(`Applied to ${applied.length} subject${applied.length === 1 ? "" : "s"}: ${applied.map((a) => a.subject_name).join(", ")}`);
+      if (skipped.length) {
+        toast.error(
+          `Skipped ${skipped.length} subject${skipped.length === 1 ? "" : "s"}: ${skipped.map((s) => `${s.subject_name} (${s.reason})`).join("; ")}`,
+          { duration: 10000 },
+        );
+      }
+      setBulkTemplateOpen(false);
+      setBulkTemplateId("");
+      setBulkSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["exams", id] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to bulk-apply template"),
+  });
+
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   const transition = STATUS_TRANSITIONS[exam.status];
@@ -299,9 +344,41 @@ export default function ExamDetailPage() {
 
       <Card>
         <CardContent className="pt-6">
+          {!!templates?.length && canEditMarkComposition && (
+            <div className="mb-3 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!bulkSelected.size}
+                onClick={() => setBulkTemplateOpen(true)}
+              >
+                Bulk Apply Template ({bulkSelected.size} selected)
+              </Button>
+              {!!bulkSelected.size && (
+                <Button size="sm" variant="ghost" onClick={() => setBulkSelected(new Set())}>
+                  Clear selection
+                </Button>
+              )}
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    onCheckedChange={(v) =>
+                      setBulkSelected((prev) => {
+                        const next = new Set(prev);
+                        for (const c of visibleConfigs) {
+                          if (v === true) next.add(c.subject_id);
+                          else next.delete(c.subject_id);
+                        }
+                        return next;
+                      })
+                    }
+                  />
+                </TableHead>
                 <TableHead>Subject</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Group</TableHead>
@@ -315,6 +392,12 @@ export default function ExamDetailPage() {
                 const markCompCount = (exam.mark_components ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
                 return (
                   <TableRow key={c.subject_id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={bulkSelected.has(c.subject_id)}
+                        onCheckedChange={(v) => toggleBulkSelected(c.subject_id, v === true)}
+                      />
+                    </TableCell>
                     <TableCell>{c.subject.name_en}</TableCell>
                     <TableCell className="text-muted-foreground">{c.subject.class.name_en}</TableCell>
                     <TableCell className="text-muted-foreground">{c.subject.group?.name_en ?? "—"}</TableCell>
@@ -335,6 +418,36 @@ export default function ExamDetailPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={bulkTemplateOpen} onOpenChange={setBulkTemplateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Apply Template — {bulkSelected.size} subject{bulkSelected.size === 1 ? "" : "s"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Applies the chosen template&apos;s parts to every selected subject whose own total matches the
+            template&apos;s total exactly. Any subject whose total doesn&apos;t match is skipped, not
+            force-applied — you&apos;ll see which ones and why after.
+          </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Template</Label>
+            <select className="w-full rounded-md border px-2 py-1.5 text-sm" value={bulkTemplateId} onChange={(e) => setBulkTemplateId(e.target.value)}>
+              <option value="">Choose a saved template…</option>
+              {templates?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.items.reduce((sum, it) => sum + it.max_marks, 0)} marks)
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkTemplateOpen(false)}>Cancel</Button>
+            <Button onClick={() => bulkApplyMutation.mutate()} disabled={!bulkTemplateId || bulkApplyMutation.isPending}>
+              {bulkApplyMutation.isPending ? "Applying..." : "Apply"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!markCompSubjectId} onOpenChange={(open) => !open && setMarkCompSubjectId(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
