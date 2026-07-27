@@ -22,11 +22,25 @@ import { computeAverageOfExamsFetch } from "../../utils/grade-component-average-
 export const marksRouter = Router();
 marksRouter.use(authenticate);
 
+// A student can end up in a class that defines Groups without ever being
+// assigned one (a real, observed data state, not hypothetical) — their own
+// group_id genuinely is null, so a null-group ResultPublication legitimately
+// matches them via the same comparison portal.routes.ts's own result lookup
+// already uses (`pub.group_id === (student.group_id ?? null)`). Used both to
+// decide whether getExamUnits() needs an extra "no group" unit for a class,
+// and to let approve/publish accept an omitted group_id specifically for
+// that unit — never for a class where every student already has a group.
+async function hasUngroupedActiveStudents(classId: string): Promise<boolean> {
+  return !!(await prisma.student.findFirst({ where: { current_class_id: classId, deleted_at: null, group_id: null } }));
+}
+
 // A class with Groups defined has no meaningful "whole class" publish unit —
-// group_id: null would create a ResultPublication row no student's own
-// group-scoped result lookup could ever match (a silent no-op publish).
-// Require an explicit, valid group_id whenever the class actually has
-// Groups; omitted group_id is only valid for a class with none.
+// group_id: null would create a ResultPublication row no GROUPED student's
+// own group-scoped result lookup could ever match (a silent no-op publish
+// for them). Require an explicit, valid group_id whenever the class has
+// Groups AND every student in it actually has one assigned; omitted
+// group_id is also valid when the class has ungrouped students to cover —
+// that's exactly the "no group" unit getExamUnits() adds for this case.
 async function assertGroupIdForApproveOrPublish(classId: string, groupId?: string) {
   if (groupId) {
     const group = await prisma.group.findFirst({ where: { id: groupId, class_id: classId, is_active: true } });
@@ -34,7 +48,7 @@ async function assertGroupIdForApproveOrPublish(classId: string, groupId?: strin
     return;
   }
   const hasGroups = await prisma.group.findFirst({ where: { class_id: classId, is_active: true } });
-  if (hasGroups) {
+  if (hasGroups && !(await hasUngroupedActiveStudents(classId))) {
     throw badRequest("This class has Groups/Streams — select a group to approve/publish, or use Publish Whole Campus once every group is ready");
   }
 }
@@ -58,11 +72,26 @@ export async function getExamUnits(examId: string): Promise<ExamUnit[]> {
   for (const g of groups) {
     groupsByClass.set(g.class_id, [...(groupsByClass.get(g.class_id) ?? []), g.id]);
   }
+  // Students left with no group assigned in a class that otherwise defines
+  // groups still need their own completable/publishable unit — without
+  // this, their marks can be entered but structurally never approved or
+  // published (no unit's student query ever matches a null group_id
+  // alongside real ones), a real gap this closes, not a display nicety.
+  const ungroupedByClass = new Set(
+    (
+      await prisma.student.findMany({
+        where: { current_class_id: { in: classIds }, deleted_at: null, group_id: null },
+        select: { current_class_id: true },
+        distinct: ["current_class_id"],
+      })
+    ).map((s) => s.current_class_id),
+  );
   const units: ExamUnit[] = [];
   for (const classId of classIds) {
     const classGroups = groupsByClass.get(classId);
     if (classGroups && classGroups.length > 0) {
       for (const groupId of classGroups) units.push({ class_id: classId, group_id: groupId });
+      if (ungroupedByClass.has(classId)) units.push({ class_id: classId, group_id: null });
     } else {
       units.push({ class_id: classId, group_id: null });
     }
@@ -548,8 +577,12 @@ marksRouter.post(
     await assertGroupIdForApproveOrPublish(classId, groupId);
 
     const subjects = await prisma.subject.findMany({ where: { class_id: classId, is_active: true } });
+    // Explicit group_id (never a truthy-guard omission) — groupId being
+    // undefined must mean "the no-group unit," matching only students whose
+    // own group_id really is null, not silently every student in the class
+    // once a class can have both real groups and a no-group unit at once.
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      where: { current_class_id: classId, deleted_at: null, group_id: groupId ?? null },
     });
 
     const entries = await prisma.markEntry.findMany({
@@ -607,6 +640,11 @@ marksRouter.get(
     const classById = new Map(classes.map((c) => [c.id, c]));
     const groupById = new Map(groups.map((g) => [g.id, g]));
     const pubByKey = new Map(publications.map((p) => [`${p.class_id}:${p.group_id ?? ""}`, p]));
+    // Distinguishes "this class has no Groups at all" (group_name: null,
+    // renders as a plain class row) from "this is the no-group unit inside
+    // an otherwise-grouped class" (group_name: "No Group", so it doesn't
+    // silently look like a duplicate of the plain-class case).
+    const classesWithGroups = new Set(units.filter((u) => u.group_id !== null).map((u) => u.class_id));
 
     // One dashboard row per (class, group) unit — a class with no Groups is
     // a single row; a class with N groups is N independent rows, each with
@@ -617,8 +655,12 @@ marksRouter.get(
           await prisma.subject.findMany({ where: { class_id: u.class_id, is_active: true } }),
           u.group_id,
         );
+        // Explicit group_id (u.group_id is already string | null) — a class
+        // can now have both real groups and a "no group" unit at once, so
+        // omitting the filter on a falsy group_id would wrongly match every
+        // student in the class, not just the ungrouped ones.
         const students = await prisma.student.findMany({
-          where: { current_class_id: u.class_id, deleted_at: null, ...(u.group_id && { group_id: u.group_id }) },
+          where: { current_class_id: u.class_id, deleted_at: null, group_id: u.group_id },
         });
         const [expectedCount, entries] = await Promise.all([
           prisma.studentSubject.count({
@@ -635,7 +677,7 @@ marksRouter.get(
           class_id: u.class_id,
           class_name: classById.get(u.class_id)?.name_en ?? "",
           group_id: u.group_id,
-          group_name: u.group_id ? (groupById.get(u.group_id)?.name_en ?? "") : null,
+          group_name: u.group_id ? (groupById.get(u.group_id)?.name_en ?? "") : classesWithGroups.has(u.class_id) ? "No Group" : null,
           student_count: students.length,
           expected_count: expectedCount,
           submitted_count: entries.length,
@@ -675,8 +717,10 @@ marksRouter.post(
     if (!exam) throw notFound("Exam not found");
 
     const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: classId, is_active: true } }), groupId);
+    // See the identical note in /approve above — explicit group_id, never a
+    // truthy-guard omission.
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      where: { current_class_id: classId, deleted_at: null, group_id: groupId ?? null },
     });
     const unapproved = await prisma.markEntry.findFirst({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
@@ -724,7 +768,11 @@ marksRouter.post(
     // a stale "not found" long after the result actually went live.
     await invalidateCacheNamespace("result-lookup");
 
-    const perStudent = (await computeClassResults(examId, classId)).filter((p) => (groupId ? p.student.group_id === groupId : true));
+    // Explicit comparison against the resolved group_id (never a truthy
+    // "everyone matches" fallback) — correct both for a class with no
+    // groups at all (every student's own group_id is null too) and for the
+    // new "no group" unit inside an otherwise-grouped class.
+    const perStudent = (await computeClassResults(examId, classId)).filter((p) => p.student.group_id === (groupId ?? null));
     const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
     const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
     const guardianById = new Map(guardians.map((g) => [g.id, g]));
@@ -770,8 +818,10 @@ marksRouter.post(
     for (const unit of pending) {
       try {
         const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: unit.class_id, is_active: true } }), unit.group_id);
+        // See the identical note on the dashboard route above — explicit
+        // group_id, never a truthy-guard omission.
         const students = await prisma.student.findMany({
-          where: { current_class_id: unit.class_id, deleted_at: null, ...(unit.group_id && { group_id: unit.group_id }) },
+          where: { current_class_id: unit.class_id, deleted_at: null, group_id: unit.group_id },
         });
         const unapproved = await prisma.markEntry.findFirst({
           where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
@@ -792,7 +842,8 @@ marksRouter.post(
           req,
         });
 
-        const perStudent = (await computeClassResults(examId, unit.class_id)).filter((p) => (unit.group_id ? p.student.group_id === unit.group_id : true));
+        // See the identical note in /publish above.
+        const perStudent = (await computeClassResults(examId, unit.class_id)).filter((p) => p.student.group_id === unit.group_id);
         const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
         const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
         const guardianById = new Map(guardians.map((g) => [g.id, g]));
