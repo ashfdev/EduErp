@@ -172,7 +172,10 @@
     "reasonLabel": "Reason",
     "submitRequest": "Submit Request",
     "correctionRequested": "Correction request submitted",
-    "correctionRequestFailed": "Failed to submit correction request"
+    "correctionRequestFailed": "Failed to submit correction request",
+    "componentAutoTitle": "{label}, auto-fetched (out of {max}) — edit to override",
+    "componentTitle": "{label}, out of {max}",
+    "componentTotalLabel": "={total}/{subjectTotal}"
   },
   "ptm": {
     "title": "Parent-Teacher Meetings",

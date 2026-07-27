@@ -11,7 +11,6 @@ interface Exam {
   name: string;
   status: string;
   academic_year: { label: string };
-  exam_type_config: { name: string };
 }
 
 export default function ResultsPage() {
@@ -34,7 +33,7 @@ export default function ResultsPage() {
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
                   <p className="font-medium">{e.name}</p>
-                  <p className="text-sm text-muted-foreground">{e.exam_type_config.name} · {e.academic_year.label}</p>
+                  <p className="text-sm text-muted-foreground">{e.academic_year.label}</p>
                 </div>
                 <StatusBadge status={e.status} />
               </CardContent>

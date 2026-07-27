@@ -33,7 +33,6 @@ const DOC_TYPE_SLUG: Partial<Record<DocumentType, string>> = {
   NOTICE: "notice",
   VISITOR_SLIP: "visitor-slip",
   ROUTINE: "routine",
-  COMBINED_RESULT: "combined-result",
 };
 
 const ONES = [

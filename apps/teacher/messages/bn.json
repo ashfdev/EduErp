@@ -172,7 +172,10 @@
     "reasonLabel": "কারণ",
     "submitRequest": "অনুরোধ জমা দিন",
     "correctionRequested": "সংশোধনের অনুরোধ জমা হয়েছে",
-    "correctionRequestFailed": "সংশোধনের অনুরোধ জমা দেওয়া যায়নি"
+    "correctionRequestFailed": "সংশোধনের অনুরোধ জমা দেওয়া যায়নি",
+    "componentAutoTitle": "{label}, স্বয়ংক্রিয়ভাবে আনা হয়েছে (সর্বোচ্চ {max}) — পরিবর্তন করতে সম্পাদনা করুন",
+    "componentTitle": "{label}, সর্বোচ্চ {max}",
+    "componentTotalLabel": "={total}/{subjectTotal}"
   },
   "ptm": {
     "title": "অভিভাবক-শিক্ষক সভা",

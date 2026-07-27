@@ -17,10 +17,6 @@ interface ResultSummary {
   overall_grade: string;
   has_failed: boolean;
 }
-interface ExamTypeOption {
-  id: string;
-  name: string;
-}
 interface AcademicYearOption {
   id: string;
   label: string;
@@ -35,16 +31,10 @@ function ResultsContent() {
   const { terms } = useInstitution();
   const t = useTranslations("results");
   const tCommon = useTranslations("common");
-  const [examTypeId, setExamTypeId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
 
   const showExamFilters = !terms.has_semesters;
 
-  const { data: examTypes } = useQuery<ExamTypeOption[]>({
-    queryKey: ["content", "exam-types"],
-    queryFn: async () => (await api.get("/api/content/exam-types")).data.data,
-    enabled: showExamFilters,
-  });
   const { data: academicYears } = useQuery<AcademicYearOption[]>({
     queryKey: ["content", "academic-years"],
     queryFn: async () => (await api.get("/api/content/academic-years")).data.data,
@@ -52,11 +42,11 @@ function ResultsContent() {
   });
 
   const { data, isLoading, isError, refetch } = useQuery<ResultSummary[]>({
-    queryKey: ["portal", "results", activeStudentId, examTypeId, academicYearId],
+    queryKey: ["portal", "results", activeStudentId, academicYearId],
     queryFn: async () =>
       (
         await api.get(`/api/portal/student/${activeStudentId}/results`, {
-          params: { exam_type_config_id: examTypeId || undefined, academic_year_id: academicYearId || undefined },
+          params: { academic_year_id: academicYearId || undefined },
         })
       ).data.data,
     enabled: !!activeStudentId,
@@ -83,14 +73,7 @@ function ResultsContent() {
       </div>
 
       {showExamFilters && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">Exam Type</label>
-            <select value={examTypeId} onChange={(e) => setExamTypeId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all">
-              <option value="">{t("anyExam")}</option>
-              {examTypes?.map((et) => <option key={et.id} value={et.id}>{et.name}</option>)}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 gap-4 p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">Academic Year</label>
             <select value={academicYearId} onChange={(e) => setAcademicYearId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all">

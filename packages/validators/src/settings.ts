@@ -94,18 +94,33 @@ export const gradingScaleSchema = z.object({
 });
 export type GradingScaleInput = z.infer<typeof gradingScaleSchema>;
 
-export const examTypeConfigSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  weight_in_annual: z.number().min(0).max(100),
-  allows_absent_marking: z.boolean(),
-  has_practical: z.boolean(),
-  has_viva: z.boolean(),
-  practical_marks_separate: z.boolean(),
-  is_board_exam: z.boolean(),
-  display_order: z.number().int(),
+// One row of a standalone, reusable Mark Composition Template (e.g. "SSC
+// Standard" = Theory 70/MCQ 20/Practical 10) — picked by name when
+// configuring a subject's mark composition for a specific exam, pre-filling
+// the draft (still adjustable before saving). source_type is deliberately
+// restricted to MANUAL/ATTENDANCE_PERCENTAGE — a reusable template
+// reapplied to a different exam/year must never silently point at a stale,
+// specific past exam, so AVERAGE_OF_EXAMS (which needs concrete exam ids)
+// is only ever configured directly on a real exam's mark component, never
+// pre-filled from a template.
+export const markCompositionTemplateItemSchema = z.object({
+  key: z
+    .string()
+    .min(1)
+    .max(40)
+    .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
+  label: z.string().min(1).max(100),
+  max_marks: z.number().min(0),
+  source_type: z.enum(["MANUAL", "ATTENDANCE_PERCENTAGE"]),
+  display_order: z.number().int().min(0).optional(),
 });
-export type ExamTypeConfigInput = z.infer<typeof examTypeConfigSchema>;
+export type MarkCompositionTemplateItemInput = z.infer<typeof markCompositionTemplateItemSchema>;
+
+export const markCompositionTemplateSchema = z.object({
+  name: z.string().min(1).max(100),
+  items: z.array(markCompositionTemplateItemSchema).max(20),
+});
+export type MarkCompositionTemplateInput = z.infer<typeof markCompositionTemplateSchema>;
 
 export const feeRulesSchema = z.object({
   late_fee_enabled: z.boolean(),

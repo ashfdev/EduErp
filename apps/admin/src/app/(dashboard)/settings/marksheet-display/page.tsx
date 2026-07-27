@@ -19,6 +19,7 @@ const GROUPS: { title: string; fields: { key: keyof MarksheetDisplaySettingsInpu
       { key: "show_attendance_info", label: "Show attendance info" },
       { key: "show_general_ability_table", label: "Show general ability table (Punctuality/Discipline/Sports/Co-curricular)" },
       { key: "show_published_date", label: "Show published date" },
+      { key: "show_mark_composition", label: "Show mark composition breakdown (Theory/MCQ/Practical/CT/Assignment/Attendance, when a subject uses it)" },
     ],
   },
   {

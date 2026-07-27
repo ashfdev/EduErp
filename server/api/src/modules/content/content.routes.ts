@@ -395,21 +395,6 @@ contentRouter.get(
   }),
 );
 
-// Public, read-only, id+name only — ExamTypeConfig/AcademicYear are
-// otherwise only exposed via authenticated /api/settings/* routes. Needed
-// so the public result-lookup page can offer an exam-type + year selector
-// for school/college/madrasah institutions without leaking anything beyond
-// the reusable template names admins already configured.
-contentRouter.get(
-  "/exam-types",
-  asyncHandler(async (_req, res) => {
-    const data = await cached(contentCacheKey("exam-types"), CONTENT_CACHE_TTL_SECONDS, async () =>
-      prisma.examTypeConfig.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { display_order: "asc" } }),
-    );
-    res.json({ success: true, data });
-  }),
-);
-
 contentRouter.get(
   "/academic-years",
   asyncHandler(async (_req, res) => {

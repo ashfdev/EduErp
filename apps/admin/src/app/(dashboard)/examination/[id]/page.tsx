@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SubjectConfig {
@@ -19,12 +19,16 @@ interface SubjectConfig {
   subject: { name_en: string; class: { name_en: string }; group: { name_en: string } | null };
 }
 
-interface ComponentConfig {
+type MarkComponentSourceType = "MANUAL" | "ATTENDANCE_PERCENTAGE" | "AVERAGE_OF_EXAMS";
+
+interface MarkComponent {
   id: string;
   subject_id: string;
   key: string;
   label: string;
   max_marks: number;
+  source_type: MarkComponentSourceType;
+  source_exams: { source_exam_id: string }[];
   display_order: number;
 }
 
@@ -33,14 +37,34 @@ interface Exam {
   name: string;
   status: string;
   subject_configs: SubjectConfig[];
-  component_configs: ComponentConfig[];
+  mark_components: MarkComponent[];
 }
 
-interface ComponentDraftRow {
+interface MarkComponentDraftRow {
   key: string;
   label: string;
   max_marks: number;
+  source_type: MarkComponentSourceType;
+  source_exam_ids: string[];
 }
+
+interface ExamOption {
+  id: string;
+  name: string;
+  academic_year: { label: string };
+}
+
+interface MarkCompositionTemplate {
+  id: string;
+  name: string;
+  items: { key: string; label: string; max_marks: number; source_type: "MANUAL" | "ATTENDANCE_PERCENTAGE" }[];
+}
+
+const SOURCE_TYPE_LABELS: Record<MarkComponentSourceType, string> = {
+  MANUAL: "Manual entry",
+  ATTENDANCE_PERCENTAGE: "Auto — Attendance %",
+  AVERAGE_OF_EXAMS: "Auto — average from specific exam(s)",
+};
 
 function slugifyKey(label: string): string {
   return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "component";
@@ -75,6 +99,20 @@ export default function ExamDetailPage() {
   const { data: exam } = useQuery<Exam>({
     queryKey: ["exams", id],
     queryFn: async () => (await api.get(`/api/exams/${id}`)).data.data,
+  });
+
+  // Candidate source exams for AVERAGE_OF_EXAMS — every other exam in the
+  // system (excluding this one), picked directly by name rather than by a
+  // shared "type" category.
+  const { data: allExams } = useQuery<ExamOption[]>({
+    queryKey: ["exams", "all"],
+    queryFn: async () => (await api.get("/api/exams")).data.data,
+  });
+  const otherExams = (allExams ?? []).filter((e) => e.id !== id);
+
+  const { data: templates } = useQuery<MarkCompositionTemplate[]>({
+    queryKey: ["settings", "mark-composition-templates"],
+    queryFn: async () => (await api.get("/api/settings/mark-composition-templates")).data.data,
   });
 
   const [configs, setConfigs] = useState<Record<string, SubjectConfig> | null>(null);
@@ -123,42 +161,68 @@ export default function ExamDetailPage() {
     },
   });
 
-  function updateConfig(subjectId: string, patch: Partial<SubjectConfig>) {
-    setConfigs({ ...effectiveConfigs, [subjectId]: { ...effectiveConfigs[subjectId]!, ...patch } });
+  // Total Marks maps directly onto full_marks_theory; full_marks_practical
+  // stays at whatever it already is (0 for any subject using the simple
+  // flow) — the dual Theory/Practical split still exists at the schema/API
+  // level for a future BD-board-specific screen, just not surfaced here.
+  function updateTotalMarks(subjectId: string, value: number) {
+    setConfigs({ ...effectiveConfigs, [subjectId]: { ...effectiveConfigs[subjectId]!, full_marks_theory: value } });
+  }
+  function updatePassMarks(subjectId: string, value: number) {
+    setConfigs({ ...effectiveConfigs, [subjectId]: { ...effectiveConfigs[subjectId]!, pass_marks_combined: value } });
   }
 
-  const [componentSubjectId, setComponentSubjectId] = useState<string | null>(null);
-  const [componentDraft, setComponentDraft] = useState<ComponentDraftRow[]>([]);
+  const [markCompSubjectId, setMarkCompSubjectId] = useState<string | null>(null);
+  const [markCompDraft, setMarkCompDraft] = useState<MarkComponentDraftRow[]>([]);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [confirmTransition, setConfirmTransition] = useState(false);
+  const canEditMarkComposition = exam?.status === "DRAFT" || exam?.status === "ACTIVE";
 
-  function openComponentEditor(subjectId: string) {
-    const existing = (exam?.component_configs ?? [])
+  function openMarkCompositionEditor(subjectId: string) {
+    const existing = (exam?.mark_components ?? [])
       .filter((c) => c.subject_id === subjectId)
       .sort((a, b) => a.display_order - b.display_order)
-      .map((c) => ({ key: c.key, label: c.label, max_marks: c.max_marks }));
-    setComponentDraft(existing);
-    setComponentSubjectId(subjectId);
+      .map((c) => ({ key: c.key, label: c.label, max_marks: c.max_marks, source_type: c.source_type, source_exam_ids: c.source_exams.map((se) => se.source_exam_id) }));
+    setMarkCompDraft(existing);
+    setMarkCompSubjectId(subjectId);
   }
 
-  const saveComponentsMutation = useMutation({
+  function updateMarkCompRow(i: number, patch: Partial<MarkComponentDraftRow>) {
+    setMarkCompDraft((prev) => prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  }
+
+  function toggleSourceExam(i: number, examId: string, checked: boolean) {
+    setMarkCompDraft((prev) =>
+      prev.map((row, idx) =>
+        idx === i
+          ? { ...row, source_exam_ids: checked ? [...row.source_exam_ids, examId] : row.source_exam_ids.filter((eid) => eid !== examId) }
+          : row,
+      ),
+    );
+  }
+
+  function applyTemplate(templateId: string) {
+    const template = templates?.find((t) => t.id === templateId);
+    if (!template) return;
+    setMarkCompDraft(template.items.map((it) => ({ ...it, source_exam_ids: [] })));
+  }
+
+  const saveMarkComponentsMutation = useMutation({
     mutationFn: () =>
-      api.put(`/api/exams/${id}/subject-config/${componentSubjectId}/components`, {
-        components: componentDraft.map((c, i) => ({ ...c, display_order: i })),
+      api.put(`/api/exams/${id}/subject-config/${markCompSubjectId}/mark-components`, {
+        components: markCompDraft.map((c, i) => ({ ...c, display_order: i })),
       }),
     onSuccess: () => {
-      toast.success("Components saved");
-      setComponentSubjectId(null);
+      toast.success("Mark composition saved");
+      setMarkCompSubjectId(null);
       queryClient.invalidateQueries({ queryKey: ["exams", id] });
     },
-    onError: (err: unknown) => {
-      const message = extractErrorMessage(err) ?? "Failed to save components";
-      toast.error(message);
-    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save mark composition"),
   });
 
-  const componentDraftTotal = componentDraft.reduce((sum, c) => sum + (c.max_marks || 0), 0);
-  const componentSubject = Object.values(effectiveConfigs).find((c) => c.subject_id === componentSubjectId);
+  const markCompSubject = Object.values(effectiveConfigs).find((c) => c.subject_id === markCompSubjectId);
+  const markCompSubjectTotal = markCompSubject ? markCompSubject.full_marks_theory + markCompSubject.full_marks_practical : 0;
+  const markCompDraftTotal = Math.round(markCompDraft.reduce((sum, c) => sum + (c.max_marks || 0), 0) * 100) / 100;
 
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
@@ -241,30 +305,24 @@ export default function ExamDetailPage() {
                 <TableHead>Subject</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Group</TableHead>
-                <TableHead>Full (Theory)</TableHead>
-                <TableHead>Full (Practical)</TableHead>
-                <TableHead>Pass (Theory)</TableHead>
-                <TableHead>Pass (Practical)</TableHead>
                 <TableHead>Total Marks</TableHead>
-                <TableHead>Theory Breakdown</TableHead>
+                <TableHead>Pass Marks</TableHead>
+                <TableHead>Mark Composition</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleConfigs.map((c) => {
-                const componentCount = (exam.component_configs ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
+                const markCompCount = (exam.mark_components ?? []).filter((cc) => cc.subject_id === c.subject_id).length;
                 return (
                   <TableRow key={c.subject_id}>
                     <TableCell>{c.subject.name_en}</TableCell>
                     <TableCell className="text-muted-foreground">{c.subject.class.name_en}</TableCell>
                     <TableCell className="text-muted-foreground">{c.subject.group?.name_en ?? "—"}</TableCell>
-                    <TableCell><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateConfig(c.subject_id, { full_marks_theory: Number(e.target.value) })} /></TableCell>
-                    <TableCell><Input type="number" className="h-8 w-24" value={c.full_marks_practical} onChange={(e) => updateConfig(c.subject_id, { full_marks_practical: Number(e.target.value) })} /></TableCell>
-                    <TableCell><Input type="number" className="h-8 w-24" value={c.pass_marks_theory} onChange={(e) => updateConfig(c.subject_id, { pass_marks_theory: Number(e.target.value) })} /></TableCell>
-                    <TableCell><Input type="number" className="h-8 w-24" value={c.pass_marks_practical} onChange={(e) => updateConfig(c.subject_id, { pass_marks_practical: Number(e.target.value) })} /></TableCell>
-                    <TableCell className="font-medium">{c.full_marks_theory + c.full_marks_practical}</TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.full_marks_theory} onChange={(e) => updateTotalMarks(c.subject_id, Number(e.target.value))} /></TableCell>
+                    <TableCell><Input type="number" className="h-8 w-24" value={c.pass_marks_combined} onChange={(e) => updatePassMarks(c.subject_id, Number(e.target.value))} /></TableCell>
                     <TableCell>
-                      <Button size="sm" variant="outline" onClick={() => openComponentEditor(c.subject_id)}>
-                        {componentCount ? `${componentCount} component(s)` : "Plain theory mark"}
+                      <Button size="sm" variant="outline" onClick={() => openMarkCompositionEditor(c.subject_id)}>
+                        {markCompCount ? `${markCompCount} part(s)` : "Plain total"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -278,66 +336,126 @@ export default function ExamDetailPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!componentSubjectId} onOpenChange={(open) => !open && setComponentSubjectId(null)}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={!!markCompSubjectId} onOpenChange={(open) => !open && setMarkCompSubjectId(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Theory Mark Breakdown — {componentSubject?.subject.name_en}</DialogTitle>
+            <DialogTitle>Mark Composition — {markCompSubject?.subject.name_en}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Optionally split the theory mark into named components (assignment, quiz, mid-term, attendance, lab/viva,
-            etc.). Leave empty to keep a single plain theory mark. When set, the theory mark is always the sum of
-            these components.
+            Optionally split this subject&apos;s total ({markCompSubjectTotal} marks) into named, fixed-mark
+            parts (e.g. Theory 60, MCQ 20, Practical 20). Leave empty for a single plain total, exactly as
+            today. The parts must sum exactly to the subject&apos;s total. Teachers cannot enter more than
+            each part&apos;s own cap.
           </p>
 
-          <div className="space-y-2">
-            {componentDraft.map((row, i) => (
-              <div key={i} className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  {i === 0 && <Label className="text-xs">Label</Label>}
+          {!!templates?.length && canEditMarkComposition && (
+            <div className="flex items-center gap-2">
+              <Label className="text-xs shrink-0">Apply Template</Label>
+              <select className="rounded-md border px-2 py-1 text-sm" value="" onChange={(e) => e.target.value && applyTemplate(e.target.value)} disabled={!canEditMarkComposition}>
+                <option value="">Choose a saved template…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!canEditMarkComposition && (
+            <p className="text-sm text-amber-700">Mark composition can only be edited while the exam is Draft or Active.</p>
+          )}
+
+          <div className="space-y-3">
+            {markCompDraft.map((row, i) => (
+              <div key={i} className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center gap-2">
                   <Input
+                    className="flex-1"
+                    placeholder="Label (e.g. Theory, MCQ, Practical, CT, Attendance)"
                     value={row.label}
-                    placeholder="e.g. Assignment"
-                    onChange={(e) =>
-                      setComponentDraft((prev) => prev.map((r, idx) => (idx === i ? { ...r, label: e.target.value, key: slugifyKey(e.target.value) } : r)))
-                    }
+                    onChange={(e) => updateMarkCompRow(i, { label: e.target.value, key: slugifyKey(e.target.value) })}
+                    disabled={!canEditMarkComposition}
                   />
-                </div>
-                <div className="w-28 space-y-1">
-                  {i === 0 && <Label className="text-xs">Max Marks</Label>}
                   <Input
                     type="number"
-                    min={0}
-                    value={row.max_marks}
-                    onChange={(e) => setComponentDraft((prev) => prev.map((r, idx) => (idx === i ? { ...r, max_marks: Number(e.target.value) } : r)))}
+                    className="w-24"
+                    placeholder="Marks"
+                    value={row.max_marks || ""}
+                    onChange={(e) => updateMarkCompRow(i, { max_marks: Number(e.target.value) })}
+                    disabled={!canEditMarkComposition}
                   />
+                  <Button variant="outline" size="sm" onClick={() => setMarkCompDraft((prev) => prev.filter((_, idx) => idx !== i))} disabled={!canEditMarkComposition}>
+                    Remove
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setComponentDraft((prev) => prev.filter((_, idx) => idx !== i))}>
-                  Remove
-                </Button>
+
+                <div className="flex items-center gap-2 pl-1">
+                  <Label className="text-xs shrink-0">Source</Label>
+                  <select
+                    className="rounded-md border px-2 py-1 text-sm"
+                    value={row.source_type}
+                    onChange={(e) =>
+                      updateMarkCompRow(i, {
+                        source_type: e.target.value as MarkComponentSourceType,
+                        source_exam_ids: e.target.value === "AVERAGE_OF_EXAMS" ? row.source_exam_ids : [],
+                      })
+                    }
+                    disabled={!canEditMarkComposition}
+                  >
+                    {(Object.entries(SOURCE_TYPE_LABELS) as [MarkComponentSourceType, string][]).map(([v, label]) => (
+                      <option key={v} value={v}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                {row.source_type === "AVERAGE_OF_EXAMS" && (
+                  <div className="pl-1 space-y-1">
+                    <Label className="text-xs">Average from</Label>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto rounded-md border p-2">
+                      {otherExams.length === 0 && <p className="text-xs text-muted-foreground">No other exams exist yet.</p>}
+                      {otherExams.map((e) => (
+                        <label key={e.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+                          <Checkbox
+                            checked={row.source_exam_ids.includes(e.id)}
+                            onCheckedChange={(v) => toggleSourceExam(i, e.id, v === true)}
+                            disabled={!canEditMarkComposition}
+                          />
+                          {e.name} ({e.academic_year.label})
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
+
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setComponentDraft((prev) => [...prev, { key: `component_${prev.length + 1}`, label: "", max_marks: 0 }])}
+              onClick={() => setMarkCompDraft((prev) => [...prev, { key: `component_${prev.length + 1}`, label: "", max_marks: 0, source_type: "MANUAL", source_exam_ids: [] }])}
+              disabled={!canEditMarkComposition}
             >
-              + Add Component
+              + Add Part
             </Button>
+
+            {markCompDraft.length > 0 && (
+              <p className={`text-sm ${markCompDraftTotal !== markCompSubjectTotal ? "text-red-600" : "text-muted-foreground"}`}>
+                Total: {markCompDraftTotal} / Subject total: {markCompSubjectTotal}
+                {markCompDraftTotal !== markCompSubjectTotal && " (must match exactly)"}
+              </p>
+            )}
           </div>
 
-          {componentDraft.length > 0 && componentSubject && (
-            <p className={`text-sm ${componentDraftTotal > componentSubject.full_marks_theory ? "text-red-600" : "text-muted-foreground"}`}>
-              Components total: {componentDraftTotal} / Theory full marks: {componentSubject.full_marks_theory}
-            </p>
-          )}
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setComponentSubjectId(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setMarkCompSubjectId(null)}>Cancel</Button>
             <Button
-              onClick={() => saveComponentsMutation.mutate()}
-              disabled={saveComponentsMutation.isPending || componentDraft.some((r) => !r.label.trim())}
+              onClick={() => saveMarkComponentsMutation.mutate()}
+              disabled={
+                !canEditMarkComposition ||
+                saveMarkComponentsMutation.isPending ||
+                markCompDraft.some((r) => !r.label.trim()) ||
+                markCompDraft.some((r) => r.source_type === "AVERAGE_OF_EXAMS" && r.source_exam_ids.length === 0)
+              }
             >
-              {saveComponentsMutation.isPending ? "Saving..." : "Save Components"}
+              {saveMarkComponentsMutation.isPending ? "Saving..." : "Save Composition"}
             </Button>
           </DialogFooter>
         </DialogContent>

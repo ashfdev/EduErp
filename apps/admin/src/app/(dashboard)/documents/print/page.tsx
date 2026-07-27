@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, RichTextEditor, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, RichTextEditor, Textarea, extractBlobErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -265,6 +265,12 @@ export default function DocumentPrintCenterPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [pickerField, setPickerField] = useState<{ key: string; kind: "select-student" | "select-staff" } | null>(null);
+  // Narrows the "Choose a Student" picker to one class/section instead of
+  // paging through the whole institution's roster (previously the only
+  // option) — kept separate from `values` since not every doc type that
+  // opens this picker has its own Class field.
+  const [pickerClassId, setPickerClassId] = useState("");
+  const [pickerSectionId, setPickerSectionId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -272,6 +278,7 @@ export default function DocumentPrintCenterPage() {
 
   const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const sections = classes?.find((c) => c.id === values.class_id)?.sections ?? [];
+  const pickerSections = classes?.find((c) => c.id === pickerClassId)?.sections ?? [];
   const groups = classes?.find((c) => c.id === values.class_id)?.groups ?? [];
   const { data: exams } = useQuery<Option[]>({ queryKey: ["exams"], queryFn: async () => (await api.get("/api/exams")).data.data });
 
@@ -396,7 +403,7 @@ export default function DocumentPrintCenterPage() {
         triggerDownload(res.data, `${doc.key}.pdf`);
       }
     } catch (err) {
-      setError(extractErrorMessage(err) ?? "Failed to generate document — check the required fields and try again.");
+      setError((await extractBlobErrorMessage(err)) ?? "Failed to generate document — check the required fields and try again.");
     } finally {
       setGenerating(false);
     }
@@ -615,7 +622,38 @@ export default function DocumentPrintCenterPage() {
         title="Choose a Student"
         searchPlaceholder="Search by name or student ID..."
         getKey={(s) => s.id}
-        fetchResults={async ({ search, page }) => (await api.get("/api/students", { params: { search: search || undefined, page, limit: 10 } })).data}
+        filterKey={`${pickerClassId}:${pickerSectionId}`}
+        filters={
+          <>
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              value={pickerClassId}
+              onChange={(e) => {
+                setPickerClassId(e.target.value);
+                setPickerSectionId("");
+              }}
+            >
+              <option value="">All Classes</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              value={pickerSectionId}
+              onChange={(e) => setPickerSectionId(e.target.value)}
+              disabled={!pickerClassId}
+            >
+              <option value="">All Sections</option>
+              {pickerSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </>
+        }
+        fetchResults={async ({ search, page }) =>
+          (
+            await api.get("/api/students", {
+              params: { search: search || undefined, class_id: pickerClassId || undefined, section_id: pickerSectionId || undefined, page, limit: 10 },
+            })
+          ).data
+        }
         renderRow={(s) => (
           <div>
             <p className="font-medium">{s.name_en}</p>

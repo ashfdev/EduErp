@@ -200,7 +200,6 @@
   },
   "results": {
     "title": "Results",
-    "anyExam": "Any exam",
     "anyYear": "Any year",
     "currentSuffix": " (current)",
     "noResultFound": "No result found for this search.",
@@ -213,7 +212,16 @@
     "absent": "Absent",
     "totalGpa": "Total GPA: {gpa}",
     "overallGrade": "Overall Grade: {grade}",
-    "printCard": "Print Result Card"
+    "printCard": "Print Result Card",
+    "courseCode": "Course Code",
+    "section": "Section",
+    "teacher": "Teacher",
+    "className": "Class",
+    "viewResult": "View Result",
+    "hideResult": "Hide",
+    "notEntered": "Not entered",
+    "notConducted": "Not conducted",
+    "fullMarks": "Full Marks"
   },
   "routine": {
     "title": "Class Routine",

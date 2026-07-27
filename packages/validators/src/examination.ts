@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const createExamSchema = z.object({
   name: z.string().min(1),
-  exam_type_config_id: z.string().min(1),
   academic_year_id: z.string().min(1),
   start_date: z.coerce.date().optional().nullable(),
   end_date: z.coerce.date().optional().nullable(),
@@ -52,23 +51,34 @@ export const examSessionSchema = z.object({
 });
 export type ExamSessionInput = z.infer<typeof examSessionSchema>;
 
-export const markComponentConfigSchema = z.object({
-  components: z
-    .array(
-      z.object({
-        key: z
-          .string()
-          .min(1)
-          .max(40)
-          .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
-        label: z.string().min(1).max(100),
-        max_marks: z.number().min(0),
-        display_order: z.number().int().min(0).optional(),
-      }),
-    )
-    .max(20),
-});
-export type MarkComponentConfigInput = z.infer<typeof markComponentConfigSchema>;
+// A single named, fixed-mark-value piece of a subject's total under one
+// exam (e.g. Theory 60, MCQ 20, Practical 20, CT 10, Attendance 5) — plain
+// peer parts, no derived "Main Exam" value, no percentage math anywhere.
+// The full list for a subject must sum exactly to that subject's real total
+// (enforced server-side, not here). source_exam_ids (one or more SPECIFIC
+// exams to average from — never a category/type match) is only meaningful
+// when source_type is AVERAGE_OF_EXAMS; enforced non-empty in that case via
+// the refine below.
+export const examMarkComponentSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1)
+      .max(40)
+      .regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, and underscores only"),
+    label: z.string().min(1).max(100),
+    max_marks: z.number().min(0),
+    source_type: z.enum(["MANUAL", "ATTENDANCE_PERCENTAGE", "AVERAGE_OF_EXAMS"]),
+    source_exam_ids: z.array(z.string()).optional(),
+    display_order: z.number().int().min(0).optional(),
+  })
+  .refine((c) => c.source_type !== "AVERAGE_OF_EXAMS" || (c.source_exam_ids && c.source_exam_ids.length > 0), {
+    message: "Must select at least one source exam to average from",
+    path: ["source_exam_ids"],
+  });
+export type ExamMarkComponentInput = z.infer<typeof examMarkComponentSchema>;
+
+export const examMarkComponentsSchema = z.array(examMarkComponentSchema).max(20);
 
 export const submitMarksSchema = z.object({
   exam_id: z.string().min(1),
@@ -78,7 +88,12 @@ export const submitMarksSchema = z.object({
       subject_id: z.string().min(1),
       marks_theory: z.number().min(0).optional().nullable(),
       marks_practical: z.number().min(0).optional().nullable(),
-      component_marks: z.record(z.string(), z.number().min(0)).optional(),
+      // One entry per ExamMarkComponent key configured for this subject.
+      // is_override is client-reported: true once the teacher has edited an
+      // auto-fetched value away from its fetched default, so a later GET
+      // knows to keep showing this value rather than recomputing a fresh
+      // fetch over it.
+      component_values: z.record(z.string(), z.object({ value: z.number().min(0).nullable(), is_override: z.boolean() })).optional(),
       is_absent: z.boolean().optional(),
     }),
   ),
@@ -103,6 +118,7 @@ export const marksheetDisplaySettingsSchema = z.object({
   show_average_grade_point: z.boolean(),
   show_average_remarks: z.boolean(),
   show_published_date: z.boolean(),
+  show_mark_composition: z.boolean(),
 });
 export type MarksheetDisplaySettingsInput = z.infer<typeof marksheetDisplaySettingsSchema>;
 

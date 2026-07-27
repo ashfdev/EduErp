@@ -18,9 +18,14 @@ export interface MultiRecordPickerDialogProps<T> {
   selected: string[];
   onToggle: (item: T) => void;
   // Extra filter controls (e.g. Class/Section selects) rendered above the
-  // search box -- re-fetches whenever this subtree's own state changes,
-  // same as a changed search/page, since the caller owns that state.
+  // search box.
   filters?: React.ReactNode;
+  // A string that changes whenever `filters`' underlying values change
+  // (e.g. `${classId}:${sectionId}`) -- without this, selecting a filter
+  // alone (no search typed, no page click) silently would not refetch,
+  // since this component has no other way to see filter state owned by
+  // the caller.
+  filterKey?: string;
   confirmLabel: string;
   onConfirm: () => void;
   confirmDisabled?: boolean;
@@ -42,6 +47,7 @@ export function MultiRecordPickerDialog<T>({
   selected,
   onToggle,
   filters,
+  filterKey,
   confirmLabel,
   onConfirm,
   confirmDisabled,
@@ -55,8 +61,21 @@ export function MultiRecordPickerDialog<T>({
   const fetchResultsRef = React.useRef(fetchResults);
   fetchResultsRef.current = fetchResults;
 
+  const prevFilterKeyRef = React.useRef(filterKey);
+
   React.useEffect(() => {
     if (!open) return;
+    // A filter change resets to page 1 first rather than fetching with a
+    // page number that may no longer be valid against the narrower result
+    // set -- this effect re-runs once `page` settles to 1, so this never
+    // double-fetches.
+    if (prevFilterKeyRef.current !== filterKey) {
+      prevFilterKeyRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     let cancelled = false;
     setLoading(true);
     fetchResultsRef
@@ -71,7 +90,7 @@ export function MultiRecordPickerDialog<T>({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, search, page]);
+  }, [open, search, page, filterKey]);
 
   React.useEffect(() => {
     if (!open) {

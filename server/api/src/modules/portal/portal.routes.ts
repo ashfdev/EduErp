@@ -253,7 +253,7 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
-    const query = z.object({ exam_type_config_id: z.string().optional(), academic_year_id: z.string().optional() }).parse(req.query);
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
 
     const student = await prisma.student.findUnique({ where: { id } });
     if (!student) throw notFound("Student not found");
@@ -270,11 +270,8 @@ portalRouter.get(
     const candidatePublications = await prisma.resultPublication.findMany({
       where: {
         is_published: true,
-        ...((query.exam_type_config_id || query.academic_year_id) && {
-          exam: {
-            ...(query.exam_type_config_id && { exam_type_config_id: query.exam_type_config_id }),
-            ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
-          },
+        ...(query.academic_year_id && {
+          exam: { academic_year_id: query.academic_year_id },
         }),
       },
       include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
@@ -291,12 +288,84 @@ portalRouter.get(
     const results = [];
     for (const pub of publications) {
       const entries = await prisma.markEntry.findMany({ where: { exam_id: pub.exam_id, student_id: id }, include: { subject: true } });
-      if (!entries.length) continue;
       const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
       const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], false);
+
+      // Ground truth for which subjects this student actually had for this
+      // exam's class/year — a student enrolled in a subject with zero
+      // MarkEntry row (e.g. a late transfer, or an elective the exam never
+      // covered) still shows up, flagged not_conducted, rather than
+      // silently vanishing from their own result. Previously the whole exam
+      // was skipped the moment ANY single subject had no entry yet — a
+      // partially-graded exam (or a student none of whose subjects happen
+      // to be graded yet) vanished from the results list entirely instead
+      // of showing what IS graded with the rest flagged not_conducted.
+      const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
+      const enrolledSubjects = resolvedClassId
+        ? await prisma.studentSubject.findMany({
+            where: { student_id: id, academic_year_id: pub.exam.academic_year_id },
+            include: { subject: true },
+          })
+        : [];
+      const entryBySubject = new Map(entries.map((e) => [e.subject_id, e]));
+      const allSubjectIds = new Set([...entries.map((e) => e.subject_id), ...enrolledSubjects.map((es) => es.subject_id)]);
+      // Only skip when the student has genuinely zero connection to this
+      // exam (no entries, no subject enrollment) — never merely because
+      // nothing's been graded yet.
+      if (!allSubjectIds.size) continue;
+
+      const markComponents = await prisma.examMarkComponent.findMany({
+        where: { exam_id: pub.exam_id, subject_id: { in: [...allSubjectIds] } },
+        orderBy: { display_order: "asc" },
+      });
+      const componentsBySubject = new Map<string, typeof markComponents>();
+      for (const c of markComponents) {
+        componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
+      }
+
+      // Best-effort teacher attribution per subject (university-style
+      // display context) — a subject with no assignment on record simply
+      // shows no teacher, never a fabricated one.
+      const assignments = await prisma.subjectTeacherAssignment.findMany({
+        where: {
+          subject_id: { in: [...allSubjectIds] },
+          academic_year_id: pub.exam.academic_year_id,
+          OR: [{ section_id: student.current_section_id }, { section_id: null }],
+        },
+        include: { staff: { select: { name_en: true } } },
+      });
+      const teacherBySubject = new Map(assignments.map((a) => [a.subject_id, a.staff.name_en]));
+
+      const subjectRows = [...allSubjectIds].map((subjectId) => {
+        const entry = entryBySubject.get(subjectId);
+        const enrolledRow = enrolledSubjects.find((es) => es.subject_id === subjectId);
+        const subject = entry?.subject ?? enrolledRow?.subject;
+        const components = componentsBySubject.get(subjectId) ?? [];
+        const enteredValues = (entry?.component_values as Record<string, { value: number | null; is_override: boolean }> | null) ?? null;
+        return {
+          subject_id: subjectId,
+          subject_name: subject?.name_en ?? "",
+          subject_code: subject?.code ?? "",
+          teacher_name: teacherBySubject.get(subjectId) ?? null,
+          not_conducted: !entry,
+          marks_theory: entry?.marks_theory ?? null,
+          marks_practical: entry?.marks_practical ?? null,
+          marks_total: entry?.marks_total ?? null,
+          grade_letter: entry?.grade_letter ?? null,
+          is_absent: entry?.is_absent ?? false,
+          has_mark_components: components.length > 0,
+          mark_components: components.map((c) => ({
+            label: c.label,
+            max_marks: c.max_marks,
+            value: enteredValues?.[c.key]?.value ?? null,
+            not_entered: !entry || enteredValues?.[c.key]?.value === undefined || enteredValues?.[c.key]?.value === null,
+          })),
+        };
+      });
+
       results.push({
         exam_id: pub.exam_id, exam_name: pub.exam.name,
-        subjects: entries.map((e) => ({ subject_name: e.subject.name_en, marks_theory: e.marks_theory, marks_practical: e.marks_practical, marks_total: e.marks_total, grade_letter: e.grade_letter, is_absent: e.is_absent })),
+        subjects: subjectRows,
         total_gpa: result.total_gpa, overall_grade: result.overall_grade_letter, has_failed: result.has_failed,
       });
     }

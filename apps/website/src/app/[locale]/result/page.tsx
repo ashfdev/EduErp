@@ -22,10 +22,6 @@ interface InstitutionInfo {
   type: "SCHOOL" | "COLLEGE" | "UNIVERSITY" | "MADRASAH";
   has_semesters: boolean;
 }
-interface ExamTypeOption {
-  id: string;
-  name: string;
-}
 interface AcademicYearOption {
   id: string;
   label: string;
@@ -38,23 +34,20 @@ export default function ResultLookupPage() {
   const [studentUid, setStudentUid] = useState("");
   const [rollNo, setRollNo] = useState("");
   const [registrationNo, setRegistrationNo] = useState("");
-  const [examTypeId, setExamTypeId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [institution, setInstitution] = useState<InstitutionInfo | null>(null);
-  const [examTypes, setExamTypes] = useState<ExamTypeOption[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
-  
+
   const printRef = useRef<HTMLDivElement>(null);
 
   const showExamFilters = institution ? !institution.has_semesters : false;
 
   useEffect(() => {
     fetch(`${API_URL}/api/content/institution`).then((r) => r.json()).then((body) => setInstitution(body.data ?? null)).catch(() => setInstitution(null));
-    fetch(`${API_URL}/api/content/exam-types`).then((r) => r.json()).then((body) => setExamTypes(body.data ?? [])).catch(() => setExamTypes([]));
     fetch(`${API_URL}/api/content/academic-years`).then((r) => r.json()).then((body) => setAcademicYears(body.data ?? [])).catch(() => setAcademicYears([]));
   }, []);
 
@@ -65,7 +58,6 @@ export default function ResultLookupPage() {
     setResult(null);
 
     const params = new URLSearchParams(mode === "uid" ? { student_uid: studentUid } : { roll_no: rollNo, registration_no: registrationNo });
-    if (showExamFilters && examTypeId) params.set("exam_type_config_id", examTypeId);
     if (showExamFilters && academicYearId) params.set("academic_year_id", academicYearId);
 
     try {
@@ -151,14 +143,7 @@ export default function ResultLookupPage() {
           )}
 
           {showExamFilters && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-              <div>
-                <label className={labelCls}>Select Exam</label>
-                <select value={examTypeId} onChange={(e) => setExamTypeId(e.target.value)} className={`${inputCls} appearance-none cursor-pointer`}>
-                  <option value="">{t("anyExam")}</option>
-                  {examTypes.map((et) => <option key={et.id} value={et.id}>{et.name}</option>)}
-                </select>
-              </div>
+            <div className="grid grid-cols-1 gap-4 pt-1">
               <div>
                 <label className={labelCls}>Select Year</label>
                 <select value={academicYearId} onChange={(e) => setAcademicYearId(e.target.value)} className={`${inputCls} appearance-none cursor-pointer`}>

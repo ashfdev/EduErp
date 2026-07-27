@@ -393,19 +393,6 @@ async function main() {
     create: { id: "singleton" },
   });
 
-  const examTypes = [
-    { code: "CT", name: "Class Test", display_order: 1, weight_in_annual: 10 },
-    { code: "HALF", name: "Half Yearly", display_order: 2, weight_in_annual: 30 },
-    { code: "FINAL", name: "Annual Final", display_order: 3, weight_in_annual: 60, is_board_exam: true },
-  ];
-  for (const et of examTypes) {
-    await prisma.examTypeConfig.upsert({
-      where: { code: et.code },
-      update: {},
-      create: et,
-    });
-  }
-
   // ── Phase 8B: Chart of Accounts + active Financial Year ──
   for (const group of ACCOUNT_GROUPS) {
     await prisma.accountGroup.upsert({ where: { id: group.id }, update: {}, create: group });
@@ -805,7 +792,6 @@ async function main() {
   // ── Demo exam with entered marks + a published result (for testing
   // marksheet/report-card/result-lookup PDF generation end to end without
   // needing to hand-build an exam through the UI first) ──
-  const halfYearlyType = await prisma.examTypeConfig.findUniqueOrThrow({ where: { code: "HALF" } });
   const demoAdmin = await prisma.user.findUniqueOrThrow({ where: { phone: "01700000000" } });
   const demoExam = await prisma.exam.upsert({
     where: { id: "seed-demo-half-yearly-2026" },
@@ -813,7 +799,6 @@ async function main() {
     create: {
       id: "seed-demo-half-yearly-2026",
       academic_year_id: academicYear.id,
-      exam_type_config_id: halfYearlyType.id,
       grading_scale_id: gradingScale.id,
       name: "Half Yearly Exam 2026",
       start_date: new Date("2026-06-01"),

@@ -13,12 +13,17 @@ interface MarkComponent {
   key: string;
   label: string;
   max_marks: number;
+  source_type: "MANUAL" | "ATTENDANCE_PERCENTAGE" | "AVERAGE_OF_EXAMS";
 }
 interface Subject {
   id: string;
   name_en: string;
   config?: { full_marks_theory: number; full_marks_practical: number };
-  components?: MarkComponent[];
+  mark_components?: MarkComponent[];
+}
+interface ComponentFetchEntry {
+  value: number | null;
+  annotation: string | null;
 }
 interface MarkEntryData {
   entry_deadline_info: { is_open: boolean; closes_at: string | null };
@@ -28,8 +33,18 @@ interface MarkEntryData {
     name_en: string;
     current_roll_no: string | null;
     group_id: string | null;
-    marks: Record<string, { marks_theory: number | null; marks_practical: number | null; is_absent: boolean; component_marks?: Record<string, number> | null; status: string } | null>;
+    marks: Record<
+      string,
+      {
+        marks_theory: number | null;
+        marks_practical: number | null;
+        is_absent: boolean;
+        component_values?: Record<string, { value: number | null; is_override: boolean }> | null;
+        status: string;
+      } | null
+    >;
     enrolled_subject_ids: string[];
+    component_fetch?: Record<string, Record<string, ComponentFetchEntry>>;
   }[];
 }
 interface ExamInfo {
@@ -68,7 +83,17 @@ export default function MarkEntryGridPage() {
   const klass = classes?.find((c) => c.id === class_id);
   const section = klass?.sections.find((s) => s.id === section_id);
 
-  const [edits, setEdits] = useState<Record<string, { marks_theory?: number; marks_practical?: number; is_absent?: boolean; component_marks?: Record<string, number> }>>({});
+  const [edits, setEdits] = useState<
+    Record<
+      string,
+      {
+        marks_theory?: number;
+        marks_practical?: number;
+        is_absent?: boolean;
+        component_values?: Record<string, { value: number | null; is_override: boolean }>;
+      }
+    >
+  >({});
   const [search, setSearch] = useState("");
 
   const filteredStudents = useMemo(() => {
@@ -92,7 +117,6 @@ export default function MarkEntryGridPage() {
       marks_theory: existing?.marks_theory ?? undefined,
       marks_practical: existing?.marks_practical ?? undefined,
       is_absent: existing?.is_absent ?? false,
-      component_marks: existing?.component_marks ?? undefined,
     };
   }
 
@@ -112,20 +136,52 @@ export default function MarkEntryGridPage() {
     return Number.isNaN(n) ? undefined : n;
   }
 
+  // Resolves the current value for every mark-composition part of one cell:
+  // an in-progress local edit wins first, then an already-stored teacher
+  // override (is_override: true) from a prior submit, then the freshly-
+  // computed auto-fetch, else null ("no source data yet" — never a silent 0).
+  function getComponentValues(studentId: string, subjectId: string): Record<string, { value: number | null; is_override: boolean }> {
+    const k = key(studentId, subjectId);
+    if (edits[k]?.component_values) return edits[k].component_values!;
+    const student = data?.students.find((s) => s.id === studentId);
+    const stored = student?.marks[subjectId]?.component_values ?? {};
+    const fetched = student?.component_fetch?.[subjectId] ?? {};
+    const subject = data?.subjects.find((s) => s.id === subjectId);
+    const merged: Record<string, { value: number | null; is_override: boolean }> = {};
+    for (const comp of subject?.mark_components ?? []) {
+      const storedEntry = stored[comp.key];
+      merged[comp.key] = storedEntry?.is_override ? storedEntry : { value: fetched[comp.key]?.value ?? null, is_override: false };
+    }
+    return merged;
+  }
+
   function setComponentValue(studentId: string, subjectId: string, componentKey: string, raw: string) {
     const v = getValue(studentId, subjectId);
-    const next = { ...(v.component_marks ?? {}) };
+    const current = getComponentValues(studentId, subjectId);
     const parsed = parseMarkInput(raw);
-    if (parsed === undefined) delete next[componentKey];
-    else next[componentKey] = parsed;
-    setEdits((prev) => ({ ...prev, [key(studentId, subjectId)]: { ...v, component_marks: next } }));
+    const next = { ...current, [componentKey]: { value: parsed ?? null, is_override: true } };
+    setEdits((prev) => ({ ...prev, [key(studentId, subjectId)]: { ...v, component_values: next } }));
   }
 
   const submitMutation = useMutation({
     mutationFn: () => {
       const entries = Object.entries(edits).map(([k, v]) => {
-        const [student_id, subject_id] = k.split(":");
-        return { student_id, subject_id, marks_theory: v.marks_theory, marks_practical: v.marks_practical, component_marks: v.component_marks, is_absent: v.is_absent };
+        const [student_id, subject_id] = k.split(":") as [string, string];
+        // Always resolve the FULL set of component values for this cell
+        // (not just whatever key the teacher happened to touch directly) —
+        // otherwise editing only one box would submit component_values as
+        // partial, silently dropping the other parts the server needs to
+        // compute the real total.
+        const subject = data?.subjects.find((s) => s.id === subject_id);
+        const componentValues = subject?.mark_components?.length ? getComponentValues(student_id, subject_id) : undefined;
+        return {
+          student_id,
+          subject_id,
+          marks_theory: v.marks_theory,
+          marks_practical: v.marks_practical,
+          component_values: componentValues,
+          is_absent: v.is_absent,
+        };
       });
       return api.post("/api/marks/submit", { exam_id, entries });
     },
@@ -193,21 +249,24 @@ export default function MarkEntryGridPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Roll</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead className="whitespace-nowrap">Roll</TableHead>
+                  <TableHead className="whitespace-nowrap">Name</TableHead>
                   {data.subjects.map((s) => (
-                    <TableHead key={s.id}>
+                    <TableHead key={s.id} className="min-w-[200px]">
                       {s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span>
-                      {s.components && s.components.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 text-[10px] font-normal normal-case text-muted-foreground">
-                          {s.components.map((comp) => <span key={comp.key} className="w-14">{comp.label}/{comp.max_marks}</span>)}
-                          {!!s.config?.full_marks_practical && <span className="w-16">Practical/{s.config.full_marks_practical}</span>}
+                      {s.mark_components && s.mark_components.length > 0 ? (
+                        <div className="flex flex-wrap gap-2 text-[10px] font-normal normal-case text-muted-foreground">
+                          {s.mark_components.map((comp) => (
+                            <span key={comp.key} title={comp.source_type !== "MANUAL" ? "Auto-fetched, editable" : undefined}>
+                              {comp.label}/{comp.max_marks}
+                            </span>
+                          ))}
                         </div>
                       ) : (
                         !!s.config?.full_marks_practical && (
-                          <div className="flex gap-1 text-[10px] font-normal normal-case text-muted-foreground">
-                            <span className="w-16">Theory/{s.config.full_marks_theory}</span>
-                            <span className="w-16">Practical/{s.config.full_marks_practical}</span>
+                          <div className="flex gap-2 text-[10px] font-normal normal-case text-muted-foreground">
+                            <span>Theory/{s.config.full_marks_theory}</span>
+                            <span>Practical/{s.config.full_marks_practical}</span>
                           </div>
                         )
                       )}
@@ -233,60 +292,84 @@ export default function MarkEntryGridPage() {
                       }
                       const v = getValue(st.id, s.id);
                       const status = entryStatus(st.id, s.id);
-                      const componentSum = s.components?.length
-                        ? Object.values(v.component_marks ?? {}).reduce((sum, n) => sum + (n || 0), 0)
+                      const hasMarkComponents = !!s.mark_components?.length;
+                      const componentValues = hasMarkComponents ? getComponentValues(st.id, s.id) : {};
+                      const componentSum = hasMarkComponents
+                        ? Object.values(componentValues).reduce((sum, e) => sum + (e.value ?? 0), 0)
                         : undefined;
+                      const subjectTotal = (s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0);
+                      const annotations = hasMarkComponents
+                        ? (s.mark_components ?? [])
+                            .filter((c) => c.source_type !== "MANUAL")
+                            .map((c) => st.component_fetch?.[s.id]?.[c.key]?.annotation)
+                            .filter((a): a is string => !!a)
+                        : [];
                       return (
-                        <TableCell key={s.id}>
-                          <div className="flex items-center gap-1">
+                        <TableCell key={s.id} className="align-top">
+                          <div className="flex flex-wrap items-center gap-2">
                             {status === "APPROVED" && (
                               <Badge variant="success" title="Already approved — editing will require re-approval">✓</Badge>
                             )}
-                            {s.components && s.components.length > 0 ? (
+                            {hasMarkComponents ? (
                               <>
-                                {s.components.map((comp) => (
-                                  <Input
-                                    key={comp.key}
-                                    type="number"
-                                    min={0}
-                                    max={comp.max_marks}
-                                    title={`${comp.label}, out of ${comp.max_marks}`}
-                                    placeholder={comp.label}
-                                    className="h-8 w-14 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                    disabled={readOnly || v.is_absent}
-                                    value={v.component_marks?.[comp.key] ?? ""}
-                                    onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
-                                  />
-                                ))}
-                                <span className="text-xs text-muted-foreground">={componentSum}</span>
+                                {(s.mark_components ?? []).map((comp) => {
+                                  const entry = componentValues[comp.key];
+                                  const isAutoUnedited = comp.source_type !== "MANUAL" && !entry?.is_override;
+                                  return (
+                                    <div key={comp.key} className="flex flex-col items-start">
+                                      <span className="text-[9px] text-muted-foreground">{comp.label}/{comp.max_marks}</span>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        max={comp.max_marks}
+                                        title={
+                                          isAutoUnedited
+                                            ? `${comp.label}, auto-fetched (out of ${comp.max_marks}) — edit to override`
+                                            : `${comp.label}, out of ${comp.max_marks}`
+                                        }
+                                        className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                                          isAutoUnedited ? "border-dashed text-muted-foreground" : ""
+                                        }`}
+                                        disabled={readOnly || v.is_absent}
+                                        value={entry?.value ?? ""}
+                                        onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                                <span className={`text-xs font-medium ${(componentSum ?? 0) > subjectTotal ? "text-red-600" : "text-muted-foreground"}`}>
+                                  ={componentSum}/{subjectTotal}
+                                </span>
                               </>
                             ) : (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={s.config?.full_marks_theory}
-                                title={s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
-                                className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                disabled={readOnly || v.is_absent}
-                                value={v.marks_theory ?? ""}
-                                onChange={(e) =>
-                                  setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
-                                }
-                              />
-                            )}
-                            {!!s.config?.full_marks_practical && (
-                              <Input
-                                type="number"
-                                min={0}
-                                max={s.config.full_marks_practical}
-                                title={`Practical, out of ${s.config.full_marks_practical}`}
-                                className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                disabled={readOnly || v.is_absent}
-                                value={v.marks_practical ?? ""}
-                                onChange={(e) =>
-                                  setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
-                                }
-                              />
+                              <>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={s.config?.full_marks_theory}
+                                  title={s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
+                                  className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                  disabled={readOnly || v.is_absent}
+                                  value={v.marks_theory ?? ""}
+                                  onChange={(e) =>
+                                    setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
+                                  }
+                                />
+                                {!!s.config?.full_marks_practical && (
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={s.config.full_marks_practical}
+                                    title={`Practical, out of ${s.config.full_marks_practical}`}
+                                    className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                    disabled={readOnly || v.is_absent}
+                                    value={v.marks_practical ?? ""}
+                                    onChange={(e) =>
+                                      setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
+                                    }
+                                  />
+                                )}
+                              </>
                             )}
                             <label className="flex items-center gap-1 text-xs">
                               <Checkbox
@@ -297,6 +380,13 @@ export default function MarkEntryGridPage() {
                               Ab
                             </label>
                           </div>
+                          {annotations.length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {annotations.map((a, i) => (
+                                <p key={i} className="text-[10px] leading-tight text-red-600">{a}</p>
+                              ))}
+                            </div>
+                          )}
                         </TableCell>
                       );
                     })}

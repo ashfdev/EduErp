@@ -38,6 +38,31 @@ export function extractErrorMessage(err: unknown): string | undefined {
   return error?.message;
 }
 
+// Same job as extractErrorMessage, for requests made with
+// `responseType: "blob"` (every PDF download/generate call in this
+// codebase). With that response type set, axios still parses an ERROR
+// response body as a Blob too — not JSON — so `err.response.data.error`
+// is always undefined and extractErrorMessage silently falls through to
+// the caller's generic fallback text no matter what the server actually
+// said (e.g. a 429 rate-limit reads identically to a real validation
+// failure). Read the Blob's text and parse it as the same JSON error
+// envelope before falling back.
+export async function extractBlobErrorMessage(err: unknown): Promise<string | undefined> {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text());
+      const error = parsed?.error as { message?: string; details?: Array<{ message?: string }> } | undefined;
+      const detailMessages = (error?.details ?? []).map((d) => d?.message).filter((m): m is string => !!m);
+      if (detailMessages.length > 0) return detailMessages.join("; ");
+      return error?.message;
+    } catch {
+      return undefined;
+    }
+  }
+  return extractErrorMessage(err);
+}
+
 // Mirrors packages/validators/src/auth.ts's passwordSchema exactly (min 8,
 // one lowercase, one uppercase, one number) — kept here too, not imported
 // from validators, since these 3 apps' change-password pages need this text

@@ -11,7 +11,6 @@ import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, MARK_VIEW_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { calculateStudentResult, calculatePositions } from "../../utils/grading.engine";
 import { badRequest, notFound } from "../../lib/errors";
-import { computeCombinedResult } from "./combined-result";
 
 export const resultsRouter = Router();
 
@@ -145,12 +144,6 @@ resultsRouter.get(
         roll_no: z.string().optional(),
         registration_no: z.string().optional(),
         exam_id: z.string().optional(),
-        // For school/college/madrasah lookups where the caller knows an exam
-        // TYPE + year but not the specific per-class Exam row (the actual
-        // Exam depends on the student's class, which isn't known until the
-        // identity lookup below resolves) — resolved server-side instead of
-        // asking the frontend to guess an exam_id blind.
-        exam_type_config_id: z.string().optional(),
         academic_year_id: z.string().optional(),
       })
       .parse(req.query);
@@ -159,7 +152,7 @@ resultsRouter.get(
       throw badRequest("Provide either student_uid, or both roll_no and registration_no");
     }
 
-    const cacheKey = `result-lookup:${query.student_uid ?? `${query.roll_no}:${query.registration_no}`}:${query.exam_id ?? "all"}:${query.exam_type_config_id ?? ""}:${query.academic_year_id ?? ""}`;
+    const cacheKey = `result-lookup:${query.student_uid ?? `${query.roll_no}:${query.registration_no}`}:${query.exam_id ?? "all"}:${query.academic_year_id ?? ""}`;
     const data = await cached(cacheKey, 30 * 60, async () => {
       const student = await prisma.student.findFirst({
         where: query.student_uid ? { student_uid: query.student_uid } : { current_roll_no: query.roll_no, registration_no: query.registration_no },
@@ -178,11 +171,8 @@ resultsRouter.get(
           is_published: true,
           is_public: true,
           ...(query.exam_id && { exam_id: query.exam_id }),
-          ...((query.exam_type_config_id || query.academic_year_id) && {
-            exam: {
-              ...(query.exam_type_config_id && { exam_type_config_id: query.exam_type_config_id }),
-              ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
-            },
+          ...(query.academic_year_id && {
+            exam: { academic_year_id: query.academic_year_id },
           }),
         },
         include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
@@ -421,42 +411,5 @@ resultsRouter.get(
     }
 
     res.json({ success: true, data: summary });
-  }),
-);
-
-// ── Combined/Annual Result (Term-Based weighted blend, Plan Fifteen,
-// Phase I) — read-only, on-demand computation over already-published exam
-// results; see combined-result.ts for the full design note.
-resultsRouter.get(
-  "/combined/:academic_year_id/:student_id",
-  authenticate,
-  authorize(MARK_VIEW_ROLES),
-  asyncHandler(async (req, res) => {
-    const academicYearId = reqParam(req, "academic_year_id");
-    const studentId = reqParam(req, "student_id");
-    const data = await computeCombinedResult(studentId, academicYearId);
-    res.json({ success: true, data });
-  }),
-);
-
-// Editable per-student-per-year co-curricular remark (informational-only,
-// never a numeric grade input) — upserted directly since it's a single row
-// per (student, year) the reviewing staff member edits freely, matching
-// StudentWaiver-adjacent small-record conventions elsewhere in this module.
-resultsRouter.put(
-  "/combined/:academic_year_id/:student_id/extracurricular",
-  authenticate,
-  authorize(RESULT_PUBLISH_ROLES),
-  asyncHandler(async (req, res) => {
-    const academicYearId = reqParam(req, "academic_year_id");
-    const studentId = reqParam(req, "student_id");
-    const body = z.object({ remarks: z.string().max(2000) }).parse(req.body);
-
-    const remark = await prisma.extracurricularRemark.upsert({
-      where: { student_id_academic_year_id: { student_id: studentId, academic_year_id: academicYearId } },
-      update: { remarks: body.remarks },
-      create: { student_id: studentId, academic_year_id: academicYearId, remarks: body.remarks, recorded_by_id: req.user!.sub },
-    });
-    res.json({ success: true, data: remark });
   }),
 );

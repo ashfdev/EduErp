@@ -42,7 +42,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/examination", key: "examination", icon: FileSpreadsheet },
       { href: "/marks", key: "marks", icon: Edit3 },
       { href: "/results", key: "results", icon: Award },
-      { href: "/results/combined", key: "combinedResult", icon: Award },
       { href: "/course-enrollment", key: "courseEnrollment", icon: BookOpen },
     ],
   },

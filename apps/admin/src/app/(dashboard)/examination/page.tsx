@@ -11,7 +11,6 @@ interface Exam {
   status: string;
   start_date?: string | null;
   end_date?: string | null;
-  exam_type_config: { name: string };
   academic_year: { label: string };
   subject_configs: unknown[];
 }
@@ -38,7 +37,7 @@ export default function ExaminationPage() {
             <Card className="hover:border-primary">
               <CardContent className="space-y-2 pt-6">
                 <CardTitle className="text-base">{e.name}</CardTitle>
-                <p className="text-sm text-muted-foreground">{e.exam_type_config.name} · {e.academic_year.label}</p>
+                <p className="text-sm text-muted-foreground">{e.academic_year.label}</p>
                 <p className="text-xs text-muted-foreground">{e.subject_configs.length} subjects configured</p>
                 <StatusBadge status={e.status} />
               </CardContent>

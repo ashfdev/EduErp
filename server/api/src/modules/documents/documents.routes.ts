@@ -12,7 +12,6 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
-import { computeCombinedResult } from "../results/combined-result";
 import { calculatePositions } from "../../utils/grading.engine";
 import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
@@ -627,33 +626,33 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries, display, subjectConfigs, componentConfigs] = await Promise.all([
+  const [exam, student, entries, display, subjectConfigs, markComponentConfigs] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: true } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
     prisma.marksheetDisplaySettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
     prisma.examSubjectConfig.findMany({ where: { exam_id: examId } }),
-    prisma.markComponentConfig.findMany({ where: { exam_id: examId }, orderBy: { display_order: "asc" } }),
+    prisma.examMarkComponent.findMany({ where: { exam_id: examId }, orderBy: { display_order: "asc" } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
 
-  // Per-component (Written/Practical) full/pass marks come from this exam's
+  // Per-subject (Written/Practical) full/pass marks come from this exam's
   // own subject configuration, not the Subject's static defaults -- the
-  // same values already used to grade the entry, and what the redesigned
-  // marksheet table needs to render a Written/Practical row split.
+  // same values already used to grade the entry, and what the marksheet
+  // table needs to render a Written/Practical row split.
   const configBySubject = new Map(subjectConfigs.map((c) => [c.subject_id, c]));
 
-  // Named mark-component breakdown (Plan Fifteen, Phase J) -- when a
-  // subject's Theory mark was entered via named components ("Theory Mark
-  // Breakdown", e.g. CT/MCQ/Written), show each one distinctly instead of
-  // only the summed total. Grouped by subject since components are
-  // configured per (exam, subject).
-  const componentConfigsBySubject = new Map<string, typeof componentConfigs>();
-  for (const c of componentConfigs) {
-    const list = componentConfigsBySubject.get(c.subject_id) ?? [];
+  // Named mark-composition breakdown -- when a subject's total was entered
+  // via named, fixed-mark-value parts (Theory/MCQ/Practical/CT/Assignment/
+  // Attendance, whatever the admin configured), show each one distinctly
+  // instead of only the summed total. Grouped by subject since components
+  // are configured per (exam, subject).
+  const markComponentsBySubject = new Map<string, typeof markComponentConfigs>();
+  for (const c of markComponentConfigs) {
+    const list = markComponentsBySubject.get(c.subject_id) ?? [];
     list.push(c);
-    componentConfigsBySubject.set(c.subject_id, list);
+    markComponentsBySubject.set(c.subject_id, list);
   }
 
   const totalMarks = entries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
@@ -778,8 +777,17 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     attendance,
     subjects: entries.map((e) => {
       const config = configBySubject.get(e.subject_id);
-      const components = componentConfigsBySubject.get(e.subject_id);
-      const enteredComponentMarks = e.component_marks as Record<string, number> | null;
+
+      // Named mark-composition breakdown — every configured part comes
+      // straight from the stored component_values, a plain peer value with
+      // no derived/scaled piece.
+      const markComponentsForSubject = markComponentsBySubject.get(e.subject_id);
+      const enteredComponentValues = e.component_values as Record<string, { value: number | null; is_override: boolean }> | null;
+      const markComponents =
+        markComponentsForSubject && !e.is_absent
+          ? markComponentsForSubject.map((c) => ({ label: c.label, marks: enteredComponentValues?.[c.key]?.value ?? null, max_marks: c.max_marks }))
+          : [];
+
       return {
         name_en: e.subject.name_en,
         code: e.subject.code,
@@ -795,11 +803,8 @@ export async function buildMarksheetData(examId: string, studentId: string) {
         marks_total: e.is_absent ? null : e.marks_total,
         grade_letter: e.is_absent ? "Abs" : e.grade_letter,
         grade_point: e.grade_point,
-        has_components: !!components?.length && !!enteredComponentMarks,
-        components:
-          components && enteredComponentMarks
-            ? components.map((c) => ({ label: c.label, marks: enteredComponentMarks[c.key] ?? null, max_marks: c.max_marks }))
-            : [],
+        has_mark_components: markComponents.length > 0,
+        mark_components: markComponents,
       };
     }),
     total_marks: totalMarks,
@@ -995,23 +1000,6 @@ documentsRouter.get(
       rows,
     });
     sendPdf(res, pdf, `merit-list-${classId}.pdf`, req.query.download === "true");
-  }),
-);
-
-// Combined/Annual Result Card (Plan Fifteen, Phase I) — the Term-Based
-// weighted blend of every ExamTypeConfig with a nonzero weight_in_annual,
-// per-subject breakdown showing each contributing exam's own score,
-// Attendance %/Extracurricular remarks shown as informational-only context
-// (confirmed Mode A design — never a numeric input to the blended grade).
-documentsRouter.get(
-  "/result/combined/:academic_year_id/:student_id",
-  asyncHandler(async (req, res) => {
-    const academicYearId = reqParam(req, "academic_year_id");
-    const studentId = reqParam(req, "student_id");
-    const data = await computeCombinedResult(studentId, academicYearId);
-    const qrCode = await generateQrDataUrl(`combined-result:${academicYearId}:${studentId}`);
-    const pdf = await renderDocument("COMBINED_RESULT", { ...data, qr_code: qrCode, published_date: new Date() } as unknown as Record<string, unknown>);
-    sendPdf(res, pdf, `combined-result-${data.student.student_uid}.pdf`, req.query.download === "true");
   }),
 );
 

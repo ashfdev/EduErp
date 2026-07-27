@@ -2,7 +2,6 @@ import { Router } from "express";
 import { institutionRouter, institutionConfigRouter } from "./institution.routes";
 import { studentIdRouter } from "./student-id.routes";
 import { gradingRouter } from "./grading.routes";
-import { examTypesRouter } from "./exam-types.routes";
 import { feeRulesRouter } from "./fee-rules.routes";
 import { attendanceRulesRouter } from "./attendance-rules.routes";
 import { signaturesRouter, authorityConfigRouter } from "./signatures.routes";
@@ -15,6 +14,7 @@ import { auditLogRouter } from "./audit-log.routes";
 import { permissionsRouter } from "./permissions.routes";
 import { paymentGatewaysRouter } from "./payment-gateways.routes";
 import { marksheetDisplayRouter } from "./marksheet-display.routes";
+import { markCompositionTemplatesRouter } from "./mark-composition-templates.routes";
 
 export const settingsRouter = Router();
 
@@ -22,7 +22,6 @@ settingsRouter.use("/institution", institutionRouter);
 settingsRouter.use("/config", institutionConfigRouter);
 settingsRouter.use("/student-id-config", studentIdRouter);
 settingsRouter.use("/grading-scales", gradingRouter);
-settingsRouter.use("/exam-types", examTypesRouter);
 settingsRouter.use("/fee-rules", feeRulesRouter);
 settingsRouter.use("/attendance-rules", attendanceRulesRouter);
 settingsRouter.use("/signatures", signaturesRouter);
@@ -44,3 +43,4 @@ settingsRouter.use("/audit-log", auditLogRouter);
 settingsRouter.use("/permissions", permissionsRouter);
 settingsRouter.use("/payment-gateways", paymentGatewaysRouter);
 settingsRouter.use("/marksheet-display", marksheetDisplayRouter);
+settingsRouter.use("/mark-composition-templates", markCompositionTemplatesRouter);

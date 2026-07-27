@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES, MARK_VIEW_ROLES } from "../../lib/roles";
-import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, markComponentConfigSchema, examSessionSchema } from "@education-erp/validators";
+import { createExamSchema, cloneExamSchema, examStatusSchema, subjectConfigSchema, seatPlanGenerateSchema, examSessionSchema, examMarkComponentsSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
 
@@ -32,7 +32,7 @@ examsRouter.get(
     const query = z.object({ academic_year_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
     const exams = await prisma.exam.findMany({
       where: { deleted_at: null, ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.status && { status: query.status as never }) },
-      include: { exam_type_config: true, academic_year: true, subject_configs: true },
+      include: { academic_year: true, subject_configs: true },
       orderBy: { created_at: "desc" },
     });
     res.json({ success: true, data: exams });
@@ -47,11 +47,10 @@ examsRouter.get(
     const exam = await prisma.exam.findUnique({
       where: { id },
       include: {
-        exam_type_config: true,
         academic_year: true,
         grading_scale: true,
         subject_configs: { include: { subject: { include: { class: true, group: true } } }, orderBy: { subject: { created_at: "asc" } } },
-        component_configs: { orderBy: { display_order: "asc" } },
+        mark_components: { include: { source_exams: true }, orderBy: { display_order: "asc" } },
       },
     });
     if (!exam) throw notFound("Exam not found");
@@ -82,7 +81,6 @@ examsRouter.post(
       const created = await tx.exam.create({
         data: {
           name: body.name,
-          exam_type_config_id: body.exam_type_config_id,
           academic_year_id: body.academic_year_id,
           start_date: body.start_date,
           end_date: body.end_date,
@@ -113,10 +111,9 @@ examsRouter.post(
 );
 
 // "Clone from previous exam" — the actual gap wasn't that admins had to
-// retype an exam TYPE each time (that dropdown already existed), it was
-// that the free-text `name` and every subject's mark-rule overrides had to
-// be rebuilt from scratch every year. This copies exam_type_config_id,
-// grading_scale_id, and — per subject CODE, not subject id, since Subject
+// retype the exam's name each time, it was that every subject's mark-rule
+// overrides had to be rebuilt from scratch every year. This copies
+// grading_scale_id and — per subject CODE, not subject id, since Subject
 // rows are recreated each academic year alongside Class — any customized
 // full_marks/pass_marks overrides the source exam had. A subject with no
 // code match in the source (new subject this year) just gets the plain
@@ -129,7 +126,7 @@ examsRouter.post(
     const body = cloneExamSchema.parse(req.body);
     const source = await prisma.exam.findUnique({
       where: { id: sourceId },
-      include: { exam_type_config: true, academic_year: true, subject_configs: { include: { subject: true } } },
+      include: { academic_year: true, subject_configs: { include: { subject: true } } },
     });
     if (!source) throw notFound("Source exam not found");
 
@@ -142,7 +139,7 @@ examsRouter.post(
       throw badRequest("All selected classes must belong to the target academic year");
     }
 
-    const name = body.name?.trim() || `${source.exam_type_config.name} ${newYear.label}`;
+    const name = body.name?.trim() || `${source.name} ${newYear.label}`;
     // Keyed by class_id+code, not code alone — Subject.code is only unique
     // per class (@@unique([class_id, code])), so a multi-class source exam
     // can have the same code in two different classes with different
@@ -154,7 +151,6 @@ examsRouter.post(
       const created = await tx.exam.create({
         data: {
           name,
-          exam_type_config_id: source.exam_type_config_id,
           academic_year_id: body.academic_year_id,
           start_date: body.start_date,
           end_date: body.end_date,
@@ -166,20 +162,18 @@ examsRouter.post(
 
       const subjects = await tx.subject.findMany({ where: { class_id: { in: body.class_ids }, is_active: true } });
       if (subjects.length > 0) {
-        await tx.examSubjectConfig.createMany({
-          data: subjects.map((s) => {
-            const override = overridesByCode.get(`${s.class_id}::${s.code}`);
-            return {
-              exam_id: created.id,
-              subject_id: s.id,
-              full_marks_theory: override?.full_marks_theory ?? s.full_marks,
-              full_marks_practical: override?.full_marks_practical ?? 0,
-              pass_marks_theory: override?.pass_marks_theory ?? s.pass_marks,
-              pass_marks_practical: override?.pass_marks_practical ?? 0,
-              pass_marks_combined: override?.pass_marks_combined ?? s.pass_marks,
-            };
-          }),
+        const resolvedTotals = subjects.map((s) => {
+          const override = overridesByCode.get(`${s.class_id}::${s.code}`);
+          return {
+            subject_id: s.id,
+            full_marks_theory: override?.full_marks_theory ?? s.full_marks,
+            full_marks_practical: override?.full_marks_practical ?? 0,
+            pass_marks_theory: override?.pass_marks_theory ?? s.pass_marks,
+            pass_marks_practical: override?.pass_marks_practical ?? 0,
+            pass_marks_combined: override?.pass_marks_combined ?? s.pass_marks,
+          };
         });
+        await tx.examSubjectConfig.createMany({ data: resolvedTotals.map(({ subject_id, ...rest }) => ({ exam_id: created.id, subject_id, ...rest })) });
       }
 
       return created;
@@ -283,40 +277,90 @@ examsRouter.put(
   }),
 );
 
-// Full replace, not upsert-by-key — a subject's component list is short and
-// edited as a whole from one small admin form, so there's no benefit to
-// diffing individual rows the way subject-config (one row per subject,
-// edited independently) does.
+// Direct, fixed-mark-value mark composition for a subject under this exam
+// (e.g. Theory 60 + MCQ 20 + Practical 20 = the subject's real total) —
+// replaces the old separate "Theory Mark Breakdown" + "Grade Composition"
+// dialogs with one unified list. Full replace, not upsert-by-key — the list
+// is short and edited as a whole from one small admin form.
+examsRouter.get(
+  "/:id/subject-config/:subject_id/mark-components",
+  authorize(EXAM_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const components = await prisma.examMarkComponent.findMany({
+      where: { exam_id: reqParam(req, "id"), subject_id: reqParam(req, "subject_id") },
+      include: { source_exams: true },
+      orderBy: { display_order: "asc" },
+    });
+    res.json({ success: true, data: components });
+  }),
+);
+
 examsRouter.put(
-  "/:id/subject-config/:subject_id/components",
+  "/:id/subject-config/:subject_id/mark-components",
   authorize(EXAM_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const subjectId = reqParam(req, "subject_id");
-    const body = markComponentConfigSchema.parse(req.body);
+    const body = examMarkComponentsSchema.parse(req.body.components);
 
-    const keys = body.components.map((c) => c.key);
+    const exam = await prisma.exam.findUnique({ where: { id } });
+    if (!exam) throw notFound("Exam not found");
+    // A composition must never change out from under marks that are already
+    // being entered against it — mirrors PUT /:id's existing DRAFT-lock
+    // precedent, widened to also allow ACTIVE (subject configuration is
+    // still being finalized then, before Mark Entry actually opens).
+    if (exam.status !== "DRAFT" && exam.status !== "ACTIVE") {
+      throw badRequest("Mark composition can only be edited while the exam is Draft or Active");
+    }
+
+    const keys = body.map((c) => c.key);
     if (new Set(keys).size !== keys.length) throw badRequest("Component keys must be unique within a subject");
 
+    if (body.length > 0) {
+      for (const c of body) {
+        if (c.source_type === "AVERAGE_OF_EXAMS" && (!c.source_exam_ids || c.source_exam_ids.length === 0)) {
+          throw badRequest(`Component "${c.label}" must select at least one source exam to average from`);
+        }
+      }
+      // Hard-validated: must sum exactly to the subject's real total — no
+      // percentage math anywhere, a simple, one-sentence rule.
+      const subjectConfig = await prisma.examSubjectConfig.findUnique({ where: { exam_id_subject_id: { exam_id: id, subject_id: subjectId } } });
+      if (!subjectConfig) throw notFound("Subject is not configured for this exam");
+      const subjectTotal = subjectConfig.full_marks_theory + subjectConfig.full_marks_practical;
+      const componentTotal = Math.round(body.reduce((sum, c) => sum + c.max_marks, 0) * 100) / 100;
+      if (Math.abs(componentTotal - subjectTotal) > 0.01) {
+        throw badRequest(`Component marks must sum to this subject's total (${subjectTotal}), got ${componentTotal}`);
+      }
+    }
+
+    // Individual creates (not createMany) — a nested source_exams create
+    // needs each component's own generated id, which a flat createMany
+    // batch can't provide. Still one transaction, still delete-and-recreate.
     await prisma.$transaction([
-      prisma.markComponentConfig.deleteMany({ where: { exam_id: id, subject_id: subjectId } }),
-      ...(body.components.length
-        ? [
-            prisma.markComponentConfig.createMany({
-              data: body.components.map((c, i) => ({
-                exam_id: id,
-                subject_id: subjectId,
-                key: c.key,
-                label: c.label,
-                max_marks: c.max_marks,
-                display_order: c.display_order ?? i,
-              })),
-            }),
-          ]
-        : []),
+      prisma.examMarkComponent.deleteMany({ where: { exam_id: id, subject_id: subjectId } }),
+      ...body.map((c, i) =>
+        prisma.examMarkComponent.create({
+          data: {
+            exam_id: id,
+            subject_id: subjectId,
+            key: c.key,
+            label: c.label,
+            max_marks: c.max_marks,
+            source_type: c.source_type,
+            display_order: c.display_order ?? i,
+            ...(c.source_type === "AVERAGE_OF_EXAMS" && c.source_exam_ids?.length
+              ? { source_exams: { createMany: { data: c.source_exam_ids.map((source_exam_id) => ({ source_exam_id })) } } }
+              : {}),
+          },
+        }),
+      ),
     ]);
 
-    const components = await prisma.markComponentConfig.findMany({ where: { exam_id: id, subject_id: subjectId }, orderBy: { display_order: "asc" } });
+    const components = await prisma.examMarkComponent.findMany({
+      where: { exam_id: id, subject_id: subjectId },
+      include: { source_exams: true },
+      orderBy: { display_order: "asc" },
+    });
     res.json({ success: true, data: components });
   }),
 );

@@ -18,7 +18,7 @@ export const SETTINGS_GROUPS = [
     items: [
       { href: "/settings/student-id", label: "Student ID Format" },
       { href: "/settings/grading", label: "Grading System" },
-      { href: "/settings/exam-types", label: "Exam Types" },
+      { href: "/settings/mark-composition-templates", label: "Mark Composition Templates" },
       { href: "/settings/marksheet-display", label: "Marksheet Display" },
       { href: "/settings/fee-rules", label: "Fee Rules" },
       { href: "/settings/attendance-rules", label: "Attendance Rules" },

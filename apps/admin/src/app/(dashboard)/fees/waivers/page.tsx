@@ -356,6 +356,7 @@ function MultiPickerLauncher({
         getKey={(s) => s.id}
         selected={selectedIds}
         onToggle={onToggle}
+        filterKey={`${classId}:${sectionId}:${groupId}`}
         filters={
           <>
             <select className="rounded-md border px-2 py-1.5 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setGroupId(""); }}>

@@ -26,6 +26,18 @@ export interface RecordPickerDialogProps<T> {
   renderRow: (item: T) => React.ReactNode;
   getKey: (item: T) => string;
   onSelect: (item: T) => void;
+  // Extra filter controls (e.g. Class/Section selects) rendered above the
+  // search box — the caller owns this state, so it's surfaced back here only
+  // as a string the dialog can compare to know a filter changed (see
+  // filterKey below); this component never needs to know what the filters
+  // actually are.
+  filters?: React.ReactNode;
+  // A string that changes whenever `filters`' underlying values change
+  // (e.g. `${classId}:${sectionId}`). Without this, selecting a filter alone
+  // — with no search text typed and no page click — would silently not
+  // refetch, since the fetch effect's own dependency list has no way to see
+  // filter state living in the caller.
+  filterKey?: string;
 }
 
 // Generic "find a record, then act on it" picker — the shared answer to
@@ -42,6 +54,8 @@ export function RecordPickerDialog<T>({
   renderRow,
   getKey,
   onSelect,
+  filters,
+  filterKey,
 }: RecordPickerDialogProps<T>) {
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
@@ -54,8 +68,21 @@ export function RecordPickerDialog<T>({
   const fetchResultsRef = React.useRef(fetchResults);
   fetchResultsRef.current = fetchResults;
 
+  const prevFilterKeyRef = React.useRef(filterKey);
+
   React.useEffect(() => {
     if (!open) return;
+    // A filter change resets to page 1 first rather than fetching with a
+    // page number that may no longer be valid against the narrower result
+    // set — this effect re-runs once `page` settles to 1, so this never
+    // double-fetches.
+    if (prevFilterKeyRef.current !== filterKey) {
+      prevFilterKeyRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     let cancelled = false;
     setLoading(true);
     fetchResultsRef
@@ -70,7 +97,7 @@ export function RecordPickerDialog<T>({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, search, page]);
+  }, [open, search, page, filterKey]);
 
   React.useEffect(() => {
     if (!open) {
@@ -93,6 +120,7 @@ export function RecordPickerDialog<T>({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
+        {filters && <div className="flex flex-wrap gap-2">{filters}</div>}
         <SearchInput
           placeholder={searchPlaceholder}
           value={search}

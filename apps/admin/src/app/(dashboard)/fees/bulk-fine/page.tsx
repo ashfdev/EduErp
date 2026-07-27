@@ -162,6 +162,7 @@ export default function BulkFinePage() {
         getKey={(s) => s.id}
         selected={selectedIds}
         onToggle={toggle}
+        filterKey={`${classId}:${sectionId}`}
         filters={
           <>
             <select className="rounded-md border px-2 py-1.5 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>

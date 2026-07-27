@@ -17,7 +17,6 @@ interface Option {
 interface ExamSummary {
   id: string;
   name: string;
-  exam_type_config: { name: string };
   academic_year: { label: string };
 }
 
@@ -61,18 +60,18 @@ function CloneExamForm() {
     <Card>
       <CardContent className="space-y-4 pt-6">
         <p className="text-sm text-muted-foreground">
-          Reuses the exam type, grading scale, and any per-subject mark-rule overrides from a past
-          exam — you only set the new dates, year, and classes.
+          Reuses the grading scale and any per-subject mark-rule overrides from a past exam — you
+          only set the new dates, year, and classes.
         </p>
         <div className="space-y-1.5">
           <Label>Clone from</Label>
           <select className="w-full rounded-md border px-3 py-2 text-sm" value={sourceExamId} onChange={(e) => setSourceExamId(e.target.value)}>
             <option value="">Select a past exam...</option>
-            {exams?.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.exam_type_config.name} — {e.academic_year.label})</option>)}
+            {exams?.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.academic_year.label})</option>)}
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label>Name (leave blank to auto-generate from the exam type + new year)</Label>
+          <Label>Name (leave blank to auto-generate from the source exam&apos;s name + new year)</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Auto-generated if left blank" />
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -116,7 +115,6 @@ function CloneExamForm() {
 function NewExamForm() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [examTypeId, setExamTypeId] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
   const [gradingScaleId, setGradingScaleId] = useState("");
   const [classIds, setClassIds] = useState<string[]>([]);
@@ -125,7 +123,6 @@ function NewExamForm() {
   const [markOpen, setMarkOpen] = useState("");
   const [markClose, setMarkClose] = useState("");
 
-  const { data: examTypes } = useQuery<Option[]>({ queryKey: ["settings", "exam-types"], queryFn: async () => (await api.get("/api/settings/exam-types")).data.data });
   const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   const { data: scales } = useQuery<Option[]>({ queryKey: ["settings", "grading-scales"], queryFn: async () => (await api.get("/api/settings/grading-scales")).data.data });
   // Scoped to the selected year — Class rows are recreated every academic
@@ -141,7 +138,6 @@ function NewExamForm() {
     mutationFn: () =>
       api.post("/api/exams", {
         name,
-        exam_type_config_id: examTypeId,
         academic_year_id: academicYearId,
         grading_scale_id: gradingScaleId || undefined,
         start_date: startDate || undefined,
@@ -162,13 +158,6 @@ function NewExamForm() {
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Half Yearly Examination 2026" /></div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Exam Type</Label>
-              <select className="w-full rounded-md border px-3 py-2 text-sm" value={examTypeId} onChange={(e) => setExamTypeId(e.target.value)}>
-                <option value="">Select...</option>
-                {examTypes?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
             <div className="space-y-1.5">
               <Label>Academic Year</Label>
               <select
@@ -206,7 +195,7 @@ function NewExamForm() {
               ))}
             </div>
           </div>
-          <Button disabled={createMutation.isPending || !name || !examTypeId || !academicYearId || !classIds.length} onClick={() => createMutation.mutate()}>
+          <Button disabled={createMutation.isPending || !name || !academicYearId || !classIds.length} onClick={() => createMutation.mutate()}>
             {createMutation.isPending ? "Creating..." : "Create Exam"}
           </Button>
         </CardContent>

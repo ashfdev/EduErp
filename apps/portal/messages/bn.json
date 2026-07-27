@@ -200,7 +200,6 @@
   },
   "results": {
     "title": "ফলাফল",
-    "anyExam": "যেকোনো পরীক্ষা",
     "anyYear": "যেকোনো বছর",
     "currentSuffix": " (চলমান)",
     "noResultFound": "এই অনুসন্ধানের জন্য কোনো ফলাফল পাওয়া যায়নি।",
@@ -213,7 +212,16 @@
     "absent": "অনুপস্থিত",
     "totalGpa": "মোট জিপিএ: {gpa}",
     "overallGrade": "সামগ্রিক গ্রেড: {grade}",
-    "printCard": "ফলাফল কার্ড প্রিন্ট করুন"
+    "printCard": "ফলাফল কার্ড প্রিন্ট করুন",
+    "courseCode": "কোর্স কোড",
+    "section": "শাখা",
+    "teacher": "শিক্ষক",
+    "className": "শ্রেণি",
+    "viewResult": "ফলাফল দেখুন",
+    "hideResult": "লুকান",
+    "notEntered": "এন্ট্রি করা হয়নি",
+    "notConducted": "অনুষ্ঠিত হয়নি",
+    "fullMarks": "পূর্ণমান"
   },
   "routine": {
     "title": "ক্লাস রুটিন",

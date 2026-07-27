@@ -72,21 +72,8 @@ model InstitutionConfig {
   show_class_position           Boolean              @default(true)
   show_section_position         Boolean              @default(true)
   fourth_subject_rule           Boolean              @default(false)
-  // Term-Based (separate real exams blended by ExamTypeConfig.weight_in_annual)
-  // vs. Course-Based (per-course weighted components, university Faculty
-  // Gradebook — designed but not yet built) result computation (Plan
-  // Fifteen, Phase I). Nullable: null means "not yet explicitly set", in
-  // which case the effective mode is derived from InstitutionProfile.type
-  // at read time (resolveResultMode()) rather than baked into a migration
-  // default — never silently wrong for a fresh UNIVERSITY-type install.
-  result_calculation_mode       ResultCalculationMode?
   created_at                    DateTime             @default(now())
   updated_at                    DateTime             @updatedAt
-}
-
-enum ResultCalculationMode {
-  TERM_BLEND
-  COURSE_GRADEBOOK
 }
 
 model StudentIdConfig {
@@ -130,43 +117,15 @@ model GradeRange {
   @@index([grading_scale_id])
 }
 
-model ExamTypeConfig {
-  id                       String   @id @default(cuid())
-  name                     String
-  code                     String   @unique
-  weight_in_annual         Float    @default(0)
-  allows_absent_marking    Boolean  @default(true)
-  has_practical            Boolean  @default(false)
-  has_viva                 Boolean  @default(false)
-  practical_marks_separate Boolean  @default(false)
-  is_board_exam            Boolean  @default(false)
-  is_active                Boolean  @default(true)
-  display_order            Int
-  exams                    Exam[]
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
-}
-
-// One free-text co-curricular remark per student per academic year (Plan
-// Fifteen, Phase I) — shown on the Combined/Annual Result Card as
-// informational-only context, per the confirmed Term-Based-mode design
-// (never a numeric contribution to any grade/GPA). Nothing existing in this
-// schema captures free-text co-curricular commentary; every other
-// "remarks"-shaped field here is either grade-derived (GradeRange.remarks)
-// or scoped to a single document (Invoice, DisciplineRecord), not a
-// standing per-student-per-year record.
-model ExtracurricularRemark {
-  id               String       @id @default(cuid())
-  student_id       String
-  student          Student      @relation(fields: [student_id], references: [id])
-  academic_year_id String
-  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
-  remarks          String
-  recorded_by_id   String
-  created_at       DateTime     @default(now())
-  updated_at       DateTime     @updatedAt
-
-  @@unique([student_id, academic_year_id])
+enum MarkComponentSourceType {
+  MANUAL
+  ATTENDANCE_PERCENTAGE
+  // An admin-picked list of one or more SPECIFIC other exams (never a
+  // category/type match) — see ExamMarkComponentSourceExam. Deliberately
+  // not offered as a MarkCompositionTemplateItem source_type: a reusable
+  // template reapplied to a different exam/year must never silently point
+  // at a stale, specific past exam.
+  AVERAGE_OF_EXAMS
 }
 
 model FeeRules {
@@ -214,6 +173,12 @@ model MarksheetDisplaySettings {
   show_average_grade_point   Boolean  @default(false)
   show_average_remarks       Boolean  @default(false)
   show_published_date        Boolean  @default(true)
+  // Gates the Theory/MCQ/Practical/CT/Assignment/Attendance mark-composition
+  // breakdown block — defaults to true (shown whenever a subject actually
+  // has mark components) matching the already-shown default for the sibling
+  // show_institute_banner/show_attendance_info-style toggles; a subject
+  // with no ExamMarkComponent rows renders nothing here regardless.
+  show_mark_composition      Boolean  @default(true)
   updated_at                 DateTime @updatedAt
 }
 
@@ -339,7 +304,6 @@ model AcademicYear {
   course_enrollments        CourseEnrollment[]
   student_waivers           StudentWaiver[]
   fee_fine_rules            FeeFineRule[]
-  extracurricular_remarks   ExtracurricularRemark[]
 }
 
 model Shift {
@@ -476,7 +440,7 @@ model Subject {
   student_subjects StudentSubject[]
   mark_entries     MarkEntry[]
   exam_subject_configs ExamSubjectConfig[]
-  component_configs MarkComponentConfig[]
+  mark_components  ExamMarkComponent[]
   homework         Homework[]
   routine_slots    RoutineSlot[]
   teaching_resources TeachingResource[]
@@ -706,7 +670,6 @@ model Student {
   documents               StudentDocument[]
   waivers                 StudentWaiver[]
   leave_requests          StudentLeaveRequest[]
-  extracurricular_remarks ExtracurricularRemark[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1144,8 +1107,6 @@ model Exam {
   id                   String              @id @default(cuid())
   academic_year_id     String
   academic_year        AcademicYear        @relation(fields: [academic_year_id], references: [id])
-  exam_type_config_id  String
-  exam_type_config     ExamTypeConfig      @relation(fields: [exam_type_config_id], references: [id])
   name                 String
   start_date           DateTime?
   end_date             DateTime?
@@ -1162,13 +1123,22 @@ model Exam {
   created_at           DateTime            @default(now())
   updated_at           DateTime            @updatedAt
   subject_configs      ExamSubjectConfig[]
-  component_configs    MarkComponentConfig[]
+  mark_components      ExamMarkComponent[]
   mark_entries         MarkEntry[]
   seat_plans           ExamSeatPlan[]
   result_publications  ResultPublication[]
   quizzes              Quiz[]
   sessions             ExamSession[]
   admit_card_overrides AdmitCardOverride[]
+  // Reverse side of ExamMarkComponentSourceExam.source_exam_id — this exam
+  // is used as an explicit averaging source by some other exam's mark
+  // component. Never traversed for computation (the auto-fetch logic
+  // queries MarkEntry/ResultPublication directly via the ids on that join
+  // table, not this relation); exams are never hard-deleted in this
+  // codebase (soft delete only, and only ever for DRAFT exams, which by
+  // definition have no published results to be used as a source), so no
+  // dangling-reference concern here.
+  used_as_component_source ExamMarkComponentSourceExam[]
 
   @@index([academic_year_id])
 }
@@ -1218,26 +1188,84 @@ model ExamSubjectConfig {
   @@unique([exam_id, subject_id])
 }
 
-// Optional, per-subject-per-exam breakdown of the theory mark into named
-// parts (assignment/quiz/mid-term/attendance/lab-viva, etc.) — admin/exam
-// staff configurable, mirroring the GradingScale->GradeRange pattern rather
-// than a hardcoded fixed list. When no rows exist for an exam+subject, that
-// subject's mark entry stays the plain theory/practical model unchanged.
-model MarkComponentConfig {
-  id            String   @id @default(cuid())
-  exam_id       String
-  exam          Exam     @relation(fields: [exam_id], references: [id])
-  subject_id    String
-  subject       Subject  @relation(fields: [subject_id], references: [id])
-  key           String
-  label         String
-  max_marks     Float
-  display_order Int      @default(0)
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+// Direct, fixed-mark-value composition of a subject's total under one exam
+// (e.g. Theory 60 + MCQ 20 + Practical 20 = the subject's real total) —
+// every row a plain named part with its own fixed max_marks, no percentage
+// math and no derived "Main Exam" piece. A subject with zero rows here
+// behaves exactly as today: marks_total = marks_theory + marks_practical,
+// no new fields read. Configured per (exam, subject) directly, optionally
+// pre-filled from a saved MarkCompositionTemplate.
+model ExamMarkComponent {
+  id             String                        @id @default(cuid())
+  exam_id        String
+  exam           Exam                          @relation(fields: [exam_id], references: [id])
+  subject_id     String
+  subject        Subject                       @relation(fields: [subject_id], references: [id])
+  key            String
+  label          String
+  max_marks      Float
+  source_type    MarkComponentSourceType       @default(MANUAL)
+  // Set only when source_type = AVERAGE_OF_EXAMS — one or more specific,
+  // admin-picked exams this component averages the student's percentage
+  // from (see ExamMarkComponentSourceExam).
+  source_exams   ExamMarkComponentSourceExam[]
+  display_order  Int                           @default(0)
+  created_at     DateTime                      @default(now())
+  updated_at     DateTime                      @updatedAt
 
   @@unique([exam_id, subject_id, key])
   @@index([exam_id, subject_id])
+}
+
+// One (component, source exam) pairing for an AVERAGE_OF_EXAMS mark
+// component — a real join table (not a JSON array) so a component can
+// average from several specific exams (e.g. CT1 + CT2) with proper
+// referential integrity, mirroring this schema's own ExamSessionClass/
+// MarkCompositionTemplateItem convention for a queryable many-to-many.
+// Cascade-deletes with its parent component (the existing delete-and-
+// recreate save pattern); exams themselves are never hard-deleted in this
+// codebase, so source_exam_id never dangles.
+model ExamMarkComponentSourceExam {
+  id              String            @id @default(cuid())
+  component_id    String
+  component       ExamMarkComponent @relation(fields: [component_id], references: [id], onDelete: Cascade)
+  source_exam_id  String
+  source_exam     Exam              @relation(fields: [source_exam_id], references: [id])
+
+  @@unique([component_id, source_exam_id])
+  @@index([source_exam_id])
+}
+
+// Standalone, named, reusable mark-composition template (e.g. "SSC
+// Standard" = Theory 70/MCQ 20/Practical 10) — built once in Settings.
+// Picked by name when configuring a subject's ExamMarkComponent rows for a
+// specific exam (pre-fills the draft, still adjustable before saving);
+// applying a template never writes anything here.
+model MarkCompositionTemplate {
+  id         String                        @id @default(cuid())
+  name       String
+  items      MarkCompositionTemplateItem[]
+  created_at DateTime                      @default(now())
+  updated_at DateTime                      @updatedAt
+}
+
+// source_type is deliberately restricted to MANUAL/ATTENDANCE_PERCENTAGE at
+// the validator level (see markCompositionTemplateItemSchema) — a reusable
+// template reapplied to a different exam/year must never silently point at
+// a stale, specific past exam, so AVERAGE_OF_EXAMS (which needs concrete
+// exam ids) is only ever configured directly on a real ExamMarkComponent,
+// never pre-filled from a template.
+model MarkCompositionTemplateItem {
+  id            String                  @id @default(cuid())
+  template_id   String
+  template      MarkCompositionTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  key           String
+  label         String
+  max_marks     Float
+  source_type   MarkComponentSourceType @default(MANUAL)
+  display_order Int                     @default(0)
+
+  @@unique([template_id, key])
 }
 
 model MarkEntry {
@@ -1250,11 +1278,13 @@ model MarkEntry {
   subject         Subject    @relation(fields: [subject_id], references: [id])
   marks_theory    Float?
   marks_practical Float?
-  // Set only when MarkComponentConfig rows exist for this exam+subject —
-  // { [component_key]: marks }. marks_theory is then server-computed as the
-  // sum of these, never accepted directly from the client, so the two can
-  // never disagree.
-  component_marks Json?
+  // Set only when ExamMarkComponent rows exist for this exam+subject —
+  // { [component_key]: { value: number|null, is_override: boolean } }.
+  // marks_total is then server-computed as the flat sum of every
+  // component's resolved value, never accepted directly from the client.
+  // value: null means "no source data yet" (e.g. no published CT exams),
+  // never a silent 0.
+  component_values Json?
   marks_total     Float?
   is_absent       Boolean    @default(false)
   grade_letter    String?
@@ -3675,7 +3705,6 @@ enum DocumentType {
   NOTICE
   VISITOR_SLIP
   ROUTINE
-  COMBINED_RESULT
 }
 
 enum NoticeAudience {

@@ -86,7 +86,7 @@ registry.registerPath({
   method: "post",
   path: "/api/exams",
   tags: ["Examination"],
-  summary: "Create an exam from an existing ExamTypeConfig",
+  summary: "Create an exam",
   security: bearer,
   request: { body: { content: { "application/json": { schema: createExamSchema } } } },
   responses: { 201: { description: "Created", content: { "application/json": { schema: successResponse(z.record(z.unknown())) } } }, ...errorResponses },

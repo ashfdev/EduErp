@@ -16,6 +16,8 @@ import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { invalidateCacheNamespace } from "../../lib/cache";
 import { isTeacherAssignedToSubjects, syncExpiredMarkCorrections } from "../../utils/mark-correction";
+import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { computeAverageOfExamsFetch } from "../../utils/grade-component-average-source";
 
 export const marksRouter = Router();
 marksRouter.use(authenticate);
@@ -185,13 +187,68 @@ marksRouter.get(
     const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } } });
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
 
-    const componentConfigs = await prisma.markComponentConfig.findMany({
+    // Direct, fixed-mark-value composition — a subject with zero rows here
+    // renders exactly as it does today (marks_theory/marks_practical boxes).
+    const markComponents = await prisma.examMarkComponent.findMany({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) } },
+      include: { source_exams: true },
       orderBy: { display_order: "asc" },
     });
-    const componentsBySubject = new Map<string, typeof componentConfigs>();
-    for (const c of componentConfigs) {
-      componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
+    const markComponentsBySubject = new Map<string, typeof markComponents>();
+    for (const c of markComponents) {
+      markComponentsBySubject.set(c.subject_id, [...(markComponentsBySubject.get(c.subject_id) ?? []), c]);
+    }
+
+    const studentIds = students.map((s) => s.id);
+    // key: `${subjectId}:${componentKey}:${studentId}` -> { value, annotation }.
+    // value is unscaled (a real mark, capped at the component's own
+    // max_marks), never scaled against a percentage. annotation is the
+    // human-readable "why" text for the red footnote under the cell (e.g.
+    // "Attendance: 92% present (46/50 days)") — computed here since this is
+    // the one place with all the raw source data at hand.
+    const componentFetch = new Map<string, { value: number | null; annotation: string | null }>();
+
+    const attendanceComponents = markComponents.filter((c) => c.source_type === "ATTENDANCE_PERCENTAGE");
+    if (attendanceComponents.length > 0 && studentIds.length > 0) {
+      const academicYear = await prisma.academicYear.findUnique({ where: { id: exam.academic_year_id } });
+      const dateRange = {
+        gte: exam.start_date ?? academicYear?.start_date,
+        lte: exam.end_date ?? academicYear?.end_date,
+      };
+      const attendanceByStudent = await computeSubjectWiseAttendance(prisma, studentIds, dateRange);
+      for (const c of attendanceComponents) {
+        for (const studentId of studentIds) {
+          const summary = attendanceByStudent.get(studentId);
+          const subjectSummary = summary?.subjects.find((s) => s.subject_id === c.subject_id);
+          const pct = subjectSummary?.percentage ?? 100;
+          const value = Math.min(c.max_marks, Math.round(((pct / 100) * c.max_marks) * 100) / 100);
+          const annotation = subjectSummary
+            ? `Attendance: ${subjectSummary.percentage}% present (${subjectSummary.present}/${subjectSummary.total} days)`
+            : "Attendance: no records yet";
+          componentFetch.set(`${c.subject_id}:${c.key}:${studentId}`, { value, annotation });
+        }
+      }
+    }
+
+    const averageComponents = markComponents.filter((c) => c.source_type === "AVERAGE_OF_EXAMS" && c.source_exams.length > 0);
+    if (averageComponents.length > 0 && studentIds.length > 0) {
+      const averageRequests = averageComponents.map((c) => ({
+        component_id: c.id,
+        subject_id: c.subject_id,
+        source_exam_ids: c.source_exams.map((se) => se.source_exam_id),
+      }));
+      const averageByKey = await computeAverageOfExamsFetch(prisma, averageRequests, classId, studentIds);
+      for (const c of averageComponents) {
+        for (const studentId of studentIds) {
+          const resolved = averageByKey.get(`${c.id}:${studentId}`);
+          const value = resolved === undefined ? null : Math.min(c.max_marks, Math.round(((resolved.average / 100) * c.max_marks) * 100) / 100);
+          const annotation =
+            resolved === undefined
+              ? "No published source exam results yet"
+              : `Average of ${resolved.count} selected exam${resolved.count === 1 ? "" : "s"}: ${Math.round(resolved.average * 10) / 10}%`;
+          componentFetch.set(`${c.subject_id}:${c.key}:${studentId}`, { value, annotation });
+        }
+      }
     }
 
     // Per-subject correction_status (Plan Fourteen, Phase M) — only ever
@@ -232,7 +289,7 @@ marksRouter.get(
         subjects: subjects.map((s) => ({
           ...s,
           config: configBySubject.get(s.id),
-          components: componentsBySubject.get(s.id) ?? [],
+          mark_components: markComponentsBySubject.get(s.id) ?? [],
           editable: assignedSubjectIds ? assignedSubjectIds.has(s.id) : true,
           correction_status: correctionStatusBySubject.get(s.id) ?? "NONE",
         })),
@@ -244,6 +301,25 @@ marksRouter.get(
           group_id: s.group_id,
           marks: Object.fromEntries(subjects.map((sub) => [sub.id, byKey.get(`${s.id}:${sub.id}`) ?? null])),
           enrolled_subject_ids: [...(enrolledByStudent.get(s.id) ?? [])],
+          // Fresh auto-fetch per (subject, mark-component key) — only
+          // present for AUTO-sourced components (ATTENDANCE_PERCENTAGE /
+          // AVERAGE_OF_EXAMS). The client prefers an already-stored
+          // is_override:true value from `marks` over this fetch; value:
+          // null means "no source data yet", never a silent 0. annotation
+          // is the red-footnote explanatory text, or null for a MANUAL
+          // component (which has no fetch entry at all).
+          component_fetch: Object.fromEntries(
+            subjects
+              .filter((sub) => (markComponentsBySubject.get(sub.id) ?? []).some((c) => c.source_type !== "MANUAL"))
+              .map((sub) => [
+                sub.id,
+                Object.fromEntries(
+                  (markComponentsBySubject.get(sub.id) ?? [])
+                    .filter((c) => c.source_type !== "MANUAL")
+                    .map((c) => [c.key, componentFetch.get(`${sub.id}:${c.key}:${s.id}`) ?? { value: null, annotation: null }]),
+                ),
+              ]),
+          ),
         })),
       },
     });
@@ -332,10 +408,14 @@ marksRouter.post(
     const subjectsForFallback = await prisma.subject.findMany({ where: { id: { in: subjectIds } }, select: { id: true, full_marks: true } });
     const fullMarksFallbackBySubject = new Map(subjectsForFallback.map((s) => [s.id, s.full_marks]));
 
-    const componentConfigs = await prisma.markComponentConfig.findMany({ where: { exam_id: body.exam_id, subject_id: { in: subjectIds } } });
-    const componentsBySubject = new Map<string, typeof componentConfigs>();
-    for (const c of componentConfigs) {
-      componentsBySubject.set(c.subject_id, [...(componentsBySubject.get(c.subject_id) ?? []), c]);
+    // A subject with zero rows here computes marks_total exactly as it does
+    // today (marksTheory + marks_practical below); this must stay a pure
+    // branch-on-existence addition, never a replacement of that flat
+    // computation.
+    const markComponentConfigs = await prisma.examMarkComponent.findMany({ where: { exam_id: body.exam_id, subject_id: { in: subjectIds } } });
+    const markComponentsBySubject = new Map<string, typeof markComponentConfigs>();
+    for (const c of markComponentConfigs) {
+      markComponentsBySubject.set(c.subject_id, [...(markComponentsBySubject.get(c.subject_id) ?? []), c]);
     }
 
     // Needed so a resubmit that touches an already-APPROVED entry can clear
@@ -365,26 +445,35 @@ marksRouter.post(
 
     for (const entry of body.entries) {
       const config = configBySubject.get(entry.subject_id);
-      const components = componentsBySubject.get(entry.subject_id);
+      const marksTheory = entry.marks_theory ?? null;
+      let marksTotal = (marksTheory ?? 0) + (entry.marks_practical ?? 0);
 
-      // When a subject has configured components, the theory mark is always
-      // the server-computed sum of those components — never trust a
-      // client-submitted marks_theory that could silently disagree with it.
-      let marksTheory = entry.marks_theory ?? null;
-      let componentMarks: Record<string, number> | null = null;
-      if (components && components.length > 0 && !entry.is_absent) {
-        const provided = entry.component_marks ?? {};
-        const configByKey = new Map(components.map((c) => [c.key, c]));
+      // When a subject has a mark composition configured, marks_total is
+      // instead the flat sum of every submitted component's own value — no
+      // derived/scaled piece, every named part (Theory, MCQ, Practical, CT,
+      // Assignment, Attendance, whatever the admin configured) is a plain
+      // peer value, capped at its own max_marks. A subject with zero rows
+      // here never enters this branch — byte-identical to today.
+      let componentValues: Record<string, { value: number | null; is_override: boolean }> | null = null;
+      const markComponents = markComponentsBySubject.get(entry.subject_id);
+      if (markComponents && markComponents.length > 0 && !entry.is_absent) {
+        const configByKey = new Map(markComponents.map((c) => [c.key, c]));
+        const provided = entry.component_values ?? {};
+        const resolved: Record<string, { value: number | null; is_override: boolean }> = {};
+        let sum = 0;
         for (const [k, v] of Object.entries(provided)) {
           const conf = configByKey.get(k);
           if (!conf) throw badRequest(`Unknown mark component "${k}" for subject`);
-          if (v < 0 || v > conf.max_marks) throw badRequest(`${conf.label} must be between 0 and ${conf.max_marks}`);
+          if (v.value !== null) {
+            if (v.value < 0 || v.value > conf.max_marks) throw badRequest(`${conf.label} must be between 0 and ${conf.max_marks}`);
+            sum += v.value;
+          }
+          resolved[k] = { value: v.value, is_override: v.is_override };
         }
-        componentMarks = provided;
-        marksTheory = Object.values(provided).reduce((sum, v) => sum + v, 0);
+        componentValues = resolved;
+        marksTotal = Math.round(sum * 100) / 100;
       }
 
-      const marksTotal = (marksTheory ?? 0) + (entry.marks_practical ?? 0);
       if (config) {
         if (marksTotal > config.full_marks_theory + config.full_marks_practical) {
           throw badRequest(`Marks for subject exceed full marks (${config.full_marks_theory + config.full_marks_practical})`);
@@ -406,7 +495,7 @@ marksRouter.post(
           subject_id: entry.subject_id,
           marks_theory: marksTheory,
           marks_practical: entry.marks_practical,
-          component_marks: componentMarks ?? undefined,
+          component_values: componentValues ?? undefined,
           marks_total: entry.is_absent ? null : marksTotal,
           is_absent: !!entry.is_absent,
           grade_letter: grade.grade_letter,
@@ -417,7 +506,7 @@ marksRouter.post(
         update: {
           marks_theory: marksTheory,
           marks_practical: entry.marks_practical,
-          component_marks: componentMarks ?? Prisma.DbNull,
+          component_values: componentValues ?? Prisma.DbNull,
           marks_total: entry.is_absent ? null : marksTotal,
           is_absent: !!entry.is_absent,
           grade_letter: grade.grade_letter,
