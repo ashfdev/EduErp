@@ -397,8 +397,12 @@ export default function HomePage() {
 
       {/* ── Governing Body ── */}
       {governingBody.length > 0 && (
-        <section className="bg-[#F5F7FA] py-12 sm:py-16">
-          <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+        <section className="relative pt-12 sm:pt-20 pb-4 sm:pb-6 overflow-hidden bg-slate-50">
+          {/* Decorative Orbs for Glassmorphism Background */}
+          <div className="absolute top-10 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[100px] pointer-events-none"></div>
+          <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-purple-400/10 rounded-full blur-[100px] pointer-events-none"></div>
+          
+          <div className="relative mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8 z-10">
             {/* Section title */}
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
@@ -410,24 +414,23 @@ export default function HomePage() {
               </Button>
             </div>
 
-            {/* Simple card grid */}
-            <div className="flex sm:grid overflow-x-auto sm:overflow-visible snap-x snap-mandatory gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 pb-4 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            {/* 3D Pop-Out Glassmorphism Cards */}
+            <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-8 pt-16 -mx-4 px-4 sm:mx-0 sm:px-1 snap-x snap-mandatory scroll-smooth" style={{ scrollbarWidth: 'none' }}>
               {governingBody.map((m) => (
-                <div key={m.id} className="min-w-[45vw] sm:min-w-0 snap-center shrink-0 sm:shrink bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col items-center text-center gap-3">
-                  {/* Avatar */}
-                  <div className="h-16 w-16 rounded-full overflow-hidden bg-slate-100 ring-2 ring-slate-200 shrink-0">
-                    {m.photo_url ? (
-                      <Image src={m.photo_url} alt={m.name} width={64} height={64} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-slate-400">
-                        <Users className="h-6 w-6" />
-                      </div>
-                    )}
+                <div key={m.id} className="w-48 sm:w-56 shrink-0 snap-start relative bg-white/60 backdrop-blur-xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-5 pt-14 sm:pt-16 text-center hover:-translate-y-2 transition-all duration-300 group">
+                  {/* Pop-Out Avatar */}
+                  <div className="absolute -top-12 sm:-top-14 left-1/2 -translate-x-1/2 w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1.5 bg-gradient-to-tr from-primary to-blue-300 shadow-xl group-hover:scale-105 group-hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-white ring-2 ring-white">
+                      {m.photo_url ? (
+                        <Image src={m.photo_url} alt={m.name} width={112} height={112} className="object-cover w-full h-full" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-primary/40 bg-slate-50"><Users className="h-10 w-10" /></div>
+                      )}
+                    </div>
                   </div>
-                  {/* Name */}
-                  <p className="text-sm font-semibold text-slate-800 leading-snug">{m.name}</p>
-                  {/* Designation — bold, prominent */}
-                  <p className="text-xs font-bold text-primary uppercase tracking-wide">{m.designation}</p>
+                  {/* Details */}
+                  <h3 className="font-bold text-slate-800 text-base sm:text-lg leading-tight line-clamp-1">{m.name}</h3>
+                  <p className="text-primary font-bold text-[10px] sm:text-xs uppercase tracking-wider mt-1.5 sm:mt-2 line-clamp-1">{m.designation}</p>
                 </div>
               ))}
             </div>
@@ -437,8 +440,12 @@ export default function HomePage() {
 
       {/* ── Teachers (Horizontal Scroll) ── */}
       {faculty.length > 0 && (
-        <section className="bg-white py-12 sm:py-16">
-          <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8">
+        <section className="relative pt-6 sm:pt-10 pb-12 sm:pb-20 overflow-hidden bg-white">
+          {/* Decorative Orbs for Glassmorphism Background */}
+          <div className="absolute top-0 right-1/3 w-[500px] h-[500px] bg-green-400/5 rounded-full blur-[120px] pointer-events-none"></div>
+          <div className="absolute bottom-0 left-1/3 w-[500px] h-[500px] bg-blue-400/5 rounded-full blur-[120px] pointer-events-none"></div>
+          
+          <div className="relative mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8 z-10">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                 <GraduationCap className="h-5 w-5 text-primary" />
@@ -448,25 +455,27 @@ export default function HomePage() {
                 <Link href="/faculty">{t("viewAll")}</Link>
               </Button>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory scroll-smooth">
+            {/* 3D Pop-Out Glassmorphism Cards */}
+            <div className="flex gap-6 sm:gap-8 overflow-x-auto pb-8 pt-16 -mx-4 px-4 sm:mx-0 sm:px-1 snap-x snap-mandatory scroll-smooth" style={{ scrollbarWidth: 'none' }}>
               {faculty.map((f) => (
                 <Link
                   key={f.id}
                   href={`/faculty/${f.id}`}
-                  className="snap-start shrink-0 w-36 sm:w-40 bg-white rounded-2xl border border-primary/20 shadow-sm overflow-hidden hover:border-primary/40 hover:shadow-md transition-all group"
+                  className="block w-48 sm:w-56 shrink-0 snap-start relative bg-slate-50/50 backdrop-blur-xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-5 pt-14 sm:pt-16 text-center hover:-translate-y-2 transition-all duration-300 group"
                 >
-                  <div className="h-1 bg-primary w-full" />
-                  <div className="p-4 text-center">
-                    <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full ring-2 ring-primary/20 bg-primary/5 group-hover:ring-green-300 transition-all">
+                  {/* Pop-Out Avatar */}
+                  <div className="absolute -top-12 sm:-top-14 left-1/2 -translate-x-1/2 w-24 h-24 sm:w-28 sm:h-28 rounded-full p-1.5 bg-gradient-to-tr from-primary to-green-300 shadow-xl group-hover:scale-105 group-hover:-translate-y-1 transition-all duration-300">
+                    <div className="w-full h-full rounded-full overflow-hidden bg-white ring-2 ring-white">
                       {f.photo_url ? (
-                        <Image src={f.photo_url} alt={f.name_en} width={64} height={64} className="h-full w-full object-cover" />
+                        <Image src={f.photo_url} alt={f.name_en} width={112} height={112} className="object-cover w-full h-full" />
                       ) : (
-                        <div className="h-full w-full flex items-center justify-center text-primary/40"><GraduationCap className="h-7 w-7" /></div>
+                        <div className="h-full w-full flex items-center justify-center text-primary/40 bg-slate-50"><GraduationCap className="h-10 w-10" /></div>
                       )}
                     </div>
-                    <p className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight">{f.name_en}</p>
-                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{f.designation}</p>
                   </div>
+                  {/* Details */}
+                  <h3 className="font-bold text-slate-800 text-base sm:text-lg leading-tight line-clamp-1">{f.name_en}</h3>
+                  <p className="text-primary font-bold text-[10px] sm:text-xs uppercase tracking-wider mt-1.5 sm:mt-2 line-clamp-1">{f.designation}</p>
                 </Link>
               ))}
             </div>
