@@ -11,7 +11,7 @@ import { csvUpload, documentUpload, verifyDocumentMagicBytes, imageUpload, verif
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema } from "@education-erp/validators";
+import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema, createStudentLoginSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
@@ -22,7 +22,7 @@ import { createOrLinkPortalLogin } from "../../lib/portal-login";
 import { assertSectionCapacity } from "../../lib/section-capacity";
 import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
-import { badRequest, notFound } from "../../lib/errors";
+import { badRequest, notFound, conflict } from "../../lib/errors";
 
 export const studentsRouter = Router();
 // Full 360-degree profiles (incl. fees/results/attendance) for any given id
@@ -397,6 +397,9 @@ studentsRouter.get(
         personal: {
           id: student.id,
           student_uid: student.student_uid,
+          // Whether this student already has a portal login — the "Create
+          // Portal Login" action only makes sense to show when this is null.
+          has_portal_login: !!student.user_id,
           name_en: student.name_en,
           name_bn: student.name_bn,
           middle_name: student.middle_name,
@@ -677,6 +680,44 @@ studentsRouter.put(
     });
 
     res.json({ success: true, data: updated });
+  }),
+);
+
+// Retroactively creates a portal login for a student who was created
+// without one — the only other place a STUDENT-role login gets created is
+// inside POST / and the CSV bulk-import-confirm path, both create-time
+// only. No existing route can do this after the fact; Settings → Users'
+// "Create User" always also creates a Staff row alongside the login, so
+// reusing it for a student would create a phantom Staff record.
+studentsRouter.post(
+  "/:id/create-login",
+  authorize(STUDENT_CRUD_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = createStudentLoginSchema.parse(req.body);
+    const student = await prisma.student.findUnique({ where: { id } });
+    if (!student) throw notFound("Student not found");
+    if (student.user_id) throw conflict("This student already has a portal login");
+
+    const phone = body.phone ?? student.phone;
+    if (!phone) throw badRequest("A phone number is required — provide one or add it to the student's profile first");
+
+    const { login } = await prisma.$transaction(async (tx) => {
+      const login = await createOrLinkPortalLogin(tx, { role: "STUDENT", phone, name: student.name_en, password_override: body.login_password });
+      await tx.student.update({ where: { id }, data: { user_id: login.userId, ...(body.phone && { phone: body.phone }) } });
+      return { login };
+    });
+
+    if (login.tempPassword) {
+      await sendNotification({
+        trigger: "PORTAL_LOGIN_CREATED",
+        recipients: [{ name: student.name_en, phone }],
+        template_data: { name: student.name_en, phone, password: login.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+      });
+    }
+    await logAudit("STUDENT_PORTAL_LOGIN_CREATE", { userId: req.user!.sub, targetType: "Student", targetId: id, metadata: { linked_existing_user: !login.tempPassword }, req });
+
+    res.json({ success: true, data: { phone, temp_password: login.tempPassword }, message: login.tempPassword ? "Login created and credentials sent via SMS" : "Linked to an existing account with this phone number" });
   }),
 );
 

@@ -20,6 +20,7 @@ interface StudentDocumentRow {
 interface StudentProfile {
   personal: {
     student_uid: string;
+    has_portal_login: boolean;
     name_en: string;
     name_bn?: string | null;
     photo_url?: string | null;
@@ -209,6 +210,29 @@ export default function StudentProfilePage() {
     },
   });
 
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [loginPhone, setLoginPhone] = useState("");
+  const [credentialModal, setCredentialModal] = useState<{ phone: string; password: string | null } | null>(null);
+  const createLoginMutation = useMutation({
+    mutationFn: () => api.post(`/api/students/${id}/create-login`, { phone: loginPhone || undefined }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      setLoginDialogOpen(false);
+      setLoginPhone("");
+      setCredentialModal({ phone: res.data.data.phone, password: res.data.data.temp_password });
+    },
+    onError: (err: unknown) => {
+      toast.error(extractErrorMessage(err) ?? "Failed to create portal login");
+    },
+  });
+  function copyPassword() {
+    if (!credentialModal?.password) return;
+    navigator.clipboard.writeText(credentialModal.password).then(
+      () => toast.success("Password copied"),
+      () => toast.error("Couldn't copy — select and copy manually"),
+    );
+  }
+
   const leaveMutation = useMutation({
     mutationFn: () => api.post(`/api/students/${id}/${leaveDialog}`, { reason: leaveReason || undefined }),
     onSuccess: () => {
@@ -276,6 +300,11 @@ export default function StudentProfilePage() {
           <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/transfer-cert`, `Transfer Certificate — ${personal.name_en}`)}>
             Transfer Certificate
           </Button>
+          {!personal.has_portal_login && (
+            <Button size="sm" variant="outline" onClick={() => { setLoginPhone(personal.phone ?? ""); setLoginDialogOpen(true); }}>
+              Create Portal Login
+            </Button>
+          )}
         </div>
         {!["GRADUATED", "TRANSFERRED", "EXPELLED"].includes(personal.status) && (
           <>
@@ -285,6 +314,58 @@ export default function StudentProfilePage() {
           </>
         )}
       </div>
+
+      <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Portal Login — {personal.name_en}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Phone Number</Label>
+              <Input value={loginPhone} onChange={(e) => setLoginPhone(e.target.value)} placeholder="01XXXXXXXXX" />
+              <p className="text-xs text-muted-foreground">
+                A temporary password will be generated and sent via SMS. If this phone already has an account (e.g. a
+                sibling), it will be linked instead of creating a duplicate.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => createLoginMutation.mutate()} disabled={createLoginMutation.isPending || !loginPhone.trim()}>
+              {createLoginMutation.isPending ? "Creating..." : "Create Login"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!credentialModal} onOpenChange={(v) => !v && setCredentialModal(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Login Credentials — {personal.name_en}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {credentialModal?.password ? (
+              <>
+                <p className="text-sm text-amber-700">Save this now — it will not be shown again. It was also sent via SMS to {credentialModal.phone}.</p>
+                <div className="space-y-1.5">
+                  <Label>Phone</Label>
+                  <Input readOnly value={credentialModal.phone} className="font-mono" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Temporary Password</Label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={credentialModal.password} className="font-mono" />
+                    <Button type="button" variant="outline" onClick={copyPassword}>Copy</Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">The student will be required to set their own password on first login.</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This phone number ({credentialModal?.phone}) already had an account — it was linked to this student instead
+                of creating a new one, so no new password was generated.
+              </p>
+            )}
+          </div>
+          <DialogFooter><Button onClick={() => setCredentialModal(null)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={graduateOpen} onOpenChange={setGraduateOpen}>
         <DialogContent>

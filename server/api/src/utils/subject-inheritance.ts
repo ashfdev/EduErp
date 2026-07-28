@@ -41,6 +41,22 @@ export async function inheritSubjectsForClass(
   // a compulsory one.
   fourthSubjectId?: string | null,
 ) {
+  // A stale same-year enrollment in a DIFFERENT class's subjects — e.g. a
+  // student moved from Class 9 to Class 10 mid-year, leaving their old
+  // Class 9 StudentSubject rows in place under the very same
+  // academic_year_id. This is not the "historical assignment" this
+  // codebase deliberately preserves (that means a genuinely different,
+  // earlier academic_year_id, e.g. last year's real Class 9 record) — a
+  // student cannot coherently be enrolled in two different classes' worth
+  // of subjects within one and the same year, so any leftover same-year
+  // row for a class other than the destination is corrected here rather
+  // than left to silently accumulate on every class change. No-op for a
+  // brand-new student (create/admission-enroll callers), who has no prior
+  // rows to clean up.
+  await tx.studentSubject.deleteMany({
+    where: { student_id: studentId, academic_year_id: academicYearId, subject: { class_id: { not: classId } } },
+  });
+
   const allSubjects = await tx.subject.findMany({ where: { class_id: classId, is_active: true } });
   // group_id === null means "applies to every group in this class" — the
   // unchanged existing behavior for every call site that doesn't pass a

@@ -136,3 +136,15 @@ export const studentDocumentSchema = z.object({
   ]),
 });
 export type StudentDocumentInput = z.infer<typeof studentDocumentSchema>;
+
+// Retroactively creates a portal login for a student who was created
+// without one (e.g. no phone on file at admission time, or a guardian only
+// asks for portal access later) -- phone is optional here specifically
+// because the student may already have one on file (Student.phone); when
+// omitted, the route falls back to that existing value and only errors if
+// neither is present.
+export const createStudentLoginSchema = z.object({
+  phone: z.string().regex(/^01\d{9}$/, "Phone must be 11 digits starting with 01").optional(),
+  login_password: z.string().min(8).optional(),
+});
+export type CreateStudentLoginInput = z.infer<typeof createStudentLoginSchema>;
