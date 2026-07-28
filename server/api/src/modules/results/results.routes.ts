@@ -27,7 +27,12 @@ export async function computeClassResults(examId: string, classId: string, group
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: true } } } }),
     prisma.subject.findMany({ where: { class_id: classId, is_active: true } }),
     prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      // status: "ACTIVE" -- a GRADUATED/TRANSFERRED/EXPELLED student's
+      // current_class_id often still points at their last real class; left
+      // unfiltered, they'd be counted in class averages/positions and drag
+      // both down for every other student's report card (see the identical
+      // fix applied to the approve/publish completeness checks).
+      where: { current_class_id: classId, status: "ACTIVE", deleted_at: null, ...(groupId && { group_id: groupId }) },
       orderBy: { current_roll_no: "asc" },
     }),
     prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),

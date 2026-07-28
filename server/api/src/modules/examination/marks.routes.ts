@@ -613,8 +613,13 @@ marksRouter.post(
     // undefined must mean "the no-group unit," matching only students whose
     // own group_id really is null, not silently every student in the class
     // once a class can have both real groups and a no-group unit at once.
+    // status: "ACTIVE" -- a GRADUATED/TRANSFERRED/EXPELLED student's
+    // current_class_id often still points at their last real class, but no
+    // one ever enters marks for them; without this filter, one leftover
+    // graduated student here makes that class's approval permanently
+    // unreachable (the expected count could never be satisfied).
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, group_id: groupId ?? null },
+      where: { current_class_id: classId, status: "ACTIVE", deleted_at: null, group_id: groupId ?? null },
     });
 
     const entries = await prisma.markEntry.findMany({
@@ -750,9 +755,11 @@ marksRouter.post(
 
     const subjects = filterEligibleSubjects(await prisma.subject.findMany({ where: { class_id: classId, is_active: true } }), groupId);
     // See the identical note in /approve above — explicit group_id, never a
-    // truthy-guard omission.
+    // truthy-guard omission, and status: "ACTIVE" so a leftover
+    // GRADUATED/TRANSFERRED/EXPELLED student's stale current_class_id can't
+    // permanently block this class/group from ever reaching 100%.
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, group_id: groupId ?? null },
+      where: { current_class_id: classId, status: "ACTIVE", deleted_at: null, group_id: groupId ?? null },
     });
     const unapproved = await prisma.markEntry.findFirst({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, student_id: { in: students.map((s) => s.id) }, status: { not: "APPROVED" } },
