@@ -170,8 +170,19 @@ marksRouter.get(
     // CLASS_TEACHER keeps seeing every subject in the class (subjectIds
     // stays undefined) — assignedSubjectIds only drives per-column editability below.
 
+    // Only subjects this exam was actually configured for (a real
+    // ExamSubjectConfig row) — without this, navigating the URL to any
+    // class_id in the institution rendered a full grid for it regardless of
+    // whether that class was ever selected when the exam was created,
+    // falling back to a fake 100-mark default per subject since no config
+    // existed to read from.
     const rawSubjects = await prisma.subject.findMany({
-      where: { class_id: classId, is_active: true, ...(subjectIds && { id: { in: subjectIds } }) },
+      where: {
+        class_id: classId,
+        is_active: true,
+        exam_subject_configs: { some: { exam_id: examId } },
+        ...(subjectIds && { id: { in: subjectIds } }),
+      },
       orderBy: { created_at: "asc" },
     });
     // Defensive: two active subject rows can share a display name (only
@@ -426,6 +437,27 @@ marksRouter.post(
     const subjectIds = [...new Set(body.entries.map((e) => e.subject_id))];
     const configs = await prisma.examSubjectConfig.findMany({ where: { exam_id: body.exam_id, subject_id: { in: subjectIds } } });
     const configBySubject = new Map(configs.map((c) => [c.subject_id, c]));
+
+    // Reject outright when the submitted subject's whole CLASS was never
+    // configured for this exam at all (a class that was never selected when
+    // the exam was created/edited) — distinct from the narrower, legitimate
+    // case just below where the class IS in scope but one specific subject's
+    // config row is missing (e.g. added to the class after the exam was
+    // created), which still gets the fallback bound, not a rejection.
+    const submittedSubjectsForClassCheck = await prisma.subject.findMany({
+      where: { id: { in: subjectIds } },
+      select: { id: true, class_id: true },
+    });
+    const classIdsInScope = new Set(
+      (
+        await prisma.examSubjectConfig.findMany({
+          where: { exam_id: body.exam_id },
+          select: { subject: { select: { class_id: true } } },
+        })
+      ).map((c) => c.subject.class_id),
+    );
+    const outOfScope = submittedSubjectsForClassCheck.find((s) => !classIdsInScope.has(s.class_id));
+    if (outOfScope) throw badRequest("This class was never configured for this exam");
     const scale = exam.grading_scale?.ranges ?? [];
 
     // Fallback bound for the one real edge case where no ExamSubjectConfig

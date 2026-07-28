@@ -25,9 +25,12 @@
   table.info { border-collapse: collapse; font-size: 11px; }
   table.info td { padding: 2px 6px; }
   table.info td.label { font-weight: 600; color: #555; }
-  .stats-box { font-size: 10px; border: 1px solid #ccc; padding: 4px 8px; }
-  .stats-box table { border-collapse: collapse; }
-  .stats-box td { padding: 1px 6px 1px 0; }
+  .stats-box { font-size: 10px; }
+  .stats-box table { border-collapse: collapse; width: 100%; }
+  .stats-box th, .stats-box td { border: 1px solid #ccc; padding: 2px 6px; }
+  .stats-box th { background: {{institution.primary_color}}; color: #fff; text-align: left; }
+  .stats-box td:first-child { text-align: left; }
+  .stats-box td:last-child { text-align: right; }
   table.results { width: 100%; border-collapse: collapse; margin-top: 10px; }
   table.results th, table.results td { border: 1px solid #999; padding: 3px 5px; font-size: 10px; text-align: center; }
   table.results th { background: {{institution.primary_color}}; color: #fff; }
@@ -115,8 +118,8 @@
           <div class="component-breakdown">{{#each this.mark_components}}{{this.label}}: {{formatMarks this.marks}}/{{this.max_marks}}{{#unless @last}} &middot; {{/unless}}{{/each}}</div>
           {{/if}}{{/if}}
         </td>
-        <td rowspan="{{#if this.has_practical}}2{{else}}1{{/if}}" style="color: {{gradeColor this.grade_letter}}">{{this.grade_letter}}</td>
-        <td rowspan="{{#if this.has_practical}}2{{else}}1{{/if}}">{{this.grade_point}}</td>
+        <td rowspan="{{#if this.has_practical}}2{{else}}1{{/if}}" style="color: {{gradeColor this.grade_letter}}">{{formatMarks this.grade_letter}}</td>
+        <td rowspan="{{#if this.has_practical}}2{{else}}1{{/if}}">{{formatMarks this.grade_point}}</td>
       </tr>
       {{#if this.has_practical}}
       <tr>
@@ -139,15 +142,18 @@
   {{#if position}}
   <div class="stats-box" style="margin-top: 8px; display: inline-block;">
     <table>
-      {{#if display.show_position_in_class}}<tr><td>Position in Class:</td><td><strong>{{position.position_in_class}}</strong></td></tr>{{/if}}
-      {{#if display.show_position_in_section}}<tr><td>Position in Section:</td><td><strong>{{position.position_in_section}}</strong></td></tr>{{/if}}
-      {{#if display.show_highest_in_class}}<tr><td>Highest in Class:</td><td>{{position.highest_in_class}}</td></tr>{{/if}}
-      {{#if display.show_highest_in_section}}<tr><td>Highest in Section:</td><td>{{position.highest_in_section}}</td></tr>{{/if}}
-      {{#if display.show_average_marks}}<tr><td>Class Average Marks:</td><td>{{position.class_average_marks}}</td></tr>{{/if}}
-      {{#if display.show_average_grade_point}}<tr><td>Class Average GPA:</td><td>{{position.class_average_gpa}}</td></tr>{{/if}}
-      {{#if display.show_average_percentage}}<tr><td>Class Average Percentage:</td><td>{{position.class_average_percentage}}%</td></tr>{{/if}}
-      {{#if display.show_average_position}}<tr><td>Standing:</td><td>{{position.standing_vs_average}}</td></tr>{{/if}}
-      {{#if display.show_average_remarks}}<tr><td>Class Average Remark:</td><td>{{position.average_remarks}}</td></tr>{{/if}}
+      <thead><tr><th colspan="2">Performance Summary</th></tr></thead>
+      <tbody>
+        {{#if display.show_position_in_class}}<tr><td>Position in Class</td><td><strong>{{position.position_in_class}}</strong></td></tr>{{/if}}
+        {{#if display.show_position_in_section}}<tr><td>Position in Section</td><td><strong>{{position.position_in_section}}</strong></td></tr>{{/if}}
+        {{#if display.show_highest_in_class}}<tr><td>Highest in Class</td><td>{{position.highest_in_class}}</td></tr>{{/if}}
+        {{#if display.show_highest_in_section}}<tr><td>Highest in Section</td><td>{{position.highest_in_section}}</td></tr>{{/if}}
+        {{#if display.show_average_marks}}<tr><td>Class Average Marks</td><td>{{position.class_average_marks}}</td></tr>{{/if}}
+        {{#if display.show_average_grade_point}}<tr><td>Class Average GPA</td><td>{{position.class_average_gpa}}</td></tr>{{/if}}
+        {{#if display.show_average_percentage}}<tr><td>Class Average Percentage</td><td>{{position.class_average_percentage}}%</td></tr>{{/if}}
+        {{#if display.show_average_position}}<tr><td>Standing</td><td>{{position.standing_vs_average}}</td></tr>{{/if}}
+        {{#if display.show_average_remarks}}<tr><td>Class Average Remark</td><td>{{position.average_remarks}}</td></tr>{{/if}}
+      </tbody>
     </table>
   </div>
   {{/if}}

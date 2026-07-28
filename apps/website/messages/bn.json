@@ -27,7 +27,8 @@
     "resultLookup": "ফলাফল অনুসন্ধান",
     "portalLogin": "পোর্টাল লগইন",
     "academicCalendar": "একাডেমিক ক্যালেন্ডার",
-    "routine": "ক্লাস রুটিন"
+    "routine": "ক্লাস রুটিন",
+    "seatPlanLookup": "সিট প্ল্যান অনুসন্ধান"
   },
   "footer": {
     "quickLinks": "দ্রুত লিংক",
@@ -273,6 +274,30 @@
     "absent": "অনুপস্থিত",
     "overall": "সামগ্রিক: {result}",
     "failed": "অকৃতকার্য"
+  },
+  "seatPlanLookup": {
+    "title": "সিট প্ল্যান অনুসন্ধান",
+    "subtitle": "আপনার স্টুডেন্ট আইডি অথবা রোল ও রেজিস্ট্রেশন নম্বর দিয়ে আপনার পরীক্ষার হল, কক্ষ, ফ্লোর ও আসন খুঁজুন।",
+    "studentId": "স্টুডেন্ট আইডি",
+    "rollRegistration": "রোল + রেজিস্ট্রেশন নম্বর",
+    "rollNumber": "রোল নম্বর",
+    "registrationNumber": "রেজিস্ট্রেশন নম্বর",
+    "studentIdPlaceholder": "স্টুডেন্ট আইডি (যেমন: STU-26-0001)",
+    "rollPlaceholder": "রোল নম্বর",
+    "registrationPlaceholder": "রেজিস্ট্রেশন নম্বর",
+    "searching": "খোঁজা হচ্ছে...",
+    "findSeat": "আসন খুঁজুন",
+    "lookupFailed": "অনুসন্ধান ব্যর্থ হয়েছে",
+    "networkError": "সার্ভারে পৌঁছানো যায়নি — আবার চেষ্টা করুন।",
+    "notFoundTitle": "কোনো সিট প্ল্যান পাওয়া যায়নি",
+    "notFound": "মিলে যাওয়া কোনো শিক্ষার্থী পাওয়া যায়নি।",
+    "noSeatPlans": "এই শিক্ষার্থীর জন্য এখনো কোনো সিট প্ল্যান তৈরি হয়নি।",
+    "hall": "হল",
+    "room": "কক্ষ",
+    "floor": "ফ্লোর",
+    "row": "সারি",
+    "seat": "আসন",
+    "rowSeat": "সারি / আসন"
   },
   "careers": {
     "title": "ক্যারিয়ার",

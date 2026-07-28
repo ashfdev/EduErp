@@ -139,8 +139,23 @@ async function buildStudentDashboard(id: string) {
     if (latestPublication) {
       const entries = await prisma.markEntry.findMany({ where: { exam_id: latestPublication.exam_id, student_id: id }, include: { subject: true } });
       if (entries.length) {
-        const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
-        const result = calculateStudentResult(subjectInputs, latestPublication.exam.grading_scale?.ranges ?? [], false);
+        const [fourthRows, institutionConfig] = await Promise.all([
+          prisma.studentSubject.findMany({
+            where: { student_id: id, academic_year_id: latestPublication.exam.academic_year_id, is_fourth_subject: true },
+            select: { subject_id: true },
+          }),
+          prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),
+        ]);
+        const fourthSubjectIds = new Set(fourthRows.map((r) => r.subject_id));
+        const subjectInputs = entries.map((e) => ({
+          subject_id: e.subject_id,
+          subject_name: e.subject.name_en,
+          is_optional: e.subject.is_optional,
+          is_fourth_subject: fourthSubjectIds.has(e.subject_id),
+          marks_total: e.marks_total,
+          is_absent: e.is_absent,
+        }));
+        const result = calculateStudentResult(subjectInputs, latestPublication.exam.grading_scale?.ranges ?? [], institutionConfig?.fourth_subject_rule ?? false);
         recentResults = [{ exam_name: latestPublication.exam.name, gpa: result.total_gpa, grade: result.overall_grade_letter }];
       }
     }
@@ -285,11 +300,12 @@ portalRouter.get(
       return pub.group_id === (student.group_id ?? null);
     });
 
+    // Single institution — read once, not per publication.
+    const institutionConfig = await prisma.institutionConfig.findUnique({ where: { id: "singleton" } });
+
     const results = [];
     for (const pub of publications) {
       const entries = await prisma.markEntry.findMany({ where: { exam_id: pub.exam_id, student_id: id }, include: { subject: true } });
-      const subjectInputs = entries.map((e) => ({ subject_id: e.subject_id, subject_name: e.subject.name_en, is_optional: e.subject.is_optional, marks_total: e.marks_total, is_absent: e.is_absent }));
-      const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], false);
 
       // Ground truth for which subjects this student actually had for this
       // exam's class/year — a student enrolled in a subject with zero
@@ -300,6 +316,8 @@ portalRouter.get(
       // partially-graded exam (or a student none of whose subjects happen
       // to be graded yet) vanished from the results list entirely instead
       // of showing what IS graded with the rest flagged not_conducted.
+      // Also the source of which subject (if any) is this student's own
+      // designated BD "4th subject" for the GPA bonus rule.
       const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
       const enrolledSubjects = resolvedClassId
         ? await prisma.studentSubject.findMany({
@@ -307,6 +325,17 @@ portalRouter.get(
             include: { subject: true },
           })
         : [];
+      const fourthBySubject = new Map(enrolledSubjects.map((es) => [es.subject_id, es.is_fourth_subject]));
+      const subjectInputs = entries.map((e) => ({
+        subject_id: e.subject_id,
+        subject_name: e.subject.name_en,
+        is_optional: e.subject.is_optional,
+        is_fourth_subject: fourthBySubject.get(e.subject_id) ?? false,
+        marks_total: e.marks_total,
+        is_absent: e.is_absent,
+      }));
+      const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], institutionConfig?.fourth_subject_rule ?? false);
+
       const entryBySubject = new Map(entries.map((e) => [e.subject_id, e]));
       const allSubjectIds = new Set([...entries.map((e) => e.subject_id), ...enrolledSubjects.map((es) => es.subject_id)]);
       // Only skip when the student has genuinely zero connection to this
@@ -824,7 +853,16 @@ portalRouter.get(
     if (!exam || !student) throw notFound("Exam or student not found");
 
     const academicYear = exam.academic_year_id ? await prisma.academicYear.findUnique({ where: { id: exam.academic_year_id } }) : null;
-    const schedule = subjectConfigs.map((sc) => ({
+    // Only this student's own subjects -- a shared (group_id: null) subject
+    // applies to everyone, a group-scoped one only to students in that
+    // same group (see the identical fix in the staff-side batch route).
+    // Also scope to the student's own class, since subjectConfigs spans
+    // every class the exam covers and an ungrouped subject in a different
+    // class would otherwise pass the group check too.
+    const eligibleConfigs = subjectConfigs.filter(
+      (sc) => sc.subject.class_id === student.current_class_id && (sc.subject.group_id === null || sc.subject.group_id === student.group_id),
+    );
+    const schedule = eligibleConfigs.map((sc) => ({
       date: exam.start_date,
       day: exam.start_date ? new Date(exam.start_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
       subject_name: sc.subject.name_en,
@@ -837,6 +875,27 @@ portalRouter.get(
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="admit-card-${student.student_uid}.pdf"`);
     res.send(pdf);
+  }),
+);
+
+// This student's own seat assignments across every exam they have one for
+// (most recent exam first) -- room/floor/row/seat, so "where do I sit" is
+// visible in the portal without needing to open the admit card PDF.
+portalRouter.get(
+  "/student/:id/seat-plans",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const plans = await prisma.examSeatPlan.findMany({
+      where: { student_id: id },
+      include: {
+        exam: { select: { id: true, name: true, status: true, start_date: true } },
+        session: { select: { label: true, date: true, start_time: true, end_time: true } },
+        hall: { select: { name: true, room_number: true, floor: true } },
+      },
+      orderBy: { exam: { start_date: "desc" } },
+    });
+    res.json({ success: true, data: plans });
   }),
 );
 

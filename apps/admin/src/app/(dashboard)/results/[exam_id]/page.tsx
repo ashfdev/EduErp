@@ -13,6 +13,14 @@ interface ClassOption {
   groups?: { id: string; name_en: string }[];
 }
 
+interface ExamOption {
+  id: string;
+  name: string;
+  // The distinct classes this exam was actually configured for — see the
+  // identical field/comment on GET /api/exams (exams.routes.ts).
+  class_ids?: string[];
+}
+
 interface MeritEntry {
   rank: number;
   roll_no: string | null;
@@ -51,6 +59,16 @@ export default function ExamResultsPage() {
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
+  // This exam only ever covers a subset of the institution's classes — the
+  // Class dropdown below must only offer those, not every class regardless
+  // of whether this exam has anything to do with it (same fix already
+  // applied to the Document Print Center's exam-aware pickers).
+  const { data: exams } = useQuery<ExamOption[]>({
+    queryKey: ["exams"],
+    queryFn: async () => (await api.get("/api/exams")).data.data,
+  });
+  const currentExam = exams?.find((e) => e.id === exam_id);
+  const examScopedClasses = currentExam ? classes?.filter((c) => currentExam.class_ids?.includes(c.id)) ?? [] : classes;
   const selectedClass = classes?.find((c) => c.id === classId);
 
   const { data: merit } = useQuery<MeritEntry[]>({
@@ -103,16 +121,21 @@ export default function ExamResultsPage() {
         }
       />
 
-      <div className="flex gap-3">
-        <select className="w-64 rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setGroupId(""); }}>
-          <option value="">Select Class...</option>
-          {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-        </select>
-        {!!selectedClass?.groups?.length && (
-          <select className="w-48 rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">All Groups</option>
-            {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex gap-3">
+          <select className="w-64 rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setGroupId(""); }}>
+            <option value="">Select Class...</option>
+            {examScopedClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
           </select>
+          {!!selectedClass?.groups?.length && (
+            <select className="w-48 rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              <option value="">All Groups</option>
+              {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+            </select>
+          )}
+        </div>
+        {currentExam && !examScopedClasses?.length && (
+          <p className="text-xs text-amber-700">This exam has no classes configured yet.</p>
         )}
       </div>
 

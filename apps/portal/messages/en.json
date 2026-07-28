@@ -40,9 +40,11 @@
     "results": "Results",
     "upcomingExams": "Upcoming Exams",
     "admitCard": "Admit Card →",
+    "seatPlanLink": "Seat Plan →",
     "inDays": "in {days}d",
     "todayLabel": "today",
     "mySubjects": "My {className} Subjects",
+    "seatPlan": "Seat Plan",
     "transportHostel": "Transport & Hostel",
     "resources": "Resources",
     "complaints": "Complaints",
@@ -275,6 +277,17 @@
     "view": "View",
     "close": "Close",
     "clearPending": "Clear all pending items above to unlock your admit card."
+  },
+  "seatPlanPage": {
+    "title": "Seat Plan",
+    "noneTitle": "No seat assigned yet",
+    "noneDescription": "Your seat plan will appear here once it's generated for an upcoming exam.",
+    "resultPublished": "Result Published",
+    "hall": "Hall",
+    "roomFloor": "Room / Floor",
+    "room": "Room",
+    "row": "Row",
+    "seat": "Seat"
   },
   "profile": {
     "title": "Profile",

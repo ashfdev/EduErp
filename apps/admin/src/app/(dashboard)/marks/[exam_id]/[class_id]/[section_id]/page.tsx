@@ -109,6 +109,32 @@ export default function MarkEntryGridPage() {
     return `${studentId}:${subjectId}`;
   }
 
+  // The `max` HTML attribute on a plain number input enforces nothing on its
+  // own — no native form submission happens here, so a value over cap was
+  // previously invisible until the server rejected the whole submit. Scans
+  // only the (small) set of cells actually edited this session, checking
+  // each edited cell against its own subject's real cap — either the sum of
+  // its mark-composition parts against the subject total, or a plain
+  // Theory/Practical value against its own config cap.
+  const overCapCells = useMemo(() => {
+    const bad = new Set<string>();
+    for (const [k, edit] of Object.entries(edits)) {
+      const [, subjectId] = k.split(":") as [string, string];
+      const subject = data?.subjects.find((s) => s.id === subjectId);
+      if (!subject) continue;
+      if (edit.component_values) {
+        for (const comp of subject.mark_components ?? []) {
+          const v = edit.component_values[comp.key]?.value;
+          if (v != null && v > comp.max_marks) bad.add(k);
+        }
+      } else {
+        if (edit.marks_theory != null && subject.config && edit.marks_theory > subject.config.full_marks_theory) bad.add(k);
+        if (edit.marks_practical != null && subject.config && edit.marks_practical > subject.config.full_marks_practical) bad.add(k);
+      }
+    }
+    return bad;
+  }, [edits, data]);
+
   function getValue(studentId: string, subjectId: string) {
     const k = key(studentId, subjectId);
     if (edits[k]) return edits[k];
@@ -319,6 +345,7 @@ export default function MarkEntryGridPage() {
                                 {(s.mark_components ?? []).map((comp) => {
                                   const entry = componentValues[comp.key];
                                   const isAutoUnedited = comp.source_type !== "MANUAL" && !entry?.is_override;
+                                  const isOverCap = entry?.value != null && entry.value > comp.max_marks;
                                   return (
                                     <div key={comp.key} className="flex flex-col items-start">
                                       <span className="text-[9px] text-muted-foreground">{comp.label}/{comp.max_marks}</span>
@@ -327,17 +354,20 @@ export default function MarkEntryGridPage() {
                                         min={0}
                                         max={comp.max_marks}
                                         title={
-                                          isAutoUnedited
-                                            ? `${comp.label}, auto-fetched (out of ${comp.max_marks}) — edit to override`
-                                            : `${comp.label}, out of ${comp.max_marks}`
+                                          isOverCap
+                                            ? `${comp.label} cannot exceed ${comp.max_marks}`
+                                            : isAutoUnedited
+                                              ? `${comp.label}, auto-fetched (out of ${comp.max_marks}) — edit to override`
+                                              : `${comp.label}, out of ${comp.max_marks}`
                                         }
                                         className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                                          isAutoUnedited ? "border-dashed text-muted-foreground" : ""
+                                          isOverCap ? "border-red-500 bg-red-50 text-red-700" : isAutoUnedited ? "border-dashed text-muted-foreground" : ""
                                         }`}
                                         disabled={readOnly || v.is_absent}
                                         value={entry?.value ?? ""}
                                         onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
                                       />
+                                      {isOverCap && <span className="text-[9px] font-medium text-red-600">Max {comp.max_marks}</span>}
                                     </div>
                                   );
                                 })}
@@ -347,31 +377,47 @@ export default function MarkEntryGridPage() {
                               </>
                             ) : (
                               <>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  max={s.config?.full_marks_theory}
-                                  title={s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
-                                  className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                  disabled={readOnly || v.is_absent}
-                                  value={v.marks_theory ?? ""}
-                                  onChange={(e) =>
-                                    setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
-                                  }
-                                />
+                                {(() => {
+                                  const theoryOverCap = v.marks_theory != null && !!s.config && v.marks_theory > s.config.full_marks_theory;
+                                  return (
+                                    <div className="flex flex-col items-start">
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        max={s.config?.full_marks_theory}
+                                        title={theoryOverCap ? `Theory cannot exceed ${s.config!.full_marks_theory}` : s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
+                                        className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${theoryOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
+                                        disabled={readOnly || v.is_absent}
+                                        value={v.marks_theory ?? ""}
+                                        onChange={(e) =>
+                                          setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
+                                        }
+                                      />
+                                      {theoryOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_theory}</span>}
+                                    </div>
+                                  );
+                                })()}
                                 {!!s.config?.full_marks_practical && (
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    max={s.config.full_marks_practical}
-                                    title={`Practical, out of ${s.config.full_marks_practical}`}
-                                    className="h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                    disabled={readOnly || v.is_absent}
-                                    value={v.marks_practical ?? ""}
-                                    onChange={(e) =>
-                                      setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
-                                    }
-                                  />
+                                  (() => {
+                                    const practicalOverCap = v.marks_practical != null && v.marks_practical > s.config!.full_marks_practical;
+                                    return (
+                                      <div className="flex flex-col items-start">
+                                        <Input
+                                          type="number"
+                                          min={0}
+                                          max={s.config.full_marks_practical}
+                                          title={practicalOverCap ? `Practical cannot exceed ${s.config.full_marks_practical}` : `Practical, out of ${s.config.full_marks_practical}`}
+                                          className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${practicalOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
+                                          disabled={readOnly || v.is_absent}
+                                          value={v.marks_practical ?? ""}
+                                          onChange={(e) =>
+                                            setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
+                                          }
+                                        />
+                                        {practicalOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_practical}</span>}
+                                      </div>
+                                    );
+                                  })()
                                 )}
                               </>
                             )}
@@ -404,10 +450,15 @@ export default function MarkEntryGridPage() {
 
       {data.subjects.length > 0 && !readOnly && (
         <div className="flex items-center gap-3">
-          <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length}>
+          <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length || overCapCells.size > 0}>
             {submitMutation.isPending ? "Submitting..." : "Submit Marks"}
           </Button>
           <Badge variant="outline">{Object.keys(edits).length} pending change(s)</Badge>
+          {overCapCells.size > 0 && (
+            <Badge variant="destructive">
+              {overCapCells.size} value{overCapCells.size === 1 ? "" : "s"} over the allowed mark — fix before submitting
+            </Badge>
+          )}
         </div>
       )}
 

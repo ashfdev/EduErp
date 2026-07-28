@@ -39,35 +39,66 @@ describe("calculateGrade — BD board boundaries", () => {
 });
 
 describe("calculateStudentResult — 4th subject rule", () => {
+  // Bangla 80->A+(5.0), English 75->A(4.0), Math 90->A+(5.0), Higher Math
+  // (designated 4th subject) 85->A+(5.0), Biology (plain optional, not the
+  // 4th subject pick) 45->C(2.0).
   const entries = [
-    { subject_id: "bangla", subject_name: "Bangla", is_optional: false, marks_total: 80, is_absent: false },
-    { subject_id: "english", subject_name: "English", is_optional: false, marks_total: 75, is_absent: false },
-    { subject_id: "math", subject_name: "Math", is_optional: false, marks_total: 90, is_absent: false },
-    { subject_id: "biology", subject_name: "Biology", is_optional: true, marks_total: 45, is_absent: false },
-    { subject_id: "higher-math", subject_name: "Higher Math", is_optional: true, marks_total: 85, is_absent: false },
+    { subject_id: "bangla", subject_name: "Bangla", is_optional: false, is_fourth_subject: false, marks_total: 80, is_absent: false },
+    { subject_id: "english", subject_name: "English", is_optional: false, is_fourth_subject: false, marks_total: 75, is_absent: false },
+    { subject_id: "math", subject_name: "Math", is_optional: false, is_fourth_subject: false, marks_total: 90, is_absent: false },
+    { subject_id: "biology", subject_name: "Biology", is_optional: true, is_fourth_subject: false, marks_total: 45, is_absent: false },
+    { subject_id: "higher-math", subject_name: "Higher Math", is_optional: true, is_fourth_subject: true, marks_total: 85, is_absent: false },
   ];
 
-  it("drops the lowest-GPA optional subject when the rule is enabled", () => {
+  it("applies the real BD formula: (sum of averaged subjects + max(4th subject point - 2, 0)) / count of averaged subjects", () => {
     const result = calculateStudentResult(entries, BD_BOARD, true);
-    const dropped = result.subjects.find((s) => s.dropped_for_fourth_subject);
-    expect(dropped?.subject_id).toBe("biology");
-    // GPA should average the 4 counted subjects, excluding biology (grade C, 2.0)
-    const counted = result.subjects.filter((s) => !s.dropped_for_fourth_subject);
-    expect(counted).toHaveLength(4);
-    expect(result.total_gpa).toBeCloseTo((5.0 + 4.0 + 5.0 + 5.0) / 4, 2);
+    const fourth = result.subjects.find((s) => s.is_fourth_subject);
+    expect(fourth?.subject_id).toBe("higher-math");
+    // Averaged subjects: Bangla, English, Math, Biology (4 of them) — Higher
+    // Math (the 4th subject) is excluded from the denominator entirely.
+    const averaged = result.subjects.filter((s) => !s.is_fourth_subject);
+    expect(averaged).toHaveLength(4);
+    // Bonus from the 4th subject: A+ (5.0) - 2.00 = 3.00.
+    // GPA = (5.0[bangla] + 4.0[english] + 5.0[math] + 2.0[biology] + 3.0[bonus]) / 4
+    expect(result.total_gpa).toBeCloseTo((5.0 + 4.0 + 5.0 + 2.0 + 3.0) / 4, 2);
   });
 
-  it("counts every subject when the rule is disabled", () => {
+  it("counts every subject with no bonus when the rule is disabled", () => {
     const result = calculateStudentResult(entries, BD_BOARD, false);
-    expect(result.subjects.every((s) => !s.dropped_for_fourth_subject)).toBe(true);
+    expect(result.subjects.every((s) => !s.is_fourth_subject)).toBe(true);
+    // Plain average of all 5 subjects, no bonus.
+    expect(result.total_gpa).toBeCloseTo((5.0 + 4.0 + 5.0 + 2.0 + 5.0) / 5, 2);
   });
 
-  it("marks the overall result as failed if any counted subject fails", () => {
-    const withFail = [...entries.slice(0, 4), { subject_id: "religion", subject_name: "Religion", is_optional: false, marks_total: 20, is_absent: false }];
+  it("floors the 4th-subject bonus at 0 when its grade point is 2.0 or below", () => {
+    // Higher Math scores only 45 (C, 2.0) instead of 85 — bonus = max(2.0 -
+    // 2.0, 0) = 0, so it contributes nothing, not a negative adjustment.
+    const weakFourth = entries.map((e) => (e.subject_id === "higher-math" ? { ...e, marks_total: 45 } : e));
+    const result = calculateStudentResult(weakFourth, BD_BOARD, true);
+    expect(result.total_gpa).toBeCloseTo((5.0 + 4.0 + 5.0 + 2.0 + 0) / 4, 2);
+  });
+
+  it("does not fail the overall result when only the 4th subject fails", () => {
+    // Higher Math scores 20 (F) — must not fail the whole result, and must
+    // not drag the average down since it's excluded from the denominator.
+    const failingFourth = entries.map((e) => (e.subject_id === "higher-math" ? { ...e, marks_total: 20 } : e));
+    const result = calculateStudentResult(failingFourth, BD_BOARD, true);
+    expect(result.has_failed).toBe(false);
+    expect(result.total_gpa).toBeCloseTo((5.0 + 4.0 + 5.0 + 2.0 + 0) / 4, 2);
+  });
+
+  it("marks the overall result as failed if a non-4th-subject fails", () => {
+    const withFail = entries.map((e) => (e.subject_id === "biology" ? { ...e, marks_total: 20 } : e));
     const result = calculateStudentResult(withFail, BD_BOARD, true);
     expect(result.has_failed).toBe(true);
     expect(result.total_gpa).toBe(0);
     expect(result.overall_grade_letter).toBe("F");
+  });
+
+  it("caps the bonus-boosted GPA at 5.00", () => {
+    const allTop = entries.map((e) => ({ ...e, marks_total: 100 }));
+    const result = calculateStudentResult(allTop, BD_BOARD, true);
+    expect(result.total_gpa).toBe(5.0);
   });
 });
 

@@ -38,9 +38,26 @@ export const subjectConfigSchema = z.array(
   }),
 );
 
+// Ordered list of existing ExamHall ids to fill in sequence -- replaces the
+// old ad-hoc "type a hall name + capacity every time" shape. A real hall
+// (room number, floor, rows x seats-per-row) is defined once in the Hall
+// catalog and reused across every future exam.
 export const seatPlanGenerateSchema = z.object({
-  halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).min(1),
+  hall_ids: z.array(z.string().min(1)).min(1, "Select at least one hall"),
 });
+
+export const examHallSchema = z.object({
+  name: z.string().min(1),
+  room_number: z.string().optional().nullable(),
+  floor: z.string().optional().nullable(),
+  rows: z.number().int().min(1).default(1),
+  seats_per_row: z.number().int().min(1),
+  // Defaults to rows*seats_per_row on the server when omitted -- only
+  // needs to be supplied explicitly for a hall with an irregular/partial
+  // last row whose real capacity is below the full grid.
+  capacity: z.number().int().min(1).optional(),
+});
+export type ExamHallInput = z.infer<typeof examHallSchema>;
 
 export const examSessionSchema = z.object({
   label: z.string().min(1),

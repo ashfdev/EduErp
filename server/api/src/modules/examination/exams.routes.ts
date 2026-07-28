@@ -32,10 +32,17 @@ examsRouter.get(
     const query = z.object({ academic_year_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
     const exams = await prisma.exam.findMany({
       where: { deleted_at: null, ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.status && { status: query.status as never }) },
-      include: { academic_year: true, subject_configs: true },
+      include: { academic_year: true, subject_configs: { include: { subject: { select: { class_id: true } } } } },
       orderBy: { created_at: "desc" },
     });
-    res.json({ success: true, data: exams });
+    // class_ids: the distinct set of classes this exam was actually
+    // configured for -- lets any UI that picks both an exam AND a class (or
+    // scopes a student picker's Class filter once an exam is chosen) only
+    // ever offer classes the exam really covers, instead of every class in
+    // the institution. Purely additive; subject_configs itself is untouched
+    // for the one existing frontend consumer that only reads its .length.
+    const data = exams.map((e) => ({ ...e, class_ids: [...new Set(e.subject_configs.map((c) => c.subject.class_id))] }));
+    res.json({ success: true, data });
   }),
 );
 
@@ -511,28 +518,51 @@ examsRouter.post(
       orderBy: [{ current_class_id: "asc" }, { name_en: "asc" }],
     });
 
+    // Halls fetched in the exact order requested, so filling proceeds hall
+    // by hall the way the admin picked them, not alphabetically or by id.
+    const hallsById = new Map((await prisma.examHall.findMany({ where: { id: { in: body.hall_ids } } })).map((h) => [h.id, h]));
+    const halls = body.hall_ids.map((hid) => hallsById.get(hid)).filter((h): h is NonNullable<typeof h> => !!h);
+    if (!halls.length) throw badRequest("None of the selected halls could be found");
+
+    // A flat, ordered list of real seat slots across every selected hall —
+    // row 1 seat 1..N, row 2 seat 1..N, etc. — capped at each hall's own
+    // `capacity` (which may be below rows*seats_per_row for an irregular
+    // last row). Building the full slot list up front means a student is
+    // never silently double-booked into an already-used seat if there are
+    // more students than total capacity -- excess students are simply left
+    // unplaced and reported, not wrapped around onto a reused seat.
+    const slots: { hall: (typeof halls)[number]; row: number; seatInRow: number }[] = [];
+    for (const hall of halls) {
+      let placed = 0;
+      outer: for (let row = 1; row <= hall.rows; row++) {
+        for (let seatInRow = 1; seatInRow <= hall.seats_per_row; seatInRow++) {
+          if (placed >= hall.capacity) break outer;
+          slots.push({ hall, row, seatInRow });
+          placed++;
+        }
+      }
+    }
+
     await prisma.examSeatPlan.deleteMany({ where: { exam_id: id, session_id: sessionId } });
 
-    let hallIndex = 0;
-    let seatInHall = 0;
-    const plans = students.map((s) => {
-      let hall = body.halls[hallIndex];
-      if (!hall) {
-        hallIndex = 0;
-        seatInHall = 0;
-        hall = body.halls[0]!;
-      }
-      if (seatInHall >= hall.capacity) {
-        hallIndex = (hallIndex + 1) % body.halls.length;
-        seatInHall = 0;
-        hall = body.halls[hallIndex]!;
-      }
-      seatInHall++;
-      return { exam_id: id, session_id: sessionId, student_id: s.id, hall_name: hall.name, seat_number: String(seatInHall) };
+    const plans = students.slice(0, slots.length).map((s, i) => {
+      const slot = slots[i]!;
+      const hallLabel = [slot.hall.name, slot.hall.room_number && `Room ${slot.hall.room_number}`, slot.hall.floor].filter(Boolean).join(", ");
+      return {
+        exam_id: id,
+        session_id: sessionId,
+        student_id: s.id,
+        hall_id: slot.hall.id,
+        hall_name: hallLabel,
+        row_number: slot.row,
+        seat_in_row: slot.seatInRow,
+        seat_number: `Row ${slot.row}, Seat ${slot.seatInRow}`,
+      };
     });
 
     if (plans.length > 0) await prisma.examSeatPlan.createMany({ data: plans });
-    res.json({ success: true, data: { generated: plans.length } });
+    const unplacedCount = Math.max(0, students.length - slots.length);
+    res.json({ success: true, data: { generated: plans.length, unplaced: unplacedCount } });
   }),
 );
 
@@ -545,6 +575,7 @@ examsRouter.get(
       where: { exam_id: id },
       include: {
         session: { select: { id: true, label: true } },
+        hall: { select: { name: true, room_number: true, floor: true } },
         student: {
           select: {
             name_en: true,
@@ -557,7 +588,7 @@ examsRouter.get(
           },
         },
       },
-      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { seat_number: "asc" }],
+      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { row_number: "asc" }, { seat_in_row: "asc" }],
     });
     const data = plans.map((p) => {
       const { invoices, ...studentRest } = p.student;

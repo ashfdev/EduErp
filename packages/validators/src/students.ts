@@ -71,6 +71,11 @@ export const createStudentSchema = z.object({
   previous_result: z.string().optional().nullable(),
 
   selected_optional_subject_ids: z.array(z.string()).optional(),
+  // The BD "4th subject" GPA-bonus pick — must be one of
+  // selected_optional_subject_ids when provided (checked server-side, not
+  // just here, since this schema alone can't cross-reference the sibling
+  // field). undefined = not provided/unchanged; null = explicitly cleared.
+  fourth_subject_id: z.string().optional().nullable(),
   send_portal_login_sms: z.boolean().optional(),
 });
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;

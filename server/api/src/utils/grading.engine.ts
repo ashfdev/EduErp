@@ -31,6 +31,13 @@ export interface SubjectMarkInput {
   subject_id: string;
   subject_name: string;
   is_optional: boolean;
+  // Explicit, per-student choice (StudentSubject.is_fourth_subject) of
+  // which ONE optional subject is this student's BD "4th subject" — never
+  // auto-inferred (e.g. by picking the lowest- or highest-scoring optional),
+  // since the real decision is made at enrollment time. A student may take
+  // more than one optional subject; any that isn't flagged here is graded
+  // like an ordinary subject, fully counted in the average.
+  is_fourth_subject: boolean;
   marks_total: number | null;
   is_absent: boolean;
 }
@@ -41,7 +48,7 @@ export interface SubjectResult {
   marks_total: number | null;
   grade_letter: string;
   grade_point: number;
-  dropped_for_fourth_subject: boolean;
+  is_fourth_subject: boolean;
 }
 
 export interface StudentResult {
@@ -52,9 +59,13 @@ export interface StudentResult {
 }
 
 /**
- * BD SSC/HSC "4th subject" rule: among optional subjects, the one with the
- * lowest grade point is excluded from the GPA average (its marks still show
- * on the marksheet, just marked as dropped).
+ * BD SSC/HSC "4th subject" rule: the designated 4th subject is excluded
+ * from the averaging denominator entirely — instead, max(grade_point - 2.00,
+ * 0) from it is ADDED to the numerator as a bonus. A weak or failing score
+ * in the 4th subject never fails the overall result and never drags the
+ * average down; it simply contributes no bonus. The bonus can raise GPA up
+ * to 5.00 but never lowers it. Source: BD education-board GPA calculation
+ * convention (SSC/HSC), verified via web research 2026-07-28.
  */
 export function calculateStudentResult(
   entries: SubjectMarkInput[],
@@ -63,21 +74,27 @@ export function calculateStudentResult(
 ): StudentResult {
   const graded: SubjectResult[] = entries.map((e) => {
     const g = calculateGrade(e.marks_total ?? 0, e.is_absent, scale);
-    return { subject_id: e.subject_id, subject_name: e.subject_name, marks_total: e.marks_total, grade_letter: g.grade_letter, grade_point: g.grade_point, dropped_for_fourth_subject: false };
+    return {
+      subject_id: e.subject_id,
+      subject_name: e.subject_name,
+      marks_total: e.marks_total,
+      grade_letter: g.grade_letter,
+      grade_point: g.grade_point,
+      is_fourth_subject: fourthSubjectRule && e.is_fourth_subject,
+    };
   });
 
-  let counted = graded;
-  if (fourthSubjectRule) {
-    const optionalGraded = graded.filter((g) => entries.find((e) => e.subject_id === g.subject_id)?.is_optional);
-    if (optionalGraded.length > 0) {
-      const lowest = optionalGraded.reduce((min, g) => (g.grade_point < min.grade_point ? g : min), optionalGraded[0]!);
-      lowest.dropped_for_fourth_subject = true;
-      counted = graded.filter((g) => g.subject_id !== lowest.subject_id);
-    }
-  }
+  const fourthSubject = graded.find((g) => g.is_fourth_subject);
+  // Every subject EXCEPT the designated 4th subject — ordinary compulsory
+  // subjects, plus any OTHER optional subject the student takes that isn't
+  // their designated pick (graded normally, no special treatment; only one
+  // subject per student ever gets the bonus rule).
+  const averaged = fourthSubject ? graded.filter((g) => g.subject_id !== fourthSubject.subject_id) : graded;
 
-  const hasFailed = counted.some((g) => g.grade_letter === "F" || g.grade_letter === "Ab");
-  const total_gpa = hasFailed ? 0 : counted.length ? Math.round((counted.reduce((sum, g) => sum + g.grade_point, 0) / counted.length) * 100) / 100 : 0;
+  const hasFailed = averaged.some((g) => g.grade_letter === "F" || g.grade_letter === "Ab");
+  const bonus = fourthSubject ? Math.max(fourthSubject.grade_point - 2, 0) : 0;
+  const rawGpa = averaged.length ? (averaged.reduce((sum, g) => sum + g.grade_point, 0) + bonus) / averaged.length : 0;
+  const total_gpa = hasFailed ? 0 : Math.round(Math.min(5, rawGpa) * 100) / 100;
   const overall_grade_letter = hasFailed ? "F" : gpaToLetter(total_gpa, scale);
 
   return { subjects: graded, total_gpa, overall_grade_letter, has_failed: hasFailed };

@@ -43,6 +43,7 @@ const ACADEMIC_CHILDREN: NavLink[] = [
   { href: "/staff", key: "staffTitle", labelFrom: "faculty" },
   { href: "/events", key: "academicCalendar" },
   { href: "/routine", key: "routine" },
+  { href: "/seat-plan", key: "seatPlanLookup" },
   { href: "/academic/course_curriculum", key: "navCourseCurriculum", labelFrom: "academic" },
   { href: "/academic/grading_system", key: "navGradingSystem", labelFrom: "academic" },
   { href: "/academic/academic_regulations", key: "navAcademicRegulations", labelFrom: "academic" },

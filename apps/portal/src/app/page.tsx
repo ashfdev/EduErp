@@ -8,10 +8,10 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { api } from "@/lib/api";
 import { Badge, Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } from "@education-erp/ui";
-import { 
-  BookOpen, Bus, FolderOpen, AlertCircle, 
-  Users, HelpCircle, FileText, ChevronRight, 
-  CalendarCheck2, Wallet, Award, BellRing, BookMarked
+import {
+  BookOpen, Bus, FolderOpen, AlertCircle,
+  Users, HelpCircle, FileText, ChevronRight,
+  CalendarCheck2, Wallet, Award, BellRing, BookMarked, Armchair
 } from "lucide-react";
 
 interface Dashboard {
@@ -58,6 +58,7 @@ function HomeContent() {
 
   const quickLinks = [
     { href: "/subjects", icon: BookOpen, label: t("mySubjects", { className: terms.term_class }), color: "text-blue-600", bg: "bg-blue-50" },
+    { href: "/seat-plan", icon: Armchair, label: t("seatPlan"), color: "text-cyan-600", bg: "bg-cyan-50" },
     { href: "/transport-hostel", icon: Bus, label: t("transportHostel"), color: "text-amber-600", bg: "bg-amber-50" },
     { href: "/resources", icon: FolderOpen, label: t("resources"), color: "text-emerald-600", bg: "bg-emerald-50" },
     { href: "/ptm", icon: Users, label: t("ptm"), color: "text-purple-600", bg: "bg-purple-50" },
@@ -193,9 +194,14 @@ function HomeContent() {
                         {days !== null && <p className="text-xs text-muted-foreground">{days > 0 ? t("inDays", { days }) : t("todayLabel")}</p>}
                       </div>
                     </div>
-                    <Link href={`/admit-card/${e.id}`} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-slate-200">
-                      {t("admitCard")}
-                    </Link>
+                    <div className="flex shrink-0 gap-2">
+                      <Link href={`/admit-card/${e.id}`} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-slate-200">
+                        {t("admitCard")}
+                      </Link>
+                      <Link href="/seat-plan" className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-slate-200">
+                        {t("seatPlanLink")}
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               );

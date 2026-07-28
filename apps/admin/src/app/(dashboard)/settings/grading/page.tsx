@@ -13,6 +13,8 @@ import {
   Button,
   Badge,
   Input,
+  Label,
+  Switch,
   EmptyState,
   Table,
   TableHeader,
@@ -22,6 +24,10 @@ import {
   TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
+
+interface InstitutionConfig {
+  fourth_subject_rule: boolean;
+}
 
 interface GradeRange {
   id?: string;
@@ -46,6 +52,19 @@ export default function GradingSettingsPage() {
   const { data: scales } = useQuery<GradingScale[]>({
     queryKey: ["settings", "grading-scales"],
     queryFn: async () => (await api.get("/api/settings/grading-scales")).data.data,
+  });
+
+  const { data: config } = useQuery<InstitutionConfig>({
+    queryKey: ["settings", "config"],
+    queryFn: async () => (await api.get("/api/settings/config")).data.data,
+  });
+  const fourthSubjectMutation = useMutation({
+    mutationFn: (enabled: boolean) => api.put("/api/settings/config", { fourth_subject_rule: enabled }),
+    onSuccess: () => {
+      toast.success("Saved");
+      queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
+    },
+    onError: () => toast.error("Failed to save"),
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -126,6 +145,30 @@ export default function GradingSettingsPage() {
           </div>
         }
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Grading Rules</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>BD 4th Subject Rule</Label>
+              <p className="text-sm text-muted-foreground max-w-xl">
+                When enabled, each student&apos;s designated 4th (optional) subject is excluded from the GPA
+                average — instead, its grade point above 2.00 is added as a bonus, and a weak or failing score
+                in it never fails the overall result. Which subject is a student&apos;s 4th subject is set per
+                student when they&apos;re enrolled.
+              </p>
+            </div>
+            <Switch
+              checked={config?.fourth_subject_rule ?? false}
+              onCheckedChange={(checked) => fourthSubjectMutation.mutate(checked)}
+              disabled={fourthSubjectMutation.isPending}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {!scales?.length && <EmptyState title="No grading scales yet" description="Apply a preset above to get started." />}
 

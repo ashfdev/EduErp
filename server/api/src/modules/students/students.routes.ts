@@ -13,7 +13,7 @@ import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
-import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
+import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
 import { invoiceReadmissionFeeIfConfigured } from "../fees/invoice-helpers";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
@@ -134,6 +134,12 @@ studentsRouter.get(
       .object({
         search: z.string().optional(),
         class_id: z.string().optional(),
+        // Comma-separated "any of these classes" — for pickers that already
+        // know a whole set of valid classes (e.g. a multi-class exam's own
+        // configured classes) and want to pre-scope the roster to exactly
+        // that set without the caller having to pick one class at a time.
+        // Ignored when the singular class_id is also present.
+        class_ids: z.string().optional(),
         section_id: z.string().optional(),
         group_id: z.string().optional(),
         status: z.string().optional(),
@@ -176,9 +182,15 @@ studentsRouter.get(
       ...(query.academic_year_id && { academic_year_id: query.academic_year_id }),
     };
 
+    const classIdsList = query.class_ids
+      ? query.class_ids.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
     const where = {
       deleted_at: null,
-      ...(query.class_id && { current_class_id: query.class_id }),
+      ...(query.class_id
+        ? { current_class_id: query.class_id }
+        : classIdsList?.length && { current_class_id: { in: classIdsList } }),
       ...(query.section_id && { current_section_id: query.section_id }),
       ...(query.group_id && { group_id: query.group_id }),
       ...(query.status && { status: query.status as never }),
@@ -480,6 +492,9 @@ studentsRouter.post(
     const body = createStudentSchema.parse(req.body);
     await assertSectionCapacity(body.current_section_id, req.body.override === true);
     await assertGroupSelectedIfRequired(prisma, body.current_class_id, body.group_id);
+    if (body.fourth_subject_id && !body.selected_optional_subject_ids?.includes(body.fourth_subject_id)) {
+      throw badRequest("The 4th subject must be one of the selected optional subjects");
+    }
 
     const { student, studentLogin, guardianLogin, student_uid } = await prisma.$transaction(async (tx) => {
       let guardianId = body.guardian_id ?? null;
@@ -564,7 +579,7 @@ studentsRouter.post(
         },
       });
 
-      await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids, body.group_id);
+      await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids, body.group_id, body.fourth_subject_id);
 
       return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid };
     });
@@ -605,7 +620,9 @@ studentsRouter.put(
     const body = updateStudentSchema.parse(req.body);
     // send_portal_login_sms is create-only (see POST / below) — destructured
     // here purely to exclude it from the prisma update payload.
-    const { selected_optional_subject_ids, send_portal_login_sms: _send_portal_login_sms, ...fields } = body;
+    // fourth_subject_id is a StudentSubject-only field (like
+    // selected_optional_subject_ids), never a real Student column.
+    const { selected_optional_subject_ids, fourth_subject_id, send_portal_login_sms: _send_portal_login_sms, ...fields } = body;
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
@@ -648,7 +665,12 @@ studentsRouter.put(
 
       if (classChanged && fields.current_class_id) {
         const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
-        await inheritSubjectsForClass(tx, id, fields.current_class_id, activeYear?.id ?? "", selected_optional_subject_ids, fields.group_id);
+        await inheritSubjectsForClass(tx, id, fields.current_class_id, activeYear?.id ?? "", selected_optional_subject_ids, fields.group_id, fourth_subject_id);
+      } else if (fourth_subject_id !== undefined) {
+        // No class change this time — inheritSubjectsForClass never ran, so
+        // a changed 4th-subject pick needs its own narrower update.
+        const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
+        if (activeYear) await setFourthSubject(tx, id, activeYear.id, fourth_subject_id);
       }
 
       return result;

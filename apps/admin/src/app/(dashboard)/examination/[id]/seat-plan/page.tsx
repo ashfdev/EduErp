@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -12,10 +13,13 @@ interface SeatPlanRow {
   id: string;
   hall_name: string;
   seat_number: string;
+  row_number: number | null;
+  seat_in_row: number | null;
   student_id: string;
   exam_office_cleared: boolean;
   outstanding_due: number;
   session: { id: string; label: string } | null;
+  hall: { name: string; room_number: string | null; floor: string | null } | null;
   student: { name_en: string; student_uid: string; current_class: { name_en: string } };
 }
 interface ExamSession {
@@ -31,7 +35,12 @@ interface ClassOption {
   name_en: string;
 }
 interface Hall {
+  id: string;
   name: string;
+  room_number: string | null;
+  floor: string | null;
+  rows: number;
+  seats_per_row: number;
   capacity: number;
 }
 
@@ -89,12 +98,15 @@ export default function SeatPlanPage() {
         subtitle="Define each exam session and the classes sitting in it, then generate seats per session"
         breadcrumbs={[{ label: "Examination", href: "/examination" }, { label: "Seat Plan" }]}
         action={
-          !!plans?.length && (
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/exam/${id}/seat-plan`, "Seat Plan")}>View Seat Plan</Button>
-              <Button variant="outline" onClick={() => printSeatPlan(id)}>Print Seat Plan</Button>
-            </div>
-          )
+          <div className="flex gap-2">
+            <Link href="/examination/halls"><Button variant="outline">Manage Halls</Button></Link>
+            {!!plans?.length && (
+              <>
+                <Button variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/exam/${id}/seat-plan`, "Seat Plan")}>View Seat Plan</Button>
+                <Button variant="outline" onClick={() => printSeatPlan(id)}>Print Seat Plan</Button>
+              </>
+            )}
+          </div>
         }
       />
 
@@ -118,15 +130,18 @@ export default function SeatPlanPage() {
             </div>
             <Table>
               <TableHeader>
-                <TableRow><TableHead></TableHead><TableHead>Session</TableHead><TableHead>Hall</TableHead><TableHead>Seat</TableHead><TableHead>Student</TableHead><TableHead>Class</TableHead><TableHead>Due</TableHead><TableHead>Exam Office Approval</TableHead></TableRow>
+                <TableRow><TableHead></TableHead><TableHead>Session</TableHead><TableHead>Hall</TableHead><TableHead>Room</TableHead><TableHead>Floor</TableHead><TableHead>Row</TableHead><TableHead>Seat</TableHead><TableHead>Student</TableHead><TableHead>Class</TableHead><TableHead>Due</TableHead><TableHead>Exam Office Approval</TableHead></TableRow>
               </TableHeader>
               <TableBody>
                 {plans.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell><Checkbox checked={selected.has(p.student_id)} onCheckedChange={() => toggle(p.student_id)} disabled={p.exam_office_cleared} /></TableCell>
                     <TableCell className="text-muted-foreground">{p.session?.label ?? "—"}</TableCell>
-                    <TableCell>{p.hall_name}</TableCell>
-                    <TableCell>{p.seat_number}</TableCell>
+                    <TableCell>{p.hall?.name ?? p.hall_name}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.hall?.room_number ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.hall?.floor ?? "—"}</TableCell>
+                    <TableCell>{p.row_number ?? "—"}</TableCell>
+                    <TableCell>{p.seat_in_row ?? p.seat_number}</TableCell>
                     <TableCell>{p.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.student.student_uid}</span></TableCell>
                     <TableCell>{p.student.current_class.name_en}</TableCell>
                     <TableCell>{p.outstanding_due > 0 ? <Badge variant="destructive">৳{p.outstanding_due} due</Badge> : <span className="text-muted-foreground">—</span>}</TableCell>
@@ -226,12 +241,29 @@ function AddSessionForm({ examId, classes }: { examId: string; classes?: ClassOp
 
 function SessionCard({ examId, session }: { examId: string; session: ExamSession }) {
   const queryClient = useQueryClient();
-  const [halls, setHalls] = useState<Hall[]>([{ name: "Hall A", capacity: 50 }]);
+  // Ordered by selection (Set preserves insertion order) -- halls fill in
+  // exactly the order picked, matching the backend's own fill logic.
+  const [hallIds, setHallIds] = useState<string[]>([]);
+  const { data: halls } = useQuery<Hall[]>({
+    queryKey: ["exam-halls"],
+    queryFn: async () => (await api.get("/api/exam-halls")).data.data,
+  });
+
+  function toggleHall(hallId: string) {
+    setHallIds((prev) => (prev.includes(hallId) ? prev.filter((h) => h !== hallId) : [...prev, hallId]));
+  }
+
+  const totalCapacity = (halls ?? []).filter((h) => hallIds.includes(h.id)).reduce((sum, h) => sum + h.capacity, 0);
 
   const generateMutation = useMutation({
-    mutationFn: () => api.post(`/api/exams/${examId}/sessions/${session.id}/seat-plan/generate`, { halls }),
+    mutationFn: () => api.post(`/api/exams/${examId}/sessions/${session.id}/seat-plan/generate`, { hall_ids: hallIds }),
     onSuccess: (res) => {
-      toast.success(`Generated seats for ${res.data.data.generated} student(s) in ${session.label}`);
+      const { generated, unplaced } = res.data.data;
+      if (unplaced > 0) {
+        toast.warning(`Generated seats for ${generated} student(s) in ${session.label} — ${unplaced} student(s) left unplaced, selected halls don't have enough capacity.`);
+      } else {
+        toast.success(`Generated seats for ${generated} student(s) in ${session.label}`);
+      }
       queryClient.invalidateQueries({ queryKey: ["exams", examId, "seat-plan"] });
     },
     onError: (err: unknown) => {
@@ -260,15 +292,36 @@ function SessionCard({ examId, session }: { examId: string; session: ExamSession
           </div>
           <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>Remove Session</Button>
         </div>
-        {halls.map((h, i) => (
-          <div key={i} className="flex gap-3">
-            <Input placeholder="Hall name" value={h.name} onChange={(e) => setHalls((prev) => prev.map((p, idx) => (idx === i ? { ...p, name: e.target.value } : p)))} />
-            <Input type="number" placeholder="Capacity" value={h.capacity} onChange={(e) => setHalls((prev) => prev.map((p, idx) => (idx === i ? { ...p, capacity: Number(e.target.value) } : p)))} className="w-32" />
+
+        {!halls?.length && (
+          <p className="text-xs text-amber-700">
+            No halls defined yet — <Link href="/examination/halls" className="underline">add one</Link> before generating seats.
+          </p>
+        )}
+        {!!halls?.length && (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Halls to fill, in order (select in the order you want them filled)</p>
+            <div className="flex flex-wrap gap-2">
+              {halls.map((h) => {
+                const order = hallIds.indexOf(h.id);
+                return (
+                  <label key={h.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+                    <Checkbox checked={order !== -1} onCheckedChange={() => toggleHall(h.id)} />
+                    {order !== -1 && <span className="font-semibold">{order + 1}.</span>}
+                    {h.name}
+                    <span className="text-muted-foreground">
+                      ({[h.room_number && `Room ${h.room_number}`, h.floor].filter(Boolean).join(", ")} · cap. {h.capacity})
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {!!hallIds.length && <p className="text-xs text-muted-foreground">Total capacity selected: {totalCapacity} seats</p>}
           </div>
-        ))}
+        )}
+
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => setHalls((prev) => [...prev, { name: "", capacity: 50 }])}>+ Add Hall</Button>
-          <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+          <Button size="sm" onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending || !hallIds.length}>
             {generateMutation.isPending ? "Generating..." : "Generate Seats for This Session"}
           </Button>
         </div>

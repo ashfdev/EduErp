@@ -12,7 +12,7 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
-import { calculatePositions } from "../../utils/grading.engine";
+import { calculatePositions, calculateStudentResult } from "../../utils/grading.engine";
 import { uploadBuffer } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
@@ -520,7 +520,20 @@ documentsRouter.get(
     const dataList = await Promise.all(
       included.map(async (student) => {
         const seatPlan = await prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: student.id } } });
-        const schedule = subjectConfigs.map((sc) => ({
+        // Every student in a section sees only THEIR own subjects on the
+        // admit card's printed schedule -- a shared (group_id: null)
+        // subject applies to everyone, a group-scoped one only to students
+        // in that same group. A single section can have mixed groups, so
+        // this must be resolved per student, never once for the whole batch.
+        // Also scope to the student's own class: subjectConfigs spans every
+        // class the exam covers, and an ungrouped subject in a DIFFERENT
+        // class (e.g. Class 10's Physics, which has no group defined at all
+        // since Class 10 has no Groups) would otherwise pass the group check
+        // and silently leak onto a Class 9 student's schedule too.
+        const eligibleConfigs = subjectConfigs.filter(
+          (sc) => sc.subject.class_id === student.current_class_id && (sc.subject.group_id === null || sc.subject.group_id === student.group_id),
+        );
+        const schedule = eligibleConfigs.map((sc) => ({
           date: exam.start_date,
           day: exam.start_date ? new Date(exam.start_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
           subject_name: sc.subject.name_en,
@@ -551,7 +564,10 @@ documentsRouter.get(
         session: { select: { label: true } },
         student: { select: { name_en: true, current_roll_no: true, student_uid: true, current_class: { select: { name_en: true } } } },
       },
-      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { seat_number: "asc" }],
+      // Numeric row/seat columns, not the display string (which would sort
+      // "Row 10" before "Row 3" alphabetically) -- falls back to hall_name
+      // for a legacy/unassigned row with no hall_id.
+      orderBy: [{ session_id: "asc" }, { hall_name: "asc" }, { row_number: "asc" }, { seat_in_row: "asc" }],
     });
     if (!plans.length) throw badRequest("No seat plan generated for this exam yet");
 
@@ -626,22 +642,65 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries, display, subjectConfigs, markComponentConfigs] = await Promise.all([
+  const [exam, student, entries, display, subjectConfigs, markComponentConfigs, studentSubjectRowsAllYears, institutionConfig] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: true } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
     prisma.marksheetDisplaySettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
-    prisma.examSubjectConfig.findMany({ where: { exam_id: examId } }),
+    // Includes each subject's own class_id -- an exam can span multiple
+    // classes (see the identical fix in the admit-card routes), and this
+    // student's report card/marksheet must only ever draw from their own
+    // class's configuration, never leak another class's subjects in.
+    prisma.examSubjectConfig.findMany({ where: { exam_id: examId }, include: { subject: true }, orderBy: { subject: { created_at: "asc" } } }),
     prisma.examMarkComponent.findMany({ where: { exam_id: examId }, orderBy: { display_order: "asc" } }),
+    prisma.studentSubject.findMany({ where: { student_id: studentId }, select: { subject_id: true, is_fourth_subject: true, academic_year_id: true } }),
+    prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
+
+  // This exam's own academic year, since enrollment/4th-subject designation
+  // is scoped per year.
+  const studentSubjectRows = studentSubjectRowsAllYears.filter((r) => r.academic_year_id === exam.academic_year_id);
+  // The BD "4th subject" GPA bonus rule (see grading.engine.ts).
+  const fourthSubjectId = studentSubjectRows.find((r) => r.is_fourth_subject)?.subject_id ?? null;
+  // Ground truth for which subjects this student is actually enrolled in —
+  // the same source the mark-entry grid already uses (StudentSubject) — so
+  // the printed subject list reflects every subject the student is really
+  // taking, with a blank ("--") row for one not yet graded, instead of
+  // silently showing nothing at all for a subject (or the whole document)
+  // until every mark happens to already be entered.
+  const enrolledSubjectIds = new Set(studentSubjectRows.map((r) => r.subject_id));
+
+  const studentResult = calculateStudentResult(
+    entries.map((e) => ({
+      subject_id: e.subject_id,
+      subject_name: e.subject.name_en,
+      is_optional: e.subject.is_optional,
+      is_fourth_subject: e.subject_id === fourthSubjectId,
+      marks_total: e.marks_total,
+      is_absent: e.is_absent,
+    })),
+    exam.grading_scale?.ranges ?? [],
+    institutionConfig?.fourth_subject_rule ?? false,
+  );
 
   // Per-subject (Written/Practical) full/pass marks come from this exam's
   // own subject configuration, not the Subject's static defaults -- the
   // same values already used to grade the entry, and what the marksheet
   // table needs to render a Written/Practical row split.
   const configBySubject = new Map(subjectConfigs.map((c) => [c.subject_id, c]));
+  const entryBySubject = new Map(entries.map((e) => [e.subject_id, e]));
+
+  // This student's expected subject list: configured for this exam, scoped
+  // to their own class, and actually enrolled in — union'd with anything
+  // that already has a real MarkEntry (a genuinely entered mark must never
+  // disappear from the printed document just because enrollment data
+  // doesn't, or no longer, match perfectly).
+  const expectedSubjectIds = subjectConfigs
+    .filter((c) => c.subject.class_id === student.current_class_id && enrolledSubjectIds.has(c.subject_id))
+    .map((c) => c.subject_id);
+  const printedSubjectIds = [...new Set([...expectedSubjectIds, ...entries.map((e) => e.subject_id)])];
 
   // Named mark-composition breakdown -- when a subject's total was entered
   // via named, fixed-mark-value parts (Theory/MCQ/Practical/CT/Assignment/
@@ -655,9 +714,41 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     markComponentsBySubject.set(c.subject_id, list);
   }
 
+  // Total Marks stays the flat sum of every subject's raw marks (including
+  // the 4th subject, if any) -- a plain informational tally, unaffected by
+  // the GPA-specific bonus/exclusion rule below.
   const totalMarks = entries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
-  const hasFailed = entries.some((e) => e.grade_letter === "F" || e.is_absent);
-  const totalGpa = entries.length ? Math.round((entries.reduce((s, e) => s + (e.grade_point ?? 0), 0) / entries.length) * 100) / 100 : 0;
+  // has_failed/total_gpa come from the same engine every other result
+  // surface uses (portal, results-by-class) -- correctly excludes a failing
+  // 4th subject from causing an overall fail, instead of the old flat
+  // "any entry is F" check, which wrongly failed a student over a subject
+  // that BD's own GPA rule says can never fail the overall result.
+  const hasFailed = studentResult.has_failed;
+  const totalGpa = studentResult.total_gpa;
+
+  // A real, honest overall remark -- never a hardcoded "Good performance"
+  // regardless of how much has actually been graded. Reuses the exam's own
+  // GradeRange.remarks (the same field the class-average line below already
+  // reuses) instead of a fixed two-string binary, and is explicit about an
+  // incomplete result rather than confidently praising one.
+  const gradedEntries = entries.filter((e) => !e.is_absent && e.marks_total !== null);
+  let overallRemarks: string;
+  if (entries.length === 0) {
+    overallRemarks = "Result Pending — marks not yet entered";
+  } else if (gradedEntries.length < printedSubjectIds.length) {
+    overallRemarks = `In Progress — ${gradedEntries.length} of ${printedSubjectIds.length} subject(s) graded so far`;
+  } else if (hasFailed) {
+    overallRemarks = "Needs Improvement";
+  } else {
+    const gradedFullMarks = gradedEntries.reduce((sum, e) => sum + (e.subject.full_marks ?? 0), 0);
+    const gradedTotalMarks = gradedEntries.reduce((sum, e) => sum + (e.marks_total ?? 0), 0);
+    const studentPercentage = gradedFullMarks > 0 ? Math.round((gradedTotalMarks / gradedFullMarks) * 10000) / 100 : null;
+    const matchingRange =
+      studentPercentage !== null
+        ? (exam.grading_scale?.ranges ?? []).find((r) => studentPercentage >= r.min_marks && studentPercentage <= r.max_marks)
+        : undefined;
+    overallRemarks = matchingRange?.remarks || "Good Performance";
+  }
 
   // A marks-range -> grade-letter -> GPA legend (Plan Fourteen, Phase L2),
   // sourced from the exam's own already-active grading scale -- a display
@@ -775,42 +866,65 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     exam_name: exam.name,
     academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
     attendance,
-    subjects: entries.map((e) => {
-      const config = configBySubject.get(e.subject_id);
+    subjects: printedSubjectIds
+      .map((subjectId) => {
+        const config = configBySubject.get(subjectId);
+        const e = entryBySubject.get(subjectId);
+        // Subject metadata comes from whichever source has it -- the exam's
+        // own subject config normally, falling back to the MarkEntry's own
+        // included subject for the rare straggler entry outside the exam's
+        // configured list (see printedSubjectIds above).
+        const subjectMeta = config?.subject ?? e?.subject;
+        if (!subjectMeta) return null;
 
-      // Named mark-composition breakdown — every configured part comes
-      // straight from the stored component_values, a plain peer value with
-      // no derived/scaled piece.
-      const markComponentsForSubject = markComponentsBySubject.get(e.subject_id);
-      const enteredComponentValues = e.component_values as Record<string, { value: number | null; is_override: boolean }> | null;
-      const markComponents =
-        markComponentsForSubject && !e.is_absent
-          ? markComponentsForSubject.map((c) => ({ label: c.label, marks: enteredComponentValues?.[c.key]?.value ?? null, max_marks: c.max_marks }))
+        // Named mark-composition breakdown — how this subject's full marks
+        // are actually split (e.g. Theory/70 + MCQ/30). Shown as soon as the
+        // exam defines these parts for the subject, even before any marks
+        // are entered — a parent should be able to see WHAT a subject is
+        // graded on, not just the eventual total. Each part's own value
+        // comes straight from the stored component_values (a plain peer
+        // value, no derived/scaled piece); "--" (via formatMarks) until a
+        // real entry exists or for an absent student.
+        const markComponentsForSubject = markComponentsBySubject.get(subjectId);
+        const enteredComponentValues = e?.component_values as Record<string, { value: number | null; is_override: boolean }> | null | undefined;
+        const markComponents = markComponentsForSubject
+          ? markComponentsForSubject.map((c) => ({
+              label: c.label,
+              marks: e && !e.is_absent ? (enteredComponentValues?.[c.key]?.value ?? null) : null,
+              max_marks: c.max_marks,
+            }))
           : [];
 
-      return {
-        name_en: e.subject.name_en,
-        code: e.subject.code,
-        full_marks: e.subject.full_marks,
-        pass_marks: e.subject.pass_marks,
-        full_marks_theory: config?.full_marks_theory ?? e.subject.full_marks,
-        full_marks_practical: config?.full_marks_practical ?? 0,
-        pass_marks_theory: config?.pass_marks_theory ?? e.subject.pass_marks,
-        pass_marks_practical: config?.pass_marks_practical ?? 0,
-        has_practical: (config?.full_marks_practical ?? 0) > 0,
-        marks_theory: e.marks_theory,
-        marks_practical: e.marks_practical,
-        marks_total: e.is_absent ? null : e.marks_total,
-        grade_letter: e.is_absent ? "Abs" : e.grade_letter,
-        grade_point: e.grade_point,
-        has_mark_components: markComponents.length > 0,
-        mark_components: markComponents,
-      };
-    }),
+        return {
+          name_en: subjectMeta.name_en,
+          code: subjectMeta.code,
+          full_marks: subjectMeta.full_marks,
+          pass_marks: subjectMeta.pass_marks,
+          full_marks_theory: config?.full_marks_theory ?? subjectMeta.full_marks,
+          full_marks_practical: config?.full_marks_practical ?? 0,
+          pass_marks_theory: config?.pass_marks_theory ?? subjectMeta.pass_marks,
+          pass_marks_practical: config?.pass_marks_practical ?? 0,
+          has_practical: (config?.full_marks_practical ?? 0) > 0,
+          // No entry yet -- every mark field renders as "--" (formatMarks),
+          // never a silently-omitted row.
+          marks_theory: e?.marks_theory ?? null,
+          marks_practical: e?.marks_practical ?? null,
+          marks_total: e ? (e.is_absent ? null : e.marks_total) : null,
+          grade_letter: e ? (e.is_absent ? "Abs" : e.grade_letter) : null,
+          grade_point: e?.grade_point ?? null,
+          has_mark_components: markComponents.length > 0,
+          mark_components: markComponents,
+        };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null),
     total_marks: totalMarks,
     total_gpa: totalGpa,
-    overall_grade: hasFailed ? "F" : entries[0]?.grade_letter ?? "",
+    // Was previously just the first subject's own grade letter -- unrelated
+    // to the actual overall GPA. Now the real GPA-derived letter, same as
+    // every other result surface.
+    overall_grade: studentResult.overall_grade_letter,
     has_failed: hasFailed,
+    overall_remarks: overallRemarks,
     next_class_name: "",
     display,
     grading_legend: gradingLegend,
@@ -858,7 +972,7 @@ documentsRouter.get(
         absent: attendanceSummary.overall.total - attendanceSummary.overall.present,
         percentage: attendanceSummary.overall.total ? attendanceSummary.overall.percentage : 0,
       },
-      overall_remarks: base.has_failed ? "Needs improvement" : "Good performance",
+      overall_remarks: base.overall_remarks,
       display: base.display,
       grading_legend: base.grading_legend,
       position: base.position,
@@ -875,13 +989,21 @@ documentsRouter.get(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
     // Each student's own marksheet is already correctly self-scoped by
     // buildMarksheetData (its position/average stats key off the student's
     // own group_id) -- this filter is purely about which students end up in
-    // the batch at all, e.g. printing only a Science section's marksheets
-    // instead of the whole (multi-group) class every time.
+    // the batch at all, e.g. printing only one section's (and/or one
+    // group's) marksheets instead of the whole (possibly multi-section,
+    // multi-group) class every time. Section and Group are independent
+    // axes and both narrow together -- a section can have mixed groups.
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+      where: {
+        current_class_id: classId,
+        deleted_at: null,
+        ...(groupId && { group_id: groupId }),
+        ...(sectionId && { current_section_id: sectionId }),
+      },
       orderBy: { current_roll_no: "asc" },
     });
     if (!students.length) throw badRequest("No students found in this class");
@@ -904,13 +1026,20 @@ documentsRouter.get(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
-    const [exam, classInfo, subjects, results] = await Promise.all([
+    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
+    const [exam, classInfo, subjects, allResults] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
-      prisma.subject.findMany({ where: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
+      // is_active: true -- a deactivated subject must never appear as a
+      // column (or, worse, silently count as a required-but-untaken
+      // subject for computeClassResults' own averaging below).
+      prisma.subject.findMany({ where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
       computeClassResults(examId, classId, groupId),
     ]);
     if (!exam) throw notFound("Exam not found");
+    // Section and Group are independent axes -- a section can have mixed
+    // groups, so both narrow together rather than one replacing the other.
+    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
 
     const rows = results
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
@@ -945,15 +1074,21 @@ documentsRouter.get(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
     const [exam, classInfo, subjectConfigs, students] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
       prisma.examSubjectConfig.findMany({
-        where: { exam_id: examId, subject: { class_id: classId, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } },
+        where: { exam_id: examId, subject: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } },
         include: { subject: true },
       }),
       prisma.student.findMany({
-        where: { current_class_id: classId, deleted_at: null, ...(groupId && { group_id: groupId }) },
+        where: {
+          current_class_id: classId,
+          deleted_at: null,
+          ...(groupId && { group_id: groupId }),
+          ...(sectionId && { current_section_id: sectionId }),
+        },
         orderBy: { current_roll_no: "asc" },
       }),
     ]);
@@ -981,12 +1116,14 @@ documentsRouter.get(
     const examId = reqParam(req, "exam_id");
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
-    const [exam, classInfo, results] = await Promise.all([
+    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
+    const [exam, classInfo, allResults] = await Promise.all([
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.class.findUnique({ where: { id: classId } }),
       computeClassResults(examId, classId, groupId),
     ]);
     if (!exam) throw notFound("Exam not found");
+    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
 
     const rows = results
       .filter((r) => !r.result.has_failed)

@@ -27,7 +27,8 @@
     "resultLookup": "Result Lookup",
     "portalLogin": "Portal Login",
     "academicCalendar": "Academic Calendar",
-    "routine": "Class Schedule / Routine"
+    "routine": "Class Schedule / Routine",
+    "seatPlanLookup": "Seat Plan Lookup"
   },
   "footer": {
     "quickLinks": "Quick Links",
@@ -273,6 +274,30 @@
     "absent": "Absent",
     "overall": "Overall: {result}",
     "failed": "Failed"
+  },
+  "seatPlanLookup": {
+    "title": "Seat Plan Lookup",
+    "subtitle": "Check your exam hall, room, floor, and seat using your Student ID, or your Roll and Registration numbers.",
+    "studentId": "Student ID",
+    "rollRegistration": "Roll + Registration No",
+    "rollNumber": "Roll Number",
+    "registrationNumber": "Registration Number",
+    "studentIdPlaceholder": "Student ID (e.g. STU-26-0001)",
+    "rollPlaceholder": "Roll No",
+    "registrationPlaceholder": "Registration No",
+    "searching": "Searching...",
+    "findSeat": "Find My Seat",
+    "lookupFailed": "Lookup failed",
+    "networkError": "Could not reach the server — please try again.",
+    "notFoundTitle": "No Seat Plan Found",
+    "notFound": "No matching student found.",
+    "noSeatPlans": "No seat plan has been generated for this student yet.",
+    "hall": "Hall",
+    "room": "Room",
+    "floor": "Floor",
+    "row": "Row",
+    "seat": "Seat",
+    "rowSeat": "Row / Seat"
   },
   "careers": {
     "title": "Careers",

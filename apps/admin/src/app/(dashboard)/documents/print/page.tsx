@@ -14,6 +14,12 @@ interface Option {
   label?: string;
   sections?: { id: string; name: string }[];
   groups?: { id: string; name_en: string }[];
+  // Set on exams only — the distinct classes this exam was actually
+  // configured for. Used to scope every Class dropdown (both the main form
+  // field and the student picker's own filter) once an exam is selected,
+  // instead of listing every class in the institution regardless of
+  // whether the chosen exam covers it at all.
+  class_ids?: string[];
 }
 
 // Must mirror server/api/src/lib/roles.ts's EXAM_MANAGE_ROLES exactly — a
@@ -84,6 +90,16 @@ interface DocDef {
   redirectTo?: { href: string; label: string };
 }
 
+// Builds a "?a=x&b=y" query string from whichever of the given params are
+// actually set — Section and Group are independent, optional axes on every
+// class-batch document below (a section can have mixed groups), so either,
+// both, or neither can be present.
+function qs(params: Record<string, string | undefined>): string {
+  const entries = Object.entries(params).filter((e): e is [string, string] => !!e[1]);
+  if (!entries.length) return "";
+  return `?${entries.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+}
+
 const DOC_TYPES: DocDef[] = [
   {
     key: "student-id-card",
@@ -138,10 +154,11 @@ const DOC_TYPES: DocDef[] = [
     key: "marksheets-class",
     title: "Marksheets (Class)",
     description: "Bulk marksheets for every student in a class.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/marksheets/class/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/marksheets/class/${p.class_id}${qs({ group_id: p.group_id, section_id: p.section_id })}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "section_id", label: "Section (optional)", kind: "select-section" },
       { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
@@ -159,10 +176,11 @@ const DOC_TYPES: DocDef[] = [
     key: "tabulation-sheet",
     title: "Tabulation Sheet",
     description: "All students × all subjects for a class (A3 landscape).",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/tabulation/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/tabulation/${p.class_id}${qs({ group_id: p.group_id, section_id: p.section_id })}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "section_id", label: "Section (optional)", kind: "select-section" },
       { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
@@ -170,10 +188,11 @@ const DOC_TYPES: DocDef[] = [
     key: "blank-marksheet",
     title: "Blank Marksheet",
     description: "Empty grid (all students × subjects) for manual mark entry, e.g. offline exam invigilation.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/blank-marksheet/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/blank-marksheet/${p.class_id}${qs({ group_id: p.group_id, section_id: p.section_id })}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "section_id", label: "Section (optional)", kind: "select-section" },
       { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
@@ -181,10 +200,11 @@ const DOC_TYPES: DocDef[] = [
     key: "merit-list",
     title: "Merit List",
     description: "Ranked merit list for a class exam.",
-    endpoint: (p) => `/api/documents/result/${p.exam_id}/merit-list/${p.class_id}${p.group_id ? `?group_id=${p.group_id}` : ""}`,
+    endpoint: (p) => `/api/documents/result/${p.exam_id}/merit-list/${p.class_id}${qs({ group_id: p.group_id, section_id: p.section_id })}`,
     fields: [
       { key: "exam_id", label: "Exam", kind: "select-exam", required: true },
       { key: "class_id", label: "Class", kind: "select-class", required: true },
+      { key: "section_id", label: "Section (optional)", kind: "select-section" },
       { key: "group_id", label: "Group (optional)", kind: "select-group" },
     ],
   },
@@ -265,22 +285,33 @@ export default function DocumentPrintCenterPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [pickerField, setPickerField] = useState<{ key: string; kind: "select-student" | "select-staff" } | null>(null);
-  // Narrows the "Choose a Student" picker to one class/section instead of
-  // paging through the whole institution's roster (previously the only
+  // Narrows the "Choose a Student" picker to one class/section/group instead
+  // of paging through the whole institution's roster (previously the only
   // option) — kept separate from `values` since not every doc type that
   // opens this picker has its own Class field.
   const [pickerClassId, setPickerClassId] = useState("");
   const [pickerSectionId, setPickerSectionId] = useState("");
+  const [pickerGroupId, setPickerGroupId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const doc = DOC_TYPES.find((d) => d.key === selectedKey)!;
+  const docHasExamField = doc.fields.some((f) => f.key === "exam_id");
 
   const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+  const { data: exams } = useQuery<Option[]>({ queryKey: ["exams"], queryFn: async () => (await api.get("/api/exams")).data.data });
+  const selectedExam = exams?.find((e) => e.id === values.exam_id);
+  // Once this doc type has a real exam selected, every Class dropdown it
+  // shows (the main field below, and the student picker's own filter) only
+  // ever offers classes that exam was actually configured for — instead of
+  // every class in the institution, most of which the exam has nothing to
+  // do with.
+  const examScopedClasses = docHasExamField && selectedExam ? (classes?.filter((c) => selectedExam.class_ids?.includes(c.id)) ?? []) : classes;
+
   const sections = classes?.find((c) => c.id === values.class_id)?.sections ?? [];
   const pickerSections = classes?.find((c) => c.id === pickerClassId)?.sections ?? [];
   const groups = classes?.find((c) => c.id === values.class_id)?.groups ?? [];
-  const { data: exams } = useQuery<Option[]>({ queryKey: ["exams"], queryFn: async () => (await api.get("/api/exams")).data.data });
+  const pickerGroups = classes?.find((c) => c.id === pickerClassId)?.groups ?? [];
 
   const { user } = useAuthStore();
   const canOverride = !!user && EXAM_MANAGE_ROLES.includes(user.role);
@@ -362,6 +393,9 @@ export default function DocumentPrintCenterPage() {
     setComposeBody("");
     setComposeTc({ conduct: "", last_exam_result: "", remarks: "", leaving_reason: "" });
     setComposeLeavingDate("");
+    setPickerClassId("");
+    setPickerSectionId("");
+    setPickerGroupId("");
   }
 
   const canGenerate =
@@ -449,10 +483,15 @@ export default function DocumentPrintCenterPage() {
                       <div key={f.key} className="space-y-1.5">
                         <Label>{f.label}</Label>
                         {f.kind === "select-class" && (
-                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
-                            <option value="">Select...</option>
-                            {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-                          </select>
+                          <>
+                            <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
+                              <option value="">Select...</option>
+                              {examScopedClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+                            </select>
+                            {docHasExamField && selectedExam && !examScopedClasses?.length && (
+                              <p className="pt-1 text-xs text-amber-700">This exam has no classes configured yet.</p>
+                            )}
+                          </>
                         )}
                         {f.kind === "select-section" && (
                           <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)} disabled={!values.class_id}>
@@ -470,7 +509,24 @@ export default function DocumentPrintCenterPage() {
                           <p className="pt-2 text-xs text-muted-foreground">{values.class_id ? "This class has no groups defined." : "Select a class first."}</p>
                         )}
                         {f.kind === "select-exam" && (
-                          <select className="w-full rounded-md border px-3 py-2 text-sm" value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}>
+                          <select
+                            className="w-full rounded-md border px-3 py-2 text-sm"
+                            value={values[f.key] ?? ""}
+                            onChange={(e) => {
+                              const newExam = exams?.find((ex) => ex.id === e.target.value);
+                              // A class (and its downstream section/group)
+                              // chosen under the PREVIOUS exam may not even
+                              // belong to the newly selected one -- clear it
+                              // rather than silently keep a now-invalid
+                              // selection around.
+                              const classStillValid = values.class_id && newExam?.class_ids?.includes(values.class_id);
+                              setValues((prev) => ({
+                                ...prev,
+                                [f.key]: e.target.value,
+                                ...(!classStillValid && { class_id: "", section_id: "", group_id: "" }),
+                              }));
+                            }}
+                          >
                             <option value="">Select...</option>
                             {exams?.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                           </select>
@@ -622,7 +678,7 @@ export default function DocumentPrintCenterPage() {
         title="Choose a Student"
         searchPlaceholder="Search by name or student ID..."
         getKey={(s) => s.id}
-        filterKey={`${pickerClassId}:${pickerSectionId}`}
+        filterKey={`${pickerClassId}:${pickerSectionId}:${pickerGroupId}`}
         filters={
           <>
             <select
@@ -631,10 +687,16 @@ export default function DocumentPrintCenterPage() {
               onChange={(e) => {
                 setPickerClassId(e.target.value);
                 setPickerSectionId("");
+                setPickerGroupId("");
               }}
             >
               <option value="">All Classes</option>
-              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+              {/* Scoped to the doc's own selected exam, when it has one --
+                  finding a student outside the exam's classes here would
+                  just lead to a document that can't actually be generated. */}
+              {(docHasExamField && selectedExam ? examScopedClasses : classes)?.map((c) => (
+                <option key={c.id} value={c.id}>{c.name_en}</option>
+              ))}
             </select>
             <select
               className="rounded-md border px-2 py-1.5 text-sm"
@@ -645,12 +707,36 @@ export default function DocumentPrintCenterPage() {
               <option value="">All Sections</option>
               {pickerSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {!!pickerGroups.length && (
+              <select
+                className="rounded-md border px-2 py-1.5 text-sm"
+                value={pickerGroupId}
+                onChange={(e) => setPickerGroupId(e.target.value)}
+                disabled={!pickerClassId}
+              >
+                <option value="">All Groups</option>
+                {pickerGroups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            )}
           </>
         }
         fetchResults={async ({ search, page }) =>
           (
             await api.get("/api/students", {
-              params: { search: search || undefined, class_id: pickerClassId || undefined, section_id: pickerSectionId || undefined, page, limit: 10 },
+              params: {
+                search: search || undefined,
+                class_id: pickerClassId || undefined,
+                // No class manually picked yet, but the doc's own exam
+                // already constrains which classes are even valid here —
+                // pre-scope to that whole set by default instead of paging
+                // through the entire institution's roster, most of whom
+                // can't actually have this document generated for them.
+                class_ids: !pickerClassId && docHasExamField && selectedExam ? examScopedClasses?.map((c) => c.id).join(",") || undefined : undefined,
+                section_id: pickerSectionId || undefined,
+                group_id: pickerGroupId || undefined,
+                page,
+                limit: 10,
+              },
             })
           ).data
         }

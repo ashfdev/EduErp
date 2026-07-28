@@ -32,6 +32,14 @@ export async function inheritSubjectsForClass(
   academicYearId: string,
   selectedOptionalSubjectIds: string[] = [],
   studentGroupId?: string | null,
+  // The single optional subject (if any) the student explicitly designated
+  // as their BD "4th subject" for the GPA bonus rule — must be one of
+  // selectedOptionalSubjectIds; never auto-inferred from scores, since the
+  // real-world choice happens at enrollment time. Any OTHER optional
+  // subject the student takes is still enrolled normally, just without
+  // this flag — it counts as a plain subject in the average, exactly like
+  // a compulsory one.
+  fourthSubjectId?: string | null,
 ) {
   const allSubjects = await tx.subject.findMany({ where: { class_id: classId, is_active: true } });
   // group_id === null means "applies to every group in this class" — the
@@ -43,10 +51,10 @@ export async function inheritSubjectsForClass(
   const optional = subjects.filter((s) => s.is_optional);
 
   const toAssign = [
-    ...compulsory.map((s) => ({ subject_id: s.id, is_inherited: true })),
+    ...compulsory.map((s) => ({ subject_id: s.id, is_inherited: true, is_fourth_subject: false })),
     ...optional
       .filter((s) => selectedOptionalSubjectIds.includes(s.id))
-      .map((s) => ({ subject_id: s.id, is_inherited: false })),
+      .map((s) => ({ subject_id: s.id, is_inherited: false, is_fourth_subject: s.id === fourthSubjectId })),
   ];
 
   if (toAssign.length > 0) {
@@ -55,6 +63,7 @@ export async function inheritSubjectsForClass(
         student_id: studentId,
         subject_id: a.subject_id,
         is_inherited: a.is_inherited,
+        is_fourth_subject: a.is_fourth_subject,
         academic_year_id: academicYearId,
       })),
       skipDuplicates: true,
@@ -62,4 +71,29 @@ export async function inheritSubjectsForClass(
   }
 
   return { compulsory, optional };
+}
+
+// Changing which optional subject is a student's designated 4th subject
+// doesn't require a class change or re-inheritance — this handles that
+// narrower update on its own, called whenever fourth_subject_id is present
+// in a student edit regardless of whether the class changed this time.
+// undefined means "not provided, leave untouched"; null means "explicitly
+// clear it" (the student no longer has a designated 4th subject).
+export async function setFourthSubject(tx: Tx, studentId: string, academicYearId: string, fourthSubjectId: string | null | undefined) {
+  if (fourthSubjectId === undefined) return;
+  await tx.studentSubject.updateMany({
+    where: { student_id: studentId, academic_year_id: academicYearId, is_fourth_subject: true },
+    data: { is_fourth_subject: false },
+  });
+  if (fourthSubjectId) {
+    // Must already be a real, optional enrollment for this student/year —
+    // never silently create one, and never flag a compulsory subject as
+    // the 4th subject (is_inherited: false is exactly how
+    // inheritSubjectsForClass marks a student-selected optional row).
+    const target = await tx.studentSubject.findFirst({
+      where: { student_id: studentId, subject_id: fourthSubjectId, academic_year_id: academicYearId, is_inherited: false },
+    });
+    if (!target) throw badRequest("The 4th subject must be one of this student's already-selected optional subjects");
+    await tx.studentSubject.update({ where: { id: target.id }, data: { is_fourth_subject: true } });
+  }
 }

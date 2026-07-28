@@ -887,6 +887,12 @@ model StudentSubject {
   subject_id        String
   subject           Subject  @relation(fields: [subject_id], references: [id])
   is_inherited      Boolean  @default(true)
+  // Explicit, per-student choice of which ONE optional subject counts as
+  // their BD "4th subject" for the GPA bonus rule — never auto-inferred
+  // (e.g. by picking whichever optional subject scored highest), since the
+  // real-world decision is made at enrollment time, same as is_optional
+  // itself. Meaningless (and never set) on a non-optional subject row.
+  is_fourth_subject Boolean  @default(false)
   academic_year_id  String
   added_at          DateTime @default(now())
 
@@ -1343,6 +1349,27 @@ model MarkCorrectionRequest {
   @@index([status])
 }
 
+// A reusable exam-hall/room catalog, admin-managed once and reused across
+// every future exam — instead of retyping an ad-hoc "Hall A, capacity 50"
+// pair from scratch on every single seat-plan generation. Carries enough
+// structure (room number, floor, a rows × seats-per-row grid) to generate a
+// real row/seat arrangement, not just a flat incrementing seat counter.
+model ExamHall {
+  id            String         @id @default(cuid())
+  name          String
+  room_number   String?
+  floor         String?
+  rows          Int            @default(1)
+  seats_per_row Int
+  // Stored (not purely derived) so a hall with an irregular/partial last row
+  // can still cap capacity below rows*seats_per_row without a schema change.
+  capacity      Int
+  is_active     Boolean        @default(true)
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  seat_plans    ExamSeatPlan[]
+}
+
 model ExamSeatPlan {
   id             String    @id @default(cuid())
   exam_id        String
@@ -1356,8 +1383,18 @@ model ExamSeatPlan {
   // same time).
   session_id     String?
   session        ExamSession? @relation(fields: [session_id], references: [id])
+  // hall_name/seat_number stay denormalized display strings — every existing
+  // template/route already reads them directly, and they remain populated
+  // (from the linked Hall, when one is used) so nothing that already reads
+  // them needs to change. hall_id/row_number/seat_in_row are the real
+  // structured source for anything that wants to render or query the actual
+  // room/floor/row/seat arrangement (e.g. the portal/public seat-plan view).
   hall_name      String?
   seat_number    String?
+  hall_id        String?
+  hall           ExamHall? @relation(fields: [hall_id], references: [id])
+  row_number     Int?
+  seat_in_row    Int?
   invigilator_id String?
   // Third leg of the admit-card clearance gate (accounts due -> library
   // fine -> exam office approval) — a manual sign-off, since nothing about

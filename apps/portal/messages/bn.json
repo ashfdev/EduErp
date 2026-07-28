@@ -40,9 +40,11 @@
     "results": "ফলাফল",
     "upcomingExams": "আসন্ন পরীক্ষা",
     "admitCard": "প্রবেশপত্র →",
+    "seatPlanLink": "সিট প্ল্যান →",
     "inDays": "{days} দিনে",
     "todayLabel": "আজ",
     "mySubjects": "আমার {className} এর বিষয়সমূহ",
+    "seatPlan": "সিট প্ল্যান",
     "transportHostel": "পরিবহন ও হোস্টেল",
     "resources": "শিক্ষা উপকরণ",
     "complaints": "অভিযোগ",
@@ -275,6 +277,17 @@
     "view": "দেখুন",
     "close": "বন্ধ করুন",
     "clearPending": "প্রবেশপত্র আনলক করতে উপরের সব বকেয়া বিষয় সম্পন্ন করুন।"
+  },
+  "seatPlanPage": {
+    "title": "সিট প্ল্যান",
+    "noneTitle": "এখনো কোনো সিট বরাদ্দ হয়নি",
+    "noneDescription": "আসন্ন কোনো পরীক্ষার সিট প্ল্যান তৈরি হলে এখানে দেখা যাবে।",
+    "resultPublished": "ফলাফল প্রকাশিত",
+    "hall": "হল",
+    "roomFloor": "কক্ষ / ফ্লোর",
+    "room": "কক্ষ",
+    "row": "সারি",
+    "seat": "আসন"
   },
   "profile": {
     "title": "প্রোফাইল",

@@ -105,6 +105,10 @@ export default function NewStudentPage() {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [selectedOptional, setSelectedOptional] = useState<string[]>([]);
+  // BD "4th subject" GPA-bonus pick (Institution Settings toggle) — must be
+  // one of selectedOptional; cleared automatically if that subject is
+  // deselected below.
+  const [fourthSubjectId, setFourthSubjectId] = useState<string>("");
   const [capacityMessage, setCapacityMessage] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -186,6 +190,7 @@ export default function NewStudentPage() {
         father_photo_url: fatherPhotoUrl || undefined,
         mother_photo_url: motherPhotoUrl || undefined,
         selected_optional_subject_ids: selectedOptional,
+        fourth_subject_id: fourthSubjectId || undefined,
         override,
       }),
     onSuccess: async (res) => {
@@ -483,7 +488,13 @@ export default function NewStudentPage() {
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => setSelectedOptional((prev) => (prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]))}
+                      onClick={() =>
+                        setSelectedOptional((prev) => {
+                          const next = prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id];
+                          if (!next.includes(s.id) && fourthSubjectId === s.id) setFourthSubjectId("");
+                          return next;
+                        })
+                      }
                       className={`rounded-full border px-3 py-1 text-sm ${selectedOptional.includes(s.id) ? "border-primary bg-primary/10" : ""}`}
                     >
                       {s.name_en}
@@ -491,6 +502,22 @@ export default function NewStudentPage() {
                   )) : <p className="text-sm text-muted-foreground">No optional subjects configured for this class.</p>}
                 </div>
               </div>
+              {selectedOptional.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>4th Subject (BD GPA bonus rule — optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    If enabled in Institution Settings, this one subject&apos;s grade point above 2.00 adds a bonus
+                    to GPA and a weak score in it never fails the overall result. Every other selected optional
+                    subject is graded normally.
+                  </p>
+                  <select className="w-full rounded-md border px-3 py-2 text-sm" value={fourthSubjectId} onChange={(e) => setFourthSubjectId(e.target.value)}>
+                    <option value="">None</option>
+                    {optional.filter((s) => selectedOptional.includes(s.id)).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name_en}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
@@ -573,7 +600,10 @@ export default function NewStudentPage() {
                 <p className="text-sm text-muted-foreground">
                   Roll: {form.current_roll_no || "—"} · Registration: {form.registration_no || "—"} · Admission: {form.admission_date}
                 </p>
-                <p className="text-sm text-muted-foreground">Subjects: {compulsory.length} compulsory + {selectedOptional.length} optional</p>
+                <p className="text-sm text-muted-foreground">
+                  Subjects: {compulsory.length} compulsory + {selectedOptional.length} optional
+                  {fourthSubjectId && ` · 4th subject: ${optional.find((s) => s.id === fourthSubjectId)?.name_en ?? ""}`}
+                </p>
               </div>
 
               <div className="rounded-md border p-3">
