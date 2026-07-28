@@ -752,6 +752,47 @@ studentsRouter.post(
   }),
 );
 
+// Same shape as /:id/create-login above, for the student's linked Guardian
+// instead -- reached from the student profile page specifically because a
+// guardian's own name is very often different from (and easy to forget
+// relative to) the student's name, making the generic Settings->Users search
+// an unreliable way to find/manage a guardian's login. Keyed off the
+// student's id (not a guardian id) to match that exact entry point.
+studentsRouter.post(
+  "/:id/guardian/create-login",
+  authorize(STUDENT_CRUD_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = createStudentLoginSchema.parse(req.body);
+    const student = await prisma.student.findUnique({ where: { id }, include: { guardian: true } });
+    if (!student) throw notFound("Student not found");
+    if (!student.guardian) throw badRequest("This student has no guardian on file");
+    if (student.guardian.user_id) throw conflict("This guardian already has a portal login");
+
+    const phone = body.phone ?? student.guardian.phone;
+    if (!phone) throw badRequest("A phone number is required — provide one or add it to the guardian's profile first");
+
+    const guardianId = student.guardian.id;
+    const guardianName = student.guardian.name_en;
+    const { login } = await prisma.$transaction(async (tx) => {
+      const login = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: guardianName, password_override: body.login_password });
+      await tx.guardian.update({ where: { id: guardianId }, data: { user_id: login.userId, ...(body.phone && { phone: body.phone }) } });
+      return { login };
+    });
+
+    if (login.tempPassword) {
+      await sendNotification({
+        trigger: "PORTAL_LOGIN_CREATED",
+        recipients: [{ name: guardianName, phone }],
+        template_data: { name: guardianName, phone, password: login.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+      });
+    }
+    await logAudit("STUDENT_PORTAL_LOGIN_CREATE", { userId: req.user!.sub, targetType: "Guardian", targetId: guardianId, metadata: { linked_existing_user: !login.tempPassword, via_student_id: id }, req });
+
+    res.json({ success: true, data: { phone, temp_password: login.tempPassword }, message: login.tempPassword ? "Login created and credentials sent via SMS" : "Linked to an existing account with this phone number" });
+  }),
+);
+
 studentsRouter.delete(
   "/:id",
   authorize(STUDENT_CRUD_ROLES),

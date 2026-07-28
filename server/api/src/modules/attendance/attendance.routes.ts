@@ -467,7 +467,7 @@ attendanceRouter.get(
     const [klass, section, students] = await Promise.all([
       prisma.class.findUnique({ where: { id: query.class_id } }),
       prisma.section.findUnique({ where: { id: query.section_id }, include: { shift: true, class_teacher: true } }),
-      prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null }, orderBy: { current_roll_no: "asc" } }),
+      prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } }),
     ]);
 
     const records = await prisma.attendanceRecord.findMany({ where: { section_id: query.section_id, date } });
@@ -495,7 +495,7 @@ attendanceRouter.get(
     const end = new Date(query.year, query.month, 1);
     const daysInMonth = new Date(query.year, query.month, 0).getDate();
 
-    const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null }, orderBy: { current_roll_no: "asc" } });
+    const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
     const records = await prisma.attendanceRecord.findMany({ where: { section_id: query.section_id, date: { gte: start, lt: end } } });
 
     const grid = students.map((s) => {
@@ -514,7 +514,7 @@ attendanceRouter.get(
   "/reports/blank-sheet",
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().min(1), section_id: z.string().min(1), from_date: z.coerce.date(), to_date: z.coerce.date() }).parse(req.query);
-    const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null }, orderBy: { current_roll_no: "asc" } });
+    const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
 
     const dates: string[] = [];
     for (let d = new Date(query.from_date); d <= query.to_date; d.setDate(d.getDate() + 1)) {
@@ -553,7 +553,7 @@ attendanceRouter.get(
       ];
 
       for (const section of klass.sections) {
-        const students = await prisma.student.findMany({ where: { current_section_id: section.id, deleted_at: null }, orderBy: { current_roll_no: "asc" } });
+        const students = await prisma.student.findMany({ where: { current_section_id: section.id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
         for (const s of students) {
           const records = await prisma.attendanceRecord.findMany({ where: { student_id: s.id, date: { gte: start, lt: end } } });
           const present = records.filter((r) => r.status === "PRESENT").length;

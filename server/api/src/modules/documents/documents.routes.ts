@@ -405,7 +405,7 @@ documentsRouter.get(
     const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
 
     const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
       select: { id: true, name_en: true, student_uid: true, current_roll_no: true },
       orderBy: { current_roll_no: "asc" },
     });
@@ -462,7 +462,7 @@ documentsRouter.get(
     }
 
     const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
       include: { current_class: true, current_section: true },
       orderBy: { current_roll_no: "asc" },
     });
@@ -1012,6 +1012,7 @@ documentsRouter.get(
       where: {
         current_class_id: classId,
         deleted_at: null,
+        status: "ACTIVE",
         ...(groupId && { group_id: groupId }),
         ...(sectionId && { current_section_id: sectionId }),
       },
@@ -1097,6 +1098,7 @@ documentsRouter.get(
         where: {
           current_class_id: classId,
           deleted_at: null,
+          status: "ACTIVE",
           ...(groupId && { group_id: groupId }),
           ...(sectionId && { current_section_id: sectionId }),
         },
@@ -1158,7 +1160,7 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.string().min(1), class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
     const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
       orderBy: { current_roll_no: "asc" },
     });
     const date = new Date(query.date);
@@ -1188,7 +1190,7 @@ documentsRouter.get(
       .parse(req.query);
 
     const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
       orderBy: { current_roll_no: "asc" },
     });
     const monthStart = new Date(query.year, query.month - 1, 1);
@@ -1232,7 +1234,7 @@ documentsRouter.get(
       .parse(req.query);
 
     const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null },
+      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
       orderBy: { current_roll_no: "asc" },
     });
     const from = new Date(query.from_date);

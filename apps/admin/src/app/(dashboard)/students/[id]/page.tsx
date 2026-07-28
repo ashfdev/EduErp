@@ -38,6 +38,7 @@ interface StudentProfile {
     mother_phone?: string | null;
     mother_photo_url?: string | null;
     documents_count: number;
+    guardian?: { id: string; name_en: string; relation: string; phone: string; user_id?: string | null } | null;
   };
   academic: {
     current: {
@@ -234,17 +235,32 @@ export default function StudentProfilePage() {
 
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [loginPhone, setLoginPhone] = useState("");
-  const [credentialModal, setCredentialModal] = useState<{ phone: string; password: string | null } | null>(null);
+  const [credentialModal, setCredentialModal] = useState<{ label: string; phone: string; password: string | null } | null>(null);
   const createLoginMutation = useMutation({
     mutationFn: () => api.post(`/api/students/${id}/create-login`, { phone: loginPhone || undefined }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["students", id] });
       setLoginDialogOpen(false);
       setLoginPhone("");
-      setCredentialModal({ phone: res.data.data.phone, password: res.data.data.temp_password });
+      setCredentialModal({ label: "Student", phone: res.data.data.phone, password: res.data.data.temp_password });
     },
     onError: (err: unknown) => {
       toast.error(extractErrorMessage(err) ?? "Failed to create portal login");
+    },
+  });
+
+  const [guardianLoginDialogOpen, setGuardianLoginDialogOpen] = useState(false);
+  const [guardianLoginPhone, setGuardianLoginPhone] = useState("");
+  const createGuardianLoginMutation = useMutation({
+    mutationFn: () => api.post(`/api/students/${id}/guardian/create-login`, { phone: guardianLoginPhone || undefined }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      setGuardianLoginDialogOpen(false);
+      setGuardianLoginPhone("");
+      setCredentialModal({ label: "Guardian", phone: res.data.data.phone, password: res.data.data.temp_password });
+    },
+    onError: (err: unknown) => {
+      toast.error(extractErrorMessage(err) ?? "Failed to create guardian portal login");
     },
   });
   function copyPassword() {
@@ -365,9 +381,31 @@ export default function StudentProfilePage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={guardianLoginDialogOpen} onOpenChange={setGuardianLoginDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create Guardian Login — {personal.guardian?.name_en}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Phone Number</Label>
+              <Input value={guardianLoginPhone} onChange={(e) => setGuardianLoginPhone(e.target.value)} placeholder="01XXXXXXXXX" />
+              <p className="text-xs text-muted-foreground">
+                A temporary password will be generated and sent via SMS. If this phone already has an account (e.g. this
+                guardian already has another child enrolled), it will be linked instead of creating a duplicate — that
+                linked login sees every one of their active children.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => createGuardianLoginMutation.mutate()} disabled={createGuardianLoginMutation.isPending || !guardianLoginPhone.trim()}>
+              {createGuardianLoginMutation.isPending ? "Creating..." : "Create Login"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!credentialModal} onOpenChange={(v) => !v && setCredentialModal(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Login Credentials — {personal.name_en}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{credentialModal?.label} Login Credentials{credentialModal?.label === "Student" ? ` — ${personal.name_en}` : personal.guardian ? ` — ${personal.guardian.name_en}` : ""}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             {credentialModal?.password ? (
               <>
@@ -383,11 +421,11 @@ export default function StudentProfilePage() {
                     <Button type="button" variant="outline" onClick={copyPassword}>Copy</Button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">The student will be required to set their own password on first login.</p>
+                <p className="text-xs text-muted-foreground">They will be required to set their own password on first login.</p>
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                This phone number ({credentialModal?.phone}) already had an account — it was linked to this student instead
+                This phone number ({credentialModal?.phone}) already had an account — it was linked instead
                 of creating a new one, so no new password was generated.
               </p>
             )}
@@ -498,6 +536,29 @@ export default function StudentProfilePage() {
                   <img src={personal.mother_photo_url} alt="Mother's photo" className="h-8 w-8 rounded-full border object-cover" />
                 )}
                 <span><span className="text-muted-foreground">Mother:</span> {personal.mother_name ?? "—"} ({personal.mother_phone ?? "—"})</span>
+              </div>
+              <div className="col-span-2 flex items-center justify-between rounded-md border p-3">
+                {personal.guardian ? (
+                  <div>
+                    <p className="text-sm font-medium">
+                      Guardian: {personal.guardian.name_en} <span className="font-normal text-muted-foreground">({personal.guardian.relation.toLowerCase()} · {personal.guardian.phone})</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {personal.guardian.user_id ? "Has a portal login" : "No portal login yet"} — find this account by the guardian&apos;s own name, not the student&apos;s.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No guardian record linked to this student.</p>
+                )}
+                {personal.guardian && !personal.guardian.user_id && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setGuardianLoginPhone(personal.guardian!.phone ?? ""); setGuardianLoginDialogOpen(true); }}
+                  >
+                    Create Guardian Login
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
