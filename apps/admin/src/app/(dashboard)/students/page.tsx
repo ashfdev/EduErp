@@ -73,7 +73,10 @@ export default function StudentsPage() {
   const [classId, setClassId] = useState<string>("");
   const [sectionId, setSectionId] = useState<string>("");
   const [groupId, setGroupId] = useState<string>("");
-  const [status, setStatus] = useState<string>("");
+  // Default to ACTIVE, not "All Status" — otherwise graduated/transferred/
+  // expelled students show up mixed into ordinary class browsing. "All
+  // Status" (and each individual status) stays one click away.
+  const [status, setStatus] = useState<string>("ACTIVE");
   const [gender, setGender] = useState<string>("");
   const [programId, setProgramId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");

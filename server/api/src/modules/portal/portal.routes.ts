@@ -848,11 +848,20 @@ portalRouter.get(
       prisma.exam.findUnique({ where: { id: examId } }),
       prisma.student.findUnique({ where: { id }, include: { current_class: true, current_section: true } }),
       prisma.examSubjectConfig.findMany({ where: { exam_id: examId }, include: { subject: true } }),
-      prisma.examSeatPlan.findUnique({ where: { exam_id_student_id: { exam_id: examId, student_id: id } } }),
+      prisma.examSeatPlan.findUnique({
+        where: { exam_id_student_id: { exam_id: examId, student_id: id } },
+        include: { session: { select: { date: true, start_time: true, end_time: true } } },
+      }),
     ]);
     if (!exam || !student) throw notFound("Exam or student not found");
 
     const academicYear = exam.academic_year_id ? await prisma.academicYear.findUnique({ where: { id: exam.academic_year_id } }) : null;
+    // Real per-session date/time (Plan Six, Phase 83), matching the
+    // identical fix in the staff-side batch admit-card route -- falls back
+    // to the exam's own start_date with no time shown for seat plans
+    // generated before sessions existed, rather than a hardcoded time.
+    const sessionDate = seatPlan?.session?.date ?? exam.start_date;
+    const sessionTime = seatPlan?.session ? `${seatPlan.session.start_time} - ${seatPlan.session.end_time}` : "TBA";
     // Only this student's own subjects -- a shared (group_id: null) subject
     // applies to everyone, a group-scoped one only to students in that
     // same group (see the identical fix in the staff-side batch route).
@@ -863,10 +872,10 @@ portalRouter.get(
       (sc) => sc.subject.class_id === student.current_class_id && (sc.subject.group_id === null || sc.subject.group_id === student.group_id),
     );
     const schedule = eligibleConfigs.map((sc) => ({
-      date: exam.start_date,
-      day: exam.start_date ? new Date(exam.start_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
+      date: sessionDate,
+      day: sessionDate ? new Date(sessionDate).toLocaleDateString("en-US", { weekday: "long" }) : "",
       subject_name: sc.subject.name_en,
-      time: "10:00 AM - 1:00 PM",
+      time: sessionTime,
       hall: seatPlan?.hall_name ?? "TBA",
       seat_no: seatPlan?.seat_number ?? "TBA",
     }));

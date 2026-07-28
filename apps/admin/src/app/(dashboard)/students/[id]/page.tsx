@@ -49,10 +49,14 @@ interface StudentProfile {
       admission_date?: string | null;
     };
     history: {
+      id: string;
+      academic_year_id: string;
       academic_year: { label: string };
       class_id: string;
       class?: { name_en: string } | null;
       section?: { name: string } | null;
+      roll_no?: string | null;
+      notes?: string | null;
       final_gpa?: number | null;
       final_grade?: string | null;
       status: string;
@@ -128,6 +132,16 @@ export default function StudentProfilePage() {
     enabled: !!expandedSubjectId,
   });
 
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [expandedHistoryYearId, setExpandedHistoryYearId] = useState<string | null>(null);
+  const { data: historySubjects, isLoading: historySubjectsLoading } = useQuery<
+    { subject_id: string; name_en: string; code: string; is_compulsory: boolean; is_fourth_subject: boolean }[]
+  >({
+    queryKey: ["students", id, "subjects-for-year", expandedHistoryYearId],
+    queryFn: async () => (await api.get(`/api/students/${id}/subjects-for-year/${expandedHistoryYearId}`)).data.data,
+    enabled: !!expandedHistoryId && !!expandedHistoryYearId,
+  });
+
   const { data: profile, isLoading } = useQuery<StudentProfile>({
     queryKey: ["students", id],
     queryFn: async () => (await api.get(`/api/students/${id}`)).data.data,
@@ -197,15 +211,23 @@ export default function StudentProfilePage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to waive invoice"),
   });
 
+  const [duesMessage, setDuesMessage] = useState<{ action: "graduate" | "transfer" | "expel"; message: string } | null>(null);
+
   const graduateMutation = useMutation({
-    mutationFn: () => api.post(`/api/students/${id}/graduate`, { graduation_year: graduationYear }),
+    mutationFn: (override?: boolean) => api.post(`/api/students/${id}/graduate`, { graduation_year: graduationYear, override }),
     onSuccess: () => {
       toast.success("Student marked as graduated");
       queryClient.invalidateQueries({ queryKey: ["students", id] });
       setGraduateOpen(false);
+      setDuesMessage(null);
     },
     onError: (err: unknown) => {
+      const code = (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
       const message = extractErrorMessage(err) ?? "Failed to graduate student";
+      if (code === "OUTSTANDING_DUES") {
+        setDuesMessage({ action: "graduate", message });
+        return;
+      }
       toast.error(message);
     },
   });
@@ -234,16 +256,23 @@ export default function StudentProfilePage() {
   }
 
   const leaveMutation = useMutation({
-    mutationFn: () => api.post(`/api/students/${id}/${leaveDialog}`, { reason: leaveReason || undefined }),
+    mutationFn: (override?: boolean) => api.post(`/api/students/${id}/${leaveDialog}`, { reason: leaveReason || undefined, override }),
     onSuccess: () => {
       toast.success(leaveDialog === "transfer" ? "Student marked as transferred — portal access revoked" : "Student marked as expelled — portal access revoked");
       queryClient.invalidateQueries({ queryKey: ["students", id] });
       queryClient.invalidateQueries({ queryKey: ["students"] });
       setLeaveDialog(null);
       setLeaveReason("");
+      setDuesMessage(null);
     },
     onError: (err: unknown) => {
-      toast.error(extractErrorMessage(err) ?? "Failed to update student status");
+      const code = (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+      const message = extractErrorMessage(err) ?? "Failed to update student status";
+      if (code === "OUTSTANDING_DUES") {
+        setDuesMessage({ action: leaveDialog === "expel" ? "expel" : "transfer", message });
+        return;
+      }
+      toast.error(message);
     },
   });
 
@@ -375,7 +404,7 @@ export default function StudentProfilePage() {
             <Input type="number" value={graduationYear} onChange={(e) => setGraduationYear(Number(e.target.value))} />
           </div>
           <DialogFooter>
-            <Button onClick={() => graduateMutation.mutate()} disabled={graduateMutation.isPending}>
+            <Button onClick={() => graduateMutation.mutate(undefined)} disabled={graduateMutation.isPending}>
               {graduateMutation.isPending ? "Saving..." : "Confirm"}
             </Button>
           </DialogFooter>
@@ -400,7 +429,7 @@ export default function StudentProfilePage() {
           <DialogFooter>
             <Button
               variant={leaveDialog === "expel" ? "destructive" : "default"}
-              onClick={() => leaveMutation.mutate()}
+              onClick={() => leaveMutation.mutate(undefined)}
               disabled={leaveMutation.isPending}
             >
               {leaveMutation.isPending ? "Saving..." : "Confirm"}
@@ -418,6 +447,20 @@ export default function StudentProfilePage() {
         destructive
         loading={refundMutation.isPending}
         onConfirm={() => refundTarget && refundMutation.mutate(refundTarget.id)}
+      />
+
+      <ConfirmDialog
+        open={!!duesMessage}
+        onOpenChange={(open) => !open && setDuesMessage(null)}
+        title="Outstanding dues"
+        description={duesMessage?.message}
+        confirmLabel="Continue anyway"
+        destructive={duesMessage?.action === "expel"}
+        loading={graduateMutation.isPending || leaveMutation.isPending}
+        onConfirm={() => {
+          if (duesMessage?.action === "graduate") graduateMutation.mutate(true);
+          else leaveMutation.mutate(true);
+        }}
       />
 
       <Tabs defaultValue="personal">
@@ -470,7 +513,7 @@ export default function StudentProfilePage() {
               <div>
                 <p className="mb-2 text-sm font-medium">Academic History</p>
                 {!academic.history.length && <p className="text-sm text-muted-foreground">No promotion history yet.</p>}
-                {academic.history.map((h, i) => {
+                {academic.history.map((h) => {
                   const fromClass = h.class?.name_en ? `${h.class.name_en}${h.section ? ` · ${h.section.name}` : ""}` : null;
                   const statusPhrase: Record<string, string> = {
                     PROMOTED: "Promoted from",
@@ -478,10 +521,47 @@ export default function StudentProfilePage() {
                     TRANSFERRED: "Transferred from",
                     GRADUATED: "Graduated from",
                   };
+                  const isOpen = expandedHistoryId === h.id;
                   return (
-                    <div key={i} className="border-b py-2 text-sm">
-                      {h.academic_year.label} — GPA {h.final_gpa ?? "—"} · {h.final_grade ?? "—"} ·{" "}
-                      {fromClass ? `${statusPhrase[h.status] ?? h.status} ${fromClass}` : <StatusBadge status={h.status} />}
+                    <div key={h.id} className="border-b">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-1.5 py-2 text-left text-sm"
+                        onClick={() => {
+                          const nextOpen = !isOpen;
+                          setExpandedHistoryId(nextOpen ? h.id : null);
+                          setExpandedHistoryYearId(nextOpen ? h.academic_year_id : null);
+                        }}
+                      >
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                        <span>
+                          {h.academic_year.label} — GPA {h.final_gpa ?? "—"} · {h.final_grade ?? "—"} ·{" "}
+                          {fromClass ? `${statusPhrase[h.status] ?? h.status} ${fromClass}` : <StatusBadge status={h.status} />}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="ml-5 space-y-2 rounded-md bg-muted/20 p-3 text-sm">
+                          <p><span className="text-muted-foreground">Class:</span> {fromClass ?? "—"}</p>
+                          <p><span className="text-muted-foreground">Roll No:</span> {h.roll_no ?? "—"}</p>
+                          {h.notes && <p><span className="text-muted-foreground">Notes:</span> {h.notes}</p>}
+                          <div>
+                            <p className="mb-1 text-muted-foreground">Subjects that year:</p>
+                            {historySubjectsLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+                            {!historySubjectsLoading && !historySubjects?.length && (
+                              <p className="text-xs text-muted-foreground">No subject records found for this year.</p>
+                            )}
+                            {!historySubjectsLoading && !!historySubjects?.length && (
+                              <ul className="ml-4 list-disc space-y-0.5">
+                                {historySubjects.map((s) => (
+                                  <li key={s.subject_id}>
+                                    {s.name_en} ({s.code}){s.is_compulsory ? "" : " · Optional"}{s.is_fourth_subject ? " · 4th Subject" : ""}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

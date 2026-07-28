@@ -735,6 +735,10 @@ feesRouter.post(
     const studentId = reqParam(req, "student_id");
     const student = await prisma.student.findFirst({ where: { id: studentId, deleted_at: null } });
     if (!student) throw notFound("Student not found");
+    // current_class_id is deliberately preserved after a student leaves (for
+    // history), so it alone can't gate this — a graduated/transferred/
+    // expelled student must never be billed again on-demand.
+    if (student.status !== "ACTIVE") throw badRequest(`This student is ${student.status.toLowerCase()}, not active — cannot generate fees`);
     if (!student.current_class_id) throw badRequest("This student has no current class assigned");
 
     const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });

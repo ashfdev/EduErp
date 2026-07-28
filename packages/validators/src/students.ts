@@ -90,12 +90,18 @@ export const promoteStudentSchema = z.object({
   new_academic_year_id: z.string().min(1),
   new_roll_no: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  selected_optional_subject_ids: z.array(z.string()).optional(),
+  fourth_subject_id: z.string().optional().nullable(),
 });
 export type PromoteStudentInput = z.infer<typeof promoteStudentSchema>;
 
 export const graduateStudentSchema = z.object({
   graduation_year: z.number().int().min(2000).max(2100),
   notes: z.string().optional().nullable(),
+  // Soft-warning-with-override (matches section-capacity.ts's convention) —
+  // set true only on a deliberate resubmit after the caller has already seen
+  // the OUTSTANDING_DUES warning once.
+  override: z.boolean().optional(),
 });
 export type GraduateStudentInput = z.infer<typeof graduateStudentSchema>;
 
@@ -106,6 +112,7 @@ export type GraduateStudentInput = z.infer<typeof graduateStudentSchema>;
 export const deactivateStudentSchema = z.object({
   reason: z.string().optional().nullable(),
   effective_date: z.coerce.date().optional(),
+  override: z.boolean().optional(),
 });
 export type DeactivateStudentInput = z.infer<typeof deactivateStudentSchema>;
 
@@ -120,6 +127,12 @@ export const bulkPromoteSchema = z.object({
   // but each student may need a different group, so this is a per-student
   // map rather than one group_id for the whole batch.
   student_group_ids: z.record(z.string(), z.string()).optional(),
+  // Same per-student-map shape as the group map above — different students
+  // in one batch can legitimately pick different optional subjects (and a
+  // different 4th subject) in the destination class, exactly like a single
+  // student's own create/edit form already allows.
+  student_optional_subject_ids: z.record(z.string(), z.array(z.string())).optional(),
+  student_fourth_subject_ids: z.record(z.string(), z.string()).optional(),
 });
 export type BulkPromoteInput = z.infer<typeof bulkPromoteSchema>;
 

@@ -27,6 +27,11 @@ interface RosterStudent {
   current_section: { id: string; name: string } | null;
   eligibility: { eligible: boolean; reason?: string };
 }
+interface SubjectOption {
+  id: string;
+  name_en: string;
+  is_optional: boolean;
+}
 interface PromoteResult {
   promoted: string[];
   skipped: { id: string; reason: string }[];
@@ -40,6 +45,8 @@ export default function PromoteStudentsPage() {
   const [destYearId, setDestYearId] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [studentGroupIds, setStudentGroupIds] = useState<Record<string, string>>({});
+  const [studentOptionalSubjectIds, setStudentOptionalSubjectIds] = useState<Record<string, string[]>>({});
+  const [studentFourthSubjectIds, setStudentFourthSubjectIds] = useState<Record<string, string>>({});
   const [result, setResult] = useState<PromoteResult | null>(null);
 
   // Intentionally unscoped by year — an admin needs to find a student's
@@ -67,6 +74,34 @@ export default function PromoteStudentsPage() {
   const destClass = destClasses?.find((c) => c.id === destClassId);
   const destHasGroups = !!destClass?.groups?.length;
 
+  // Every subject in the destination class -- same unfiltered-by-group shape
+  // the single-student Add/Edit Student wizard's own Subjects step already
+  // uses (inheritSubjectsForClass silently drops a selection that doesn't
+  // match the student's own group server-side, so this isn't a correctness
+  // gap, just the same established UI pattern carried over here).
+  const { data: destSubjects } = useQuery<SubjectOption[]>({
+    queryKey: ["subjects", destClassId],
+    queryFn: async () => (await api.get("/api/subjects", { params: { class_id: destClassId } })).data.data,
+    enabled: !!destClassId,
+  });
+  const destOptionalSubjects = destSubjects?.filter((s) => s.is_optional) ?? [];
+
+  function toggleOptionalSubject(studentId: string, subjectId: string) {
+    setStudentOptionalSubjectIds((prev) => {
+      const current = prev[studentId] ?? [];
+      const next = current.includes(subjectId) ? current.filter((sid) => sid !== subjectId) : [...current, subjectId];
+      return { ...prev, [studentId]: next };
+    });
+    // Dropping a subject that was the designated 4th subject must also clear
+    // that designation -- it can no longer point at a selected subject.
+    setStudentFourthSubjectIds((prev) => {
+      if (prev[studentId] !== subjectId) return prev;
+      const next = { ...prev };
+      delete next[studentId];
+      return next;
+    });
+  }
+
   const { data: roster, isFetching: rosterLoading, refetch } = useQuery<RosterStudent[]>({
     queryKey: ["students", "promotion-roster", sourceClassId, sourceSectionId],
     queryFn: async () =>
@@ -77,6 +112,8 @@ export default function PromoteStudentsPage() {
   function loadRoster() {
     setSelected(new Set());
     setStudentGroupIds({});
+    setStudentOptionalSubjectIds({});
+    setStudentFourthSubjectIds({});
     setResult(null);
     refetch().then((res) => {
       const eligibleIds = (res.data ?? []).filter((s) => s.eligibility.eligible).map((s) => s.id);
@@ -113,12 +150,16 @@ export default function PromoteStudentsPage() {
         new_academic_year_id: destYearId,
         student_ids: [...selected],
         student_group_ids: destHasGroups ? studentGroupIds : undefined,
+        student_optional_subject_ids: destOptionalSubjects.length ? studentOptionalSubjectIds : undefined,
+        student_fourth_subject_ids: destOptionalSubjects.length ? studentFourthSubjectIds : undefined,
       }),
     onSuccess: (res) => {
       const data: PromoteResult = res.data.data;
       setResult(data);
       setSelected(new Set());
       setStudentGroupIds({});
+      setStudentOptionalSubjectIds({});
+      setStudentFourthSubjectIds({});
       toast.success(`Promoted ${data.promoted.length} student(s)${data.skipped.length ? `, ${data.skipped.length} skipped` : ""}`);
       refetch();
     },
@@ -164,7 +205,7 @@ export default function PromoteStudentsPage() {
             <select
               className="w-full rounded-md border px-3 py-2 text-sm"
               value={destClassId}
-              onChange={(e) => { setDestClassId(e.target.value); setDestSectionId(""); setStudentGroupIds({}); }}
+              onChange={(e) => { setDestClassId(e.target.value); setDestSectionId(""); setStudentGroupIds({}); setStudentOptionalSubjectIds({}); setStudentFourthSubjectIds({}); }}
               disabled={!destYearId}
             >
               <option value="">{destYearId ? "Select destination class..." : "Select an academic year first"}</option>
@@ -175,6 +216,7 @@ export default function PromoteStudentsPage() {
               {destClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {destHasGroups && <p className="text-xs text-muted-foreground">This class has Groups/Streams — pick each promoted student&apos;s group below.</p>}
+            {!!destOptionalSubjects.length && <p className="text-xs text-muted-foreground">This class offers optional subjects — pick each promoted student&apos;s selection below.</p>}
           </CardContent>
         </Card>
       </div>
@@ -200,6 +242,7 @@ export default function PromoteStudentsPage() {
                   <th className="p-2">Student</th>
                   <th className="p-2">Status</th>
                   {destHasGroups && <th className="p-2">Group</th>}
+                  {!!destOptionalSubjects.length && <th className="p-2">Optional Subjects</th>}
                 </tr>
               </thead>
               <tbody>
@@ -231,6 +274,40 @@ export default function PromoteStudentsPage() {
                             <option value="">Select group...</option>
                             {destClass?.groups?.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
                           </select>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    )}
+                    {!!destOptionalSubjects.length && (
+                      <td className="p-2">
+                        {selected.has(s.id) ? (
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                              {destOptionalSubjects.map((subj) => (
+                                <label key={subj.id} className="flex items-center gap-1 text-xs">
+                                  <Checkbox
+                                    checked={(studentOptionalSubjectIds[s.id] ?? []).includes(subj.id)}
+                                    onCheckedChange={() => toggleOptionalSubject(s.id, subj.id)}
+                                  />
+                                  {subj.name_en}
+                                </label>
+                              ))}
+                            </div>
+                            {!!(studentOptionalSubjectIds[s.id] ?? []).length && (
+                              <select
+                                className="rounded-md border px-2 py-1 text-xs"
+                                value={studentFourthSubjectIds[s.id] ?? ""}
+                                onChange={(e) => setStudentFourthSubjectIds((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                              >
+                                <option value="">No 4th subject</option>
+                                {(studentOptionalSubjectIds[s.id] ?? []).map((sid) => {
+                                  const subj = destOptionalSubjects.find((o) => o.id === sid);
+                                  return subj ? <option key={sid} value={sid}>{subj.name_en} (4th)</option> : null;
+                                })}
+                              </select>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

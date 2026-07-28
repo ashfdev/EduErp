@@ -20,6 +20,7 @@ import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
 import { assertSectionCapacity } from "../../lib/section-capacity";
+import { assertNoOutstandingDues } from "../../lib/outstanding-dues";
 import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, notFound, conflict } from "../../lib/errors";
@@ -473,6 +474,36 @@ studentsRouter.get(
   }),
 );
 
+// Powers the click-to-expand Academic History detail on the student profile
+// page -- StudentSubject rows are already scoped per academic_year_id (see
+// inheritSubjectsForClass), so this is the correct, year-scoped source for
+// "which subjects did this student actually have back then," unlike the
+// main GET /:id response's own student_subjects include (which is
+// deliberately left untouched here, out of scope for this fix).
+studentsRouter.get(
+  "/:id/subjects-for-year/:academic_year_id",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const academicYearId = reqParam(req, "academic_year_id");
+    const rows = await prisma.studentSubject.findMany({
+      where: { student_id: id, academic_year_id: academicYearId },
+      include: { subject: true },
+      orderBy: { subject: { display_order: "asc" } },
+    });
+    res.json({
+      success: true,
+      data: rows.map((r) => ({
+        subject_id: r.subject_id,
+        name_en: r.subject.name_en,
+        code: r.subject.code,
+        is_compulsory: r.subject.is_compulsory,
+        is_inherited: r.is_inherited,
+        is_fourth_subject: r.is_fourth_subject,
+      })),
+    });
+  }),
+);
+
 // Pre-creation photo upload (Plan Thirteen, Phase N) — mirrors the
 // equivalent staff route exactly: no Student id exists yet, this just
 // returns a URL to attach to the create payload's now-mandatory photo_url.
@@ -779,7 +810,15 @@ studentsRouter.post(
         data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, current_roll_no: body.new_roll_no, group_id: body.new_group_id ?? null },
       });
 
-      await inheritSubjectsForClass(tx, id, body.new_class_id, body.new_academic_year_id, [], body.new_group_id);
+      await inheritSubjectsForClass(
+        tx,
+        id,
+        body.new_class_id,
+        body.new_academic_year_id,
+        body.selected_optional_subject_ids ?? [],
+        body.new_group_id,
+        body.fourth_subject_id,
+      );
       await invoiceReadmissionFeeIfConfigured(tx, id, body.new_class_id, body.new_academic_year_id);
       return result;
     });
@@ -800,6 +839,7 @@ studentsRouter.post(
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
+    await assertNoOutstandingDues(id, body.override);
 
     const updated = await prisma.$transaction(async (tx) => {
       if (existing.current_class_id) {
@@ -837,13 +877,14 @@ studentsRouter.post(
 async function deactivateStudentAndRevokeAccess(
   id: string,
   status: "TRANSFERRED" | "EXPELLED",
-  body: { reason?: string | null; effective_date?: Date },
+  body: { reason?: string | null; effective_date?: Date; override?: boolean },
 ) {
   const existing = await prisma.student.findFirst({ where: { id, deleted_at: null }, include: { guardian: true } });
   if (!existing) throw notFound("Student not found");
   if (existing.status === "TRANSFERRED" || existing.status === "EXPELLED" || existing.status === "GRADUATED") {
     throw badRequest(`Student is already ${existing.status.toLowerCase()}`);
   }
+  await assertNoOutstandingDues(id, body.override);
 
   return prisma.$transaction(async (tx) => {
     if (existing.current_class_id) {
@@ -985,7 +1026,15 @@ studentsRouter.post(
           where: { id: studentId },
           data: { current_class_id: body.new_class_id, current_section_id: body.new_section_id, group_id: groupId ?? null },
         });
-        await inheritSubjectsForClass(tx, studentId, body.new_class_id, body.new_academic_year_id, [], groupId);
+        await inheritSubjectsForClass(
+          tx,
+          studentId,
+          body.new_class_id,
+          body.new_academic_year_id,
+          body.student_optional_subject_ids?.[studentId] ?? [],
+          groupId,
+          body.student_fourth_subject_ids?.[studentId],
+        );
         await invoiceReadmissionFeeIfConfigured(tx, studentId, body.new_class_id, body.new_academic_year_id);
       });
       promoted.push(studentId);
