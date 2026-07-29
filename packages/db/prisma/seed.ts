@@ -121,6 +121,7 @@ const CHART_OF_ACCOUNTS: { code: string; name: string; group: string; is_system?
   { code: "5018", name: "Depreciation Expense", group: "grp-expenses", is_system: true },
   { code: "5019", name: "Miscellaneous Expense", group: "grp-expenses" },
   { code: "5020", name: "Loss on Disposal of Asset", group: "grp-expenses" },
+  { code: "5021", name: "Scholarship & Waiver Expense", group: "grp-expenses", is_system: true },
 ];
 
 const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {

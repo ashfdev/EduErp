@@ -39,6 +39,31 @@ async function recordJournalFailure(referenceType: string, referenceId: string |
   });
 }
 
+// Waivers reduce Invoice.amount_due at invoice-creation time but were never
+// otherwise visible in the accounts books — a waived invoice, once paid,
+// journaled as if the fee had simply always been the discounted amount,
+// with zero trace of the discount ever being granted. This "gross-up"s the
+// income side back to the full pre-waiver amount and books the difference
+// as a real expense, so a board/auditor reading the income-expenditure
+// report can see the true cost of scholarships given, not just net income.
+//
+// Recognized ONCE per invoice, on whichever payment-completion event
+// (createFeeReceiptJournal or createAdvanceCreditConsumptionJournal) is the
+// first to settle any money against it — Invoice.waiver_journaled_at gates
+// this, so a second/partial payment on the same invoice never re-books the
+// same discount twice. Returns null (no extra entries) for the ordinary
+// case: no waiver, or already recognized by an earlier payment.
+async function resolveWaiverGrossUp(invoice: Invoice): Promise<{ waiverAmount: number; expenseAccountId: string } | null> {
+  if (invoice.waiver_journaled_at) return null;
+  const applications = await prisma.invoiceWaiverApplication.findMany({ where: { invoice_id: invoice.id } });
+  const waiverAmount = Math.round(applications.reduce((sum, a) => sum + a.discount_amount, 0) * 100) / 100;
+  if (waiverAmount <= 0) return null;
+
+  const expenseAccountId = await getAccountId("5021"); // Scholarship & Waiver Expense
+  await prisma.invoice.update({ where: { id: invoice.id }, data: { waiver_journaled_at: new Date() } });
+  return { waiverAmount, expenseAccountId };
+}
+
 // appliedToInvoice defaults to the full payment amount (every existing
 // caller's behavior, unchanged). Pass a smaller value when an advance-
 // payment overpayment (Phase 81) has capped what actually applies to this
@@ -53,11 +78,15 @@ export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice
     const mapping = await prisma.feeAccountMapping.findUnique({ where: { category: invoice.category } });
     const incomeAccountId = mapping?.account_id ?? (await getAccountId("4011")); // Other Income fallback
     const cashOrBankAccountId = await getAccountId(payment.gateway === "CASH" ? "1001" : "1002");
+    const grossUp = await resolveWaiverGrossUp(invoice);
 
     const entries: JournalEntryInput[] = [
       { debit_account_id: cashOrBankAccountId, amount: payment.amount, narration: `Fee receipt — ${invoice.description}` },
-      { credit_account_id: incomeAccountId, amount: applied, narration: `Fee receipt — ${invoice.description}` },
+      { credit_account_id: incomeAccountId, amount: applied + (grossUp?.waiverAmount ?? 0), narration: `Fee receipt — ${invoice.description}` },
     ];
+    if (grossUp) {
+      entries.push({ debit_account_id: grossUp.expenseAccountId, amount: grossUp.waiverAmount, narration: `Scholarship/waiver granted — ${invoice.description}` });
+    }
     if (overflow > 0) {
       const advanceAccountId = await getAccountId("2005");
       entries.push({ credit_account_id: advanceAccountId, amount: overflow, narration: `Advance payment credited — ${invoice.description}` });
@@ -88,11 +117,20 @@ export async function createAdvanceCreditConsumptionJournal(payment: Payment, in
     const mapping = await prisma.feeAccountMapping.findUnique({ where: { category: invoice.category } });
     const incomeAccountId = mapping?.account_id ?? (await getAccountId("4011"));
     const advanceAccountId = await getAccountId("2005");
+    // A brand-new invoice can be waived AND immediately settled from
+    // pre-existing advance credit in the same createMonthlyInvoiceIfMissing
+    // call, before createFeeReceiptJournal ever runs for it -- the same
+    // gross-up must fire here too, or this specific path would silently
+    // never recognize the waiver.
+    const grossUp = await resolveWaiverGrossUp(invoice);
 
     const entries: JournalEntryInput[] = [
       { debit_account_id: advanceAccountId, amount: payment.amount, narration: `Advance credit applied — ${invoice.description}` },
-      { credit_account_id: incomeAccountId, amount: payment.amount, narration: `Advance credit applied — ${invoice.description}` },
+      { credit_account_id: incomeAccountId, amount: payment.amount + (grossUp?.waiverAmount ?? 0), narration: `Advance credit applied — ${invoice.description}` },
     ];
+    if (grossUp) {
+      entries.push({ debit_account_id: grossUp.expenseAccountId, amount: grossUp.waiverAmount, narration: `Scholarship/waiver granted — ${invoice.description}` });
+    }
 
     await createVoucher(prisma, {
       voucher_type: "RECEIPT",

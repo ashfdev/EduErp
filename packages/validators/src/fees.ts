@@ -54,6 +54,11 @@ export const generateInvoiceSchema = z.object({
   month: z.number().int().min(1).max(12).optional(),
   year: z.number().int().optional(),
   student_ids: z.array(z.string()).optional(),
+  // Explicit override for a ONE_TIME fee (e.g. an exam fee) where "10th of
+  // whichever month generation happens to run in" (the month/year+due_day
+  // fallback below) isn't a meaningful deadline. Omitted -> byte-identical
+  // to today's existing month/year/due_day computation.
+  due_date: z.coerce.date().optional(),
 });
 
 export const generateBulkMonthlySchema = z.object({

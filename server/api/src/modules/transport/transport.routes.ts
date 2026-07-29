@@ -11,6 +11,7 @@ import { reqParam } from "../../lib/req-param";
 import { TRANSPORT_MANAGE_ROLES } from "../../lib/roles";
 import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema, locationPingSchema } from "@education-erp/validators";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
+import { applyWaiversToInvoice } from "../fees/invoice-helpers";
 import { notFound } from "../../lib/errors";
 
 export const transportRouter = Router();
@@ -241,7 +242,7 @@ transportRouter.post(
     if (route.fare > 0) {
       const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
       if (activeYear) {
-        await prisma.invoice.create({
+        const invoice = await prisma.invoice.create({
           data: {
             invoice_no: await generateInvoiceNo(prisma),
             student_id: body.student_id,
@@ -253,6 +254,11 @@ transportRouter.post(
             status: "PENDING",
           },
         });
+        // Waiver auto-apply (Plan Twenty-One follow-up) -- same reasoning
+        // as every other invoice-creation path: a waiver whose
+        // applicable_categories includes TRANSPORT (or is empty = all
+        // categories) must actually reduce this invoice.
+        await applyWaiversToInvoice(prisma, invoice);
       }
     }
 

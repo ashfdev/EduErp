@@ -16,7 +16,7 @@ interface SubjectConfig {
   pass_marks_theory: number;
   pass_marks_practical: number;
   pass_marks_combined: number;
-  subject: { name_en: string; class: { name_en: string }; group: { name_en: string } | null };
+  subject: { name_en: string; class: { id: string; name_en: string }; group: { name_en: string } | null };
 }
 
 type MarkComponentSourceType = "MANUAL" | "ATTENDANCE_PERCENTAGE" | "AVERAGE_OF_EXAMS";
@@ -36,8 +36,23 @@ interface Exam {
   id: string;
   name: string;
   status: string;
+  academic_year_id: string;
   subject_configs: SubjectConfig[];
   mark_components: MarkComponent[];
+}
+
+// Plan Twenty-One, Phase B -- "Generate Exam Fee" reuses-or-creates an
+// EXAM-category, ONE_TIME FeeStructure scoped to this exam's own classes,
+// then calls the existing /invoices/generate route. Mirrors the same
+// FeeStructure shape the Fee Structures page already works with.
+interface ExamFeeStructure {
+  id: string;
+  name: string;
+  category: string;
+  frequency: string;
+  amount: number;
+  class_id: string | null;
+  classes: { class: { id: string; name_en: string } }[];
 }
 
 interface MarkComponentDraftRow {
@@ -269,6 +284,108 @@ export default function ExamDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to bulk-apply template"),
   });
 
+  // "Generate Exam Fee" (Plan Twenty-One, Phase B) -- an explicit, deliberate
+  // admin action (never auto-triggered), matching the plan's own framing:
+  // exam-fee amounts/timing need real admin judgment, unlike calendar-driven
+  // monthly tuition. Reuses an existing EXAM-category ONE_TIME FeeStructure
+  // already scoped to this exam's classes, or creates one inline scoped to
+  // exactly this exam's class list, then bulk-generates via the existing,
+  // unchanged POST /invoices/generate route -- same idempotency guarantee
+  // that route already has.
+  const examClassIds = [...new Set(Object.values(effectiveConfigs).map((c) => c.subject.class.id))];
+
+  const [examFeeOpen, setExamFeeOpen] = useState(false);
+  const [examFeeMode, setExamFeeMode] = useState<"existing" | "new">("new");
+  const [examFeeStructureId, setExamFeeStructureId] = useState("");
+  const [examFeeName, setExamFeeName] = useState("");
+  const [examFeeAmount, setExamFeeAmount] = useState(0);
+  const [examFeeOverlapMessage, setExamFeeOverlapMessage] = useState<string | null>(null);
+  // Tracks a just-created structure across an overlap-confirm retry, so
+  // re-submitting with override=true reuses it instead of creating a
+  // second, orphaned duplicate.
+  const [examFeePendingStructureId, setExamFeePendingStructureId] = useState<string | null>(null);
+  // Explicit, required due date -- without this, /invoices/generate falls
+  // back to "the structure's due_day in whichever month you happen to
+  // click Generate in," which isn't a meaningful exam-fee deadline.
+  const [examFeeDueDate, setExamFeeDueDate] = useState("");
+
+  function openExamFeeDialog() {
+    setExamFeeMode("new");
+    setExamFeeStructureId("");
+    setExamFeeName(exam ? `${exam.name} — Exam Fee` : "Exam Fee");
+    setExamFeeAmount(0);
+    setExamFeePendingStructureId(null);
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    setExamFeeDueDate(d.toISOString().slice(0, 10));
+    setExamFeeOpen(true);
+  }
+
+  const { data: examFeeStructures } = useQuery<ExamFeeStructure[]>({
+    queryKey: ["fees", "structures", "for-exam", exam?.academic_year_id],
+    queryFn: async () => (await api.get("/api/fees/structures", { params: { academic_year_id: exam!.academic_year_id } })).data.data,
+    enabled: examFeeOpen && !!exam,
+  });
+  const existingExamFeeOptions = (examFeeStructures ?? []).filter((s) => s.category === "EXAM" && s.frequency === "ONE_TIME");
+  const selectedExistingStructure = existingExamFeeOptions.find((s) => s.id === examFeeStructureId);
+
+  const examFeePreviewClassIds =
+    examFeeMode === "new"
+      ? examClassIds
+      : selectedExistingStructure
+        ? selectedExistingStructure.classes.length
+          ? selectedExistingStructure.classes.map((c) => c.class.id)
+          : selectedExistingStructure.class_id
+            ? [selectedExistingStructure.class_id]
+            : null
+        : undefined;
+
+  const { data: examFeePreviewTotal } = useQuery<number>({
+    queryKey: ["students", "count-for-generate", "exam-fee", examFeePreviewClassIds?.join(",") ?? "none"],
+    queryFn: async () => {
+      const params: Record<string, string> = { status: "ACTIVE", limit: "1" };
+      if (examFeePreviewClassIds) params.class_ids = examFeePreviewClassIds.join(",");
+      return (await api.get("/api/students", { params })).data.meta.total as number;
+    },
+    enabled: examFeeOpen && examFeePreviewClassIds !== undefined,
+  });
+
+  const examFeeAmountForPreview = examFeeMode === "new" ? examFeeAmount : (selectedExistingStructure?.amount ?? 0);
+
+  const generateExamFeeMutation = useMutation({
+    mutationFn: async (overrideOverlap?: boolean) => {
+      let structureId = examFeeMode === "existing" ? examFeeStructureId : examFeePendingStructureId;
+      if (examFeeMode === "new" && !structureId) {
+        const createdStructure = await api.post("/api/fees/structures", {
+          academic_year_id: exam!.academic_year_id,
+          category: "EXAM",
+          frequency: "ONE_TIME",
+          name: examFeeName,
+          amount: examFeeAmount,
+        });
+        structureId = createdStructure.data.data.id;
+        setExamFeePendingStructureId(structureId);
+      }
+      if (examFeeMode === "new") {
+        await api.put(`/api/fees/structures/${structureId}/classes`, { class_ids: examClassIds, override_overlap: overrideOverlap });
+      }
+      return api.post("/api/fees/invoices/generate", { fee_structure_id: structureId, due_date: examFeeDueDate });
+    },
+    onSuccess: (res) => {
+      const { created, skipped_duplicates } = res.data.data as { created: number; skipped_duplicates: number };
+      toast.success(`Generated ${created} invoice${created === 1 ? "" : "s"}${skipped_duplicates ? ` (${skipped_duplicates} already existed)` : ""}`);
+      setExamFeeOpen(false);
+    },
+    onError: (err: unknown) => {
+      const error = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error;
+      if (error?.code === "FEE_STRUCTURE_CLASS_OVERLAP") {
+        setExamFeeOverlapMessage(error.message ?? "One or more classes already have an active EXAM fee structure.");
+        return;
+      }
+      toast.error(error?.message ?? "Failed to generate exam fee invoices");
+    },
+  });
+
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   const transition = STATUS_TRANSITIONS[exam.status];
@@ -281,6 +398,7 @@ export default function ExamDetailPage() {
         breadcrumbs={[{ label: "Examination", href: "/examination" }, { label: exam.name }]}
         action={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={openExamFeeDialog}>Generate Exam Fee</Button>
             <Link href={`/examination/${id}/seat-plan`}><Button variant="outline">Seat Plan</Button></Link>
             {exam.status === "COMPLETED" && (
               <>
@@ -601,6 +719,97 @@ export default function ExamDetailPage() {
           }}
         />
       )}
+
+      <Dialog open={examFeeOpen} onOpenChange={setExamFeeOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Generate Exam Fee — {exam.name}</DialogTitle></DialogHeader>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs shrink-0">Fee Structure</Label>
+            <select
+              className="w-full rounded-md border px-2 py-1.5 text-sm"
+              value={examFeeMode === "new" ? "__new__" : examFeeStructureId}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  setExamFeeMode("new");
+                  setExamFeeStructureId("");
+                } else {
+                  setExamFeeMode("existing");
+                  setExamFeeStructureId(e.target.value);
+                }
+              }}
+            >
+              <option value="__new__">+ Create new Exam Fee structure</option>
+              {existingExamFeeOptions.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} (৳{s.amount})</option>
+              ))}
+            </select>
+          </div>
+
+          {examFeeMode === "new" && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Creates a new EXAM-category, one-time fee scoped to exactly this exam&apos;s classes.
+              </p>
+              <div className="space-y-1.5"><Label>Name</Label><Input value={examFeeName} onChange={(e) => setExamFeeName(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Amount</Label><Input type="number" value={examFeeAmount} onChange={(e) => setExamFeeAmount(Number(e.target.value))} /></div>
+            </>
+          )}
+
+          {examFeeMode === "existing" && selectedExistingStructure && (
+            <p className="text-sm text-muted-foreground">
+              Applies to: {selectedExistingStructure.classes.length ? selectedExistingStructure.classes.map((c) => c.class.name_en).join(", ") : selectedExistingStructure.class_id ? "1 class" : "All classes institution-wide"}
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>Due Date</Label>
+            <Input type="date" value={examFeeDueDate} onChange={(e) => setExamFeeDueDate(e.target.value)} />
+          </div>
+
+          <p className="text-sm">
+            {examFeePreviewTotal === undefined ? (
+              "Calculating..."
+            ) : (
+              <>
+                Eligible: <strong>{examFeePreviewTotal}</strong> active student{examFeePreviewTotal === 1 ? "" : "s"} · Up to{" "}
+                <strong>৳{(examFeePreviewTotal * examFeeAmountForPreview).toLocaleString()}</strong>
+                <br />
+                <span className="text-xs text-muted-foreground">
+                  Students who already have this invoice are skipped automatically — this is an upper bound, not a guarantee of new charges.
+                </span>
+              </>
+            )}
+          </p>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExamFeeOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => generateExamFeeMutation.mutate(undefined)}
+              disabled={
+                generateExamFeeMutation.isPending ||
+                examFeePreviewTotal === undefined ||
+                !examFeeDueDate ||
+                (examFeeMode === "new" ? !examFeeName.trim() || examFeeAmount <= 0 : !examFeeStructureId)
+              }
+            >
+              {generateExamFeeMutation.isPending ? "Generating..." : "Generate Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!examFeeOverlapMessage}
+        onOpenChange={(open) => !open && setExamFeeOverlapMessage(null)}
+        title="Classes already assigned elsewhere"
+        description={examFeeOverlapMessage ?? undefined}
+        confirmLabel="Continue anyway"
+        loading={generateExamFeeMutation.isPending}
+        onConfirm={() => {
+          setExamFeeOverlapMessage(null);
+          generateExamFeeMutation.mutate(true);
+        }}
+      />
     </PageWrapper>
   );
 }

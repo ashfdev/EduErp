@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient, FeeStructure, Invoice } from "@education-erp/db";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createAdvanceCreditConsumptionJournal } from "../accounts/auto-journal.service";
+import { resolveFeeStructureClassIds } from "./fee-structure-scope";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -109,6 +110,43 @@ export async function createMonthlyInvoiceIfMissing(
   return { created: true };
 }
 
+// Shared by POST /invoices/generate-bulk-monthly (the manual admin button,
+// unchanged) and the new scheduled job (Plan Twenty-One, Phase A) — one
+// place for the actual generation loop so a real cron trigger can never
+// drift from what the manual button already does. Every active MONTHLY
+// FeeStructure for the given year, resolved against every active student
+// it applies to, via the same idempotent createMonthlyInvoiceIfMissing
+// used everywhere else fee generation happens.
+export async function runMonthlyFeeGeneration(
+  tx: Tx,
+  academicYearId: string,
+  month: number,
+  year: number,
+): Promise<{ created: number; skipped: number }> {
+  const structures = await tx.feeStructure.findMany({ where: { academic_year_id: academicYearId, frequency: "MONTHLY", is_active: true } });
+
+  let created = 0;
+  let skipped = 0;
+  for (const structure of structures) {
+    const classIds = await resolveFeeStructureClassIds(tx, structure);
+    const students = await tx.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        ...(classIds && { current_class_id: { in: classIds } }),
+        ...(structure.section_id && { current_section_id: structure.section_id }),
+      },
+    });
+    for (const student of students) {
+      const result = await createMonthlyInvoiceIfMissing(tx, student.id, structure, month, year);
+      if (result.created) created++;
+      else skipped++;
+    }
+  }
+
+  return { created, skipped };
+}
+
 // Promotion-triggered readmission fee — invoiced only if the destination
 // class actually has an active READMISSION FeeStructure defined for the
 // target academic year (mirrors the admission-enroll ADMISSION/FORM invoice
@@ -142,7 +180,7 @@ export async function invoiceReadmissionFeeIfConfigured(
   });
   if (existing) return { created: false };
 
-  await tx.invoice.create({
+  const invoice = await tx.invoice.create({
     data: {
       invoice_no: await generateInvoiceNo(tx),
       student_id: studentId,
@@ -155,6 +193,11 @@ export async function invoiceReadmissionFeeIfConfigured(
       due_date: new Date(),
     },
   });
+  // Same waiver auto-apply as every other invoice-creation path (Plan
+  // Twenty-One follow-up) -- a waiver whose applicable_categories includes
+  // READMISSION (or is empty = all categories) must actually reduce this
+  // invoice, not silently be ignored just because it was created here.
+  await applyWaiversToInvoice(tx, invoice);
   return { created: true };
 }
 
@@ -170,11 +213,21 @@ export async function invoiceReadmissionFeeIfConfigured(
 // recomputes status to PARTIAL/PAID off the current amount_paid regardless
 // of what status was there before, so an invoice that was OVERDUE and then
 // gets paid is never stuck.
+//
+// Respects FeeRules.grace_period_days -- the same grace window
+// calculateLateFee()/daysOverdue() (late-fee.ts) already use to decide when
+// a fine starts accruing. Before this, the OVERDUE badge flipped red the
+// instant due_date passed while the fine stayed ৳0 for the whole grace
+// window, reading as a contradiction to whoever saw it.
 export async function syncOverdueInvoices(tx: Tx, studentId?: string): Promise<void> {
+  const rules = await tx.feeRules.findUnique({ where: { id: "singleton" } });
+  const graceDeadlineCutoff = new Date();
+  graceDeadlineCutoff.setDate(graceDeadlineCutoff.getDate() - (rules?.grace_period_days ?? 0));
+
   await tx.invoice.updateMany({
     where: {
       status: { in: ["PENDING", "PARTIAL"] },
-      due_date: { lt: new Date() },
+      due_date: { lt: graceDeadlineCutoff },
       ...(studentId && { student_id: studentId }),
     },
     data: { status: "OVERDUE" },

@@ -26,7 +26,7 @@ import {
 } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
-import { createMonthlyInvoiceIfMissing } from "../fees/invoice-helpers";
+import { createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
 import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
@@ -857,8 +857,14 @@ admissionRouter.post(
       const feeRules = await tx.feeRules.findFirst();
       const admissionInvoiceDueDate = new Date(Date.now() + (feeRules?.grace_period_days ?? 7) * 24 * 60 * 60 * 1000);
 
+      // Waiver auto-apply (Plan Twenty-One follow-up) -- a waiver whose
+      // applicable_categories includes ADMISSION/FORM (or is empty = all
+      // categories) must actually reduce these invoices, same as every
+      // other invoice-creation path. In practice a brand-new student rarely
+      // has a StudentWaiver yet, but this keeps the behavior consistent
+      // rather than being a silent, undocumented exception.
       if (application.cycle.app_fee > 0) {
-        await tx.invoice.create({
+        const admissionInvoice = await tx.invoice.create({
           data: {
             invoice_no: await generateInvoiceNo(tx),
             student_id: created.id,
@@ -870,10 +876,11 @@ admissionRouter.post(
             status: "PENDING",
           },
         });
+        await applyWaiversToInvoice(tx, admissionInvoice);
       }
 
       if (application.cycle.form_fee > 0) {
-        await tx.invoice.create({
+        const formInvoice = await tx.invoice.create({
           data: {
             invoice_no: await generateInvoiceNo(tx),
             student_id: created.id,
@@ -885,6 +892,7 @@ admissionRouter.post(
             status: "PENDING",
           },
         });
+        await applyWaiversToInvoice(tx, formInvoice);
       }
 
       // First month's tuition, invoiced immediately at enrollment rather than

@@ -76,6 +76,61 @@ export default function FeeStructuresPage() {
     onError: () => toast.error("This structure has invoices generated and cannot be deleted"),
   });
 
+  // Generate Invoices Now (Plan Twenty-One, Phase B) -- the generic,
+  // category-agnostic bulk-generate action for any ONE_TIME structure
+  // (exam fee, a one-off development levy, a field-trip charge, etc.),
+  // reusing the existing /invoices/generate route as-is. MONTHLY structures
+  // keep using the separate scheduled/bulk-monthly path on the Invoices
+  // page -- deliberately not offered here, since generating a MONTHLY
+  // structure through this month/year-less route would key its idempotency
+  // check on month:null/year:null, a different (and colliding) slot than
+  // the real monthly invoices already use.
+  const [generateTarget, setGenerateTarget] = useState<FeeStructure | null>(null);
+  // Explicit, required due date -- without this, /invoices/generate falls
+  // back to "the structure's due_day in whichever month you happen to
+  // click Generate in," which is meaningless for a ONE_TIME fee. Defaults
+  // to 14 days out, editable before generating.
+  const [generateDueDate, setGenerateDueDate] = useState("");
+  function openGenerateDialog(s: FeeStructure) {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    setGenerateDueDate(d.toISOString().slice(0, 10));
+    setGenerateTarget(s);
+  }
+  const generateClassIds = generateTarget
+    ? generateTarget.classes.length
+      ? generateTarget.classes.map((c) => c.class.id)
+      : generateTarget.class_id
+        ? [generateTarget.class_id]
+        : null
+    : null;
+
+  // Raw eligible-student count, not net of already-invoiced -- an honest
+  // upper bound shown before committing (per this codebase's "never a
+  // blind bulk write" convention for Bulk SMS / Bulk Create Student
+  // Logins), not a promise of exactly-this-many new charges. The actual
+  // generate call below reports the real created/skipped breakdown after.
+  const { data: generatePreviewTotal } = useQuery<number>({
+    queryKey: ["students", "count-for-generate", generateTarget?.id, generateClassIds?.join(",")],
+    queryFn: async () => {
+      const params: Record<string, string> = { status: "ACTIVE", limit: "1" };
+      if (generateClassIds) params.class_ids = generateClassIds.join(",");
+      return (await api.get("/api/students", { params })).data.meta.total as number;
+    },
+    enabled: !!generateTarget,
+  });
+
+  const generateInvoicesMutation = useMutation({
+    mutationFn: () => api.post("/api/fees/invoices/generate", { fee_structure_id: generateTarget!.id, due_date: generateDueDate }),
+    onSuccess: (res) => {
+      const { created, skipped_duplicates } = res.data.data as { created: number; skipped_duplicates: number };
+      toast.success(`Generated ${created} invoice${created === 1 ? "" : "s"}${skipped_duplicates ? ` (${skipped_duplicates} already existed)` : ""}`);
+      setGenerateTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate invoices"),
+  });
+
   // Assign to Classes dialog
   const [classesTarget, setClassesTarget] = useState<FeeStructure | null>(null);
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
@@ -130,6 +185,9 @@ export default function FeeStructuresPage() {
                   </td>
                   <td className="p-2">
                     <div className="flex justify-end gap-2">
+                      {s.frequency === "ONE_TIME" && (
+                        <Button size="sm" variant="outline" onClick={() => openGenerateDialog(s)}>Generate Invoices</Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openAssignClasses(s)}>Assign to Classes</Button>
                       <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>
                       <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
@@ -215,6 +273,48 @@ export default function FeeStructuresPage() {
           assignClassesMutation.mutate(true);
         }}
       />
+
+      <Dialog open={!!generateTarget} onOpenChange={(v) => !v && setGenerateTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Generate Invoices — {generateTarget?.name}</DialogTitle></DialogHeader>
+          {generateClassIds === null ? (
+            <p className="text-sm text-amber-700">
+              This fee has no classes assigned — generating will apply to <strong>all active students institution-wide</strong>.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Applies to: {generateTarget?.classes.length ? generateTarget.classes.map((c) => c.class.name_en).join(", ") : "1 class"}
+            </p>
+          )}
+          <div className="space-y-1.5">
+            <Label>Due Date</Label>
+            <Input type="date" value={generateDueDate} onChange={(e) => setGenerateDueDate(e.target.value)} />
+          </div>
+          <p className="text-sm">
+            {generatePreviewTotal === undefined ? (
+              "Calculating..."
+            ) : (
+              <>
+                Eligible: <strong>{generatePreviewTotal}</strong> active student{generatePreviewTotal === 1 ? "" : "s"} · Up to{" "}
+                <strong>৳{(generatePreviewTotal * (generateTarget?.amount ?? 0)).toLocaleString()}</strong>
+                <br />
+                <span className="text-xs text-muted-foreground">
+                  Students who already have this invoice are skipped automatically — this is an upper bound, not a guarantee of new charges.
+                </span>
+              </>
+            )}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenerateTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => generateInvoicesMutation.mutate()}
+              disabled={generateInvoicesMutation.isPending || generatePreviewTotal === undefined || !generateDueDate}
+            >
+              {generateInvoicesMutation.isPending ? "Generating..." : "Generate Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

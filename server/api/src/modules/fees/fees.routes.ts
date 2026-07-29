@@ -17,7 +17,7 @@ import {
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration } from "./invoice-helpers";
 import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
@@ -257,7 +257,7 @@ feesRouter.post(
     });
 
     const now = new Date();
-    const dueDate = new Date(body.year ?? now.getFullYear(), (body.month ?? now.getMonth() + 1) - 1, structure.due_day ?? 10);
+    const dueDate = body.due_date ?? new Date(body.year ?? now.getFullYear(), (body.month ?? now.getMonth() + 1) - 1, structure.due_day ?? 10);
 
     let created = 0;
     let skipped = 0;
@@ -306,28 +306,7 @@ feesRouter.post(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const body = generateBulkMonthlySchema.parse(req.body);
-    const structures = await prisma.feeStructure.findMany({ where: { academic_year_id: body.academic_year_id, frequency: "MONTHLY", is_active: true } });
-
-    let created = 0;
-    let skipped = 0;
-    for (const structure of structures) {
-      // Multi-class-aware (Phase N3) -- see /invoices/generate for the same
-      // resolution logic.
-      const classIds = await resolveFeeStructureClassIds(prisma, structure);
-      const students = await prisma.student.findMany({
-        where: {
-          deleted_at: null,
-          status: "ACTIVE",
-          ...(classIds && { current_class_id: { in: classIds } }),
-          ...(structure.section_id && { current_section_id: structure.section_id }),
-        },
-      });
-      for (const student of students) {
-        const result = await createMonthlyInvoiceIfMissing(prisma, student.id, structure, body.month, body.year);
-        if (result.created) created++;
-        else skipped++;
-      }
-    }
+    const { created, skipped } = await runMonthlyFeeGeneration(prisma, body.academic_year_id, body.month, body.year);
 
     await prisma.invoiceGenerationRun.create({
       data: { run_by_id: req.user!.sub, trigger: "BULK_MONTHLY", created_count: created, skipped_count: skipped, academic_year_id: body.academic_year_id, month: body.month, year: body.year },

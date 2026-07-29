@@ -1526,6 +1526,13 @@ model Invoice {
   updated_at       DateTime      @updatedAt
   payments         Payment[]
   waiver_applications InvoiceWaiverApplication[]
+  // Set once the total waiver discount on this invoice has been recognized
+  // in the accounts ledger (a gross-up: the waived amount is journaled as
+  // a Scholarship/Waiver Expense debit, with the income credit reflecting
+  // the full pre-waiver amount) -- prevents double-counting the same
+  // waiver if the invoice is settled across more than one payment. Null
+  // for every invoice with no waiver, or one paid before this existed.
+  waiver_journaled_at DateTime?
 
   @@index([student_id])
   @@index([status])
@@ -1674,7 +1681,10 @@ model StudentWaiver {
 // skipped_duplicates} counts were returned and nothing was ever persisted.
 model InvoiceGenerationRun {
   id             String   @id @default(cuid())
-  run_by_id      String
+  // Nullable specifically for a SCHEDULED (cron-triggered) run, which has no
+  // real human actor -- this field is write-only today (never joined/
+  // displayed anywhere), so loosening it costs nothing downstream.
+  run_by_id      String?
   run_at         DateTime @default(now())
   trigger        InvoiceGenerationTrigger
   created_count  Int
@@ -1694,6 +1704,9 @@ enum InvoiceGenerationTrigger {
   // Plan Fourteen, Phase N4 -- the new "Generate Fees of [name]" on-demand
   // action from the redesigned Fee Collection workspace.
   STUDENT_ON_DEMAND
+  // Plan Twenty-One, Phase A -- fired by the real cron job, distinguishing
+  // an automatic monthly run from a human clicking the manual bulk button.
+  SCHEDULED
 }
 
 // One row per invoice a waiver actually discounted -- traced per-invoice
@@ -3783,6 +3796,11 @@ enum InAppNotificationType {
   MARK_CORRECTION_REQUESTED
   MARK_CORRECTION_APPROVED
   MARK_CORRECTION_REJECTED
+  // Plan Twenty-One, Phase A -- summarizes a scheduled (cron) monthly fee
+  // generation run to FEE_COLLECTION_ROLES, since nobody is watching a
+  // background job run in real time the way a human would notice the
+  // manual button's own response.
+  SCHEDULED_FEE_GENERATION_COMPLETE
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

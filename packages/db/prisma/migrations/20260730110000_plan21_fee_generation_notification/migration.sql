@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "InAppNotificationType" ADD VALUE 'SCHEDULED_FEE_GENERATION_COMPLETE';
+

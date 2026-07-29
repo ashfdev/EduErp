@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { loadPermissionsFromDb } from "./lib/permissions";
 import { attachSocketServer } from "./realtime/socket";
 import { registerExamReminderJob } from "./jobs/exam-reminder.job";
+import { registerMonthlyFeeGenerationJob } from "./jobs/monthly-fee-generation.job";
 
 const port = env.PORT;
 
@@ -21,6 +22,7 @@ async function start() {
   });
   attachSocketServer(httpServer);
   await registerExamReminderJob();
+  await registerMonthlyFeeGenerationJob();
 }
 
 start().catch((err) => {
