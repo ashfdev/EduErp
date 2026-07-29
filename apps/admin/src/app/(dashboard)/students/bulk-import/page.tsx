@@ -42,7 +42,12 @@ export default function BulkImportStudentsPage() {
   const [academicYearId, setAcademicYearId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ total: number; valid: number; preview: PreviewRow[] } | null>(null);
-  const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[]; no_own_login_count: number } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    failed: { row: number; reason: string }[];
+    no_own_login_count: number;
+    login_conflicts: { row: number; message: string }[];
+  } | null>(null);
 
   const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
@@ -185,6 +190,14 @@ export default function BulkImportStudentsPage() {
                 the CSV, so {result.no_own_login_count === 1 ? "that student" : "those students"} can only be reached via their guardian&apos;s
                 login for now — add a phone via Edit Student to give them their own login later.
               </p>
+            )}
+            {!!result.login_conflicts.length && (
+              <div className="text-sm text-amber-600">
+                Login conflicts: {result.login_conflicts.length}
+                <ul className="list-inside list-disc">
+                  {result.login_conflicts.map((c, i) => <li key={i}>Row {c.row}: {c.message}</li>)}
+                </ul>
+              </div>
             )}
             {!!result.failed.length && (
               <div className="text-sm text-destructive">

@@ -84,6 +84,29 @@ describe("createOrLinkPortalLogin", () => {
     });
   });
 
+  it("refuses to link across an incompatible role instead of silently attaching to the wrong account", async () => {
+    const phone = randomPhone("012");
+
+    await inRollbackTx(async (tx) => {
+      const passwordHash = await bcrypt.hash("Existing@1234", 10);
+      const existingTeacher = await tx.user.create({
+        data: { name_en: "Existing Teacher", role: "SUBJECT_TEACHER", phone, password_hash: passwordHash },
+      });
+
+      const result = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: "New Guardian" });
+
+      expect(result.userId).toBeNull();
+      expect(result.tempPassword).toBeNull();
+      expect(result.created).toBe(false);
+      expect(result.conflict).toEqual({ existingRole: "SUBJECT_TEACHER", existingName: "Existing Teacher" });
+
+      // Confirm the pre-existing account was never mutated (still the
+      // teacher it always was, not silently repurposed).
+      const stillTeacher = await tx.user.findUniqueOrThrow({ where: { id: existingTeacher.id } });
+      expect(stillTeacher.role).toBe("SUBJECT_TEACHER");
+    });
+  });
+
   it("never returns the same temp password twice across calls", async () => {
     const phone1 = randomPhone("015");
     const phone2 = randomPhone("014");

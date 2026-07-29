@@ -31,7 +31,7 @@ marksRouter.use(authenticate);
 // and to let approve/publish accept an omitted group_id specifically for
 // that unit — never for a class where every student already has a group.
 async function hasUngroupedActiveStudents(classId: string): Promise<boolean> {
-  return !!(await prisma.student.findFirst({ where: { current_class_id: classId, deleted_at: null, group_id: null } }));
+  return !!(await prisma.student.findFirst({ where: { current_class_id: classId, deleted_at: null, status: "ACTIVE", group_id: null } }));
 }
 
 // A class with Groups defined has no meaningful "whole class" publish unit —

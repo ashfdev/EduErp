@@ -13,6 +13,7 @@ hostelRouter.use(authenticate);
 
 hostelRouter.get(
   "/blocks",
+  authorize(HOSTEL_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const blocks = await prisma.hostelBlock.findMany({ include: { rooms: { include: { _count: { select: { allocations: true } } } } }, orderBy: { name: "asc" } });
     res.json({ success: true, data: blocks });
@@ -51,6 +52,7 @@ hostelRouter.put(
 
 hostelRouter.get(
   "/rooms",
+  authorize(HOSTEL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const availableOnly = req.query.available === "true";
     const rooms = await prisma.hostelRoom.findMany({
@@ -66,6 +68,7 @@ hostelRouter.get(
 
 hostelRouter.get(
   "/rooms/:id/residents",
+  authorize(HOSTEL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const roomId = reqParam(req, "id");
     const allocations = await prisma.hostelAllocation.findMany({
@@ -115,6 +118,7 @@ hostelRouter.post(
 
 hostelRouter.get(
   "/visitors",
+  authorize(HOSTEL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const activeOnly = req.query.active === "true";
     const visitors = await prisma.hostelVisitor.findMany({
@@ -141,6 +145,7 @@ hostelRouter.put(
 
 hostelRouter.get(
   "/reports/occupancy",
+  authorize(HOSTEL_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const rooms = await prisma.hostelRoom.findMany({ where: { is_active: true }, include: { block: true, allocations: { where: { is_active: true } } } });
     const totalCapacity = rooms.reduce((sum, r) => sum + r.capacity, 0);

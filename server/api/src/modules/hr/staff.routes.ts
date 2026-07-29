@@ -233,7 +233,10 @@ hrStaffRouter.post(
         // The pre-check above already rejected an existing phone (409) — a
         // staff account must never silently link to an unrelated existing
         // login, unlike the guardian-sibling-sharing-a-phone case elsewhere.
+        // conflict is therefore unreachable here; the narrow below is a
+        // defensive backstop, not an expected path.
         const login = await createOrLinkPortalLogin(tx, { role: body.role as UserRole, phone: body.phone, name: body.name_en, password_override: body.login_password });
+        if (!login.userId) throw new Error("Unexpected: portal login creation failed after the phone-uniqueness pre-check already passed");
         userId = login.userId;
         tempPassword = login.tempPassword;
       } else {
@@ -430,6 +433,10 @@ hrStaffRouter.post(
         const staff = await prisma.$transaction(async (tx) => {
           const staff_uid = await generateStaffUid();
           const login = await createOrLinkPortalLogin(tx, { role: row.role as UserRole, phone: row.phone, name: row.name_en });
+          // Same pre-check-above-means-unreachable reasoning as the
+          // single-add route -- the existingUser check a few lines up
+          // already rejected this row if the phone was taken.
+          if (!login.userId) throw new Error("Unexpected: portal login creation failed after the phone-uniqueness pre-check already passed");
           tempPassword = login.tempPassword;
 
           return tx.staff.create({

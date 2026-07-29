@@ -58,8 +58,11 @@ usersRouter.post(
       // Pre-check above already rejected an existing phone, so this always
       // takes the "create new" branch in practice — same reasoning as staff
       // creation (hr/staff.routes.ts), reusing the shared helper regardless
-      // for consistent password generation + the User row itself.
+      // for consistent password generation + the User row itself. conflict
+      // is therefore unreachable here; the narrow below is a defensive
+      // backstop, not an expected path.
       const login = await createOrLinkPortalLogin(tx, { role: body.role, phone: body.phone, name: body.name_en, password_override: body.login_password });
+      if (!login.userId) throw new Error("Unexpected: portal login creation failed after the phone-uniqueness pre-check already passed");
       await tx.staff.create({
         data: {
           user_id: login.userId,

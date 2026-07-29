@@ -1442,7 +1442,7 @@ documentsRouter.get(
   asyncHandler(async (req, res) => {
     const classId = reqParam(req, "class_id");
     const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null },
+      where: { current_class_id: classId, deleted_at: null, status: "ACTIVE" },
       include: { current_class: true, current_section: true },
       orderBy: { current_roll_no: "asc" },
     });

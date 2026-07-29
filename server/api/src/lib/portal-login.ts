@@ -21,10 +21,20 @@ export function generateMemorablePassword(name: string, phone: string): string {
 // used by staff creation, admin Settings->Users, admission enrollment, and
 // manual/bulk student add, replacing four previously-separate ad-hoc
 // tempPassword blocks. User.phone is globally unique, so a phone that
-// already has an account (a returning guardian, a sibling's father, a
-// staff/guardian phone overlap) LINKS to the existing User instead of
-// throwing — callers must branch on `created` rather than assuming a fresh
-// password was always issued.
+// already has an account (a returning guardian, a sibling's father) LINKS
+// to the existing User instead of throwing — callers must branch on
+// `created` rather than assuming a fresh password was always issued.
+//
+// Linking is only ever safe across a MATCHING role (two GUARDIAN accounts
+// for siblings, a returning STUDENT). A phone that already belongs to a
+// role-incompatible account (e.g. a staff member's phone reused as a new
+// guardian's) must never be silently attached — that account's role means
+// it can't even pass the portal's own role gate, so "linking" it would
+// produce a guardian with no working access and no visible error anywhere.
+// Real-world dual-identity (a teacher who is also a parent) isn't
+// supported by this single-role User model at all and needs a human to
+// resolve it, not a silent guess — so this returns a `conflict` descriptor
+// instead of a userId, and never fabricates a fake success.
 export async function createOrLinkPortalLogin(
   tx: Tx,
   // password_override lets a direct, one-at-a-time admin flow (Staff
@@ -32,9 +42,17 @@ export async function createOrLinkPortalLogin(
   // password instead of the auto-generated memorable one — the caller is
   // responsible for validating it against passwordSchema first.
   params: { role: UserRole; phone: string; name: string; password_override?: string },
-): Promise<{ userId: string; tempPassword: string | null; created: boolean }> {
+): Promise<{
+  userId: string | null;
+  tempPassword: string | null;
+  created: boolean;
+  conflict?: { existingRole: UserRole; existingName: string };
+}> {
   const existing = await tx.user.findUnique({ where: { phone: params.phone } });
   if (existing) {
+    if (existing.role !== params.role) {
+      return { userId: null, tempPassword: null, created: false, conflict: { existingRole: existing.role, existingName: existing.name_en } };
+    }
     return { userId: existing.id, tempPassword: null, created: false };
   }
 

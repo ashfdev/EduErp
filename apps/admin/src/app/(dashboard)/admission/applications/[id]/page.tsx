@@ -56,6 +56,10 @@ export default function AdmissionApplicationDetailPage() {
   const enrollMutation = useMutation({
     mutationFn: () => api.post(`/api/admission/applications/${id}/enroll`, {}),
     onSuccess: (res) => {
+      const loginWarnings: string[] | undefined = res.data.login_warnings;
+      if (loginWarnings?.length) {
+        for (const warning of loginWarnings) toast(warning, { duration: 15000 });
+      }
       toast.success(`Enrolled as ${res.data.data.student_uid}`);
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", id] });
       router.push(`/students/${res.data.data.id}`);

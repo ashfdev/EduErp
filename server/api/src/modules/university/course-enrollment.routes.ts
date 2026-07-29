@@ -29,6 +29,7 @@ async function getGpa4Scale() {
 
 courseEnrollmentRouter.get(
   "/",
+  authorize(STUDENT_CRUD_ROLES),
   asyncHandler(async (req, res) => {
     const query = req.query as { student_id?: string; class_id?: string; course_id?: string };
     const enrollments = await prisma.courseEnrollment.findMany({
@@ -46,6 +47,7 @@ courseEnrollmentRouter.get(
 
 courseEnrollmentRouter.get(
   "/student/:student_id/cgpa",
+  authorize(STUDENT_CRUD_ROLES),
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "student_id");
     const student = await prisma.student.findUnique({ where: { id: studentId }, select: { cgpa: true, current_semester: true } });

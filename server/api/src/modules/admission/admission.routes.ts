@@ -954,7 +954,23 @@ admissionRouter.post(
       });
     }
 
-    res.status(201).json({ success: true, data: student });
+    // A role-incompatible phone match (e.g. this guardian's number already
+    // belongs to an unrelated staff account) never silently links -- the
+    // student still enrolls, just with no working login for that person,
+    // surfaced here instead of vanishing with no trace.
+    const loginWarnings: string[] = [];
+    if (guardianLogin?.conflict) {
+      loginWarnings.push(
+        `Guardian phone ${guardianInfo.phone} already belongs to a ${guardianLogin.conflict.existingRole} account (${guardianLogin.conflict.existingName}) — no portal login was created for this guardian.`,
+      );
+    }
+    if (studentLogin?.conflict) {
+      loginWarnings.push(
+        `Student phone ${studentPhoneForNotify} already belongs to a ${studentLogin.conflict.existingRole} account (${studentLogin.conflict.existingName}) — no portal login was created for this student.`,
+      );
+    }
+
+    res.status(201).json({ success: true, data: student, login_warnings: loginWarnings.length ? loginWarnings : undefined });
   }),
 );
 

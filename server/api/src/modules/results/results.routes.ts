@@ -496,7 +496,7 @@ resultsRouter.get(
       where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) },
     });
     const sectionStudentIds = sectionId
-      ? await prisma.student.findMany({ where: { current_class_id: classId, current_section_id: sectionId, deleted_at: null }, select: { id: true } }).then((rows) => rows.map((r) => r.id))
+      ? await prisma.student.findMany({ where: { current_class_id: classId, current_section_id: sectionId, deleted_at: null, status: "ACTIVE" }, select: { id: true } }).then((rows) => rows.map((r) => r.id))
       : undefined;
     const entries = await prisma.markEntry.findMany({
       where: { exam_id: examId, subject_id: { in: subjects.map((s) => s.id) }, ...(sectionStudentIds && { student_id: { in: sectionStudentIds } }) },

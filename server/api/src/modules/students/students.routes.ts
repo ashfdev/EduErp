@@ -530,7 +530,8 @@ studentsRouter.post(
       throw badRequest("The 4th subject must be one of the selected optional subjects");
     }
 
-    const { student, studentLogin, guardianLogin, student_uid } = await prisma.$transaction(async (tx) => {
+    const { student, studentLogin, guardianLogin, student_uid, loginWarnings } = await prisma.$transaction(async (tx) => {
+      const loginWarnings: string[] = [];
       let guardianId = body.guardian_id ?? null;
       let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
       if (!guardianId && body.father_phone) {
@@ -541,8 +542,17 @@ studentsRouter.post(
           // Guardians get a portal login too — the phone may already belong
           // to a User from an older sibling's guardian record, in which case
           // this links the new Guardian row to that existing account instead
-          // of erroring or creating a duplicate.
+          // of erroring or creating a duplicate. A ROLE-INCOMPATIBLE phone
+          // match (e.g. an unrelated staff account) is never silently linked
+          // — enrollment still proceeds (this student is real regardless of
+          // the guardian's login state), but the conflict is surfaced as a
+          // warning instead of vanishing with no trace.
           guardianLoginResult = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone: body.father_phone, name: body.father_name ?? "Guardian" });
+          if (guardianLoginResult.conflict) {
+            loginWarnings.push(
+              `Guardian phone ${body.father_phone} already belongs to a ${guardianLoginResult.conflict.existingRole} account (${guardianLoginResult.conflict.existingName}) — no portal login was created for this guardian. Use "Create Guardian Login" with a different phone number once this is resolved.`,
+            );
+          }
           const guardian = await tx.guardian.create({
             data: { user_id: guardianLoginResult.userId, name_en: body.father_name ?? "Guardian", relation: "FATHER", phone: body.father_phone },
           });
@@ -554,6 +564,11 @@ studentsRouter.post(
       const studentLoginResult = body.phone
         ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: body.phone, name: body.name_en })
         : null;
+      if (studentLoginResult?.conflict) {
+        loginWarnings.push(
+          `Student phone ${body.phone} already belongs to a ${studentLoginResult.conflict.existingRole} account (${studentLoginResult.conflict.existingName}) — no portal login was created for this student. Use "Create Portal Login" with a different phone number once this is resolved.`,
+        );
+      }
 
       const created = await tx.student.create({
         data: {
@@ -615,7 +630,7 @@ studentsRouter.post(
 
       await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids, body.group_id, body.fourth_subject_id);
 
-      return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid };
+      return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid, loginWarnings };
     });
 
     if (body.send_portal_login_sms !== false) {
@@ -642,7 +657,7 @@ studentsRouter.post(
       }
     }
 
-    res.status(201).json({ success: true, data: student });
+    res.status(201).json({ success: true, data: student, login_warnings: loginWarnings.length ? loginWarnings : undefined });
   }),
 );
 
@@ -735,6 +750,9 @@ studentsRouter.post(
 
     const { login } = await prisma.$transaction(async (tx) => {
       const login = await createOrLinkPortalLogin(tx, { role: "STUDENT", phone, name: student.name_en, password_override: body.login_password });
+      if (login.conflict) {
+        throw conflict(`This phone number already belongs to a ${login.conflict.existingRole} account (${login.conflict.existingName}) — use a different phone number, or resolve the conflict manually if this is genuinely the same person.`);
+      }
       await tx.student.update({ where: { id }, data: { user_id: login.userId, ...(body.phone && { phone: body.phone }) } });
       return { login };
     });
@@ -776,6 +794,9 @@ studentsRouter.post(
     const guardianName = student.guardian.name_en;
     const { login } = await prisma.$transaction(async (tx) => {
       const login = await createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: guardianName, password_override: body.login_password });
+      if (login.conflict) {
+        throw conflict(`This phone number already belongs to a ${login.conflict.existingRole} account (${login.conflict.existingName}) — use a different phone number, or resolve the conflict manually if this is genuinely the same person.`);
+      }
       await tx.guardian.update({ where: { id: guardianId }, data: { user_id: login.userId, ...(body.phone && { phone: body.phone }) } });
       return { login };
     });
@@ -1209,6 +1230,7 @@ studentsRouter.post(
 
     const created: string[] = [];
     const failed: { row: number; reason: string }[] = [];
+    const loginConflicts: { row: number; message: string }[] = [];
     let noOwnLoginCount = 0;
 
     // Sequential per-row loop with a bcrypt hash + a queued SMS added per
@@ -1274,6 +1296,18 @@ studentsRouter.post(
           return { student: s, guardianLogin: guardianLoginResult, studentLogin: studentLoginResult };
         });
 
+        if (guardianLogin?.conflict) {
+          loginConflicts.push({
+            row: index + 1,
+            message: `Guardian phone ${row.father_phone} already belongs to a ${guardianLogin.conflict.existingRole} account (${guardianLogin.conflict.existingName}) — no guardian login created.`,
+          });
+        }
+        if (studentLogin?.conflict) {
+          loginConflicts.push({
+            row: index + 1,
+            message: `Student phone ${row.phone} already belongs to a ${studentLogin.conflict.existingRole} account (${studentLogin.conflict.existingName}) — no student login created.`,
+          });
+        }
         if (guardianLogin?.tempPassword) {
           await sendNotification({
             trigger: "PORTAL_LOGIN_CREATED",
@@ -1306,6 +1340,11 @@ studentsRouter.post(
         // reached via their guardian's login, not their own, until a phone
         // is added later (e.g. via Edit Student).
         no_own_login_count: noOwnLoginCount,
+        // A role-incompatible phone match (e.g. a staff account reused as a
+        // guardian's phone) never silently links -- the student/guardian row
+        // still imports, just with no working login, surfaced here instead
+        // of vanishing with no trace.
+        login_conflicts: loginConflicts,
       },
     });
   }),

@@ -209,6 +209,10 @@ export default function NewStudentPage() {
       if (failedCount > 0) {
         toast(`${failedCount} document(s) failed to upload — add them manually from the Documents tab.`);
       }
+      const loginWarnings: string[] | undefined = res.data.login_warnings;
+      if (loginWarnings?.length) {
+        for (const warning of loginWarnings) toast(warning, { duration: 15000 });
+      }
       toast.success(`Student created — ID: ${res.data.data.student_uid}`);
       router.push(`/students/${studentId}`);
     },

@@ -486,7 +486,7 @@ analyticsRouter.get(
 
     const comparison = await Promise.all(
       classes.map(async (klass) => {
-        const students = await prisma.student.findMany({ where: { current_class_id: klass.id, deleted_at: null } });
+        const students = await prisma.student.findMany({ where: { current_class_id: klass.id, deleted_at: null, status: "ACTIVE" } });
         const studentIds = students.map((s) => s.id);
 
         const [present, total] = await Promise.all([
