@@ -751,14 +751,29 @@ portalRouter.get(
     const id = reqParam(req, "id");
     await assertAccess(req.user!.sub, req.user!.role, id);
     const studentSubjects = await prisma.studentSubject.findMany({ where: { student_id: id }, include: { subject: true } });
+    // Fetched once, outside the loop below (previously re-fetched per
+    // subject -- an N+1 query for no reason, the value never changes).
+    const student = await prisma.student.findUnique({ where: { id } });
 
     const withTeacher = await Promise.all(
       studentSubjects.map(async (ss) => {
-        const student = await prisma.student.findUnique({ where: { id } });
-        const assignment = await prisma.subjectTeacherAssignment.findFirst({
-          where: { subject_id: ss.subject_id, section_id: student?.current_section_id ?? undefined },
-          include: { staff: { select: { name_en: true, designation: true } } },
-        });
+        // section_id: null means "this teacher teaches the whole class,
+        // every section" -- the same nullable-scoping convention used
+        // throughout this codebase. A bare exact-match on the student's own
+        // section would miss every whole-class assignment, which is the
+        // common case, not the exception (see the identical fix in
+        // students.routes.ts's own GET /:id). A section-specific override
+        // (if one exists for this exact subject) wins over the whole-class one.
+        const assignment =
+          (student?.current_section_id &&
+            (await prisma.subjectTeacherAssignment.findFirst({
+              where: { subject_id: ss.subject_id, section_id: student.current_section_id },
+              include: { staff: { select: { name_en: true, designation: true } } },
+            }))) ||
+          (await prisma.subjectTeacherAssignment.findFirst({
+            where: { subject_id: ss.subject_id, section_id: null },
+            include: { staff: { select: { name_en: true, designation: true } } },
+          }));
         return { subject: ss.subject, is_inherited: ss.is_inherited, teacher: assignment?.staff ?? null };
       }),
     );

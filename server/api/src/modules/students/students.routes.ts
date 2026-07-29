@@ -334,6 +334,100 @@ studentsRouter.get(
   }),
 );
 
+// Plan Nineteen — roster for the Bulk Create Student Logins page. Same shape
+// as promotion-roster above (unpaginated, one class/section at a time,
+// registered before "/:id" for the same reason), but selecting the fields
+// that page actually needs (the student's OWN phone + whether they already
+// have a login) rather than promotion eligibility.
+studentsRouter.get(
+  "/login-roster",
+  authorize(STUDENT_CRUD_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), section_id: z.string().optional() }).parse(req.query);
+    const students = await prisma.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        current_class_id: query.class_id,
+        ...(query.section_id && { current_section_id: query.section_id }),
+      },
+      select: { id: true, student_uid: true, name_en: true, current_roll_no: true, phone: true, user_id: true },
+      orderBy: { current_roll_no: "asc" },
+    });
+    res.json({ success: true, data: students });
+  }),
+);
+
+// Bulk version of /:id/create-login (Plan Nineteen) — same mechanics
+// (createOrLinkPortalLogin, per-student SMS, per-student audit entry)
+// applied to a whole class/section roster at once. Per-student try/catch,
+// never fails the whole batch over one row's issue -- same resilience
+// discipline as bulk-promote/CSV bulk-import.
+studentsRouter.post(
+  "/bulk-create-login",
+  authorize(STUDENT_CRUD_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = z.object({ student_ids: z.array(z.string()).min(1) }).parse(req.body);
+
+    const created: string[] = [];
+    const linked: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+
+    for (const studentId of body.student_ids) {
+      try {
+        const student = await prisma.student.findUnique({ where: { id: studentId } });
+        if (!student) {
+          skipped.push({ id: studentId, reason: "Student not found" });
+          continue;
+        }
+        if (student.user_id) {
+          skipped.push({ id: studentId, reason: "Already has a portal login" });
+          continue;
+        }
+        if (!student.phone) {
+          skipped.push({ id: studentId, reason: "No phone on file" });
+          continue;
+        }
+
+        const { login } = await prisma.$transaction(async (tx) => {
+          const login = await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: student.phone!, name: student.name_en });
+          if (!login.conflict) {
+            await tx.student.update({ where: { id: studentId }, data: { user_id: login.userId } });
+          }
+          return { login };
+        });
+
+        if (login.conflict) {
+          skipped.push({ id: studentId, reason: `Phone already belongs to a ${login.conflict.existingRole} account (${login.conflict.existingName})` });
+          continue;
+        }
+
+        if (login.tempPassword) {
+          await sendNotification({
+            trigger: "PORTAL_LOGIN_CREATED",
+            recipients: [{ name: student.name_en, phone: student.phone }],
+            template_data: { name: student.name_en, phone: student.phone, password: login.tempPassword, portal_url: env.PORTAL_URL ?? "" },
+          });
+          created.push(studentId);
+        } else {
+          linked.push(studentId);
+        }
+        await logAudit("STUDENT_PORTAL_LOGIN_CREATE", {
+          userId: req.user!.sub,
+          targetType: "Student",
+          targetId: studentId,
+          metadata: { linked_existing_user: !login.tempPassword, via: "bulk" },
+          req,
+        });
+      } catch (err) {
+        skipped.push({ id: studentId, reason: err instanceof Error ? err.message : "Unknown error" });
+      }
+    }
+
+    res.json({ success: true, data: { created, linked, skipped } });
+  }),
+);
+
 studentsRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -359,10 +453,23 @@ studentsRouter.get(
 
     const subjectsWithTeacher = await Promise.all(
       student.student_subjects.map(async (ss) => {
-        const assignment = await prisma.subjectTeacherAssignment.findFirst({
-          where: { subject_id: ss.subject_id, section_id: student.current_section_id ?? undefined },
-          include: { staff: { select: { name_en: true, designation: true } } },
-        });
+        // section_id: null means "this teacher teaches the whole class,
+        // every section" (the same nullable-scoping convention used
+        // throughout this codebase, e.g. Subject.group_id) -- a bare
+        // section_id: student.current_section_id match alone would miss
+        // every whole-class assignment, which is the common case, not the
+        // exception. A section-specific override (if one happens to exist
+        // for this exact subject) wins over the whole-class one.
+        const assignment =
+          (student.current_section_id &&
+            (await prisma.subjectTeacherAssignment.findFirst({
+              where: { subject_id: ss.subject_id, section_id: student.current_section_id },
+              include: { staff: { select: { name_en: true, designation: true } } },
+            }))) ||
+          (await prisma.subjectTeacherAssignment.findFirst({
+            where: { subject_id: ss.subject_id, section_id: null },
+            include: { staff: { select: { name_en: true, designation: true } } },
+          }));
         return {
           subject_id: ss.subject_id,
           subject_name_en: ss.subject.name_en,
