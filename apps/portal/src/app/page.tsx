@@ -11,7 +11,7 @@ import { Badge, Card, CardContent, StatusBadge, LoadingSpinner, ErrorState } fro
 import {
   BookOpen, Bus, FolderOpen, AlertCircle,
   Users, HelpCircle, FileText, ChevronRight,
-  CalendarCheck2, Wallet, Award, BellRing, BookMarked, Armchair
+  CalendarCheck2, Wallet, Award, BellRing, BookMarked, Armchair, CalendarClock
 } from "lucide-react";
 
 interface Dashboard {
@@ -24,11 +24,21 @@ interface Dashboard {
   homework: { pending: number; submitted: number; recent: { id: string; title: string; due_date: string }[] };
 }
 
+interface RoutineSlot {
+  id: string;
+  day_of_week: number;
+  period_no: number;
+  start_time: string;
+  end_time: string;
+  subject: { name_en: string } | null;
+}
+
 function HomeContent() {
   const { activeStudentId } = useAuthStore();
   const { terms } = useInstitution();
   const t = useTranslations("home");
   const tCommon = useTranslations("common");
+  const tRoutine = useTranslations("routine");
 
   const { data, isLoading, isError, refetch } = useQuery<Dashboard>({
     queryKey: ["portal", "dashboard", activeStudentId],
@@ -36,6 +46,21 @@ function HomeContent() {
     enabled: !!activeStudentId,
     retry: 1,
   });
+
+  // Same endpoint the full Routine page uses -- reused here (React Query
+  // dedupes/caches by queryKey, so this costs nothing extra if that page's
+  // own query is already warm) rather than growing /dashboard's own
+  // response shape for one widget.
+  const { data: routineData } = useQuery<RoutineSlot[]>({
+    queryKey: ["portal", "routine", activeStudentId],
+    queryFn: async () => (await api.get(`/api/portal/student/${activeStudentId}/routine`)).data.data,
+    enabled: !!activeStudentId,
+    retry: 1,
+  });
+  const todayDayOfWeek = new Date().getDay();
+  const todaysClasses = (routineData ?? [])
+    .filter((s) => s.day_of_week === todayDayOfWeek)
+    .sort((a, b) => a.period_no - b.period_no);
 
   if (isError) {
     return (
@@ -58,6 +83,7 @@ function HomeContent() {
 
   const quickLinks = [
     { href: "/subjects", icon: BookOpen, label: t("mySubjects", { className: terms.term_class }), color: "text-blue-600", bg: "bg-blue-50" },
+    { href: "/routine", icon: CalendarClock, label: t("routine"), color: "text-violet-600", bg: "bg-violet-50" },
     { href: "/seat-plan", icon: Armchair, label: t("seatPlan"), color: "text-cyan-600", bg: "bg-cyan-50" },
     { href: "/transport-hostel", icon: Bus, label: t("transportHostel"), color: "text-amber-600", bg: "bg-amber-50" },
     { href: "/resources", icon: FolderOpen, label: t("resources"), color: "text-emerald-600", bg: "bg-emerald-50" },
@@ -172,6 +198,38 @@ function HomeContent() {
       {/* Main Content Grid for Desktop */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
         <div className="space-y-6 lg:space-y-8">
+          {/* Today's Classes */}
+          <div>
+            <div className="mb-3 flex items-center justify-between px-1">
+              <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("todaysClasses")}</h3>
+              <Link href="/routine" className="flex items-center text-xs font-medium text-primary">
+                {t("viewFullRoutine")}
+              </Link>
+            </div>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-0">
+                {!todaysClasses.length && <p className="p-5 text-sm text-muted-foreground">{tRoutine("noClasses")}</p>}
+                {todaysClasses.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className={`flex items-center justify-between p-4 ${i !== todaysClasses.length - 1 ? "border-b border-slate-100" : ""}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                        <CalendarClock className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">{s.subject?.name_en ?? tRoutine("freePeriod")}</p>
+                        <p className="text-xs text-muted-foreground">{tRoutine("period", { no: s.period_no })}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{s.start_time} – {s.end_time}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Upcoming Exams */}
           {!!data.upcoming_exams.length && (
         <div>

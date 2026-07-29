@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, CalendarDays, CreditCard, Bell } from "lucide-react";
+import { Home, ClipboardList, CalendarDays, CalendarClock, CreditCard, Bell } from "lucide-react";
 
 const ITEMS = [
   { href: "/", icon: Home, key: "home" },
+  { href: "/routine", icon: CalendarClock, key: "routine" },
   { href: "/results", icon: ClipboardList, key: "results" },
   { href: "/attendance", icon: CalendarDays, key: "attendance" },
   { href: "/fees", icon: CreditCard, key: "fees" },

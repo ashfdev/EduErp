@@ -12,6 +12,7 @@
   },
   "nav": {
     "home": "Home",
+    "routine": "Routine",
     "results": "Results",
     "attendance": "Attendance",
     "fees": "Fees",
@@ -44,7 +45,10 @@
     "inDays": "in {days}d",
     "todayLabel": "today",
     "mySubjects": "My {className} Subjects",
+    "todaysClasses": "Today's Classes",
+    "viewFullRoutine": "Full Routine →",
     "seatPlan": "Seat Plan",
+    "routine": "Class Routine",
     "transportHostel": "Transport & Hostel",
     "resources": "Resources",
     "complaints": "Complaints",

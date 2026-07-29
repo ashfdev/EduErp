@@ -59,8 +59,18 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
       setSession: ({ user, access_token, refresh_token }) =>
         set({ user, accessToken: access_token, refreshToken: refresh_token, isAuthenticated: true }),
+      // A previously-persisted activeStudentId can survive into a different
+      // login (e.g. switching test accounts in the same browser without an
+      // explicit logout) -- keeping it unvalidated would silently point
+      // every query at a student that doesn't belong to this account at
+      // all, which the portal has no visible way to explain to the user
+      // (a 403 that just looks like "nothing loads"). Only keep it when
+      // it's actually a member of THIS login's real student list.
       setStudents: (students) =>
-        set((state) => ({ students, activeStudentId: state.activeStudentId ?? students[0]?.id ?? null })),
+        set((state) => ({
+          students,
+          activeStudentId: students.some((s) => s.id === state.activeStudentId) ? state.activeStudentId : (students[0]?.id ?? null),
+        })),
       setActiveStudent: (id) => set({ activeStudentId: id }),
       clearMustChangePassword: () =>
         set((state) => (state.user ? { user: { ...state.user, must_change_password: false } } : {})),

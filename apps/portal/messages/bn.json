@@ -12,6 +12,7 @@
   },
   "nav": {
     "home": "হোম",
+    "routine": "রুটিন",
     "results": "ফলাফল",
     "attendance": "উপস্থিতি",
     "fees": "ফি",
@@ -44,7 +45,10 @@
     "inDays": "{days} দিনে",
     "todayLabel": "আজ",
     "mySubjects": "আমার {className} এর বিষয়সমূহ",
+    "todaysClasses": "আজকের ক্লাস",
+    "viewFullRoutine": "সম্পূর্ণ রুটিন →",
     "seatPlan": "সিট প্ল্যান",
+    "routine": "ক্লাস রুটিন",
     "transportHostel": "পরিবহন ও হোস্টেল",
     "resources": "শিক্ষা উপকরণ",
     "complaints": "অভিযোগ",
