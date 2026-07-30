@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const CATEGORIES = ["SYLLABUS", "EXAM_SCHEDULE", "CLASS_ROUTINE", "ACADEMIC_CALENDAR", "FORMS", "RESULTS", "CIRCULARS", "OTHERS"];
@@ -25,7 +25,7 @@ export default function DownloadsPage() {
   const [category, setCategory] = useState("FORMS");
   const [file, setFile] = useState<File | null>(null);
 
-  const { data: downloads } = useQuery<DownloadItem[]>({ queryKey: ["website", "downloads"], queryFn: async () => (await api.get("/api/website/downloads")).data.data });
+  const { data: downloads, isLoading, isError, error, refetch } = useQuery<DownloadItem[]>({ queryKey: ["website", "downloads"], queryFn: async () => (await api.get("/api/website/downloads")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -50,34 +50,43 @@ export default function DownloadsPage() {
       toast.success("File removed");
       queryClient.invalidateQueries({ queryKey: ["website", "downloads"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove file"),
   });
 
   return (
     <PageWrapper>
       <PageHeader title="Downloads" breadcrumbs={[{ label: "Website" }, { label: "Downloads" }]} action={<Button onClick={() => setOpen(true)}>+ Upload File</Button>} />
 
-      {!downloads?.length && <EmptyState title="No files uploaded yet" />}
-      {!!downloads?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Title</TableHead><TableHead>Category</TableHead><TableHead>Visibility</TableHead><TableHead>Downloads</TableHead><TableHead>Actions</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {downloads.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>{d.title}</TableCell>
-                    <TableCell><StatusBadge status={d.category} /></TableCell>
-                    <TableCell><StatusBadge status={d.is_public ? "PUBLIC" : "PRIVATE"} /></TableCell>
-                    <TableCell>{d.download_count}</TableCell>
-                    <TableCell><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load downloads" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!downloads?.length && <EmptyState title="No files uploaded yet" />}
+          {!!downloads?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Title</TableHead><TableHead>Category</TableHead><TableHead>Visibility</TableHead><TableHead>Downloads</TableHead><TableHead>Actions</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {downloads.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell>{d.title}</TableCell>
+                        <TableCell><StatusBadge status={d.category} /></TableCell>
+                        <TableCell><StatusBadge status={d.is_public ? "PUBLIC" : "PRIVATE"} /></TableCell>
+                        <TableCell>{d.download_count}</TableCell>
+                        <TableCell><Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

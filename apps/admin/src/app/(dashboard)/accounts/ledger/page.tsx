@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -40,7 +40,7 @@ export default function LedgerPage() {
     queryFn: async () => (await api.get("/api/accounts/search")).data.data,
   });
 
-  const { data: ledger } = useQuery<LedgerData>({
+  const { data: ledger, isLoading, isError, error, refetch } = useQuery<LedgerData>({
     queryKey: ["accounts", "ledger", accountId, fromDate, toDate],
     queryFn: async () => (await api.get(`/api/accounts/ledger/${accountId}`, { params: { from_date: fromDate || undefined, to_date: toDate || undefined } })).data.data,
     enabled: !!accountId,
@@ -81,6 +81,10 @@ export default function LedgerPage() {
 
       {!accountId ? (
         <EmptyState title="Select an account" description="Choose an account above to view its ledger." />
+      ) : isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load ledger" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
       ) : ledger ? (
         <Card>
           <CardContent className="pt-6">

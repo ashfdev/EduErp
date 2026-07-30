@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, EmptyState, ErrorState, LoadingSpinner, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -48,7 +48,7 @@ export default function BulkCreateStudentLoginsPage() {
   });
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data: roster, isFetching: rosterLoading, refetch } = useQuery<RosterStudent[]>({
+  const { data: roster, isFetching: rosterLoading, isError: rosterError, error: rosterErrorObj, refetch } = useQuery<RosterStudent[]>({
     queryKey: ["students", "login-roster", classId, sectionId],
     queryFn: async () => (await api.get("/api/students/login-roster", { params: { class_id: classId, section_id: sectionId || undefined } })).data.data,
     enabled: false,
@@ -134,6 +134,12 @@ export default function BulkCreateStudentLoginsPage() {
         </CardContent>
       </Card>
 
+      {rosterLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : rosterError ? (
+        <ErrorState title="Failed to load roster" description={extractErrorMessage(rosterErrorObj)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {roster && !roster.length && <EmptyState title="No active students in this class/section" />}
 
       {!!roster?.length && (
@@ -181,6 +187,8 @@ export default function BulkCreateStudentLoginsPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       {result && (

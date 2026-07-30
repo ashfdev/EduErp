@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Input, Label, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Supplier {
@@ -19,7 +19,7 @@ export default function SuppliersPage() {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", contact_person: "", phone: "", email: "" });
 
-  const { data } = useQuery<Supplier[]>({ queryKey: ["inventory", "suppliers"], queryFn: async () => (await api.get("/api/inventory/suppliers")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<Supplier[]>({ queryKey: ["inventory", "suppliers"], queryFn: async () => (await api.get("/api/inventory/suppliers")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/inventory/suppliers", form),
@@ -29,6 +29,7 @@ export default function SuppliersPage() {
       setShowNew(false);
       setForm({ name: "", contact_person: "", phone: "", email: "" });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add supplier"),
   });
 
   return (
@@ -37,7 +38,11 @@ export default function SuppliersPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {!data?.length ? <EmptyState title="No suppliers yet" /> : (
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load suppliers" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : !data?.length ? <EmptyState title="No suppliers yet" /> : (
             <div className="divide-y">
               {data.map((s) => (
                 <div key={s.id} className="flex items-center justify-between py-2 text-sm">

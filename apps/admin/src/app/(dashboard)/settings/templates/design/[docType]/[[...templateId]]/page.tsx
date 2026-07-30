@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { DocumentType } from "@education-erp/types";
 import { cardDesignSchema, type CardDesign } from "@education-erp/validators";
-import { PageWrapper } from "@education-erp/ui";
+import { PageWrapper, ErrorState, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { CardDesigner } from "@/components/card-designer/CardDesigner";
 
@@ -31,13 +31,21 @@ export default function CardDesignerPage() {
   const docType = params.docType as DocumentType;
   const templateId = params.templateId?.[0] ?? null;
 
-  const { data: template, isLoading } = useQuery<TemplateDetail | null>({
+  const { data: template, isLoading, isError, error, refetch } = useQuery<TemplateDetail | null>({
     queryKey: ["settings", "templates", "detail", templateId],
     queryFn: async () => (await api.get(`/api/settings/templates/${templateId}`)).data.data,
     enabled: !!templateId,
   });
 
   if (templateId && isLoading) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
+
+  if (templateId && isError) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load template" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   const defaults = DEFAULT_SIZE_BY_DOC_TYPE[docType] ?? { preset: "ID_CARD", width_mm: 85.6, height_mm: 54 };
 

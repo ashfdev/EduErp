@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Applicant {
@@ -38,7 +38,7 @@ export default function JobApplicantsPage() {
   });
   const job = jobs?.find((j) => j.id === id);
 
-  const { data: applicants } = useQuery<Applicant[]>({
+  const { data: applicants, isLoading, isError, error, refetch } = useQuery<Applicant[]>({
     queryKey: ["hr", "jobs", id, "applications"],
     queryFn: async () => (await api.get(`/api/hr/jobs/${id}/applications`)).data.data,
   });
@@ -50,6 +50,7 @@ export default function JobApplicantsPage() {
       toast.success("Status updated");
       queryClient.invalidateQueries({ queryKey: ["hr", "jobs", id, "applications"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update status"),
   });
 
   async function downloadCv(applicationId: string) {
@@ -67,6 +68,12 @@ export default function JobApplicantsPage() {
 
       <Card>
         <CardContent className="pt-6">
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load applicants" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : (
+            <>
           {!applicants?.length && <EmptyState title="No applications received yet" />}
           {!!applicants?.length && (
             <Table>
@@ -106,6 +113,8 @@ export default function JobApplicantsPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -5,8 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AdjustmentNote, Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, Input, Label,
-  PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch,
+  AdjustmentNote, Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label,
+  LoadingSpinner, PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -43,6 +43,7 @@ interface WorkspaceLine {
   sub_category: string | null;
   description: string;
   period: string;
+  due_date: string;
   amount_due: number;
   amount_paid: number;
   fine_amount: number;
@@ -92,7 +93,7 @@ export default function CollectFeePage() {
   });
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data: roster, isFetching: rosterLoading } = useQuery<RosterResponse>({
+  const { data: roster, isFetching: rosterLoading, isError: isRosterError, error: rosterError, refetch: refetchRoster } = useQuery<RosterResponse>({
     queryKey: ["fees", "roster", classId, sectionId, groupId],
     queryFn: async () =>
       (await api.get("/api/fees/roster", { params: { class_id: classId, section_id: sectionId || undefined, group_id: groupId || undefined } })).data.data,
@@ -139,6 +140,14 @@ export default function CollectFeePage() {
       </div>
 
       {!classId && <EmptyState title="Select a class to browse its roster" description="Or open a specific student's Fees tab and use its Collect Fee button." />}
+
+      {classId && rosterLoading && !roster && (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      )}
+
+      {classId && isRosterError && (
+        <ErrorState title="Failed to load roster" description={extractErrorMessage(rosterError)} retryLabel="Retry" onRetry={() => refetchRoster()} />
+      )}
 
       {classId && roster && (
         <>
@@ -270,7 +279,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
   const [showAdHoc, setShowAdHoc] = useState<"fee" | "fine" | null>(null);
   const [lastBatch, setLastBatch] = useState<{ receipt_batch_id: string; payments: { id: string; receipt_no: string }[] } | null>(null);
 
-  const { data: workspace, isFetching } = useQuery<Workspace>({
+  const { data: workspace, isFetching, isError: isWorkspaceError, error: workspaceError, refetch: refetchWorkspace } = useQuery<Workspace>({
     queryKey: ["fees", "collect-workspace", student?.id],
     queryFn: async () => (await api.get(`/api/fees/collect-workspace/${student?.id}`)).data.data,
     enabled: !!student,
@@ -397,7 +406,12 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
 
         <div className="max-h-[45vh] overflow-y-auto rounded-md border">
           {isFetching && !lines.length && <p className="p-4 text-sm text-muted-foreground">Loading...</p>}
-          {!isFetching && !lines.length && <EmptyState title="No outstanding invoices" />}
+          {!isFetching && isWorkspaceError && (
+            <div className="p-4">
+              <ErrorState title="Failed to load invoices" description={extractErrorMessage(workspaceError)} retryLabel="Retry" onRetry={() => refetchWorkspace()} />
+            </div>
+          )}
+          {!isFetching && !isWorkspaceError && !lines.length && <EmptyState title="No outstanding invoices" />}
           {!!lines.length && (
             <Table>
               <TableHeader>
@@ -424,9 +438,14 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
                           <p className="font-medium">{line.description}{line.is_manual_fine && <Badge variant="destructive" className="ml-2">Fine</Badge>}</p>
                           <p className="text-xs text-muted-foreground">
                             {line.category}{line.sub_category ? ` · ${line.sub_category}` : ""} · {line.period}
+                            {" · "}Due {new Date(line.due_date).toLocaleDateString()}
                             {line.fine_amount > 0 && ` · Fine ৳${line.fine_amount}`}
                           </p>
-                          {line.fine_amount > 0 && line.fine_source && <AdjustmentNote>{line.fine_source}</AdjustmentNote>}
+                          {line.fine_amount > 0 && line.fine_source && (
+                            <AdjustmentNote>
+                              Was due {new Date(line.due_date).toLocaleDateString()} — {line.fine_source}
+                            </AdjustmentNote>
+                          )}
                         </TableCell>
                         <TableCell>৳{receivable}</TableCell>
                         <TableCell>

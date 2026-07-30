@@ -17,7 +17,7 @@ import {
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration, applyWaiverToExistingInvoices } from "./invoice-helpers";
 import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
@@ -412,12 +412,26 @@ feesRouter.get(
     const query = z.object({ student_id: z.string().optional(), class_id: z.string().optional(), active_only: z.string().optional() }).parse(req.query);
     const waivers = await prisma.studentWaiver.findMany({
       where: {
+        // A transferred/graduated/expelled student's old waiver was
+        // showing here identically to a real, actionable active one --
+        // this list is a management view (revoke, eventually edit), and
+        // matches every other roster-facing query in this codebase in
+        // never surfacing a non-active student by default.
+        student: { deleted_at: null, status: "ACTIVE" },
         ...(query.student_id && { student_id: query.student_id }),
         ...(query.active_only === "true" && { revoked_at: null }),
         ...(query.class_id && { student: { current_class_id: query.class_id } }),
       },
       include: {
-        student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } } } },
+        student: {
+          select: {
+            id: true, name_en: true, student_uid: true,
+            current_class: { select: { name_en: true } },
+            current_section: { select: { name: true } },
+            group: { select: { name_en: true } },
+            father_phone: true,
+          },
+        },
         waiver_type: true,
         academic_year: { select: { id: true, label: true } },
       },
@@ -447,8 +461,14 @@ feesRouter.post(
         assigned_by_id: req.user!.sub,
       },
     });
-    await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "StudentWaiver", targetId: waiver.id, metadata: { student_id: body.student_id, waiver_type_id: body.waiver_type_id }, req });
-    res.status(201).json({ success: true, data: waiver });
+    // Retroactive apply -- a waiver assigned today must also discount a
+    // real invoice the student is already carrying (this month's tuition,
+    // say), not only invoices generated from this point on. Without this,
+    // "assign a waiver" looked like it silently did nothing whenever the
+    // student already had an unpaid invoice at assignment time.
+    const { invoicesAffected, totalDiscount } = await applyWaiverToExistingInvoices(prisma, { ...waiver, waiver_type: waiverType });
+    await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "StudentWaiver", targetId: waiver.id, metadata: { student_id: body.student_id, waiver_type_id: body.waiver_type_id, invoicesAffected, totalDiscount }, req });
+    res.status(201).json({ success: true, data: { ...waiver, invoices_affected: invoicesAffected, total_discount: totalDiscount } });
   }),
 );
 
@@ -468,23 +488,34 @@ feesRouter.post(
     const validIds = new Set(students.map((s) => s.id));
     const skipped = body.student_ids.filter((id) => !validIds.has(id));
 
-    const created = await prisma.$transaction(
-      [...validIds].map((studentId) =>
-        prisma.studentWaiver.create({
+    // Callback-style transaction (not the array-of-promises form used
+    // before) since each student now needs a create followed by a
+    // retroactive-apply step, not just an independent create.
+    const { created, invoicesAffected, totalDiscount } = await prisma.$transaction(async (tx) => {
+      const created: { id: string }[] = [];
+      let invoicesAffected = 0;
+      let totalDiscount = 0;
+      for (const studentId of validIds) {
+        const waiver = await tx.studentWaiver.create({
           data: { student_id: studentId, waiver_type_id: body.waiver_type_id, academic_year_id: body.academic_year_id ?? null, assigned_by_id: req.user!.sub },
-        }),
-      ),
-    );
+        });
+        created.push(waiver);
+        const result = await applyWaiverToExistingInvoices(tx, { ...waiver, waiver_type: waiverType });
+        invoicesAffected += result.invoicesAffected;
+        totalDiscount += result.totalDiscount;
+      }
+      return { created, invoicesAffected, totalDiscount: Math.round(totalDiscount * 100) / 100 };
+    });
 
     await logAudit("FEE_WAIVE", {
       userId: req.user!.sub,
       targetType: "StudentWaiver",
       targetId: "bulk",
-      metadata: { waiver_type_id: body.waiver_type_id, student_count: created.length, skipped },
+      metadata: { waiver_type_id: body.waiver_type_id, student_count: created.length, skipped, invoicesAffected, totalDiscount },
       req,
     });
 
-    res.status(201).json({ success: true, data: { created: created.length, skipped } });
+    res.status(201).json({ success: true, data: { created: created.length, skipped, invoices_affected: invoicesAffected, total_discount: totalDiscount } });
   }),
 );
 
@@ -686,6 +717,7 @@ feesRouter.get(
           sub_category: inv.fee_sub_category?.name ?? null,
           description: inv.description,
           period,
+          due_date: inv.due_date.toISOString(),
           amount_due: inv.amount_due,
           amount_paid: inv.amount_paid,
           fine_amount: fine,

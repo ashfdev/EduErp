@@ -18,6 +18,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -47,7 +50,7 @@ export default function DocumentRequestsQueuePage() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const { data: requests } = useQuery<RequestRow[]>({
+  const { data: requests, isLoading, isError, error, refetch } = useQuery<RequestRow[]>({
     queryKey: ["documents", "requests"],
     queryFn: async () => (await api.get("/api/documents/requests")).data.data,
   });
@@ -80,42 +83,50 @@ export default function DocumentRequestsQueuePage() {
         breadcrumbs={[{ label: "Document Requests" }]}
       />
 
-      {!requests?.length && <EmptyState title="No pending requests" />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load document requests" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!requests?.length && <EmptyState title="No pending requests" />}
 
-      <div className="space-y-3">
-        {requests?.map((r) => (
-          <Card key={r.id}>
-            <CardContent className="space-y-2 pt-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium">
-                    {r.student.name_en} <span className="font-mono text-xs text-muted-foreground">{r.student.student_uid}</span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {r.student.current_class?.name_en} {r.student.current_section && `· ${r.student.current_section.name}`}
-                  </p>
-                </div>
-                <Badge variant="outline">{DOC_TYPE_LABEL[r.doc_type]}</Badge>
-              </div>
-              {r.reason && <p className="text-sm">Reason: {r.reason}</p>}
-              <div className="flex flex-wrap gap-2 text-sm">
-                <Badge variant={r.context.outstanding_due > 0 ? "destructive" : "default"}>
-                  {r.context.outstanding_due > 0 ? `৳${r.context.outstanding_due.toFixed(2)} due` : "No dues"}
-                </Badge>
-                <Badge variant={r.context.latest_result_published ? "default" : "outline"}>
-                  {r.context.latest_result_published ? "Result published" : "No published result"}
-                </Badge>
-                {r.student.cgpa != null && <Badge variant="outline">CGPA {r.student.cgpa.toFixed(2)}</Badge>}
-              </div>
-              <p className="text-xs text-muted-foreground">Requested {new Date(r.created_at).toLocaleDateString()}</p>
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" onClick={() => approveMutation.mutate(r.id)} disabled={approveMutation.isPending}>Approve</Button>
-                <Button size="sm" variant="destructive" onClick={() => setRejectId(r.id)}>Reject</Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          <div className="space-y-3">
+            {requests?.map((r) => (
+              <Card key={r.id}>
+                <CardContent className="space-y-2 pt-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium">
+                        {r.student.name_en} <span className="font-mono text-xs text-muted-foreground">{r.student.student_uid}</span>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {r.student.current_class?.name_en} {r.student.current_section && `· ${r.student.current_section.name}`}
+                      </p>
+                    </div>
+                    <Badge variant="outline">{DOC_TYPE_LABEL[r.doc_type]}</Badge>
+                  </div>
+                  {r.reason && <p className="text-sm">Reason: {r.reason}</p>}
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <Badge variant={r.context.outstanding_due > 0 ? "destructive" : "default"}>
+                      {r.context.outstanding_due > 0 ? `৳${r.context.outstanding_due.toFixed(2)} due` : "No dues"}
+                    </Badge>
+                    <Badge variant={r.context.latest_result_published ? "default" : "outline"}>
+                      {r.context.latest_result_published ? "Result published" : "No published result"}
+                    </Badge>
+                    {r.student.cgpa != null && <Badge variant="outline">CGPA {r.student.cgpa.toFixed(2)}</Badge>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Requested {new Date(r.created_at).toLocaleDateString()}</p>
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" onClick={() => approveMutation.mutate(r.id)} disabled={approveMutation.isPending}>Approve</Button>
+                    <Button size="sm" variant="destructive" onClick={() => setRejectId(r.id)}>Reject</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       <Dialog open={!!rejectId} onOpenChange={(o) => !o && setRejectId(null)}>
         <DialogContent>

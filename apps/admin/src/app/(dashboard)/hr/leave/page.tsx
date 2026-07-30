@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Label, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveRequest {
@@ -14,6 +14,7 @@ interface LeaveRequest {
   to_date: string;
   reason: string;
   status: string;
+  rejection_reason: string | null;
 }
 
 function LeaveTable({ status }: { status: string }) {
@@ -31,11 +32,18 @@ function LeaveTable({ status }: { status: string }) {
     },
   });
 
+  const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => api.put(`/api/hr/leaves/${id}/reject`, { reason: "Not approved" }),
+    mutationFn: () => api.put(`/api/hr/leaves/${rejectTarget!.id}/reject`, { reason: rejectReason }),
     onSuccess: () => {
       toast.success("Leave rejected");
       queryClient.invalidateQueries({ queryKey: ["hr", "leaves"] });
+      setRejectTarget(null);
+      setRejectReason("");
+    },
+    onError: (err: unknown) => {
+      toast.error(extractErrorMessage(err) ?? "Failed to reject leave request");
     },
   });
 
@@ -57,13 +65,18 @@ function LeaveTable({ status }: { status: string }) {
                 <TableCell>{l.leave_type.name}</TableCell>
                 <TableCell>{new Date(l.from_date).toLocaleDateString()}</TableCell>
                 <TableCell>{new Date(l.to_date).toLocaleDateString()}</TableCell>
-                <TableCell>{l.reason}</TableCell>
+                <TableCell>
+                  {l.reason}
+                  {l.status === "REJECTED" && l.rejection_reason && (
+                    <p className="mt-1 text-xs text-destructive">Rejected: {l.rejection_reason}</p>
+                  )}
+                </TableCell>
                 <TableCell><StatusBadge status={l.status} /></TableCell>
                 <TableCell className="space-x-2">
                   {l.status === "PENDING" && (
                     <>
                       <Button size="sm" onClick={() => approveMutation.mutate(l.id)}>Approve</Button>
-                      <Button size="sm" variant="destructive" onClick={() => rejectMutation.mutate(l.id)}>Reject</Button>
+                      <Button size="sm" variant="destructive" onClick={() => { setRejectTarget(l); setRejectReason(""); }}>Reject</Button>
                     </>
                   )}
                 </TableCell>
@@ -72,6 +85,21 @@ function LeaveTable({ status }: { status: string }) {
           </TableBody>
         </Table>
       </CardContent>
+
+      <Dialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Reject leave request — {rejectTarget?.staff.name_en}</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Reason</Label>
+            <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} placeholder="Explain why this request is being rejected — the staff member will see this." />
+          </div>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending || !rejectReason.trim()}>
+              {rejectMutation.isPending ? "Rejecting..." : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -15,6 +15,8 @@ import {
   Label,
   EmptyState,
   extractErrorMessage,
+  ErrorState,
+  LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -48,7 +50,7 @@ function slugifyKey(label: string): string {
 
 export default function MarkCompositionTemplatesPage() {
   const queryClient = useQueryClient();
-  const { data: templates } = useQuery<Template[]>({
+  const { data: templates, isLoading, isError, error, refetch } = useQuery<Template[]>({
     queryKey: ["settings", "mark-composition-templates"],
     queryFn: async () => (await api.get("/api/settings/mark-composition-templates")).data.data,
   });
@@ -99,6 +101,7 @@ export default function MarkCompositionTemplatesPage() {
       toast.success("Template removed");
       queryClient.invalidateQueries({ queryKey: ["settings", "mark-composition-templates"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove template"),
   });
 
   const total = Math.round(items.reduce((sum, it) => sum + (it.max_marks || 0), 0) * 100) / 100;
@@ -112,28 +115,36 @@ export default function MarkCompositionTemplatesPage() {
         action={<Button onClick={openCreate}>+ New Template</Button>}
       />
 
-      {!templates?.length && <EmptyState title="No templates yet" description="Create one to reuse across exams and classes." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load templates" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!templates?.length && <EmptyState title="No templates yet" description="Create one to reuse across exams and classes." />}
 
-      <div className="grid grid-cols-3 gap-4">
-        {templates?.map((t) => {
-          const templateTotal = Math.round(t.items.reduce((sum, it) => sum + it.max_marks, 0) * 100) / 100;
-          return (
-            <Card key={t.id}>
-              <CardHeader><CardTitle className="text-base">{t.name}</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  {t.items.map((it) => `${it.label} ${it.max_marks}`).join(" + ") || "No parts yet"}
-                  {t.items.length > 0 && ` = ${templateTotal}`}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(t)}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(t.id)}>Delete</Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+          <div className="grid grid-cols-3 gap-4">
+            {templates?.map((t) => {
+              const templateTotal = Math.round(t.items.reduce((sum, it) => sum + it.max_marks, 0) * 100) / 100;
+              return (
+                <Card key={t.id}>
+                  <CardHeader><CardTitle className="text-base">{t.name}</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      {t.items.map((it) => `${it.label} ${it.max_marks}`).join(" + ") || "No parts yet"}
+                      {t.items.length > 0 && ` = ${templateTotal}`}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(t)}>Edit</Button>
+                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(t.id)}>Delete</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {editingId && (
         <Card>

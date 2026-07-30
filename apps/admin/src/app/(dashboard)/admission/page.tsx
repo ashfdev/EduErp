@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Cycle {
@@ -20,7 +20,7 @@ interface Cycle {
 }
 
 export default function AdmissionDashboardPage() {
-  const { data: cycles } = useQuery<Cycle[]>({ queryKey: ["admission", "cycles"], queryFn: async () => (await api.get("/api/admission/cycles")).data.data });
+  const { data: cycles, isLoading, isError, error, refetch } = useQuery<Cycle[]>({ queryKey: ["admission", "cycles"], queryFn: async () => (await api.get("/api/admission/cycles")).data.data });
 
   return (
     <PageWrapper>
@@ -31,6 +31,12 @@ export default function AdmissionDashboardPage() {
         action={<Link href="/admission/cycles/new"><Button>+ New Cycle</Button></Link>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load admission cycles" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!cycles?.length && <EmptyState title="No admission cycles yet" description="Create a cycle to start accepting applications" />}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -61,6 +67,8 @@ export default function AdmissionDashboardPage() {
           </Link>
         ))}
       </div>
+        </>
+      )}
     </PageWrapper>
   );
 }

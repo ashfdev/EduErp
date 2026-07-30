@@ -35,7 +35,14 @@ interface SectionRow {
   capacity: number;
   shift_id: string | null;
   shift: { id: string; name: string; start_time: string; end_time: string } | null;
+  class_teacher: { id: string; name_en: string } | null;
   _count: { students: number };
+}
+
+interface Teacher {
+  id: string;
+  name_en: string;
+  designation: string;
 }
 
 interface GroupRow {
@@ -73,6 +80,10 @@ export default function AcademicSettingsPage() {
   const { data: classes } = useQuery<ClassRow[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+  });
+  const { data: teachers } = useQuery<Teacher[]>({
+    queryKey: ["staff", "teachers"],
+    queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
   });
 
   const [yearOpen, setYearOpen] = useState(false);
@@ -162,10 +173,10 @@ export default function AcademicSettingsPage() {
   });
 
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
-  const [editSectionForm, setEditSectionForm] = useState(emptySectionForm);
+  const [editSectionForm, setEditSectionForm] = useState({ ...emptySectionForm, class_teacher_id: "" });
   function openEditSection(s: SectionRow) {
     setEditingSectionId(s.id);
-    setEditSectionForm({ name: s.name, shift_id: s.shift_id ?? "", capacity: s.capacity });
+    setEditSectionForm({ name: s.name, shift_id: s.shift_id ?? "", capacity: s.capacity, class_teacher_id: s.class_teacher?.id ?? "" });
   }
   const updateSection = useMutation({
     mutationFn: () =>
@@ -181,6 +192,21 @@ export default function AcademicSettingsPage() {
     },
     onError: (err: unknown) => {
       const message = extractErrorMessage(err) ?? "Failed to update section";
+      toast.error(message);
+    },
+  });
+  const updateClassTeacher = useMutation({
+    mutationFn: () =>
+      api.put(`/api/settings/sections/${editingSectionId}/class-teacher`, {
+        class_teacher_id: editSectionForm.class_teacher_id || null,
+      }),
+    onSuccess: () => {
+      toast.success("Class teacher updated");
+      queryClient.invalidateQueries({ queryKey: ["settings", "classes"] });
+      setEditingSectionId(null);
+    },
+    onError: (err: unknown) => {
+      const message = extractErrorMessage(err) ?? "Failed to update class teacher";
       toast.error(message);
     },
   });
@@ -409,8 +435,25 @@ export default function AcademicSettingsPage() {
               <Label>Capacity</Label>
               <Input type="number" min={1} value={editSectionForm.capacity} onChange={(e) => setEditSectionForm({ ...editSectionForm, capacity: Number(e.target.value) })} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Class Teacher (optional)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={editSectionForm.class_teacher_id} onChange={(e) => setEditSectionForm({ ...editSectionForm, class_teacher_id: e.target.value })}>
+                <option value="">None</option>
+                {teachers?.map((t) => <option key={t.id} value={t.id}>{t.name_en} ({t.designation})</option>)}
+              </select>
+            </div>
           </div>
-          <DialogFooter><Button onClick={() => updateSection.mutate()} disabled={updateSection.isPending || !editSectionForm.name}>Save</Button></DialogFooter>
+          <DialogFooter>
+            <Button
+              onClick={async () => {
+                await updateSection.mutateAsync();
+                await updateClassTeacher.mutateAsync();
+              }}
+              disabled={updateSection.isPending || updateClassTeacher.isPending || !editSectionForm.name}
+            >
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

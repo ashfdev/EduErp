@@ -6,6 +6,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, Label, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  ErrorState, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -26,7 +27,7 @@ export default function AuditLogPage() {
   const [action, setAction] = useState<string>("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery<{ items: AuditLogEntry[]; meta: { total: number; page: number; totalPages: number } }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items: AuditLogEntry[]; meta: { total: number; page: number; totalPages: number } }>({
     queryKey: ["settings", "audit-log", action, page],
     queryFn: async () => {
       const res = await api.get("/api/settings/audit-log", { params: { ...(action && { action }), page, limit: 50 } });
@@ -61,6 +62,8 @@ export default function AuditLogPage() {
         <CardContent className="pt-4">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : isError ? (
+            <ErrorState title="Failed to load audit log" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
           ) : !data?.items.length ? (
             <EmptyState title="No audit log entries yet" description="Entries appear here as sensitive actions occur (logins, result publish, fee waivers, etc.)." />
           ) : (

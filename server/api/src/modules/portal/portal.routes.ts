@@ -473,7 +473,7 @@ portalRouter.get(
     });
 
     const now = new Date();
-    const projected: { category: string; name: string; amount: number; frequency: string }[] = [];
+    const projected: { category: string; name: string; amount: number; frequency: string; due_date: string | null }[] = [];
     for (const structure of structures) {
       if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id))) continue;
 
@@ -481,10 +481,21 @@ portalRouter.get(
         const existing = await prisma.invoice.findFirst({
           where: { student_id: id, fee_structure_id: structure.id, month: now.getMonth() + 1, year: now.getFullYear() },
         });
-        if (!existing) projected.push({ category: structure.category, name: structure.name, amount: structure.amount, frequency: "This month" });
+        if (!existing) {
+          projected.push({
+            category: structure.category, name: structure.name, amount: structure.amount, frequency: "This month",
+            due_date: structure.due_day ? new Date(now.getFullYear(), now.getMonth(), structure.due_day).toISOString() : null,
+          });
+        }
       } else {
         const existing = await prisma.invoice.findFirst({ where: { student_id: id, fee_structure_id: structure.id, academic_year_id: activeYear.id } });
-        if (!existing) projected.push({ category: structure.category, name: structure.name, amount: structure.amount, frequency: structure.frequency === "YEARLY" ? "This year" : "One-time" });
+        if (!existing) {
+          projected.push({
+            category: structure.category, name: structure.name, amount: structure.amount,
+            frequency: structure.frequency === "YEARLY" ? "This year" : "One-time",
+            due_date: structure.target_due_date ? structure.target_due_date.toISOString() : null,
+          });
+        }
       }
     }
 

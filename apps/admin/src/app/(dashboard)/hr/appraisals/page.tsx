@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Criterion { key: string; label: string; max_score: number }
@@ -30,7 +30,7 @@ export default function AppraisalsPage() {
     queryKey: ["appraisals", "templates"],
     queryFn: async () => (await api.get("/api/appraisals/templates")).data.data,
   });
-  const { data: reviews } = useQuery<Review[]>({
+  const { data: reviews, isLoading: reviewsLoading, isError: reviewsError, error: reviewsErrorObj, refetch: refetchReviews } = useQuery<Review[]>({
     queryKey: ["appraisals", "reviews"],
     queryFn: async () => (await api.get("/api/appraisals/reviews")).data.data,
   });
@@ -63,6 +63,7 @@ export default function AppraisalsPage() {
       setTemplateName("");
       setCriteria([{ key: "", label: "", max_score: 10 }]);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create template"),
   });
 
   // Review creation
@@ -79,6 +80,7 @@ export default function AppraisalsPage() {
       setReviewOpen(false);
       setReviewStaffId(""); setReviewTemplateId(""); setReviewPeriod("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create review"),
   });
 
   // Score entry
@@ -113,41 +115,49 @@ export default function AppraisalsPage() {
         }
       />
 
-      {!reviews?.length && <EmptyState title="No reviews yet" />}
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Staff</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Template</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {reviews?.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{r.staff.name_en}</TableCell>
-                  <TableCell>{r.review_period}</TableCell>
-                  <TableCell>{r.template.name}</TableCell>
-                  <TableCell>{r.overall_score ?? "—"}</TableCell>
-                  <TableCell><Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge></TableCell>
-                  <TableCell>
-                    {r.status === "DRAFT" && (
-                      <Button size="sm" variant="outline" onClick={() => { setScoreReviewId(r.id); setScoreDraft({}); setComments(""); }}>
-                        Score
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {reviewsLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : reviewsError ? (
+        <ErrorState title="Failed to load reviews" description={extractErrorMessage(reviewsErrorObj)} retryLabel="Retry" onRetry={() => refetchReviews()} />
+      ) : (
+        <>
+          {!reviews?.length && <EmptyState title="No reviews yet" />}
+          <Card>
+            <CardContent className="pt-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Staff</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Template</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reviews?.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.staff.name_en}</TableCell>
+                      <TableCell>{r.review_period}</TableCell>
+                      <TableCell>{r.template.name}</TableCell>
+                      <TableCell>{r.overall_score ?? "—"}</TableCell>
+                      <TableCell><Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"}>{r.status}</Badge></TableCell>
+                      <TableCell>
+                        {r.status === "DRAFT" && (
+                          <Button size="sm" variant="outline" onClick={() => { setScoreReviewId(r.id); setScoreDraft({}); setComments(""); }}>
+                            Score
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
         <DialogContent className="max-w-lg">

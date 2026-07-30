@@ -7,6 +7,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState, SearchInput,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -33,7 +34,7 @@ export default function VehiclesPage() {
   const [revealedKey, setRevealedKey] = useState<{ vehicle_no: string; key: string } | null>(null);
   const [search, setSearch] = useState("");
 
-  const { data: vehicles } = useQuery<Vehicle[]>({ queryKey: ["transport", "vehicles"], queryFn: async () => (await api.get("/api/transport/vehicles")).data.data });
+  const { data: vehicles, isLoading, isError, error, refetch } = useQuery<Vehicle[]>({ queryKey: ["transport", "vehicles"], queryFn: async () => (await api.get("/api/transport/vehicles")).data.data });
   const { data: routes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
   const filteredVehicles = vehicles?.filter((v) => {
     if (!search) return true;
@@ -85,6 +86,7 @@ export default function VehiclesPage() {
       toast.success("Device key revoked");
       queryClient.invalidateQueries({ queryKey: ["transport", "vehicles"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to revoke device key"),
   });
 
   return (
@@ -120,31 +122,39 @@ export default function VehiclesPage() {
         </CardContent>
       </Card>
 
-      {!vehicles?.length && <EmptyState title="No vehicles added yet" />}
-      {!!vehicles?.length && (
-        <SearchInput placeholder="Filter by vehicle no., driver, or route..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load vehicles" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!vehicles?.length && <EmptyState title="No vehicles added yet" />}
+          {!!vehicles?.length && (
+            <SearchInput placeholder="Filter by vehicle no., driver, or route..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+          )}
+          <div className="space-y-3">
+            {filteredVehicles?.map((v) => (
+              <Card key={v.id}>
+                <CardContent className="flex items-center justify-between pt-6">
+                  <div>
+                    <p className="font-medium">{v.vehicle_no} <span className="text-sm text-muted-foreground">({v.type})</span></p>
+                    <p className="text-sm text-muted-foreground">{v.route?.name ?? "No route"} · Driver: {v.driver_name ?? "N/A"}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={v.has_device_key ? "default" : "outline"}>{v.has_device_key ? "Tracker linked" : "No device key"}</Badge>
+                    <Button variant="outline" size="sm" onClick={() => issueKeyMutation.mutate(v.id)} disabled={issueKeyMutation.isPending}>
+                      {v.has_device_key ? "Rotate Key" : "Issue Key"}
+                    </Button>
+                    {v.has_device_key && (
+                      <Button variant="outline" size="sm" onClick={() => revokeKeyMutation.mutate(v.id)}>Revoke</Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
-      <div className="space-y-3">
-        {filteredVehicles?.map((v) => (
-          <Card key={v.id}>
-            <CardContent className="flex items-center justify-between pt-6">
-              <div>
-                <p className="font-medium">{v.vehicle_no} <span className="text-sm text-muted-foreground">({v.type})</span></p>
-                <p className="text-sm text-muted-foreground">{v.route?.name ?? "No route"} · Driver: {v.driver_name ?? "N/A"}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={v.has_device_key ? "default" : "outline"}>{v.has_device_key ? "Tracker linked" : "No device key"}</Badge>
-                <Button variant="outline" size="sm" onClick={() => issueKeyMutation.mutate(v.id)} disabled={issueKeyMutation.isPending}>
-                  {v.has_device_key ? "Rotate Key" : "Issue Key"}
-                </Button>
-                {v.has_device_key && (
-                  <Button variant="outline" size="sm" onClick={() => revokeKeyMutation.mutate(v.id)}>Revoke</Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       <Dialog open={!!revealedKey} onOpenChange={(open) => !open && setRevealedKey(null)}>
         <DialogContent>

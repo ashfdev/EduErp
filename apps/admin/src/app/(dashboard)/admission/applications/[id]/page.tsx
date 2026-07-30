@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Application {
@@ -42,6 +42,7 @@ export default function AdmissionApplicationDetailPage() {
       toast.success("Status updated");
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update application status"),
   });
 
   const confirmMutation = useMutation({

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, SearchInput, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, SearchInput, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Book {
@@ -40,7 +40,7 @@ export default function BookCatalogPage() {
     queryFn: async () => (await api.get("/api/library/books/categories")).data.data,
   });
 
-  const { data: booksResponse } = useQuery<BooksResponse>({
+  const { data: booksResponse, isLoading, isError, error, refetch } = useQuery<BooksResponse>({
     queryKey: ["library", "books", search, categoryFilter, availableOnly, page],
     queryFn: async () =>
       (
@@ -66,6 +66,7 @@ export default function BookCatalogPage() {
       setOpen(false);
       setTitle(""); setAuthor(""); setCategory(""); setIsbn(""); setTotalCopies(1); setLocation("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add book"),
   });
 
   const addCopiesMutation = useMutation({
@@ -74,6 +75,7 @@ export default function BookCatalogPage() {
       toast.success("Copies added");
       queryClient.invalidateQueries({ queryKey: ["library", "books"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add copies"),
   });
 
   return (
@@ -102,6 +104,12 @@ export default function BookCatalogPage() {
         {meta && <span className="text-xs text-muted-foreground">{meta.total} book{meta.total === 1 ? "" : "s"}</span>}
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load books" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!books?.length && <EmptyState title="No books found" />}
       {!!books?.length && (
         <Card>
@@ -135,6 +143,8 @@ export default function BookCatalogPage() {
             )}
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

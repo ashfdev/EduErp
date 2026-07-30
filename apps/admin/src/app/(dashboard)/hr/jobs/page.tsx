@@ -26,6 +26,9 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -48,7 +51,7 @@ export default function JobPostingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: jobs } = useQuery<JobPosting[]>({
+  const { data: jobs, isLoading, isError, error, refetch } = useQuery<JobPosting[]>({
     queryKey: ["hr", "jobs"],
     queryFn: async () => (await api.get("/api/hr/jobs")).data.data,
   });
@@ -95,6 +98,7 @@ export default function JobPostingsPage() {
       toast.success("Updated");
       queryClient.invalidateQueries({ queryKey: ["hr", "jobs"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update job posting"),
   });
 
   return (
@@ -108,6 +112,12 @@ export default function JobPostingsPage() {
 
       <Card>
         <CardContent className="pt-6">
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load job postings" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : (
+            <>
           {!jobs?.length && <EmptyState title="No job postings yet" />}
           {!!jobs?.length && (
             <Table>
@@ -144,6 +154,8 @@ export default function JobPostingsPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+            </>
           )}
         </CardContent>
       </Card>

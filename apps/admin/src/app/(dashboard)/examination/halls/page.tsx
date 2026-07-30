@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardHeader, CardTitle, CardContent, Button, Input, Label, EmptyState, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardHeader, CardTitle, CardContent, Button, Input, Label, EmptyState, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Hall {
@@ -28,7 +28,7 @@ const EMPTY_DRAFT: HallDraft = { name: "", room_number: "", floor: "", rows: "1"
 
 export default function ExamHallsPage() {
   const queryClient = useQueryClient();
-  const { data: halls } = useQuery<Hall[]>({
+  const { data: halls, isLoading, isError, error, refetch } = useQuery<Hall[]>({
     queryKey: ["exam-halls"],
     queryFn: async () => (await api.get("/api/exam-halls")).data.data,
   });
@@ -84,6 +84,12 @@ export default function ExamHallsPage() {
         action={<Button onClick={openCreate}>+ New Hall</Button>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load exam halls" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!halls?.length && <EmptyState title="No halls defined yet" description="Add one before generating a seat plan." />}
 
       <div className="grid grid-cols-3 gap-4">
@@ -105,6 +111,8 @@ export default function ExamHallsPage() {
           </Card>
         ))}
       </div>
+        </>
+      )}
 
       {editingId && (
         <Card>

@@ -187,7 +187,7 @@ studentsRouter.get(
       ? query.class_ids.split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
 
-    const where = {
+    const baseWhere = {
       deleted_at: null,
       ...(query.class_id
         ? { current_class_id: query.class_id }
@@ -197,25 +197,81 @@ studentsRouter.get(
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
       ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
-      ...(query.search && {
-        OR: [
-          { name_en: { contains: query.search, mode: "insensitive" as const } },
-          { student_uid: { contains: query.search, mode: "insensitive" as const } },
-          { current_roll_no: { contains: query.search, mode: "insensitive" as const } },
-          { registration_no: { contains: query.search, mode: "insensitive" as const } },
-        ],
-      }),
     };
+
+    if (query.search) {
+      // Prisma's query builder has no "ORDER BY relevance" for a plain
+      // `contains` filter -- a search for "sabb" returning "Md. Sabbir"
+      // and "Rakib Sabbir Ahmed" in creation-date order (the previous
+      // behavior) reads as broken to anyone expecting name-first matches
+      // up top. Two-tier, still fully paginated, no raw SQL: fetch
+      // prefix matches first, then contains-but-not-prefix matches to
+      // fill the rest of the requested page.
+      const search = query.search;
+      const prefixOr = [
+        { name_en: { startsWith: search, mode: "insensitive" as const } },
+        { student_uid: { startsWith: search, mode: "insensitive" as const } },
+        { current_roll_no: { startsWith: search, mode: "insensitive" as const } },
+        { registration_no: { startsWith: search, mode: "insensitive" as const } },
+      ];
+      const containsOr = [
+        { name_en: { contains: search, mode: "insensitive" as const } },
+        { student_uid: { contains: search, mode: "insensitive" as const } },
+        { current_roll_no: { contains: search, mode: "insensitive" as const } },
+        { registration_no: { contains: search, mode: "insensitive" as const } },
+      ];
+      const prefixWhere = { ...baseWhere, OR: prefixOr };
+      // Second tier = matches the broader "contains" net but NOT already
+      // captured by the prefix tier, so nothing is ever double-counted
+      // across the two fetches.
+      const restWhere = { ...baseWhere, AND: [{ OR: containsOr }, { NOT: { OR: prefixOr } }] };
+
+      const [prefixTotal, restTotal] = await Promise.all([
+        prisma.student.count({ where: prefixWhere }),
+        prisma.student.count({ where: restWhere }),
+      ]);
+      const total = prefixTotal + restTotal;
+      const skip = (query.page - 1) * query.limit;
+
+      let items: Prisma.StudentGetPayload<{ select: typeof STUDENT_LIST_SELECT }>[] = [];
+      if (skip < prefixTotal) {
+        const fromPrefix = await prisma.student.findMany({
+          where: prefixWhere, select: STUDENT_LIST_SELECT,
+          skip, take: query.limit, orderBy: { name_en: "asc" },
+        });
+        items = fromPrefix;
+        const remaining = query.limit - fromPrefix.length;
+        if (remaining > 0) {
+          const fromRest = await prisma.student.findMany({
+            where: restWhere, select: STUDENT_LIST_SELECT,
+            skip: 0, take: remaining, orderBy: { name_en: "asc" },
+          });
+          items = [...items, ...fromRest];
+        }
+      } else {
+        items = await prisma.student.findMany({
+          where: restWhere, select: STUDENT_LIST_SELECT,
+          skip: skip - prefixTotal, take: query.limit, orderBy: { name_en: "asc" },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: items,
+        meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+      });
+      return;
+    }
 
     const [items, total] = await Promise.all([
       prisma.student.findMany({
-        where,
+        where: baseWhere,
         select: STUDENT_LIST_SELECT,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { created_at: "desc" },
       }),
-      prisma.student.count({ where }),
+      prisma.student.count({ where: baseWhere }),
     ]);
 
     res.json({

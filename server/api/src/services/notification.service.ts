@@ -12,6 +12,10 @@ export interface NotificationRecipient {
   lang?: "BN" | "EN";
 }
 
+// Fallback only — used when the matching NotificationConfig row's own
+// `subject` column (Settings-editable, see settings/notifications page) is
+// unset. Kept so every institution that hasn't customized a trigger yet
+// gets the exact same subject/title it always has.
 const TRIGGER_EMAIL_SUBJECT: Record<NotificationTrigger, string> = {
   ABSENCE: "Attendance Notice",
   LATE: "Late Arrival Notice",
@@ -88,7 +92,7 @@ export async function sendNotification(params: {
           });
           await emailQueue.add(
             "send",
-            { log_id: log.id, to: recipient.email, subject: TRIGGER_EMAIL_SUBJECT[params.trigger], body: message },
+            { log_id: log.id, to: recipient.email, subject: config.subject || TRIGGER_EMAIL_SUBJECT[params.trigger], body: message },
             DEFAULT_JOB_OPTS,
           );
           queued++;
@@ -102,7 +106,7 @@ export async function sendNotification(params: {
           });
           await pushQueue.add(
             "send",
-            { log_id: log.id, user_id: recipient.user_id, title: TRIGGER_EMAIL_SUBJECT[params.trigger], body: message },
+            { log_id: log.id, user_id: recipient.user_id, title: config.subject || TRIGGER_EMAIL_SUBJECT[params.trigger], body: message },
             DEFAULT_JOB_OPTS,
           );
           queued++;

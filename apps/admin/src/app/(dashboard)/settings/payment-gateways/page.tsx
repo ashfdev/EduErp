@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PageWrapper, PageHeader, Card, CardContent, CardHeader, CardTitle, Label, Input, Switch, Button, Badge,
-  extractErrorMessage,
+  extractErrorMessage, ErrorState, LoadingSpinner,
 } from "@education-erp/ui";
 import type { PaymentGatewayConfigInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
@@ -134,7 +134,7 @@ function GatewayCard({ status }: { status: GatewayStatus }) {
 }
 
 export default function PaymentGatewaysPage() {
-  const { data } = useQuery<GatewayStatus[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<GatewayStatus[]>({
     queryKey: ["settings", "payment-gateways"],
     queryFn: async () => (await api.get("/api/settings/payment-gateways")).data.data,
   });
@@ -146,9 +146,15 @@ export default function PaymentGatewaysPage() {
         subtitle="Enter merchant credentials for each gateway. Real bKash/Nagad/SSLCommerz/Rocket integration is still pending — these credentials activate automatically once each gateway's live integration is wired up."
         breadcrumbs={[{ label: "Settings" }, { label: "Payment Gateways" }]}
       />
-      <div className="max-w-3xl space-y-6">
-        {data?.map((status) => <GatewayCard key={status.provider} status={status} />)}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load payment gateways" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <div className="max-w-3xl space-y-6">
+          {data?.map((status) => <GatewayCard key={status.provider} status={status} />)}
+        </div>
+      )}
     </PageWrapper>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { Receipt, Wallet, FileBarChart, PlusCircle } from "lucide-react";
 
@@ -32,7 +32,7 @@ export default function AccountsDashboardPage() {
     queryFn: async () => (await api.get("/api/accounts/chart")).data.data,
   });
 
-  const { data: vouchers } = useQuery<Voucher[]>({
+  const { data: vouchers, isLoading: vouchersLoading, isError: vouchersError, error: vouchersErrorObj, refetch: refetchVouchers } = useQuery<Voucher[]>({
     queryKey: ["accounts", "vouchers", "recent"],
     queryFn: async () => (await api.get("/api/accounts/vouchers", { params: { limit: 10 } })).data.data,
   });
@@ -104,36 +104,52 @@ export default function AccountsDashboardPage() {
         <Card>
           <CardContent className="pt-6">
             <p className="mb-3 font-medium">Recent Vouchers</p>
-            {!vouchers?.length && <EmptyState title="No vouchers yet" description="Create your first voucher to get started." />}
-            <div className="space-y-2">
-              {vouchers?.slice(0, 10).map((v) => (
-                <Link key={v.id} href={`/accounts/vouchers/${v.id}`} className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-accent">
-                  <div>
-                    <p className="font-medium">{v.voucher_no}</p>
-                    <p className="text-xs text-muted-foreground">{v.narration.slice(0, 50)}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span>{fmt(v.total_amount)}</span>
-                    <StatusBadge status={v.status} />
-                  </div>
-                </Link>
-              ))}
-            </div>
+            {vouchersLoading ? (
+              <div className="flex justify-center py-8"><LoadingSpinner /></div>
+            ) : vouchersError ? (
+              <ErrorState title="Failed to load vouchers" description={extractErrorMessage(vouchersErrorObj)} retryLabel="Retry" onRetry={() => refetchVouchers()} />
+            ) : (
+              <>
+                {!vouchers?.length && <EmptyState title="No vouchers yet" description="Create your first voucher to get started." />}
+                <div className="space-y-2">
+                  {vouchers?.slice(0, 10).map((v) => (
+                    <Link key={v.id} href={`/accounts/vouchers/${v.id}`} className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-accent">
+                      <div>
+                        <p className="font-medium">{v.voucher_no}</p>
+                        <p className="text-xs text-muted-foreground">{v.narration.slice(0, 50)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span>{fmt(v.total_amount)}</span>
+                        <StatusBadge status={v.status} />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <p className="mb-3 font-medium">Pending Approvals</p>
-            {!pendingApprovals.length && <EmptyState title="Nothing pending" description="All vouchers are posted." />}
-            <div className="space-y-2">
-              {pendingApprovals.map((v) => (
-                <Link key={v.id} href={`/accounts/vouchers/${v.id}`} className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-accent">
-                  <span className="font-medium">{v.voucher_no}</span>
-                  <StatusBadge status={v.status} />
-                </Link>
-              ))}
-            </div>
+            {vouchersLoading ? (
+              <div className="flex justify-center py-8"><LoadingSpinner /></div>
+            ) : vouchersError ? (
+              <ErrorState title="Failed to load vouchers" description={extractErrorMessage(vouchersErrorObj)} retryLabel="Retry" onRetry={() => refetchVouchers()} />
+            ) : (
+              <>
+                {!pendingApprovals.length && <EmptyState title="Nothing pending" description="All vouchers are posted." />}
+                <div className="space-y-2">
+                  {pendingApprovals.map((v) => (
+                    <Link key={v.id} href={`/accounts/vouchers/${v.id}`} className="flex items-center justify-between rounded-md border p-2 text-sm hover:bg-accent">
+                      <span className="font-medium">{v.voucher_no}</span>
+                      <StatusBadge status={v.status} />
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

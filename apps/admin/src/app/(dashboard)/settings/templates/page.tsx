@@ -19,6 +19,9 @@ import {
   DialogTitle,
   DialogFooter,
   EmptyState,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -47,7 +50,7 @@ export default function TemplatesPage() {
   const queryClient = useQueryClient();
   const [selectedType, setSelectedType] = useState(DOC_TYPES[0]!);
 
-  const { data: grouped } = useQuery<Record<string, Template[]>>({
+  const { data: grouped, isLoading, isError, error, refetch } = useQuery<Record<string, Template[]>>({
     queryKey: ["settings", "templates"],
     queryFn: async () => (await api.get("/api/settings/templates")).data.data,
   });
@@ -84,6 +87,7 @@ export default function TemplatesPage() {
       toast.success("Template activated");
       queryClient.invalidateQueries({ queryKey: ["settings", "templates"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to activate template"),
   });
 
   const deleteMutation = useMutation({
@@ -137,6 +141,12 @@ export default function TemplatesPage() {
             </div>
           </div>
 
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load templates" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : (
+            <>
           {!list.length && <EmptyState title="No templates for this document type yet" />}
 
           <div className="space-y-2">
@@ -161,6 +171,8 @@ export default function TemplatesPage() {
               </Card>
             ))}
           </div>
+            </>
+          )}
 
           {previewHtml && (
             <div className="rounded-md border">

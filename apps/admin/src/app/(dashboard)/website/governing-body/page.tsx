@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Member {
@@ -22,7 +22,7 @@ export default function GoverningBodyPage() {
   const [designation, setDesignation] = useState("");
   const [group, setGroup] = useState("Governing Body");
 
-  const { data: members } = useQuery<Member[]>({ queryKey: ["website", "governing-body"], queryFn: async () => (await api.get("/api/website/governing-body")).data.data });
+  const { data: members, isLoading, isError, error, refetch } = useQuery<Member[]>({ queryKey: ["website", "governing-body"], queryFn: async () => (await api.get("/api/website/governing-body")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/website/governing-body", { name, designation, group }),
@@ -32,6 +32,7 @@ export default function GoverningBodyPage() {
       setOpen(false);
       setName(""); setDesignation("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add member"),
   });
 
   const reorderMutation = useMutation({
@@ -45,6 +46,7 @@ export default function GoverningBodyPage() {
       toast.success("Member removed");
       queryClient.invalidateQueries({ queryKey: ["website", "governing-body"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove member"),
   });
 
   function move(index: number, dir: -1 | 1) {
@@ -60,24 +62,32 @@ export default function GoverningBodyPage() {
     <PageWrapper>
       <PageHeader title="Governing Body" breadcrumbs={[{ label: "Website" }, { label: "Governing Body" }]} action={<Button onClick={() => setOpen(true)}>+ Add Member</Button>} />
 
-      {!members?.length && <EmptyState title="No members added yet" />}
-      <div className="space-y-2">
-        {members?.map((m, i) => (
-          <Card key={m.id}>
-            <CardContent className="flex items-center justify-between pt-6">
-              <div>
-                <p className="font-medium">{m.name}</p>
-                <p className="text-sm text-muted-foreground">{m.designation} · {m.group}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => move(i, -1)}>↑</Button>
-                <Button size="sm" variant="outline" onClick={() => move(i, 1)}>↓</Button>
-                <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(m.id)}>Delete</Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load governing body members" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!members?.length && <EmptyState title="No members added yet" />}
+          <div className="space-y-2">
+            {members?.map((m, i) => (
+              <Card key={m.id}>
+                <CardContent className="flex items-center justify-between pt-6">
+                  <div>
+                    <p className="font-medium">{m.name}</p>
+                    <p className="text-sm text-muted-foreground">{m.designation} · {m.group}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => move(i, -1)}>↑</Button>
+                    <Button size="sm" variant="outline" onClick={() => move(i, 1)}>↓</Button>
+                    <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(m.id)}>Delete</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -5,10 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { PageWrapper, PageHeader, Card, CardContent, Button } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
-interface StaffListItem {
-  id: string;
-  is_active: boolean;
-}
 interface LeaveRequestItem {
   id: string;
   status: string;
@@ -23,7 +19,18 @@ function todayLocalDateString(): string {
 }
 
 export default function HrDashboardPage() {
-  const { data: staff } = useQuery<StaffListItem[]>({ queryKey: ["hr", "staff", "all"], queryFn: async () => (await api.get("/api/hr/staff", { params: { limit: 100 } })).data.data });
+  // Real institution-wide counts via meta.total, not the length of one
+  // paginated page — a previous version of this dashboard used
+  // `staff.length` off a `limit: 100` call, which silently under-reported
+  // both tiles for any institution with more than 100 staff.
+  const { data: totalStaffCount } = useQuery<number>({
+    queryKey: ["hr", "staff", "count", "all"],
+    queryFn: async () => (await api.get("/api/hr/staff", { params: { limit: 1 } })).data.meta.total as number,
+  });
+  const { data: activeStaffCount } = useQuery<number>({
+    queryKey: ["hr", "staff", "count", "active"],
+    queryFn: async () => (await api.get("/api/hr/staff", { params: { limit: 1, is_active: "true" } })).data.meta.total as number,
+  });
   const { data: pendingLeaves } = useQuery<LeaveRequestItem[]>({ queryKey: ["hr", "leaves", "pending"], queryFn: async () => (await api.get("/api/hr/leaves", { params: { status: "PENDING" } })).data.data });
 
   const today = todayLocalDateString();
@@ -38,7 +45,6 @@ export default function HrDashboardPage() {
     queryFn: async () => (await api.get("/api/hr/payroll", { params: { month: now.getMonth() + 1, year: now.getFullYear() } })).data.data,
   });
 
-  const activeStaff = staff?.filter((s) => s.is_active).length ?? 0;
   const payrollTotal = payroll?.reduce((sum, p) => sum + p.net_salary, 0) ?? 0;
   const presentToday = (dailySummary?.summary.present ?? 0) + (dailySummary?.summary.late ?? 0);
   const absentToday = dailySummary?.summary.absent ?? 0;
@@ -57,8 +63,8 @@ export default function HrDashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{staff?.length ?? 0}</p><p className="text-sm text-muted-foreground">Total Staff</p></CardContent></Card>
-        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{activeStaff}</p><p className="text-sm text-muted-foreground">Active</p></CardContent></Card>
+        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{totalStaffCount ?? 0}</p><p className="text-sm text-muted-foreground">Total Staff</p></CardContent></Card>
+        <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{activeStaffCount ?? 0}</p><p className="text-sm text-muted-foreground">Active</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold text-emerald-600">{presentToday}</p><p className="text-sm text-muted-foreground">Present Today</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold text-rose-600">{absentToday}</p><p className="text-sm text-muted-foreground">Absent Today</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{pendingLeaves?.length ?? 0}</p><p className="text-sm text-muted-foreground">Pending Leave</p></CardContent></Card>

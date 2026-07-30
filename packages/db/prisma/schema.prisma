@@ -213,6 +213,14 @@ model AttendanceRules {
   // starting behavior (single approver), same "default preserves the
   // simpler existing pattern" discipline as promotion_attendance_mode above.
   leave_approval_mode         StudentLeaveApprovalMode @default(CLASS_TEACHER_ONLY)
+  // Subject-wise pass-rate (%) at/above which the exam results page's
+  // per-subject badge shows "good" instead of "needs attention" -- was a
+  // hardcoded `>= 80` literal in apps/admin's exam results page with no
+  // Settings-driven override anywhere. Lives on this singleton (not a new
+  // table) since it's the same "is this figure good enough" classification
+  // shape as min_attendance_percentage above, reused by the same
+  // reports/analytics surfaces. Default 80 preserves today's exact behavior.
+  pass_rate_alert_threshold   Float    @default(80)
   created_at                  DateTime @default(now())
   updated_at                  DateTime @updatedAt
 }
@@ -278,6 +286,16 @@ model NotificationConfig {
   is_enabled  Boolean             @default(true)
   template_bn String              @db.Text
   template_en String              @db.Text
+  // EMAIL subject / PUSH title for this trigger+channel — was previously a
+  // hardcoded `TRIGGER_EMAIL_SUBJECT` lookup table in notification.service.ts
+  // with no Settings override at all (unlike template_bn/template_en, which
+  // were always admin-editable). Nullable: null means "use the built-in
+  // default string", so every existing row (and every institution that never
+  // touches this field) keeps today's exact subject/title byte-for-byte.
+  // Unused for SMS (no subject concept), but the column is on this shared
+  // row rather than a separate table since it's a per-trigger-per-channel
+  // override just like the templates it sits next to.
+  subject     String?
   created_at  DateTime            @default(now())
   updated_at  DateTime            @updatedAt
 
@@ -1486,6 +1504,15 @@ model FeeStructure {
   amount           Float
   frequency        FeeFrequency
   due_day          Int?
+  // Explicit target due date -- specifically for a ONE_TIME structure
+  // (an exam fee, a one-off levy), where "day of month" (due_day, the
+  // MONTHLY-only convention above) doesn't mean anything on its own since
+  // there's no month to anchor it to. Shown on the portal's Upcoming
+  // (Projected) list before any invoice exists, and used to pre-fill the
+  // due date when the structure is actually generated -- without this,
+  // generation silently defaulted to "whatever day you happened to click
+  // Generate," never a deadline anyone actually chose.
+  target_due_date  DateTime?
   is_active        Boolean      @default(true)
   created_at       DateTime     @default(now())
   invoices         Invoice[]
@@ -1533,6 +1560,12 @@ model Invoice {
   // waiver if the invoice is settled across more than one payment. Null
   // for every invoice with no waiver, or one paid before this existed.
   waiver_journaled_at DateTime?
+  // Running total of how much of fine_amount has already been posted to
+  // the Late Fine Income account (4009) across this invoice's payments --
+  // fine_amount can grow between payments (more late days accrued), so
+  // unlike the waiver flag this tracks an amount, not a single point in
+  // time, letting a later payment recognize only the newly-accrued delta.
+  fine_journaled_amount Float @default(0)
 
   @@index([student_id])
   @@index([status])

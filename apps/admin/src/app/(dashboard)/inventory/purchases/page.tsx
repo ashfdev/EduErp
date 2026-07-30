@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Requisition {
@@ -31,13 +31,25 @@ interface Supplier {
   name: string;
 }
 
+interface CatalogItem {
+  id: string;
+  name: string;
+  unit: string;
+  category: { name: string };
+}
+
+interface AssetCategoryOption {
+  id: string;
+  name: string;
+}
+
 function RequisitionsTab() {
   const queryClient = useQueryClient();
   const [showNew, setShowNew] = useState(false);
   const [reason, setReason] = useState("");
   const [items, setItems] = useState([{ description: "", quantity: "1" }]);
 
-  const { data } = useQuery<Requisition[]>({ queryKey: ["inventory", "requisitions"], queryFn: async () => (await api.get("/api/inventory/requisitions")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<Requisition[]>({ queryKey: ["inventory", "requisitions"], queryFn: async () => (await api.get("/api/inventory/requisitions")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -49,6 +61,7 @@ function RequisitionsTab() {
       setReason("");
       setItems([{ description: "", quantity: "1" }]);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to submit requisition"),
   });
 
   const approveMutation = useMutation({
@@ -57,13 +70,18 @@ function RequisitionsTab() {
       toast.success("Requisition approved");
       queryClient.invalidateQueries({ queryKey: ["inventory", "requisitions"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to approve requisition"),
   });
 
   return (
     <Card>
       <CardContent className="space-y-4 pt-6">
         <div className="flex justify-end"><Button size="sm" onClick={() => setShowNew(true)}>New Requisition</Button></div>
-        {!data?.length ? <EmptyState title="No requisitions yet" /> : (
+        {isLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load requisitions" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : !data?.length ? <EmptyState title="No requisitions yet" /> : (
           <Table>
             <TableHeader>
               <TableRow><TableHead>REQ No</TableHead><TableHead>Reason</TableHead><TableHead>Items</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow>
@@ -108,26 +126,42 @@ function PurchaseOrdersTab() {
   const [showNew, setShowNew] = useState(false);
   const [showGrn, setShowGrn] = useState<PurchaseOrder | null>(null);
   const [supplierId, setSupplierId] = useState("");
-  const [poItems, setPoItems] = useState([{ description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE" }]);
+  const [poItems, setPoItems] = useState([{ description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE", item_id: "", asset_category_id: "" }]);
   const [grnQuantities, setGrnQuantities] = useState<Record<string, string>>({});
 
   const { data: suppliers } = useQuery<Supplier[]>({ queryKey: ["inventory", "suppliers"], queryFn: async () => (await api.get("/api/inventory/suppliers")).data.data });
-  const { data: orders } = useQuery<PurchaseOrder[]>({ queryKey: ["inventory", "purchase-orders"], queryFn: async () => (await api.get("/api/inventory/purchase-orders")).data.data });
+  const { data: orders, isLoading: ordersLoading, isError: ordersError, error: ordersErrorObj, refetch: refetchOrders } = useQuery<PurchaseOrder[]>({ queryKey: ["inventory", "purchase-orders"], queryFn: async () => (await api.get("/api/inventory/purchase-orders")).data.data });
+  // Sourced from the Item/Asset-Category catalogs so a PO line item can
+  // actually be traced through to a specific Item/AssetCategory — without
+  // this, GRN receiving has no item_id to increment stock against (a
+  // CONSUMABLE line only updates stock when poItem.item_id is set).
+  const { data: catalogItems } = useQuery<CatalogItem[]>({ queryKey: ["inventory", "items", "picker"], queryFn: async () => (await api.get("/api/inventory/items", { params: { limit: 100 } })).data.data });
+  const { data: assetCategories } = useQuery<AssetCategoryOption[]>({ queryKey: ["inventory", "asset-categories", "picker"], queryFn: async () => (await api.get("/api/inventory/asset-categories")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () =>
       api.post("/api/inventory/purchase-orders", {
         supplier_id: supplierId,
         order_date: new Date().toISOString().slice(0, 10),
-        items: poItems.filter((i) => i.description).map((i) => ({ description: i.description, purchase_type: i.purchase_type, quantity: Number(i.quantity), unit_price: Number(i.unit_price) })),
+        items: poItems
+          .filter((i) => i.description)
+          .map((i) => ({
+            description: i.description,
+            purchase_type: i.purchase_type,
+            quantity: Number(i.quantity),
+            unit_price: Number(i.unit_price),
+            item_id: i.purchase_type === "CONSUMABLE" && i.item_id ? i.item_id : undefined,
+            asset_category_id: i.purchase_type === "ASSET" && i.asset_category_id ? i.asset_category_id : undefined,
+          })),
       }),
     onSuccess: () => {
       toast.success("Purchase order created");
       queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] });
       setShowNew(false);
       setSupplierId("");
-      setPoItems([{ description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE" }]);
+      setPoItems([{ description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE", item_id: "", asset_category_id: "" }]);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create purchase order"),
   });
 
   const approveMutation = useMutation({
@@ -136,6 +170,7 @@ function PurchaseOrdersTab() {
       toast.success("PO approved");
       queryClient.invalidateQueries({ queryKey: ["inventory", "purchase-orders"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to approve purchase order"),
   });
 
   const grnMutation = useMutation({
@@ -157,7 +192,11 @@ function PurchaseOrdersTab() {
     <Card>
       <CardContent className="space-y-4 pt-6">
         <div className="flex justify-end"><Button size="sm" onClick={() => setShowNew(true)}>Create PO</Button></div>
-        {!orders?.length ? <EmptyState title="No purchase orders yet" /> : (
+        {ordersLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : ordersError ? (
+          <ErrorState title="Failed to load purchase orders" description={extractErrorMessage(ordersErrorObj)} retryLabel="Retry" onRetry={() => refetchOrders()} />
+        ) : !orders?.length ? <EmptyState title="No purchase orders yet" /> : (
           <Table>
             <TableHeader>
               <TableRow><TableHead>PO No</TableHead><TableHead>Supplier</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow>
@@ -191,17 +230,36 @@ function PurchaseOrdersTab() {
                 </Select>
               </div>
               {poItems.map((item, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input placeholder="Description" value={item.description} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, description: e.target.value } : it)))} />
-                  <Select value={item.purchase_type} onValueChange={(v) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, purchase_type: v } : it)))}>
-                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="CONSUMABLE">Consumable</SelectItem><SelectItem value="ASSET">Asset</SelectItem></SelectContent>
-                  </Select>
-                  <Input type="number" className="w-16" placeholder="Qty" value={item.quantity} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, quantity: e.target.value } : it)))} />
-                  <Input type="number" className="w-24" placeholder="Unit price" value={item.unit_price} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, unit_price: e.target.value } : it)))} />
+                <div key={i} className="space-y-1.5 rounded-md border p-2">
+                  <div className="flex gap-2">
+                    <Input placeholder="Description" value={item.description} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, description: e.target.value } : it)))} />
+                    <Select value={item.purchase_type} onValueChange={(v) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, purchase_type: v, item_id: "", asset_category_id: "" } : it)))}>
+                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="CONSUMABLE">Consumable</SelectItem><SelectItem value="ASSET">Asset</SelectItem></SelectContent>
+                    </Select>
+                    <Input type="number" className="w-16" placeholder="Qty" value={item.quantity} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, quantity: e.target.value } : it)))} />
+                    <Input type="number" className="w-24" placeholder="Unit price" value={item.unit_price} onChange={(e) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, unit_price: e.target.value } : it)))} />
+                  </div>
+                  {item.purchase_type === "CONSUMABLE" ? (
+                    <Select value={item.item_id || "NONE"} onValueChange={(v) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, item_id: v === "NONE" ? "" : v } : it)))}>
+                      <SelectTrigger><SelectValue placeholder="Link to catalog item (required for stock to update on GRN)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">— No catalog link (stock will not update on receipt) —</SelectItem>
+                        {catalogItems?.map((ci) => <SelectItem key={ci.id} value={ci.id}>{ci.name} ({ci.category.name}, {ci.unit})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select value={item.asset_category_id || "NONE"} onValueChange={(v) => setPoItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, asset_category_id: v === "NONE" ? "" : v } : it)))}>
+                      <SelectTrigger><SelectValue placeholder="Asset category (required to create assets on GRN)" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">— None —</SelectItem>
+                        {assetCategories?.map((ac) => <SelectItem key={ac.id} value={ac.id}>{ac.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               ))}
-              <Button size="sm" variant="outline" onClick={() => setPoItems((prev) => [...prev, { description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE" }])}>+ Add Item</Button>
+              <Button size="sm" variant="outline" onClick={() => setPoItems((prev) => [...prev, { description: "", quantity: "1", unit_price: "0", purchase_type: "CONSUMABLE", item_id: "", asset_category_id: "" }])}>+ Add Item</Button>
             </div>
             <DialogFooter><Button onClick={() => createMutation.mutate()} disabled={!supplierId}>Create</Button></DialogFooter>
           </DialogContent>
@@ -234,11 +292,15 @@ function ReceivedTab() {
     total_amount: number;
     po: { po_no: string; supplier: { name: string } };
   }
-  const { data } = useQuery<Grn[]>({ queryKey: ["inventory", "purchase-history"], queryFn: async () => (await api.get("/api/inventory/reports/purchase-history")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<Grn[]>({ queryKey: ["inventory", "purchase-history"], queryFn: async () => (await api.get("/api/inventory/reports/purchase-history")).data.data });
   return (
     <Card>
       <CardContent className="pt-6">
-        {!data?.length ? <EmptyState title="No GRNs yet" /> : (
+        {isLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load GRNs" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : !data?.length ? <EmptyState title="No GRNs yet" /> : (
           <Table>
             <TableHeader>
               <TableRow><TableHead>GRN No</TableHead><TableHead>PO No</TableHead><TableHead>Supplier</TableHead><TableHead>Date</TableHead><TableHead>Amount</TableHead></TableRow>

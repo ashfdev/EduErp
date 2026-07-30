@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { PageWrapper, PageHeader, Card, CardContent, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
@@ -44,7 +44,7 @@ export default function MyMarkEntryPage() {
   const [sectionId, setSectionId] = useState("");
   const [groupId, setGroupId] = useState("");
 
-  const { data: exams } = useQuery<Exam[]>({
+  const { data: exams, isLoading: examsLoading, isError: examsError, error: examsErrorObj, refetch: refetchExams } = useQuery<Exam[]>({
     queryKey: ["exams", "mark-entry-open"],
     queryFn: async () => (await api.get("/api/exams", { params: { status: "MARK_ENTRY" } })).data.data,
   });
@@ -137,7 +137,13 @@ export default function MyMarkEntryPage() {
           </Button>
         </CardContent>
       </Card>
-      {!exams?.length && <p className="text-sm text-muted-foreground">{t("noExamsOpen")}</p>}
+      {examsLoading ? (
+        <div className="flex justify-center py-8"><LoadingSpinner /></div>
+      ) : examsError ? (
+        <ErrorState title="Failed to load exams" description={extractErrorMessage(examsErrorObj)} retryLabel="Retry" onRetry={() => refetchExams()} />
+      ) : (
+        !exams?.length && <p className="text-sm text-muted-foreground">{t("noExamsOpen")}</p>
+      )}
     </PageWrapper>
   );
 }

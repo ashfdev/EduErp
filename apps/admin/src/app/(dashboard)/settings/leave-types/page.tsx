@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveType {
@@ -17,7 +17,7 @@ const emptyForm = { name: "", days_allowed: 10, is_paid: true };
 
 export default function LeaveTypesPage() {
   const queryClient = useQueryClient();
-  const { data: leaveTypes } = useQuery<LeaveType[]>({
+  const { data: leaveTypes, isLoading, isError, error, refetch } = useQuery<LeaveType[]>({
     queryKey: ["hr", "leave-types"],
     queryFn: async () => (await api.get("/api/hr/leave-types")).data.data,
   });
@@ -66,36 +66,44 @@ export default function LeaveTypesPage() {
         action={<Button onClick={openCreate}>+ Add Leave Type</Button>}
       />
 
-      {!leaveTypes?.length && <EmptyState title="No leave types yet" description="Add at least one so staff can apply for leave." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load leave types" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!leaveTypes?.length && <EmptyState title="No leave types yet" description="Add at least one so staff can apply for leave." />}
 
-      {!!leaveTypes?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Days Allowed</TableHead>
-                  <TableHead>Paid</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leaveTypes.map((lt) => (
-                  <TableRow key={lt.id}>
-                    <TableCell className="font-medium">{lt.name}</TableCell>
-                    <TableCell>{lt.days_allowed}</TableCell>
-                    <TableCell>{lt.is_paid ? "Yes" : "No"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(lt)}>Edit</Button>{" "}
-                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(lt.id)}>Delete</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+          {!!leaveTypes?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Days Allowed</TableHead>
+                      <TableHead>Paid</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {leaveTypes.map((lt) => (
+                      <TableRow key={lt.id}>
+                        <TableCell className="font-medium">{lt.name}</TableCell>
+                        <TableCell>{lt.days_allowed}</TableCell>
+                        <TableCell>{lt.is_paid ? "Yes" : "No"}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(lt)}>Edit</Button>{" "}
+                          <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(lt.id)}>Delete</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

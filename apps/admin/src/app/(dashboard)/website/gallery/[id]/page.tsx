@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface GalleryImage {
@@ -25,7 +25,7 @@ export default function GalleryAlbumDetailPage() {
   const queryClient = useQueryClient();
   const [files, setFiles] = useState<FileList | null>(null);
 
-  const { data: album } = useQuery<Album>({ queryKey: ["website", "gallery", "album", id], queryFn: async () => (await api.get(`/api/website/gallery/albums/${id}`)).data.data });
+  const { data: album, isLoading, isError, error, refetch } = useQuery<Album>({ queryKey: ["website", "gallery", "album", id], queryFn: async () => (await api.get(`/api/website/gallery/albums/${id}`)).data.data });
 
   const uploadMutation = useMutation({
     mutationFn: () => {
@@ -47,9 +47,12 @@ export default function GalleryAlbumDetailPage() {
       toast.success("Photo removed");
       queryClient.invalidateQueries({ queryKey: ["website", "gallery", "album", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove photo"),
   });
 
-  if (!album) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
+  if (isLoading) return <PageWrapper><div className="flex justify-center py-16"><LoadingSpinner /></div></PageWrapper>;
+  if (isError) return <PageWrapper><ErrorState title="Failed to load album" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} /></PageWrapper>;
+  if (!album) return null;
 
   return (
     <PageWrapper>

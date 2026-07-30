@@ -9,6 +9,18 @@ import { Card, CardContent, EmptyState, Badge } from "@education-erp/ui";
 import { CalendarCheck, ClipboardList, BookOpen, Target, Plane, Clock, ArrowRight, Activity } from "lucide-react";
 import Link from "next/link";
 
+interface LeaveRequestRow {
+  id: string;
+  status: string;
+}
+interface QuizRow {
+  id: string;
+  title: string;
+  is_published: boolean;
+  subject: { name_en: string } | null;
+  _count: { questions: number; attempts: number };
+}
+
 interface ScheduleSlot {
   id: string;
   period_no: number;
@@ -64,6 +76,20 @@ export default function TeacherHomePage() {
     queryKey: ["teacher", "schedule", "today"],
     queryFn: async () => (await api.get("/api/teacher/schedule/today")).data.data,
   });
+  // Real counts, matching what /leave and /quizzes themselves already show —
+  // this dashboard used to show hardcoded "1"/"2"/"94%" here regardless of
+  // the signed-in teacher's actual data.
+  const { data: leaves } = useQuery<LeaveRequestRow[]>({
+    queryKey: ["hr", "leaves", "me"],
+    queryFn: async () => (await api.get("/api/hr/leaves")).data.data,
+  });
+  const { data: quizzes } = useQuery<QuizRow[]>({
+    queryKey: ["quizzes", "quizzes"],
+    queryFn: async () => (await api.get("/api/quizzes/quizzes")).data.data,
+  });
+  const pendingLeaveCount = leaves?.filter((l) => l.status === "PENDING").length ?? 0;
+  const publishedQuizzes = quizzes?.filter((q) => q.is_published) ?? [];
+  const attendanceMarkedCount = schedule?.filter((s) => s.attendance_marked).length ?? 0;
 
   return (
     <TeacherShell>
@@ -101,9 +127,9 @@ export default function TeacherHomePage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: "Classes Today", value: schedule?.length ?? 0, icon: Clock, color: "text-blue-600", bg: "bg-blue-50" },
-              { label: "Pending Leave", value: "1", icon: Plane, color: "text-amber-600", bg: "bg-amber-50" },
-              { label: "Active Quizzes", value: "2", icon: Target, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Avg Attendance", value: "94%", icon: Activity, color: "text-purple-600", bg: "bg-purple-50" },
+              { label: "Pending Leave", value: pendingLeaveCount, icon: Plane, color: "text-amber-600", bg: "bg-amber-50" },
+              { label: "Active Quizzes", value: publishedQuizzes.length, icon: Target, color: "text-emerald-600", bg: "bg-emerald-50" },
+              { label: "Marked Today", value: `${attendanceMarkedCount}/${schedule?.length ?? 0}`, icon: Activity, color: "text-purple-600", bg: "bg-purple-50" },
             ].map((stat, i) => (
               <div key={i} className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50 hover:shadow-md transition-all">
                 <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-full ${stat.bg} ${stat.color}`}>
@@ -207,14 +233,16 @@ export default function TeacherHomePage() {
               </h3>
             </div>
             <div className="space-y-3">
-              {[
-                { title: "Mid-Term Physics", class: "Class 9 - A", date: "Tomorrow, 10:00 AM" },
-                { title: "Weekly Math Test", class: "Class 10 - B", date: "Friday, 11:30 AM" }
-              ].map((q, i) => (
-                <div key={i} className="rounded-xl border border-slate-100 p-3 hover:border-purple-200 transition-colors bg-slate-50/50">
+              {!publishedQuizzes.length && (
+                <p className="text-xs text-slate-400 text-center py-2">No published quizzes yet.</p>
+              )}
+              {publishedQuizzes.slice(0, 3).map((q) => (
+                <div key={q.id} className="rounded-xl border border-slate-100 p-3 hover:border-purple-200 transition-colors bg-slate-50/50">
                   <p className="font-bold text-slate-800 text-sm">{q.title}</p>
-                  <p className="text-xs text-slate-500 font-medium mt-1">{q.class}</p>
-                  <p className="text-[10px] font-bold text-purple-600 mt-2 bg-purple-100 px-2 py-0.5 rounded-md inline-block">{q.date}</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1">{q.subject?.name_en ?? ""}</p>
+                  <p className="text-[10px] font-bold text-purple-600 mt-2 bg-purple-100 px-2 py-0.5 rounded-md inline-block">
+                    {q._count.questions} question{q._count.questions === 1 ? "" : "s"} · {q._count.attempts} attempt{q._count.attempts === 1 ? "" : "s"}
+                  </p>
                 </div>
               ))}
               <Link href="/quizzes" className="block text-center text-xs font-bold text-slate-400 hover:text-primary mt-4 transition-colors">

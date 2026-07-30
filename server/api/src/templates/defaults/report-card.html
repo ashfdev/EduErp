@@ -81,7 +81,7 @@
           <div class="component-breakdown">{{#each this.mark_components}}{{this.label}}: {{formatMarks this.marks}}/{{this.max_marks}}{{#unless @last}} &middot; {{/unless}}{{/each}}</div>
           {{/if}}{{/if}}
         </td>
-        <td style="color: {{gradeColor this.grade_letter}}">{{formatMarks this.grade_letter}}</td>
+        <td style="color: {{gradeColor this.grade_letter this.grade_point}}">{{formatMarks this.grade_letter}}</td>
         <td>{{this.remark}}</td>
       </tr>
       {{/each}}

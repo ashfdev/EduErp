@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Item {
@@ -27,7 +28,7 @@ export default function StockPage() {
   const [showIssue, setShowIssue] = useState(false);
   const [issueForm, setIssueForm] = useState({ item_id: "", quantity: "", notes: "" });
 
-  const { data } = useQuery<{ items: Item[] }>({ queryKey: ["inventory", "items"], queryFn: async () => ({ items: (await api.get("/api/inventory/items", { params: { limit: 100 } })).data.data }) });
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items: Item[] }>({ queryKey: ["inventory", "items"], queryFn: async () => ({ items: (await api.get("/api/inventory/items", { params: { limit: 100 } })).data.data }) });
 
   const issueMutation = useMutation({
     mutationFn: () => api.post("/api/inventory/stock/issue", { ...issueForm, quantity: Number(issueForm.quantity) }),
@@ -41,12 +42,29 @@ export default function StockPage() {
 
   return (
     <PageWrapper>
-      <PageHeader title="Stock & Items" breadcrumbs={[{ label: "Inventory" }, { label: "Stock" }]} action={<Button size="sm" onClick={() => setShowIssue(true)}>Issue Stock</Button>} />
+      <PageHeader
+        title="Stock & Items"
+        breadcrumbs={[{ label: "Inventory" }, { label: "Stock" }]}
+        action={
+          <div className="flex gap-2">
+            <Link href="/inventory/items"><Button variant="outline" size="sm">Manage Items</Button></Link>
+            <Button size="sm" onClick={() => setShowIssue(true)}>Issue Stock</Button>
+          </div>
+        }
+      />
 
       <Card>
         <CardContent className="pt-6">
-          {!data?.items.length ? (
-            <EmptyState title="No items yet" description="Add items under a category first, via the API or a future items admin page." />
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load items" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : !data?.items.length ? (
+            <EmptyState
+              title="No items yet"
+              description="Add an item category, then add items under it, to start tracking consumable stock."
+              action={<Link href="/inventory/item-categories"><Button size="sm">Item Categories</Button></Link>}
+            />
           ) : (
             <Table>
               <TableHeader>

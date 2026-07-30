@@ -22,6 +22,9 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -49,7 +52,7 @@ interface GradingScale {
 
 export default function GradingSettingsPage() {
   const queryClient = useQueryClient();
-  const { data: scales } = useQuery<GradingScale[]>({
+  const { data: scales, isLoading, isError, error, refetch } = useQuery<GradingScale[]>({
     queryKey: ["settings", "grading-scales"],
     queryFn: async () => (await api.get("/api/settings/grading-scales")).data.data,
   });
@@ -110,6 +113,7 @@ export default function GradingSettingsPage() {
       toast.success("Preset applied as a new scale");
       queryClient.invalidateQueries({ queryKey: ["settings", "grading-scales"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to apply preset"),
   });
 
   const defaultMutation = useMutation({
@@ -118,6 +122,7 @@ export default function GradingSettingsPage() {
       toast.success("Default scale updated");
       queryClient.invalidateQueries({ queryKey: ["settings", "grading-scales"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to set default scale"),
   });
 
   const deleteMutation = useMutation({
@@ -170,30 +175,38 @@ export default function GradingSettingsPage() {
         </CardContent>
       </Card>
 
-      {!scales?.length && <EmptyState title="No grading scales yet" description="Apply a preset above to get started." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load grading scales" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!scales?.length && <EmptyState title="No grading scales yet" description="Apply a preset above to get started." />}
 
-      <div className="grid grid-cols-3 gap-4">
-        {scales?.map((scale) => (
-          <Card key={scale.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{scale.name}</CardTitle>
-                {scale.is_default && <Badge variant="success">Default</Badge>}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">{scale.scale_type} · {scale.ranges.length} grades</p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => openEditor(scale)}>Edit</Button>
-                {!scale.is_default && (
-                  <Button size="sm" variant="outline" onClick={() => defaultMutation.mutate(scale.id)}>Set Default</Button>
-                )}
-                <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(scale.id)}>Delete</Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-4">
+            {scales?.map((scale) => (
+              <Card key={scale.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">{scale.name}</CardTitle>
+                    {scale.is_default && <Badge variant="success">Default</Badge>}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">{scale.scale_type} · {scale.ranges.length} grades</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => openEditor(scale)}>Edit</Button>
+                    {!scale.is_default && (
+                      <Button size="sm" variant="outline" onClick={() => defaultMutation.mutate(scale.id)}>Set Default</Button>
+                    )}
+                    <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(scale.id)}>Delete</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       {editingId && (
         <Card>

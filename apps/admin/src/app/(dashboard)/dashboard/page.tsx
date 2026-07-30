@@ -7,7 +7,7 @@ import {
   LineChart, Line, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight, Activity, ClipboardCheck, AlertTriangle, TrendingDown } from "lucide-react";
@@ -61,7 +61,7 @@ export default function DashboardPage() {
 
   const { data: overview } = useQuery<Overview>({ queryKey: ["analytics", "overview"], queryFn: async () => (await api.get("/api/analytics/overview")).data.data });
   const { data: trend } = useQuery<AttendanceTrend>({ queryKey: ["analytics", "attendance-trend"], queryFn: async () => (await api.get("/api/analytics/attendance-trend")).data.data });
-  const { data: notices } = useQuery<Notice[]>({ queryKey: ["website", "notices", "recent"], queryFn: async () => (await api.get("/api/website/notices")).data.data.slice(0, 5) });
+  const { data: notices, isLoading: noticesLoading, isError: noticesIsError, error: noticesError, refetch: refetchNotices } = useQuery<Notice[]>({ queryKey: ["website", "notices", "recent"], queryFn: async () => (await api.get("/api/website/notices")).data.data.slice(0, 5) });
 
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().slice(0, 10);
@@ -79,7 +79,7 @@ export default function DashboardPage() {
     enabled: !!activeYearId,
   });
 
-  const { data: events } = useQuery<EventItem[]>({ queryKey: ["website", "events", "upcoming"], queryFn: async () => (await api.get("/api/website/events")).data.data });
+  const { data: events, isLoading: eventsLoading, isError: eventsIsError, error: eventsError, refetch: refetchEvents } = useQuery<EventItem[]>({ queryKey: ["website", "events", "upcoming"], queryFn: async () => (await api.get("/api/website/events")).data.data });
 
   const trendData = trend?.labels.map((label, i) => ({ label, present: trend.present_percentage[i] })) ?? [];
   const feeData = feeCollection?.daily.map((d) => ({ date: d.date.slice(5), amount: d.amount })) ?? [];
@@ -231,23 +231,31 @@ export default function DashboardPage() {
                 <Link href="/website/notices">View All</Link>
               </Button>
             </div>
-            {!notices?.length && <EmptyState title={t("noNotices")} />}
-            <div className="space-y-4">
-              {notices?.map((n) => (
-                <div key={n.id} className="group flex items-start gap-4 rounded-xl p-3 hover:bg-slate-50 transition-colors">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                    <Bell className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{n.title}</p>
-                    <div className="flex items-center gap-2 pt-1">
-                      <StatusBadge status={n.audience} />
-                      <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</span>
+            {noticesLoading ? (
+              <div className="flex justify-center py-8"><LoadingSpinner /></div>
+            ) : noticesIsError ? (
+              <ErrorState title="Failed to load notices" description={extractErrorMessage(noticesError)} retryLabel="Retry" onRetry={() => refetchNotices()} />
+            ) : (
+              <>
+                {!notices?.length && <EmptyState title={t("noNotices")} />}
+                <div className="space-y-4">
+                  {notices?.map((n) => (
+                    <div key={n.id} className="group flex items-start gap-4 rounded-xl p-3 hover:bg-slate-50 transition-colors">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                        <Bell className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{n.title}</p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <StatusBadge status={n.audience} />
+                          <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -385,20 +393,28 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-6">
               <p className="font-semibold tracking-tight">{t("upcomingEvents")}</p>
             </div>
-            {!upcomingEvents.length && <EmptyState title={t("noUpcomingEvents")} />}
-            <div className="space-y-4">
-              {upcomingEvents.map((e) => (
-                <div key={e.id} className="flex items-start gap-4">
-                  <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                    <span className="text-[10px] font-bold uppercase">{new Date(e.date_from).toLocaleString('default', { month: 'short' })}</span>
-                    <span className="text-sm font-bold leading-none">{new Date(e.date_from).getDate()}</span>
-                  </div>
-                  <div className="flex flex-col justify-center py-1">
-                    <p className="text-sm font-medium leading-tight">{e.name}</p>
-                  </div>
+            {eventsLoading ? (
+              <div className="flex justify-center py-8"><LoadingSpinner /></div>
+            ) : eventsIsError ? (
+              <ErrorState title="Failed to load events" description={extractErrorMessage(eventsError)} retryLabel="Retry" onRetry={() => refetchEvents()} />
+            ) : (
+              <>
+                {!upcomingEvents.length && <EmptyState title={t("noUpcomingEvents")} />}
+                <div className="space-y-4">
+                  {upcomingEvents.map((e) => (
+                    <div key={e.id} className="flex items-start gap-4">
+                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                        <span className="text-[10px] font-bold uppercase">{new Date(e.date_from).toLocaleString('default', { month: 'short' })}</span>
+                        <span className="text-sm font-bold leading-none">{new Date(e.date_from).getDate()}</span>
+                      </div>
+                      <div className="flex flex-col justify-center py-1">
+                        <p className="text-sm font-medium leading-tight">{e.name}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
         

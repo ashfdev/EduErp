@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface OverdueIssue {
@@ -19,7 +19,7 @@ interface FineReport {
 }
 
 export default function LibraryReportsPage() {
-  const { data: overdue } = useQuery<OverdueIssue[]>({ queryKey: ["library", "reports", "overdue"], queryFn: async () => (await api.get("/api/library/reports/overdue")).data.data });
+  const { data: overdue, isLoading, isError, error, refetch } = useQuery<OverdueIssue[]>({ queryKey: ["library", "reports", "overdue"], queryFn: async () => (await api.get("/api/library/reports/overdue")).data.data });
   const { data: fineReport } = useQuery<FineReport>({ queryKey: ["library", "reports", "fine"], queryFn: async () => (await api.get("/api/library/reports/fine-report")).data.data });
 
   async function downloadOverdueExcel() {
@@ -45,6 +45,12 @@ export default function LibraryReportsPage() {
           <TabsTrigger value="fines">Fine Report</TabsTrigger>
         </TabsList>
         <TabsContent value="overdue">
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load overdue books" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : (
+            <>
           {!overdue?.length && <EmptyState title="No overdue books" />}
           {!!overdue?.length && (
             <Card>
@@ -66,6 +72,8 @@ export default function LibraryReportsPage() {
                 </Table>
               </CardContent>
             </Card>
+          )}
+            </>
           )}
         </TabsContent>
         <TabsContent value="fines">

@@ -60,11 +60,6 @@ export const institutionConfigSchema = z.object({
   show_class_position: z.boolean().optional(),
   show_section_position: z.boolean().optional(),
   fourth_subject_rule: z.boolean().optional(),
-  // Term-Based vs Course-Based result computation (Plan Fifteen, Phase I) —
-  // nullable is intentional: "not yet explicitly set" is a real, distinct
-  // state from either mode, resolved to an institution-type-based default
-  // at read time rather than a migration-baked default.
-  result_calculation_mode: z.enum(["TERM_BLEND", "COURSE_GRADEBOOK"]).nullable().optional(),
 });
 
 export const studentIdConfigSchema = z.object({
@@ -150,6 +145,9 @@ export const attendanceRulesSchema = z.object({
   promotion_attendance_mode: z.nativeEnum(PromotionAttendanceMode).optional(),
   promotion_min_sessions_per_subject: z.number().int().min(1).optional(),
   leave_approval_mode: z.nativeEnum(StudentLeaveApprovalMode).optional(),
+  // Subject-wise pass-rate (%) at/above which the exam results page shows a
+  // "good" badge instead of "needs attention". Was a hardcoded `>= 80`.
+  pass_rate_alert_threshold: z.number().min(0).max(100).optional(),
 });
 export type AttendanceRulesInput = z.infer<typeof attendanceRulesSchema>;
 
@@ -179,6 +177,9 @@ export const notificationConfigUpdateSchema = z.object({
   is_enabled: z.boolean(),
   template_bn: z.string().min(1),
   template_en: z.string().min(1),
+  // EMAIL subject / PUSH title override. Empty string/omitted => service
+  // falls back to its built-in default for the trigger.
+  subject: z.string().max(200).optional().nullable(),
 });
 
 export const academicYearSchema = z.object({

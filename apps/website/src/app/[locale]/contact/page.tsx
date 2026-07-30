@@ -45,8 +45,6 @@ export default function ContactPage() {
     }
   }
 
-  const mapQuery = institution?.address ? encodeURIComponent(institution.address) : "Chattogram, Bangladesh";
-  const googleMapUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyC-vh-mYwgSjPd3tn08IeQbckKWeM5NohY&q=${mapQuery}`;
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   
   const bgImage = institution?.student_login_bg_url ?? `${portalUrl}/assets/login-illustration.png`;
@@ -169,17 +167,17 @@ export default function ContactPage() {
             </div>
 
             {/* Map (Right side under form) */}
-            <div className="h-[350px] w-full rounded-3xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-slate-100 relative group">
-              <iframe
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                loading="lazy"
-                allowFullScreen
-                src={googleMapUrl}
-                className="w-full h-full grayscale-[15%] transition-all duration-700 group-hover:grayscale-0"
-              ></iframe>
-            </div>
+            {institution?.map_embed_code ? (
+              <div
+                className="h-[350px] w-full rounded-3xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-slate-100 relative group [&_iframe]:w-full [&_iframe]:h-full [&_iframe]:grayscale-[15%] [&_iframe]:transition-all [&_iframe]:duration-700 group-hover:[&_iframe]:grayscale-0"
+                dangerouslySetInnerHTML={{ __html: institution.map_embed_code }}
+              />
+            ) : (
+              <div className="h-[200px] w-full rounded-3xl overflow-hidden shadow-sm ring-1 ring-slate-100 bg-slate-100 flex flex-col items-center justify-center gap-2 text-center px-6">
+                <MapPin className="h-6 w-6 text-slate-400" />
+                <p className="text-slate-500 text-sm">{institution?.address || "Address not available"}</p>
+              </div>
+            )}
 
           </div>
         </div>

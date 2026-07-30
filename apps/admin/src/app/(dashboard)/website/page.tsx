@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const SECTIONS = [
@@ -26,7 +26,7 @@ interface ContactSubmission {
 }
 
 export default function WebsiteDashboardPage() {
-  const { data: submissions } = useQuery<ContactSubmission[]>({
+  const { data: submissions, isLoading, isError, error, refetch } = useQuery<ContactSubmission[]>({
     queryKey: ["website", "contact", "submissions"],
     queryFn: async () => (await api.get("/api/website/contact/submissions")).data.data,
   });
@@ -57,28 +57,36 @@ export default function WebsiteDashboardPage() {
 
       <div>
         <h2 className="mb-2 text-lg font-semibold">Contact Form Submissions</h2>
-        {!submissions?.length && <EmptyState title="No submissions yet" />}
-        {!!submissions?.length && (
-          <Card>
-            <CardContent className="pt-6">
-              <Table>
-                <TableHeader>
-                  <TableRow><TableHead>Name</TableHead><TableHead>Subject</TableHead><TableHead>Message</TableHead><TableHead>Status</TableHead><TableHead>Received</TableHead></TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissions.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{s.name}</TableCell>
-                      <TableCell>{s.subject ?? "-"}</TableCell>
-                      <TableCell className="max-w-xs truncate">{s.message}</TableCell>
-                      <TableCell><StatusBadge status={s.is_read ? "READ" : "UNREAD"} /></TableCell>
-                      <TableCell>{new Date(s.created_at).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        {isLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load contact submissions" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : (
+          <>
+            {!submissions?.length && <EmptyState title="No submissions yet" />}
+            {!!submissions?.length && (
+              <Card>
+                <CardContent className="pt-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow><TableHead>Name</TableHead><TableHead>Subject</TableHead><TableHead>Message</TableHead><TableHead>Status</TableHead><TableHead>Received</TableHead></TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {submissions.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.name}</TableCell>
+                          <TableCell>{s.subject ?? "-"}</TableCell>
+                          <TableCell className="max-w-xs truncate">{s.message}</TableCell>
+                          <TableCell><StatusBadge status={s.is_read ? "READ" : "UNREAD"} /></TableCell>
+                          <TableCell>{new Date(s.created_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </PageWrapper>

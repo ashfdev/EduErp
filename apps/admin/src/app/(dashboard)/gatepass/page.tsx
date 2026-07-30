@@ -10,6 +10,8 @@ import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   PdfPreviewModal,
   extractErrorMessage,
+  ErrorState,
+  LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
@@ -67,7 +69,7 @@ export default function GatePassPage() {
   const [pickerClassId, setPickerClassId] = useState("");
   const [pickerSectionId, setPickerSectionId] = useState("");
 
-  const { data: visitors } = useQuery<VisitorRow[]>({
+  const { data: visitors, isLoading, isError, error, refetch } = useQuery<VisitorRow[]>({
     queryKey: ["gatepass", "visitors", activeOnly, dateFilter],
     queryFn: async () =>
       (await api.get("/api/gatepass/visitors", { params: { active: activeOnly ? "true" : undefined, date: activeOnly ? undefined : dateFilter } })).data.data,
@@ -174,67 +176,75 @@ export default function GatePassPage() {
         </Button>
       </div>
 
-      {!visitors?.length && <EmptyState title="No visitor records" description="Try a different date, or log a new visitor in." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load visitor records" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!visitors?.length && <EmptyState title="No visitor records" description="Try a different date, or log a new visitor in." />}
 
-      {!!visitors?.length && (
-        <Card>
-          <CardContent className="pt-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Visitor</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Visiting</TableHead>
-                  <TableHead>Relation</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Reason</TableHead>
-                  <TableHead>In Time</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visitors.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell className="font-medium">{v.visitor_name}</TableCell>
-                    <TableCell>{v.visitor_type}</TableCell>
-                    <TableCell>
-                      {v.student ? (
-                        <>
-                          {v.student.name_en} ({v.student.student_uid})
-                          {v.class && (
-                            <span className="block text-xs text-muted-foreground">
-                              {v.class.name_en}{v.section ? ` / ${v.section.name}` : ""}
-                            </span>
+          {!!visitors?.length && (
+            <Card>
+              <CardContent className="pt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Visitor</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Visiting</TableHead>
+                      <TableHead>Relation</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead>In Time</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visitors.map((v) => (
+                      <TableRow key={v.id}>
+                        <TableCell className="font-medium">{v.visitor_name}</TableCell>
+                        <TableCell>{v.visitor_type}</TableCell>
+                        <TableCell>
+                          {v.student ? (
+                            <>
+                              {v.student.name_en} ({v.student.student_uid})
+                              {v.class && (
+                                <span className="block text-xs text-muted-foreground">
+                                  {v.class.name_en}{v.section ? ` / ${v.section.name}` : ""}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
                           )}
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>{v.relation ?? "—"}</TableCell>
-                    <TableCell>{v.phone}</TableCell>
-                    <TableCell className="max-w-[200px] truncate" title={v.reason}>{v.reason}</TableCell>
-                    <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
-                    <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => downloadSlip(v.id, v.visitor_name)}>
-                          Slip
-                        </Button>
-                        {!v.out_time && (
-                          <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>
-                            Check Out
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                        </TableCell>
+                        <TableCell>{v.relation ?? "—"}</TableCell>
+                        <TableCell>{v.phone}</TableCell>
+                        <TableCell className="max-w-[200px] truncate" title={v.reason}>{v.reason}</TableCell>
+                        <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
+                        <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => downloadSlip(v.id, v.visitor_name)}>
+                              Slip
+                            </Button>
+                            {!v.out_time && (
+                              <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>
+                                Check Out
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>

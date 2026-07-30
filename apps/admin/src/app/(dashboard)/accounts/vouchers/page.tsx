@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Voucher {
@@ -24,6 +25,8 @@ export default function VouchersPage() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<Voucher | null>(null);
+  const queryClient = useQueryClient();
 
   const { data } = useQuery<{ items: Voucher[]; meta: { total: number; totalPages: number } }>({
     queryKey: ["accounts", "vouchers", type, status, search, page],
@@ -31,6 +34,15 @@ export default function VouchersPage() {
       const res = await api.get("/api/accounts/vouchers", { params: { type: type || undefined, status: status || undefined, search: search || undefined, page, limit: 20 } });
       return { items: res.data.data, meta: res.data.meta };
     },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/accounts/vouchers/${id}`),
+    onSuccess: () => {
+      toast.success("Voucher deleted");
+      queryClient.invalidateQueries({ queryKey: ["accounts", "vouchers"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to delete voucher"),
   });
 
   return (
@@ -65,6 +77,7 @@ export default function VouchersPage() {
                   <TableHead>Narration</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -76,6 +89,14 @@ export default function VouchersPage() {
                     <TableCell className="max-w-xs truncate">{v.narration}</TableCell>
                     <TableCell>৳{v.total_amount.toLocaleString()}</TableCell>
                     <TableCell><StatusBadge status={v.status} /></TableCell>
+                    <TableCell>
+                      {v.status === "DRAFT" && (
+                        <div className="flex justify-end gap-2">
+                          <Link href={`/accounts/vouchers/${v.id}/edit`}><Button size="sm" variant="outline">Edit</Button></Link>
+                          <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(v)}>Delete</Button>
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -90,6 +111,20 @@ export default function VouchersPage() {
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete voucher"
+        description={deleteTarget ? `Delete voucher ${deleteTarget.voucher_no}? This cannot be undone.` : undefined}
+        destructive
+        confirmLabel="Delete"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+          setDeleteTarget(null);
+        }}
+      />
     </PageWrapper>
   );
 }

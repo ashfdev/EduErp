@@ -150,7 +150,7 @@ function NewExamForm() {
       toast.success("Exam created");
       router.push(`/examination/${res.data.data.id}`);
     },
-    onError: () => toast.error("Failed to create exam"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create exam"),
   });
 
   return (

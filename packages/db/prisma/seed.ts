@@ -71,9 +71,9 @@ const CHART_OF_ACCOUNTS: { code: string; name: string; group: string; is_system?
   { code: "1102", name: "Fixed Assets (Electronics & Equipment)", group: "grp-assets" },
   { code: "1103", name: "Fixed Assets (Vehicles)", group: "grp-assets" },
   { code: "1104", name: "Fixed Assets (Buildings)", group: "grp-assets" },
-  { code: "1105", name: "Accumulated Depreciation", group: "grp-assets", nature: "CREDIT_NORMAL" },
+  { code: "1105", name: "Accumulated Depreciation", group: "grp-assets", is_system: true, nature: "CREDIT_NORMAL" },
 
-  { code: "2001", name: "Accounts Payable", group: "grp-liabilities" },
+  { code: "2001", name: "Accounts Payable", group: "grp-liabilities", is_system: true },
   { code: "2002", name: "TDS Payable", group: "grp-liabilities", is_system: true },
   { code: "2003", name: "VAT Payable", group: "grp-liabilities", is_system: true },
   { code: "2004", name: "Salary Payable", group: "grp-liabilities", is_system: true },
@@ -120,7 +120,7 @@ const CHART_OF_ACCOUNTS: { code: string; name: string; group: string; is_system?
   { code: "5017", name: "Audit & Professional Fees", group: "grp-expenses" },
   { code: "5018", name: "Depreciation Expense", group: "grp-expenses", is_system: true },
   { code: "5019", name: "Miscellaneous Expense", group: "grp-expenses" },
-  { code: "5020", name: "Loss on Disposal of Asset", group: "grp-expenses" },
+  { code: "5020", name: "Loss on Disposal of Asset", group: "grp-expenses", is_system: true },
   { code: "5021", name: "Scholarship & Waiver Expense", group: "grp-expenses", is_system: true },
 ];
 

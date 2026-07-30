@@ -19,6 +19,9 @@ import {
   DialogTitle,
   DialogFooter,
   EmptyState,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -39,7 +42,7 @@ interface AuthoritySignature {
 
 export default function SignaturesPage() {
   const queryClient = useQueryClient();
-  const { data: signatures } = useQuery<AuthoritySignature[]>({
+  const { data: signatures, isLoading, isError, error, refetch } = useQuery<AuthoritySignature[]>({
     queryKey: ["settings", "signatures"],
     queryFn: async () => (await api.get("/api/settings/signatures")).data.data,
   });
@@ -98,6 +101,7 @@ export default function SignaturesPage() {
   const toggleMutation = useMutation({
     mutationFn: (sig: AuthoritySignature) => api.put(`/api/settings/signatures/${sig.id}/activate`, { is_active: !sig.is_active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "signatures"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update signature status"),
   });
 
   const deleteMutation = useMutation({
@@ -106,6 +110,7 @@ export default function SignaturesPage() {
       toast.success("Signature deleted");
       queryClient.invalidateQueries({ queryKey: ["settings", "signatures"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to delete signature"),
   });
 
   return (
@@ -117,32 +122,40 @@ export default function SignaturesPage() {
         action={<Button onClick={openCreate}>+ Add Signature</Button>}
       />
 
-      {!signatures?.length && <EmptyState title="No signatures yet" />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load signatures" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!signatures?.length && <EmptyState title="No signatures yet" />}
 
-      <div className="grid grid-cols-3 gap-4">
-        {signatures?.map((s) => (
-          <Card key={s.id}>
-            <CardContent className="space-y-2 pt-6">
-              <div className="flex h-20 items-center justify-center rounded border bg-muted">
-                {s.signature_url ? <img src={s.signature_url} alt="Signature" className="max-h-16" /> : <span className="text-xs text-muted-foreground">No signature</span>}
-              </div>
-              <p className="font-medium">{s.display_name}</p>
-              <p className="text-sm text-muted-foreground">{s.designation}</p>
-              <Badge variant="outline">{s.role}</Badge>
-              <div className="flex items-center justify-between pt-2">
-                <div className="flex items-center gap-2">
-                  <Switch checked={s.is_active} onCheckedChange={() => toggleMutation.mutate(s)} />
-                  <Label className="text-xs">Active</Label>
-                </div>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-4">
+            {signatures?.map((s) => (
+              <Card key={s.id}>
+                <CardContent className="space-y-2 pt-6">
+                  <div className="flex h-20 items-center justify-center rounded border bg-muted">
+                    {s.signature_url ? <img src={s.signature_url} alt="Signature" className="max-h-16" /> : <span className="text-xs text-muted-foreground">No signature</span>}
+                  </div>
+                  <p className="font-medium">{s.display_name}</p>
+                  <p className="text-sm text-muted-foreground">{s.designation}</p>
+                  <Badge variant="outline">{s.role}</Badge>
+                  <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={s.is_active} onCheckedChange={() => toggleMutation.mutate(s)} />
+                      <Label className="text-xs">Active</Label>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>
+                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

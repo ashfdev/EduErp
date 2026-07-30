@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AdjustmentNote, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AdjustmentNote, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -44,7 +44,7 @@ export default function PayrollPage() {
     queryFn: async () => (await api.get("/api/settings/departments")).data.data,
   });
 
-  const { data: records } = useQuery<PayrollRow[]>({
+  const { data: records, isLoading, isError, error, refetch } = useQuery<PayrollRow[]>({
     queryKey: ["hr", "payroll", month, year, departmentId, status],
     queryFn: async () =>
       (
@@ -79,6 +79,7 @@ export default function PayrollPage() {
       setSelected([]);
       queryClient.invalidateQueries({ queryKey: ["hr", "payroll", month, year] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to mark payroll as paid"),
   });
 
   const [voidTarget, setVoidTarget] = useState<{ id: string; name: string } | null>(null);
@@ -154,6 +155,12 @@ export default function PayrollPage() {
         {hasFinalized && selected.length > 0 && <Button variant="outline" onClick={() => markPaidMutation.mutate()} disabled={markPaidMutation.isPending}>Mark Paid ({selected.length})</Button>}
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load payroll records" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+      <>
       {!records?.length && <EmptyState title="No payroll records for this month yet" description="Click Calculate Payroll to generate draft records" />}
       {!!records?.length && (
         <Card>
@@ -210,6 +217,8 @@ export default function PayrollPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
 
       <Dialog open={breakdownTarget !== null} onOpenChange={(open) => !open && setBreakdownTarget(null)}>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Input, EmptyState, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Input, EmptyState, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AlumniRow {
@@ -20,7 +20,7 @@ export default function AlumniPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["students", "alumni", { search, page }],
     queryFn: async () =>
       (
@@ -39,50 +39,58 @@ export default function AlumniPage() {
 
       <Input placeholder="Search name or UID..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
 
-      {!alumni.length && <EmptyState title="No alumni yet" description="Students appear here once marked as graduated from their profile page." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load alumni" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!alumni.length && <EmptyState title="No alumni yet" description="Students appear here once marked as graduated from their profile page." />}
 
-      <Card>
-        <CardContent className="pt-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-muted-foreground">
-                <th className="p-2">Student UID</th>
-                <th className="p-2">Name</th>
-                <th className="p-2">Last Class</th>
-                <th className="p-2">Graduation Year</th>
-                <th className="p-2">Contact</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {alumni.map((a) => (
-                <tr key={a.id} className="border-b hover:bg-accent/40">
-                  <td className="p-2 font-mono text-xs">{a.student_uid}</td>
-                  <td className="p-2">
-                    <div className="font-medium">{a.name_en}</div>
-                    {a.name_bn && <div className="text-xs text-muted-foreground">{a.name_bn}</div>}
-                  </td>
-                  <td className="p-2">{a.current_class?.name_en ?? "—"}</td>
-                  <td className="p-2">{a.graduation_year ?? "—"}</td>
-                  <td className="p-2">{a.father_phone ?? "—"}</td>
-                  <td className="p-2">
-                    <Link href={`/students/${a.id}`} className="text-primary hover:underline">
-                      View / Update Contact
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="p-2">Student UID</th>
+                    <th className="p-2">Name</th>
+                    <th className="p-2">Last Class</th>
+                    <th className="p-2">Graduation Year</th>
+                    <th className="p-2">Contact</th>
+                    <th className="p-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {alumni.map((a) => (
+                    <tr key={a.id} className="border-b hover:bg-accent/40">
+                      <td className="p-2 font-mono text-xs">{a.student_uid}</td>
+                      <td className="p-2">
+                        <div className="font-medium">{a.name_en}</div>
+                        {a.name_bn && <div className="text-xs text-muted-foreground">{a.name_bn}</div>}
+                      </td>
+                      <td className="p-2">{a.current_class?.name_en ?? "—"}</td>
+                      <td className="p-2">{a.graduation_year ?? "—"}</td>
+                      <td className="p-2">{a.father_phone ?? "—"}</td>
+                      <td className="p-2">
+                        <Link href={`/students/${a.id}`} className="text-primary hover:underline">
+                          View / Update Contact
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
 
-      {!!meta && meta.totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-          <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
-          <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
-        </div>
+          {!!meta && meta.totalPages > 1 && (
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
+        </>
       )}
     </PageWrapper>
   );

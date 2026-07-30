@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, Switch, EmptyState, extractErrorMessage,
+  PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, Badge, Switch, EmptyState, extractErrorMessage,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -23,7 +23,7 @@ interface SubCategory {
 
 export default function FeeSubCategoriesPage() {
   const queryClient = useQueryClient();
-  const { data: subCategories } = useQuery<SubCategory[]>({
+  const { data: subCategories, isLoading, isError, error, refetch } = useQuery<SubCategory[]>({
     queryKey: ["fees", "sub-categories"],
     queryFn: async () => (await api.get("/api/fees/sub-categories")).data.data,
   });
@@ -57,6 +57,12 @@ export default function FeeSubCategoriesPage() {
         action={<Button onClick={() => setOpen(true)}>+ Add Sub-Category</Button>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load fee sub-categories" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!subCategories?.length && <EmptyState title="No fee sub-categories yet" description="Create one to enable finer-grained fee structures, fine rules, and reporting." />}
       {!!subCategories?.length && (
         <Card>
@@ -89,6 +95,8 @@ export default function FeeSubCategoriesPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

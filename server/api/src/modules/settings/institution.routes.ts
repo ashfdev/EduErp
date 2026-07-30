@@ -7,10 +7,12 @@ import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
 import { cached } from "../../lib/cache";
 import { sanitizeEmbedCode } from "../../lib/sanitize";
+import { triggerRevalidation } from "../../services/revalidate.service";
 import { redis } from "../../lib/redis";
 import { SETTINGS_INSTITUTION_ROLES } from "../../lib/roles";
 import { institutionProfileSchema, institutionConfigSchema } from "@education-erp/validators";
 import { badRequest } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
 import type { InstitutionType } from "@education-erp/types";
 
 export const institutionRouter = Router();
@@ -53,6 +55,7 @@ institutionRouter.put(
     if (body.map_embed_code) body.map_embed_code = sanitizeEmbedCode(body.map_embed_code);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: body });
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: profile });
   }),
 );
@@ -68,6 +71,7 @@ institutionRouter.post(
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { logo_url: url } });
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: profile });
   }),
 );
@@ -83,6 +87,7 @@ institutionRouter.post(
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { favicon_url: url } });
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: profile });
   }),
 );
@@ -98,6 +103,7 @@ institutionRouter.post(
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { student_login_bg_url: url } });
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: profile });
   }),
 );
@@ -113,6 +119,7 @@ institutionRouter.post(
     const { url } = await uploadBuffer("branding", req.file.originalname, req.file.buffer, req.file.mimetype);
     const profile = await prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { teacher_login_bg_url: url } });
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
     res.json({ success: true, data: profile });
   }),
 );
@@ -130,6 +137,8 @@ institutionRouter.put(
       prisma.institutionConfig.update({ where: { id: CONFIG_ID }, data: TYPE_CASCADE[type] }),
     ]);
     await redis.del(PROFILE_CACHE_KEY);
+    await triggerRevalidation(["/"]);
+    await logAudit("INSTITUTION_TYPE_CHANGE", { userId: req.user!.sub, targetType: "InstitutionProfile", targetId: PROFILE_ID, metadata: { new_type: type }, req });
     res.json({ success: true, data: { profile, config } });
   }),
 );

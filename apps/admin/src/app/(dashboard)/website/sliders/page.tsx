@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Slider {
@@ -24,7 +24,7 @@ export default function SlidersPage() {
   const [btnLink, setBtnLink] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
-  const { data: sliders } = useQuery<Slider[]>({ queryKey: ["website", "sliders"], queryFn: async () => (await api.get("/api/website/sliders")).data.data });
+  const { data: sliders, isLoading, isError, error, refetch } = useQuery<Slider[]>({ queryKey: ["website", "sliders"], queryFn: async () => (await api.get("/api/website/sliders")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -61,6 +61,7 @@ export default function SlidersPage() {
       toast.success("Slide removed");
       queryClient.invalidateQueries({ queryKey: ["website", "sliders"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove slide"),
   });
 
   function move(index: number, dir: -1 | 1) {
@@ -76,31 +77,39 @@ export default function SlidersPage() {
     <PageWrapper>
       <PageHeader title="Homepage Sliders" breadcrumbs={[{ label: "Website" }, { label: "Sliders" }]} action={<Button onClick={() => setOpen(true)}>+ Add Slide</Button>} />
 
-      {!sliders?.length && <EmptyState title="No slides yet" />}
-      <div className="grid grid-cols-2 gap-4">
-        {sliders?.map((s, i) => (
-          <Card key={s.id}>
-            <CardContent className="space-y-2 pt-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={s.image_url} alt={s.title ?? ""} className="h-32 w-full rounded-md object-cover" />
-              <p className="font-medium">{s.title || "(no title)"}</p>
-              <p className="text-sm text-muted-foreground">{s.subtitle}</p>
-              <div className="flex items-center justify-between">
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={() => move(i, -1)}>↑</Button>
-                  <Button size="sm" variant="outline" onClick={() => move(i, 1)}>↓</Button>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate({ id: s.id, is_active: !s.is_active })}>
-                    {s.is_active ? "Deactivate" : "Activate"}
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load sliders" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!sliders?.length && <EmptyState title="No slides yet" />}
+          <div className="grid grid-cols-2 gap-4">
+            {sliders?.map((s, i) => (
+              <Card key={s.id}>
+                <CardContent className="space-y-2 pt-6">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={s.image_url} alt={s.title ?? ""} className="h-32 w-full rounded-md object-cover" />
+                  <p className="font-medium">{s.title || "(no title)"}</p>
+                  <p className="text-sm text-muted-foreground">{s.subtitle}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => move(i, -1)}>↑</Button>
+                      <Button size="sm" variant="outline" onClick={() => move(i, 1)}>↓</Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate({ id: s.id, is_active: !s.is_active })}>
+                        {s.is_active ? "Deactivate" : "Activate"}
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

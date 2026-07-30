@@ -7,6 +7,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState,
   Tabs, TabsList, TabsTrigger, TabsContent, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -59,7 +60,7 @@ function RoomsTab() {
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
 
-  const { data: blocks } = useQuery<Block[]>({ queryKey: ["hostel", "blocks"], queryFn: async () => (await api.get("/api/hostel/blocks")).data.data });
+  const { data: blocks, isLoading, isError, error, refetch } = useQuery<Block[]>({ queryKey: ["hostel", "blocks"], queryFn: async () => (await api.get("/api/hostel/blocks")).data.data });
   const { data: rooms } = useQuery<Room[]>({ queryKey: ["hostel", "rooms"], queryFn: async () => (await api.get("/api/hostel/rooms")).data.data });
 
   const { data: students } = useQuery<StudentRow[]>({
@@ -76,6 +77,7 @@ function RoomsTab() {
       setBlockOpen(false);
       setBlockName(""); setBlockType("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add block"),
   });
 
   const createRoomMutation = useMutation({
@@ -87,6 +89,7 @@ function RoomsTab() {
       setRoomOpen(false);
       setRoomNo(""); setRoomCapacity(4);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add room"),
   });
 
   const allocateMutation = useMutation({
@@ -107,26 +110,34 @@ function RoomsTab() {
         <Button variant="outline" onClick={() => setRoomOpen(true)}>+ Add Room</Button>
       </div>
 
-      {!blocks?.length && <EmptyState title="No hostel blocks configured yet" />}
-      {blocks?.map((b) => (
-        <Card key={b.id}>
-          <CardContent className="pt-6">
-            <p className="mb-2 font-medium">{b.name} {b.type && <span className="text-sm text-muted-foreground">({b.type})</span>}</p>
-            <div className="grid grid-cols-4 gap-3">
-              {b.rooms.map((r) => (
-                <div key={r.id} className="rounded-md border p-3 text-center">
-                  <p className="font-medium">{r.room_no}</p>
-                  <p className="text-sm text-muted-foreground">{r._count.allocations}/{r.capacity} beds</p>
-                  <Button size="sm" variant="outline" className="mt-2" onClick={() => { setAllocateRoomId(r.id); setAllocateOpen(true); }}>
-                    Allocate
-                  </Button>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load hostel blocks" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!blocks?.length && <EmptyState title="No hostel blocks configured yet" />}
+          {blocks?.map((b) => (
+            <Card key={b.id}>
+              <CardContent className="pt-6">
+                <p className="mb-2 font-medium">{b.name} {b.type && <span className="text-sm text-muted-foreground">({b.type})</span>}</p>
+                <div className="grid grid-cols-4 gap-3">
+                  {b.rooms.map((r) => (
+                    <div key={r.id} className="rounded-md border p-3 text-center">
+                      <p className="font-medium">{r.room_no}</p>
+                      <p className="text-sm text-muted-foreground">{r._count.allocations}/{r.capacity} beds</p>
+                      <Button size="sm" variant="outline" className="mt-2" onClick={() => { setAllocateRoomId(r.id); setAllocateOpen(true); }}>
+                        Allocate
+                      </Button>
+                    </div>
+                  ))}
+                  {!b.rooms.length && <p className="text-sm text-muted-foreground">No rooms yet</p>}
                 </div>
-              ))}
-              {!b.rooms.length && <p className="text-sm text-muted-foreground">No rooms yet</p>}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              </CardContent>
+            </Card>
+          ))}
+        </>
+      )}
 
       <Dialog open={blockOpen} onOpenChange={setBlockOpen}>
         <DialogContent>
@@ -197,7 +208,7 @@ function VisitorsTab() {
   const [relation, setRelation] = useState("");
   const [phone, setPhone] = useState("");
 
-  const { data: visitors } = useQuery<Visitor[]>({ queryKey: ["hostel", "visitors"], queryFn: async () => (await api.get("/api/hostel/visitors")).data.data });
+  const { data: visitors, isLoading, isError, error, refetch } = useQuery<Visitor[]>({ queryKey: ["hostel", "visitors"], queryFn: async () => (await api.get("/api/hostel/visitors")).data.data });
 
   const { data: students } = useQuery<StudentRow[]>({
     queryKey: ["students", "search", studentSearch],
@@ -213,6 +224,7 @@ function VisitorsTab() {
       setOpen(false);
       setSelectedStudent(null); setStudentSearch(""); setVisitorName(""); setRelation(""); setPhone("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to log visitor in"),
   });
 
   const checkoutMutation = useMutation({
@@ -221,34 +233,43 @@ function VisitorsTab() {
       toast.success("Visitor checked out");
       queryClient.invalidateQueries({ queryKey: ["hostel", "visitors"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to check out visitor"),
   });
 
   return (
     <div className="space-y-4">
       <Button onClick={() => setOpen(true)}>+ Log Visitor In</Button>
-      {!visitors?.length && <EmptyState title="No visitor records" />}
-      {!!visitors?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Visitor</TableHead><TableHead>Relation</TableHead><TableHead>Phone</TableHead><TableHead>In Time</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {visitors.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell>{v.visitor_name}</TableCell>
-                    <TableCell>{v.relation}</TableCell>
-                    <TableCell>{v.phone}</TableCell>
-                    <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
-                    <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
-                    <TableCell>{!v.out_time && <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>Check Out</Button>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load visitor records" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!visitors?.length && <EmptyState title="No visitor records" />}
+          {!!visitors?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Visitor</TableHead><TableHead>Relation</TableHead><TableHead>Phone</TableHead><TableHead>In Time</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visitors.map((v) => (
+                      <TableRow key={v.id}>
+                        <TableCell>{v.visitor_name}</TableCell>
+                        <TableCell>{v.relation}</TableCell>
+                        <TableCell>{v.phone}</TableCell>
+                        <TableCell>{new Date(v.in_time).toLocaleString()}</TableCell>
+                        <TableCell>{v.out_time ? <StatusBadge status="CHECKED_OUT" /> : <StatusBadge status="INSIDE" />}</TableCell>
+                        <TableCell>{!v.out_time && <Button size="sm" variant="outline" onClick={() => checkoutMutation.mutate(v.id)}>Check Out</Button>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -285,7 +306,9 @@ function VisitorsTab() {
 }
 
 function OccupancyTab() {
-  const { data } = useQuery<Occupancy>({ queryKey: ["hostel", "occupancy"], queryFn: async () => (await api.get("/api/hostel/reports/occupancy")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<Occupancy>({ queryKey: ["hostel", "occupancy"], queryFn: async () => (await api.get("/api/hostel/reports/occupancy")).data.data });
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load occupancy report" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data) return null;
 
   return (

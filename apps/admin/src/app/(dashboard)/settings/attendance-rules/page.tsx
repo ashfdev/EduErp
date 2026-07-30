@@ -59,6 +59,13 @@ export default function AttendanceRulesPage() {
               <Label>N lates = 1 absent</Label>
               <Input type="number" {...register("count_late_as_absent_after", { valueAsNumber: true })} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Subject pass-rate "good" threshold (%)</Label>
+              <Input type="number" {...register("pass_rate_alert_threshold", { valueAsNumber: true })} />
+              <p className="text-xs text-muted-foreground">
+                Used by the exam results page to badge a subject as good vs needs-attention.
+              </p>
+            </div>
           </CardContent>
         </Card>
         <Card>

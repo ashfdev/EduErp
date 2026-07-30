@@ -47,6 +47,7 @@ interface UpcomingDue {
   name: string;
   amount: number;
   frequency: string;
+  due_date: string | null;
 }
 
 const GATEWAYS = [
@@ -245,6 +246,9 @@ function FeesContent() {
                 {upcoming.map((u, i) => (
                   <div key={i} className="flex flex-col rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
                     <p className="font-semibold text-slate-700">{u.name}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {u.due_date ? `Last date: ${new Date(u.due_date).toLocaleDateString()}` : "Last date not set yet"}
+                    </p>
                     <div className="flex items-center justify-between mt-auto pt-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{u.frequency}</p>
                       <p className="font-bold text-slate-600">৳{u.amount}</p>

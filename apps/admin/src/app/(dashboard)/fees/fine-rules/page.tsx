@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Label, Badge, Switch, EmptyState, extractErrorMessage,
+  PageWrapper, PageHeader, Card, CardContent, Button, Label, Badge, Switch, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -47,7 +47,7 @@ export default function FeeFineRulesPage() {
   const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const { data: subCategories } = useQuery<SubCategoryOption[]>({ queryKey: ["fees", "sub-categories"], queryFn: async () => (await api.get("/api/fees/sub-categories", { params: { active_only: "true" } })).data.data });
-  const { data: rules } = useQuery<FineRule[]>({ queryKey: ["fees", "fine-rules"], queryFn: async () => (await api.get("/api/fees/fine-rules")).data.data });
+  const { data: rules, isLoading, isError, error, refetch } = useQuery<FineRule[]>({ queryKey: ["fees", "fine-rules"], queryFn: async () => (await api.get("/api/fees/fine-rules")).data.data });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -96,6 +96,12 @@ export default function FeeFineRulesPage() {
         action={<Button onClick={() => setOpen(true)}>+ Add Fine Rule</Button>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load fine rules" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!rules?.length && <EmptyState title="No fine rules yet" description="Every invoice uses the global late fee setting (Fee Rules) until a rule is added here." />}
       {!!rules?.length && (
         <Card>
@@ -130,6 +136,8 @@ export default function FeeFineRulesPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm); }}>

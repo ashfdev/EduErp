@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   PageWrapper, PageHeader, Card, CardContent, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, StatusBadge, EmptyState, extractErrorMessage,
+  ErrorState, LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -47,7 +48,7 @@ export default function EmployeeAttendancePage() {
   const [position, setPosition] = useState("");
   const [status, setStatus] = useState("");
 
-  const { data, isLoading } = useQuery<DailySummaryResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<DailySummaryResponse>({
     queryKey: ["hr", "attendance", "daily-summary", date, position, status],
     queryFn: async () =>
       (
@@ -110,7 +111,13 @@ export default function EmployeeAttendancePage() {
         </div>
       )}
 
-      {!isLoading && !data?.rows.length && <EmptyState title="No staff found" description="Try adjusting the position or status filter." />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load attendance" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+      {!data?.rows.length && <EmptyState title="No staff found" description="Try adjusting the position or status filter." />}
 
       {!!data?.rows.length && (
         <Card>
@@ -160,6 +167,8 @@ export default function EmployeeAttendancePage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </PageWrapper>
   );

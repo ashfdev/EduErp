@@ -5,6 +5,47 @@ import { resolveFeeStructureClassIds } from "./fee-structure-scope";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
+type WaiverWithType = Prisma.StudentWaiverGetPayload<{ include: { waiver_type: true } }>;
+
+// The one shared, idempotent primitive both applyWaiversToInvoice (below,
+// every waiver -> one fresh invoice) and applyWaiverToExistingInvoices
+// (fees.routes.ts, one newly-assigned waiver -> every matching existing
+// invoice) build on. Guarded by an InvoiceWaiverApplication existence check
+// so calling this a second time for the same (invoice, waiver) pair is a
+// safe no-op -- without this, retroactively re-running a student's waiver
+// set against an invoice it was already applied to would double-discount
+// it. Also recomputes status: a waiver applied AFTER a partial payment was
+// already made can bring amount_due down to or below what's already paid,
+// which should flip the invoice to PAID immediately, not leave it stuck
+// PARTIAL/OVERDUE until someone happens to reload it.
+async function applySingleWaiverToInvoice(tx: Tx, invoice: Invoice, waiver: WaiverWithType): Promise<Invoice> {
+  const applicable = waiver.waiver_type.applicable_categories as string[];
+  if (applicable.length > 0 && !applicable.includes(invoice.category)) return invoice;
+  if (invoice.amount_due <= 0) return invoice;
+
+  const already = await tx.invoiceWaiverApplication.findFirst({ where: { invoice_id: invoice.id, student_waiver_id: waiver.id } });
+  if (already) return invoice;
+
+  const rawDiscount =
+    waiver.waiver_type.discount_type === "PERCENTAGE" ? invoice.amount_due * (waiver.waiver_type.discount_value / 100) : waiver.waiver_type.discount_value;
+  const discount = Math.min(Math.round(rawDiscount * 100) / 100, invoice.amount_due);
+  if (discount <= 0) return invoice;
+
+  await tx.invoiceWaiverApplication.create({
+    data: { invoice_id: invoice.id, student_waiver_id: waiver.id, discount_amount: discount },
+  });
+  const newAmountDue = invoice.amount_due - discount;
+  const newStatus =
+    invoice.status === "PENDING" || invoice.status === "PARTIAL" || invoice.status === "OVERDUE"
+      ? invoice.amount_paid >= newAmountDue + invoice.fine_amount
+        ? "PAID"
+        : invoice.amount_paid > 0
+          ? "PARTIAL"
+          : invoice.status
+      : invoice.status;
+  return tx.invoice.update({ where: { id: invoice.id }, data: { amount_due: newAmountDue, status: newStatus } });
+}
+
 // Auto-applies every active StudentWaiver the student holds that matches
 // this invoice's category and academic year (Plan Thirteen, Phase F) --
 // called once, right after a fresh invoice is created, before the advance-
@@ -28,22 +69,40 @@ export async function applyWaiversToInvoice(tx: Tx, invoice: Invoice): Promise<I
 
   let current = invoice;
   for (const w of waivers) {
-    const applicable = w.waiver_type.applicable_categories as string[];
-    if (applicable.length > 0 && !applicable.includes(current.category)) continue;
-    if (current.amount_due <= 0) break;
-
-    const rawDiscount =
-      w.waiver_type.discount_type === "PERCENTAGE" ? current.amount_due * (w.waiver_type.discount_value / 100) : w.waiver_type.discount_value;
-    const discount = Math.min(Math.round(rawDiscount * 100) / 100, current.amount_due);
-    if (discount <= 0) continue;
-
-    await tx.invoiceWaiverApplication.create({
-      data: { invoice_id: current.id, student_waiver_id: w.id, discount_amount: discount },
-    });
-    current = await tx.invoice.update({ where: { id: current.id }, data: { amount_due: { decrement: discount } } });
+    current = await applySingleWaiverToInvoice(tx, current, w);
   }
-
   return current;
+}
+
+// The other direction: a waiver just assigned to a student today shouldn't
+// only affect invoices generated from now on -- a real, currently-owed
+// invoice (this month's tuition, say) sitting unpaid at the moment of
+// assignment is exactly the case a staff member assigning a waiver expects
+// to see reflected immediately. Scoped to invoices not yet settled
+// (PENDING/PARTIAL/OVERDUE -- a PAID or WAIVED invoice is left alone, and a
+// year-scoped waiver only touches invoices in that same academic year).
+// Reuses the same idempotent per-waiver primitive, so calling this twice
+// for the same waiver (e.g. a retry) never double-discounts.
+export async function applyWaiverToExistingInvoices(tx: Tx, waiver: WaiverWithType): Promise<{ invoicesAffected: number; totalDiscount: number }> {
+  const invoices = await tx.invoice.findMany({
+    where: {
+      student_id: waiver.student_id,
+      status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+      ...(waiver.academic_year_id && { academic_year_id: waiver.academic_year_id }),
+    },
+  });
+
+  let invoicesAffected = 0;
+  let totalDiscount = 0;
+  for (const invoice of invoices) {
+    const updated = await applySingleWaiverToInvoice(tx, invoice, waiver);
+    const discount = invoice.amount_due - updated.amount_due;
+    if (discount > 0) {
+      invoicesAffected++;
+      totalDiscount += discount;
+    }
+  }
+  return { invoicesAffected, totalDiscount: Math.round(totalDiscount * 100) / 100 };
 }
 
 // Shared by /invoices/generate-bulk-monthly and the admission enroll handler

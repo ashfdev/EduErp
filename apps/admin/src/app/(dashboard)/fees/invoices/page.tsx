@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -46,7 +46,7 @@ export default function InvoicesPage() {
   const [monthFilter, setMonthFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
   const pdfPreview = usePdfPreview();
-  const { data: invoices } = useQuery<Invoice[]>({
+  const { data: invoices, isLoading, isError, error, refetch } = useQuery<Invoice[]>({
     queryKey: ["fees", "invoices", status, classId, monthFilter, yearFilter],
     queryFn: async () =>
       (
@@ -87,6 +87,7 @@ export default function InvoicesPage() {
       toast.success(`Generated ${res.data.data.created} invoices (${res.data.data.skipped_duplicates} already existed)`);
       queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate monthly invoices"),
   });
 
   return (
@@ -132,6 +133,12 @@ export default function InvoicesPage() {
         </Select>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load invoices" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!invoices?.length && <EmptyState title="No invoices found" />}
       <Card>
         <CardContent className="p-0">
@@ -171,6 +178,8 @@ export default function InvoicesPage() {
           </Table>
         </CardContent>
       </Card>
+        </>
+      )}
 
       <PdfPreviewModal
         open={pdfPreview.open}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Switch, Textarea, Label, Input } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Switch, Textarea, Label, Input, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface NotificationConfig {
@@ -13,17 +13,18 @@ interface NotificationConfig {
   is_enabled: boolean;
   template_bn: string;
   template_en: string;
+  subject: string | null;
 }
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery<NotificationConfig[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<NotificationConfig[]>({
     queryKey: ["settings", "notifications"],
     queryFn: async () => (await api.get("/api/settings/notifications")).data.data,
   });
 
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, { template_bn: string; template_en: string }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { template_bn: string; template_en: string; subject: string | null }>>({});
   const [testPhone, setTestPhone] = useState("");
 
   const updateMutation = useMutation({
@@ -32,11 +33,13 @@ export default function NotificationsPage() {
       toast.success("Saved");
       queryClient.invalidateQueries({ queryKey: ["settings", "notifications"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save notification template"),
   });
 
   const testMutation = useMutation({
     mutationFn: () => api.post("/api/settings/notifications/test", { phone: testPhone, message: "Test notification from Education ERP." }),
     onSuccess: () => toast.success("Test SMS queued (check server logs if SMS gateway isn't configured)"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to send test SMS"),
   });
 
   const grouped = new Map<string, NotificationConfig[]>();
@@ -59,6 +62,11 @@ export default function NotificationsPage() {
         }
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load notification settings" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <div className="space-y-2">
         {[...grouped.entries()].map(([trigger, configs]) => (
           <Card key={trigger}>
@@ -71,7 +79,7 @@ export default function NotificationsPage() {
                   {configs.map((c) => (
                     <div key={c.id} className="flex items-center gap-1.5">
                       <Label className="text-xs">{c.channel}</Label>
-                      <Switch checked={c.is_enabled} onCheckedChange={(v) => updateMutation.mutate({ id: c.id, body: { is_enabled: v, template_bn: c.template_bn, template_en: c.template_en } })} />
+                      <Switch checked={c.is_enabled} onCheckedChange={(v) => updateMutation.mutate({ id: c.id, body: { is_enabled: v, template_bn: c.template_bn, template_en: c.template_en, subject: c.subject } })} />
                     </div>
                   ))}
                 </div>
@@ -82,18 +90,48 @@ export default function NotificationsPage() {
                   {configs.map((c) => (
                     <div key={c.id} className="space-y-2">
                       <p className="text-xs font-medium text-muted-foreground">{c.channel}</p>
+                      {(c.channel === "EMAIL" || c.channel === "PUSH") && (
+                        <div className="space-y-1.5">
+                          <Label>{c.channel === "EMAIL" ? "Email subject" : "Push title"} (blank = use default)</Label>
+                          <Input
+                            defaultValue={c.subject ?? ""}
+                            onChange={(e) => setDrafts((prev) => ({
+                              ...prev,
+                              [c.id]: {
+                                template_bn: prev[c.id]?.template_bn ?? c.template_bn,
+                                template_en: prev[c.id]?.template_en ?? c.template_en,
+                                subject: e.target.value,
+                              },
+                            }))}
+                          />
+                        </div>
+                      )}
                       <div className="space-y-1.5">
                         <Label>Bangla template</Label>
                         <Textarea
                           defaultValue={c.template_bn}
-                          onChange={(e) => setDrafts((prev) => ({ ...prev, [c.id]: { template_bn: e.target.value, template_en: drafts[c.id]?.template_en ?? c.template_en } }))}
+                          onChange={(e) => setDrafts((prev) => ({
+                            ...prev,
+                            [c.id]: {
+                              template_bn: e.target.value,
+                              template_en: prev[c.id]?.template_en ?? c.template_en,
+                              subject: prev[c.id]?.subject ?? c.subject,
+                            },
+                          }))}
                         />
                       </div>
                       <div className="space-y-1.5">
                         <Label>English template</Label>
                         <Textarea
                           defaultValue={c.template_en}
-                          onChange={(e) => setDrafts((prev) => ({ ...prev, [c.id]: { template_en: e.target.value, template_bn: drafts[c.id]?.template_bn ?? c.template_bn } }))}
+                          onChange={(e) => setDrafts((prev) => ({
+                            ...prev,
+                            [c.id]: {
+                              template_en: e.target.value,
+                              template_bn: prev[c.id]?.template_bn ?? c.template_bn,
+                              subject: prev[c.id]?.subject ?? c.subject,
+                            },
+                          }))}
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">Variables: {"{{student_name}}"} {"{{date}}"} {"{{class}}"}</p>
@@ -102,7 +140,12 @@ export default function NotificationsPage() {
                         onClick={() =>
                           updateMutation.mutate({
                             id: c.id,
-                            body: { is_enabled: c.is_enabled, template_bn: drafts[c.id]?.template_bn ?? c.template_bn, template_en: drafts[c.id]?.template_en ?? c.template_en },
+                            body: {
+                              is_enabled: c.is_enabled,
+                              template_bn: drafts[c.id]?.template_bn ?? c.template_bn,
+                              template_en: drafts[c.id]?.template_en ?? c.template_en,
+                              subject: drafts[c.id]?.subject ?? c.subject,
+                            },
                           })
                         }
                       >
@@ -116,6 +159,7 @@ export default function NotificationsPage() {
           </Card>
         ))}
       </div>
+      )}
     </PageWrapper>
   );
 }

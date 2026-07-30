@@ -75,6 +75,7 @@ export default function StudentIdSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["settings", "student-id"] });
       setConfirmReset(false);
     },
+    onError: () => toast.error("Failed to reset sequence"),
   });
 
   return (

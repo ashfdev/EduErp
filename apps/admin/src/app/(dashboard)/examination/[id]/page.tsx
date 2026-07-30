@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SubjectConfig {
@@ -52,6 +52,7 @@ interface ExamFeeStructure {
   frequency: string;
   amount: number;
   class_id: string | null;
+  target_due_date: string | null;
   classes: { class: { id: string; name_en: string } }[];
 }
 
@@ -111,7 +112,7 @@ export default function ExamDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
 
-  const { data: exam } = useQuery<Exam>({
+  const { data: exam, isLoading: examLoading, isError: examError, error: examErrorObj, refetch: refetchExam } = useQuery<Exam>({
     queryKey: ["exams", id],
     queryFn: async () => (await api.get(`/api/exams/${id}`)).data.data,
   });
@@ -174,6 +175,7 @@ export default function ExamDetailPage() {
       toast.success("Subject configuration saved");
       queryClient.invalidateQueries({ queryKey: ["exams", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save subject configuration"),
   });
 
   // Total Marks maps directly onto full_marks_theory; full_marks_practical
@@ -362,6 +364,7 @@ export default function ExamDetailPage() {
           frequency: "ONE_TIME",
           name: examFeeName,
           amount: examFeeAmount,
+          target_due_date: examFeeDueDate || null,
         });
         structureId = createdStructure.data.data.id;
         setExamFeePendingStructureId(structureId);
@@ -386,6 +389,8 @@ export default function ExamDetailPage() {
     },
   });
 
+  if (examLoading) return <PageWrapper><div className="flex justify-center py-16"><LoadingSpinner /></div></PageWrapper>;
+  if (examError) return <PageWrapper><ErrorState title="Failed to load exam" description={extractErrorMessage(examErrorObj)} retryLabel="Retry" onRetry={() => refetchExam()} /></PageWrapper>;
   if (!exam) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   const transition = STATUS_TRANSITIONS[exam.status];
@@ -735,6 +740,8 @@ export default function ExamDetailPage() {
                 } else {
                   setExamFeeMode("existing");
                   setExamFeeStructureId(e.target.value);
+                  const picked = existingExamFeeOptions.find((s) => s.id === e.target.value);
+                  if (picked?.target_due_date) setExamFeeDueDate(picked.target_due_date.slice(0, 10));
                 }
               }}
             >

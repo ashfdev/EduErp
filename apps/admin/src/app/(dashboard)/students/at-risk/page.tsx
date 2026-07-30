@@ -16,6 +16,9 @@ import {
   SelectContent,
   SelectItem,
   EmptyState,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -63,7 +66,7 @@ export default function AtRiskStudentsPage() {
   });
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data: students, refetch } = useQuery<RiskStudent[]>({
+  const { data: students, isLoading, isError, error, refetch } = useQuery<RiskStudent[]>({
     queryKey: ["analytics", "defaulters-risk", classId, sectionId, groupId],
     queryFn: async () =>
       (await api.get("/api/analytics/defaulters-risk", { params: { class_id: classId || undefined, section_id: sectionId || undefined, group_id: groupId || undefined } })).data.data,
@@ -125,6 +128,12 @@ export default function AtRiskStudentsPage() {
         <Button variant="outline" onClick={() => refetch()}>Refresh</Button>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load at-risk students" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!students?.length && <EmptyState title="No at-risk students" description="Everyone in this filter meets the configured attendance and fee-due thresholds." />}
 
       {!!students?.length && (
@@ -165,6 +174,8 @@ export default function AtRiskStudentsPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={!!messageStudentId} onOpenChange={(v) => !v && setMessageStudentId(null)}>

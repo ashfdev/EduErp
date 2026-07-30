@@ -36,7 +36,14 @@ export type AuditAction =
   | "PAYMENT_GATEWAY_CONFIG_UPDATE"
   | "STAFF_RESIGN"
   | "STAFF_REJOIN"
-  | "STUDENT_PORTAL_LOGIN_CREATE";
+  | "STUDENT_PORTAL_LOGIN_CREATE"
+  | "INSTITUTION_TYPE_CHANGE"
+  | "STUDENT_ID_SEQUENCE_RESET"
+  | "GRADING_SCALE_CREATE"
+  | "GRADING_SCALE_DELETE"
+  | "GRADING_SCALE_SET_DEFAULT"
+  | "SIGNATURE_CREATE"
+  | "SIGNATURE_DELETE";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

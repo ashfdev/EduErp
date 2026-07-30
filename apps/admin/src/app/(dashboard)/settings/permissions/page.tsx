@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const ROLES = [
@@ -38,11 +38,11 @@ interface PermissionRow {
 
 export default function PermissionsPage() {
   const queryClient = useQueryClient();
-  const { data: users } = useQuery<UserRow[]>({
+  const { data: users, isLoading: usersLoading, isError: usersError, error: usersErrorObj, refetch: refetchUsers } = useQuery<UserRow[]>({
     queryKey: ["settings", "users"],
     queryFn: async () => (await api.get("/api/settings/users")).data.data,
   });
-  const { data: permissions } = useQuery<PermissionRow[]>({
+  const { data: permissions, isLoading: permissionsLoading, isError: permissionsError, error: permissionsErrorObj, refetch: refetchPermissions } = useQuery<PermissionRow[]>({
     queryKey: ["settings", "permissions"],
     queryFn: async () => (await api.get("/api/settings/permissions")).data.data,
   });
@@ -126,6 +126,12 @@ export default function PermissionsPage() {
       <Card>
         <CardHeader><CardTitle>Assign Roles</CardTitle></CardHeader>
         <CardContent className="space-y-3 pt-2">
+          {usersLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : usersError ? (
+            <ErrorState title="Failed to load users" description={extractErrorMessage(usersErrorObj)} retryLabel="Retry" onRetry={() => refetchUsers()} />
+          ) : (
+            <>
           {!users?.length && <EmptyState title="No users yet" />}
           {!!users?.length && (
             <div className="flex flex-wrap items-center gap-2">
@@ -166,6 +172,8 @@ export default function PermissionsPage() {
               ))}
             </TableBody>
           </Table>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -176,6 +184,12 @@ export default function PermissionsPage() {
             SUPER_ADMIN and ADMIN always have full access to every feature below, in addition to the roles listed — that can never be changed here.
             Click a feature to change which other roles can access it; the change applies immediately, no restart needed.
           </p>
+          {permissionsLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : permissionsError ? (
+            <ErrorState title="Failed to load permissions" description={extractErrorMessage(permissionsErrorObj)} retryLabel="Retry" onRetry={() => refetchPermissions()} />
+          ) : (
+            <>
           {!permissions?.length && <EmptyState title="No permissions found" />}
           {[...permissionsByCategory.entries()].map(([category, rows]) => (
             <div key={category}>
@@ -206,6 +220,8 @@ export default function PermissionsPage() {
               </div>
             </div>
           ))}
+            </>
+          )}
         </CardContent>
       </Card>
 

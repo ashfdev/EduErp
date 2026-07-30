@@ -7,6 +7,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Input, Label, Textarea, StatusBadge, EmptyState, Tabs, TabsList, TabsTrigger, TabsContent,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage,
+  ErrorState, LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -29,7 +30,7 @@ interface CorrectionRow {
 
 function PendingTab() {
   const queryClient = useQueryClient();
-  const { data } = useQuery<CorrectionRow[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<CorrectionRow[]>({
     queryKey: ["mark-corrections", "pending"],
     queryFn: async () => (await api.get("/api/mark-corrections/pending")).data.data,
   });
@@ -62,6 +63,8 @@ function PendingTab() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to reject"),
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load correction requests" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data?.length) return <EmptyState title="No pending correction requests" />;
 
   return (
@@ -134,7 +137,7 @@ function PendingTab() {
 
 function AllRequestsTab() {
   const queryClient = useQueryClient();
-  const { data } = useQuery<CorrectionRow[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<CorrectionRow[]>({
     queryKey: ["mark-corrections", "all"],
     queryFn: async () => (await api.get("/api/mark-corrections")).data.data,
   });
@@ -149,6 +152,8 @@ function AllRequestsTab() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to revoke"),
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load correction requests" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data?.length) return <EmptyState title="No requests" />;
 
   return (

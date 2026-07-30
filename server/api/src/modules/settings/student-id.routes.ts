@@ -6,6 +6,7 @@ import { authorize } from "../../middleware/authorize";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { studentIdConfigSchema } from "@education-erp/validators";
 import { formatStudentId } from "../../lib/student-id-format";
+import { logAudit } from "../../lib/audit-log";
 
 export const studentIdRouter = Router();
 const CONFIG_ID = "singleton";
@@ -56,8 +57,9 @@ studentIdRouter.post(
 studentIdRouter.post(
   "/reset-sequence",
   authorize(SETTINGS_ACADEMIC_ROLES),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const config = await prisma.studentIdConfig.update({ where: { id: CONFIG_ID }, data: { current_sequence: 0 } });
+    await logAudit("STUDENT_ID_SEQUENCE_RESET", { userId: req.user!.sub, targetType: "StudentIdConfig", targetId: CONFIG_ID, req });
     res.json({ success: true, data: config, message: "Sequence reset to 0" });
   }),
 );

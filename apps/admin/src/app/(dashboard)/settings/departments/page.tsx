@@ -21,6 +21,9 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -38,7 +41,7 @@ interface StaffOption {
 
 export default function DepartmentsPage() {
   const queryClient = useQueryClient();
-  const { data: departments } = useQuery<Department[]>({
+  const { data: departments, isLoading, isError, error, refetch } = useQuery<Department[]>({
     queryKey: ["settings", "departments"],
     queryFn: async () => (await api.get("/api/settings/departments")).data.data,
   });
@@ -79,6 +82,7 @@ export default function DepartmentsPage() {
       toast.success("Department head updated");
       queryClient.invalidateQueries({ queryKey: ["settings", "departments"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update department head"),
   });
 
   const deleteMutation = useMutation({
@@ -87,6 +91,7 @@ export default function DepartmentsPage() {
       toast.success("Department removed");
       queryClient.invalidateQueries({ queryKey: ["settings", "departments"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove department"),
   });
 
   return (
@@ -98,36 +103,44 @@ export default function DepartmentsPage() {
         action={<Button onClick={openCreate}>+ Add Department</Button>}
       />
 
-      {!departments?.length && <EmptyState title="No departments yet" />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load departments" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!departments?.length && <EmptyState title="No departments yet" />}
 
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableBody>
-              {departments?.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-medium">{d.name_en}</TableCell>
-                  <TableCell className="text-muted-foreground">{d.code}</TableCell>
-                  <TableCell>
-                    <select
-                      className="rounded-md border px-2 py-1 text-sm"
-                      value={d.head_id ?? ""}
-                      onChange={(e) => setHeadMutation.mutate({ id: d.id, head_id: e.target.value || null })}
-                    >
-                      <option value="">No head assigned</option>
-                      {staff?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
-                    </select>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(d)}>Edit</Button>{" "}
-                    <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <Table>
+                <TableBody>
+                  {departments?.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell className="font-medium">{d.name_en}</TableCell>
+                      <TableCell className="text-muted-foreground">{d.code}</TableCell>
+                      <TableCell>
+                        <select
+                          className="rounded-md border px-2 py-1 text-sm"
+                          value={d.head_id ?? ""}
+                          onChange={(e) => setHeadMutation.mutate({ id: d.id, head_id: e.target.value || null })}
+                        >
+                          <option value="">No head assigned</option>
+                          {staff?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
+                        </select>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(d)}>Edit</Button>{" "}
+                        <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(d.id)}>Delete</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

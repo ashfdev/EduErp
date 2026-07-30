@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalFailure {
@@ -19,7 +19,7 @@ export default function JournalFailuresPage() {
   const queryClient = useQueryClient();
   const [showResolved, setShowResolved] = useState(false);
 
-  const { data: failures } = useQuery<JournalFailure[]>({
+  const { data: failures, isLoading, isError, error, refetch } = useQuery<JournalFailure[]>({
     queryKey: ["accounts", "journal-failures", showResolved],
     queryFn: async () => (await api.get("/api/accounts/journal-failures", { params: { resolved: showResolved ? "true" : "false" } })).data.data,
   });
@@ -46,6 +46,12 @@ export default function JournalFailuresPage() {
         }
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load journal failures" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!failures?.length && (
         <EmptyState
           title={showResolved ? "No resolved failures yet" : "No unresolved failures"}
@@ -87,6 +93,8 @@ export default function JournalFailuresPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </PageWrapper>
   );

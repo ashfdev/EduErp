@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface DueInvoice {
@@ -71,7 +71,7 @@ function StudentDueTab() {
     enabled: studentSearch.length > 1 && !selectedStudent,
   });
 
-  const { data } = useQuery<{ total_due: number; invoices: DueInvoice[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ total_due: number; invoices: DueInvoice[] }>({
     queryKey: ["fees", "reports", "student-wise-due", selectedStudent?.id],
     queryFn: async () => (await api.get("/api/fees/reports/student-wise-due", { params: { student_id: selectedStudent!.id } })).data.data,
     enabled: !!selectedStudent,
@@ -96,7 +96,9 @@ function StudentDueTab() {
           </>
         )}
       </div>
-      {data && (
+      {isLoading && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load student dues" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
+      {!isLoading && !isError && data && (
         <Card>
           <CardContent className="pt-6">
             <p className="mb-3 text-sm">Total Due: <span className="font-semibold text-red-600">৳{data.total_due}</span></p>
@@ -146,7 +148,7 @@ function useSessionPicker() {
 
 function ClassSummaryTab() {
   const { selectedYearId, picker } = useSessionPicker();
-  const { data } = useQuery<{ class_id: string; class_name: string; generated: number; collected: number; due: number }[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ class_id: string; class_name: string; generated: number; collected: number; due: number }[]>({
     queryKey: ["fees", "reports", "class-wise-summary", selectedYearId],
     queryFn: async () => (await api.get("/api/fees/reports/class-wise-summary", { params: { academic_year_id: selectedYearId } })).data.data,
     enabled: !!selectedYearId,
@@ -155,6 +157,12 @@ function ClassSummaryTab() {
   return (
     <div className="space-y-4">
       {picker}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load class-wise summary" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!data?.length && <EmptyState title="No data for this session" />}
       {!!data?.length && (
         <Card>
@@ -175,6 +183,8 @@ function ClassSummaryTab() {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -184,7 +194,7 @@ function StudentSummaryTab() {
   const [classId, setClassId] = useState("");
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
 
-  const { data } = useQuery<{ student_id: string; name_en: string; student_uid: string; generated: number; collected: number; due: number }[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ student_id: string; name_en: string; student_uid: string; generated: number; collected: number; due: number }[]>({
     queryKey: ["fees", "reports", "student-wise-summary", selectedYearId, classId],
     queryFn: async () => (await api.get("/api/fees/reports/student-wise-summary", { params: { academic_year_id: selectedYearId, class_id: classId || undefined } })).data.data,
     enabled: !!selectedYearId,
@@ -199,6 +209,12 @@ function StudentSummaryTab() {
           {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
         </select>
       </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load student-wise summary" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!data?.length && <EmptyState title="No data for this session" />}
       {!!data?.length && (
         <Card>
@@ -219,6 +235,8 @@ function StudentSummaryTab() {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -228,7 +246,7 @@ function CollectionSummaryTab() {
   const [from, setFrom] = useState(new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).toISOString().slice(0, 10));
   const [to, setTo] = useState(now.toISOString().slice(0, 10));
 
-  const { data } = useQuery<{ daily: { date: string; amount: number }[]; by_category: { category: string; total: number }[]; gateway_breakdown: { gateway: string; total: number }[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ daily: { date: string; amount: number }[]; by_category: { category: string; total: number }[]; gateway_breakdown: { gateway: string; total: number }[] }>({
     queryKey: ["analytics", "fee-collection", from, to],
     queryFn: async () => (await api.get("/api/analytics/fee-collection", { params: { from_date: from, to_date: to } })).data.data,
   });
@@ -241,6 +259,10 @@ function CollectionSummaryTab() {
           <div><Label>From</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
           <div><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         </div>
+        {isLoading && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+        {isError && <ErrorState title="Failed to load collection summary" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
+        {!isLoading && !isError && (
+          <>
         <p className="text-sm">Total Collected ({from} – {to}): <span className="font-semibold">৳{totalCollected}</span></p>
         {data && (
           <div className="grid grid-cols-2 gap-6">
@@ -260,17 +282,21 @@ function CollectionSummaryTab() {
             </div>
           </div>
         )}
+          </>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 function WaiversReportTab() {
-  const { data } = useQuery<{ id: string; discount_amount: number; applied_at: string; invoice: { invoice_no: string; description: string; category: string; student: { name_en: string; student_uid: string } }; student_waiver: { waiver_type: { name: string } } }[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ id: string; discount_amount: number; applied_at: string; invoice: { invoice_no: string; description: string; category: string; student: { name_en: string; student_uid: string } }; student_waiver: { waiver_type: { name: string } } }[]>({
     queryKey: ["fees", "reports", "waivers"],
     queryFn: async () => (await api.get("/api/fees/reports/waivers")).data.data,
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load waivers" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data?.length) return <EmptyState title="No waivers applied yet" />;
   return (
     <Card>
@@ -295,11 +321,13 @@ function WaiversReportTab() {
 }
 
 function GenerationLogTab() {
-  const { data } = useQuery<{ id: string; run_at: string; trigger: string; created_count: number; skipped_count: number; month: number | null; year: number | null }[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ id: string; run_at: string; trigger: string; created_count: number; skipped_count: number; month: number | null; year: number | null }[]>({
     queryKey: ["fees", "reports", "generation-log"],
     queryFn: async () => (await api.get("/api/fees/reports/generation-log")).data.data,
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load generation log" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data?.length) return <EmptyState title="No invoice generation runs yet" />;
   return (
     <Card>
@@ -333,7 +361,7 @@ function DuesTab() {
   });
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data } = useQuery<DueInvoice[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<DueInvoice[]>({
     queryKey: ["fees", "reports", "dues", classId, sectionId],
     queryFn: async () => (await api.get("/api/fees/reports/dues", { params: { class_id: classId || undefined, section_id: sectionId || undefined } })).data.data,
   });
@@ -350,6 +378,12 @@ function DuesTab() {
           {selectedClass?.sections?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load dues" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!data?.length && <EmptyState title="No outstanding dues" />}
       {!!data?.length && (
         <Card>
@@ -375,6 +409,8 @@ function DuesTab() {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -382,7 +418,7 @@ function DuesTab() {
 function DefaultersTab() {
   const [days, setDays] = useState(30);
   const [enabled, setEnabled] = useState(false);
-  const { data } = useQuery<DefaulterEntry[]>({
+  const { data, isFetching, isError, error, refetch } = useQuery<DefaulterEntry[]>({
     queryKey: ["fees", "reports", "defaulters", days],
     queryFn: async () => (await api.get("/api/fees/reports/defaulters", { params: { days_overdue: days } })).data.data,
     enabled,
@@ -394,8 +430,10 @@ function DefaultersTab() {
         <Input type="number" value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-32" />
         <Button size="sm" onClick={() => setEnabled(true)}>Find Defaulters</Button>
       </div>
-      {data && !data.length && <EmptyState title="No defaulters found" />}
-      {!!data?.length && (
+      {isFetching && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load defaulters" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
+      {!isFetching && !isError && data && !data.length && <EmptyState title="No defaulters found" />}
+      {!isFetching && !!data?.length && (
         <Card>
           <CardContent className="pt-6">
             <table className="w-full text-sm">
@@ -430,7 +468,7 @@ function ExportTab() {
   const [from, setFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10));
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
 
-  const { data: payments } = useQuery<{ data: PaymentRow[] }>({
+  const { data: payments, isLoading, isError, error, refetch } = useQuery<{ data: PaymentRow[] }>({
     queryKey: ["fees", "reports", "datewise-payments", from, to],
     queryFn: async () => (await api.get("/api/payments", { params: { from, to, limit: 100 } })).data,
   });
@@ -451,6 +489,12 @@ function ExportTab() {
         <div><Label>To</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
         <Button onClick={download}>Download Excel</Button>
       </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load payments" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {payments && !payments.data.length && <EmptyState title="No payments in this range" />}
       {!!payments?.data.length && (
         <Card>
@@ -471,6 +515,8 @@ function ExportTab() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );

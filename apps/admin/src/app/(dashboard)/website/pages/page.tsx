@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Badge } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Badge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StaticPageRow {
@@ -63,15 +63,21 @@ function PageGroup({ title, keys, pages }: { title: string; keys: string[]; page
 }
 
 export default function StaticPagesListPage() {
-  const { data: pages } = useQuery<StaticPageRow[]>({ queryKey: ["website", "pages"], queryFn: async () => (await api.get("/api/website/pages")).data.data });
+  const { data: pages, isLoading, isError, error, refetch } = useQuery<StaticPageRow[]>({ queryKey: ["website", "pages"], queryFn: async () => (await api.get("/api/website/pages")).data.data });
 
   return (
     <PageWrapper>
       <PageHeader title="Static Pages" breadcrumbs={[{ label: "Website" }, { label: "Pages" }]} />
-      <div className="space-y-8">
-        <PageGroup title="About" keys={ABOUT_KEYS} pages={pages ?? []} />
-        <PageGroup title="Academic" keys={ACADEMIC_KEYS} pages={pages ?? []} />
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load pages" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <div className="space-y-8">
+          <PageGroup title="About" keys={ABOUT_KEYS} pages={pages ?? []} />
+          <PageGroup title="Academic" keys={ACADEMIC_KEYS} pages={pages ?? []} />
+        </div>
+      )}
     </PageWrapper>
   );
 }

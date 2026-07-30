@@ -10,7 +10,7 @@ import {
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
   Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
-  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, type LucideIcon,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, type LucideIcon,
 } from "lucide-react";
 
 interface NavItem {
@@ -90,6 +90,9 @@ export const NAV_GROUPS: NavGroup[] = [
     key: "campus",
     items: [
       { href: "/inventory", key: "inventory", icon: Package },
+      { href: "/inventory/item-categories", key: "itemCategories", icon: FolderTree },
+      { href: "/inventory/items", key: "items", icon: Boxes },
+      { href: "/inventory/asset-categories", key: "assetCategories", icon: Layers },
       { href: "/library", key: "library", icon: Library },
       { href: "/transport", key: "transport", icon: Bus },
       { href: "/hostel", key: "hostel", icon: Home },

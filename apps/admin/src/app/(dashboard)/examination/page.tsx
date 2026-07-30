@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, CardTitle, Button, StatusBadge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, CardTitle, Button, StatusBadge, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Exam {
@@ -16,7 +16,7 @@ interface Exam {
 }
 
 export default function ExaminationPage() {
-  const { data: exams } = useQuery<Exam[]>({
+  const { data: exams, isLoading, isError, error, refetch } = useQuery<Exam[]>({
     queryKey: ["exams"],
     queryFn: async () => (await api.get("/api/exams")).data.data,
   });
@@ -29,22 +29,30 @@ export default function ExaminationPage() {
         action={<Link href="/examination/new"><Button>+ Create Exam</Button></Link>}
       />
 
-      {!exams?.length && <EmptyState title="No exams yet" />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load exams" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!exams?.length && <EmptyState title="No exams yet" />}
 
-      <div className="grid grid-cols-3 gap-4">
-        {exams?.map((e) => (
-          <Link key={e.id} href={`/examination/${e.id}`}>
-            <Card className="hover:border-primary">
-              <CardContent className="space-y-2 pt-6">
-                <CardTitle className="text-base">{e.name}</CardTitle>
-                <p className="text-sm text-muted-foreground">{e.academic_year.label}</p>
-                <p className="text-xs text-muted-foreground">{e.subject_configs.length} subjects configured</p>
-                <StatusBadge status={e.status} />
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-4">
+            {exams?.map((e) => (
+              <Link key={e.id} href={`/examination/${e.id}`}>
+                <Card className="hover:border-primary">
+                  <CardContent className="space-y-2 pt-6">
+                    <CardTitle className="text-base">{e.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{e.academic_year.label}</p>
+                    <p className="text-xs text-muted-foreground">{e.subject_configs.length} subjects configured</p>
+                    <StatusBadge status={e.status} />
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </PageWrapper>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalEntry {
@@ -33,9 +33,11 @@ interface VoucherDetail {
 
 export default function VoucherDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [reverseOpen, setReverseOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data: voucher } = useQuery<VoucherDetail>({
     queryKey: ["accounts", "vouchers", params.id],
@@ -62,6 +64,15 @@ export default function VoucherDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Reversal failed"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/accounts/vouchers/${params.id}`),
+    onSuccess: () => {
+      toast.success("Voucher deleted");
+      router.push("/accounts/vouchers");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to delete voucher"),
+  });
+
   if (!voucher) return null;
 
   return (
@@ -72,10 +83,18 @@ export default function VoucherDetailPage() {
         breadcrumbs={[{ label: "Accounts" }, { label: "Vouchers", href: "/accounts/vouchers" }, { label: voucher.voucher_no }]}
         action={
           <div className="flex gap-2">
+            {voucher.status === "DRAFT" && (
+              <Link href={`/accounts/vouchers/${voucher.id}/edit`}>
+                <Button size="sm" variant="outline">Edit</Button>
+              </Link>
+            )}
             {voucher.status === "DRAFT" && <Button size="sm" onClick={() => actionMutation.mutate("approve")}>Approve</Button>}
             {voucher.status === "APPROVED" && <Button size="sm" onClick={() => actionMutation.mutate("post")}>Post</Button>}
             {voucher.status !== "POSTED" && voucher.status !== "CANCELLED" && (
               <Button size="sm" variant="outline" onClick={() => actionMutation.mutate("cancel")}>Cancel</Button>
+            )}
+            {voucher.status === "DRAFT" && (
+              <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>Delete</Button>
             )}
             {voucher.status === "POSTED" && !voucher.reversed_by_voucher_id && (
               <Button size="sm" variant="destructive" onClick={() => setReverseOpen(true)}>Reverse (Correct a Mistake)</Button>
@@ -112,6 +131,20 @@ export default function VoucherDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete voucher"
+        description={`Delete voucher ${voucher.voucher_no}? This cannot be undone.`}
+        destructive
+        confirmLabel="Delete"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          setDeleteOpen(false);
+          deleteMutation.mutate();
+        }}
+      />
 
       <Card>
         <CardContent className="space-y-4 pt-6">

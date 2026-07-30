@@ -107,11 +107,32 @@ function registerHelpers() {
     return `${dd}/${mm}/${d.getFullYear()}`;
   });
 
-  Handlebars.registerHelper("gradeColor", (grade: unknown) => {
+  // Was a fixed 3-bucket letter heuristic ("starts with A" => green) --
+  // broke for "Abs" (also starts with "A", so an absent subject rendered
+  // green) and hardcoded BD's A+/A/A- naming, ignoring whatever grade
+  // letters/points the institution's actual active GradingScale defines
+  // (CLAUDE.md: "no hardcoded institution-specific values"). Rather than a
+  // schema migration to store a per-GradeRange color (a bigger, riskier
+  // change for a purely cosmetic PDF heuristic), this derives a smooth
+  // red->green color from the subject's real grade_point, normalized
+  // against the highest grade_point in *this document's own* grading
+  // scale (via `grading_legend`, already embedded in every marksheet/
+  // report-card render — see buildMarksheetData in documents.routes.ts) --
+  // so a UNIVERSITY's 4.00-max CGPA scale and a SCHOOL's 5.00-max GPA
+  // scale each color correctly instead of assuming a fixed ceiling.
+  Handlebars.registerHelper("gradeColor", function (grade: unknown, gradePoint: unknown, options?: Handlebars.HelperOptions) {
     const g = String(grade ?? "").toUpperCase();
-    if (g === "F" || g === "FAIL") return "red";
-    if (g.startsWith("A")) return "green";
-    return "#b8860b";
+    if (g === "F" || g === "FAIL" || g === "ABS") return "#dc2626";
+
+    const point = typeof gradePoint === "number" ? gradePoint : Number(gradePoint);
+    if (Number.isNaN(point)) return "#b8860b"; // no grade_point passed (older/custom template) -- same neutral amber the old heuristic's default bucket used
+
+    const root = options?.data?.root as { grading_legend?: { grade_point: number }[] } | undefined;
+    const legend = root?.grading_legend ?? [];
+    const maxPoint = legend.length ? Math.max(...legend.map((r) => r.grade_point)) : 5;
+    const ratio = maxPoint > 0 ? Math.max(0, Math.min(1, point / maxPoint)) : 0;
+    const hue = Math.round(ratio * 120); // 0 = red, 120 = green
+    return `hsl(${hue}, 68%, 38%)`;
   });
 
   Handlebars.registerHelper("ifPassed", function (this: unknown, marks: unknown, passMark: unknown, options: Handlebars.HelperOptions) {

@@ -49,6 +49,7 @@ export default function AssetDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["inventory", "assets", params.id] });
       setShowMaintenance(false);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to log maintenance"),
   });
 
   const disposeMutation = useMutation({

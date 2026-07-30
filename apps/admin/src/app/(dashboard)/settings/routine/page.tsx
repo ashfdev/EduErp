@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, RoutineGrid, PdfPreviewModal, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, RoutineGrid, PdfPreviewModal, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -85,7 +85,7 @@ export default function RoutineSettingsPage() {
     queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
   });
 
-  const { data: slots } = useQuery<RoutineSlotRow[]>({
+  const { data: slots, isLoading: slotsLoading, isError: slotsError, error: slotsErrorObj, refetch: refetchSlots } = useQuery<RoutineSlotRow[]>({
     queryKey: ["settings", "routine", classId, sectionFilter, groupFilter],
     queryFn: async () =>
       (
@@ -170,6 +170,7 @@ export default function RoutineSettingsPage() {
       toast.success("Slot removed");
       queryClient.invalidateQueries({ queryKey: ["settings", "routine"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove slot"),
   });
 
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -261,40 +262,48 @@ export default function RoutineSettingsPage() {
               </div>
               <Button size="sm" variant="outline" onClick={() => setPdfOpen(true)} disabled={!slots?.length}>Download PDF</Button>
             </div>
-            {!slots?.length && <EmptyState title="No routine slots yet for this class/section" />}
-            {!!slots?.length && viewMode === "grid" && <RoutineGrid days={gridData.days} rows={gridData.rows} todayIndex={new Date().getDay()} />}
-            {!!slots?.length && viewMode === "list" && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Day</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Section</TableHead>
-                    {!!groups.length && <TableHead>Group</TableHead>}
-                    <TableHead>Subject</TableHead>
-                    <TableHead>Teacher</TableHead>
-                    <TableHead></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {slots.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>{DAYS[s.day_of_week]}</TableCell>
-                      <TableCell>{s.period_no}</TableCell>
-                      <TableCell>{s.start_time}–{s.end_time}</TableCell>
-                      <TableCell>{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</TableCell>
-                      {!!groups.length && <TableCell>{s.group?.name_en ?? "All Groups"}</TableCell>}
-                      <TableCell>{s.subject?.name_en ?? "-"}</TableCell>
-                      <TableCell>{s.teacher?.name_en ?? "-"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>{" "}
-                        <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            {slotsLoading ? (
+              <div className="flex justify-center py-16"><LoadingSpinner /></div>
+            ) : slotsError ? (
+              <ErrorState title="Failed to load routine slots" description={extractErrorMessage(slotsErrorObj)} retryLabel="Retry" onRetry={() => refetchSlots()} />
+            ) : (
+              <>
+                {!slots?.length && <EmptyState title="No routine slots yet for this class/section" />}
+                {!!slots?.length && viewMode === "grid" && <RoutineGrid days={gridData.days} rows={gridData.rows} todayIndex={new Date().getDay()} />}
+                {!!slots?.length && viewMode === "list" && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Day</TableHead>
+                        <TableHead>Period</TableHead>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Section</TableHead>
+                        {!!groups.length && <TableHead>Group</TableHead>}
+                        <TableHead>Subject</TableHead>
+                        <TableHead>Teacher</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {slots.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{DAYS[s.day_of_week]}</TableCell>
+                          <TableCell>{s.period_no}</TableCell>
+                          <TableCell>{s.start_time}–{s.end_time}</TableCell>
+                          <TableCell>{sections.find((sec) => sec.id === s.section_id)?.name ?? "All"}</TableCell>
+                          {!!groups.length && <TableCell>{s.group?.name_en ?? "All Groups"}</TableCell>}
+                          <TableCell>{s.subject?.name_en ?? "-"}</TableCell>
+                          <TableCell>{s.teacher?.name_en ?? "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>{" "}
+                            <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

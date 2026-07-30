@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, EmptyState, ErrorState, LoadingSpinner, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PendingTransfer {
@@ -17,7 +17,7 @@ interface PendingTransfer {
 export default function BankTransfersPage() {
   const queryClient = useQueryClient();
 
-  const { data } = useQuery<PendingTransfer[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<PendingTransfer[]>({
     queryKey: ["fees", "bank-transfers", "pending"],
     queryFn: async () => (await api.get("/api/payments/bank-transfers/pending")).data.data,
   });
@@ -40,12 +40,19 @@ export default function BankTransfersPage() {
       toast.success("Payment rejected");
       queryClient.invalidateQueries({ queryKey: ["fees", "bank-transfers", "pending"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to reject payment"),
   });
 
   return (
     <PageWrapper>
       <PageHeader title="Bank Transfer Verification" subtitle="Cross-check each slip against the bank statement before verifying" breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Bank Transfers" }]} />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load bank transfers" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!data?.length && <EmptyState title="No pending bank transfers" />}
       <div className="space-y-3">
         {data?.map((p) => (
@@ -69,6 +76,8 @@ export default function BankTransfersPage() {
           </Card>
         ))}
       </div>
+        </>
+      )}
     </PageWrapper>
   );
 }

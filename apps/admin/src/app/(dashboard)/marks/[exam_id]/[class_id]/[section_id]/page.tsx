@@ -27,6 +27,7 @@ interface ComponentFetchEntry {
 }
 interface MarkEntryData {
   entry_deadline_info: { is_open: boolean; closes_at: string | null };
+  exam_has_subjects_for_class: boolean;
   subjects: Subject[];
   students: {
     id: string;
@@ -251,7 +252,13 @@ export default function MarkEntryGridPage() {
         breadcrumbs={[{ label: "Marks", href: "/marks" }, ...(exam ? [{ label: exam.name }] : []), ...(klass && section ? [{ label: `${klass.name_en} · ${section.name}` }] : [])]}
       />
 
-      {!data.subjects.length && <p className="text-sm text-muted-foreground">No subjects assigned to you for this class/section.</p>}
+      {!data.subjects.length && (
+        <p className="text-sm text-muted-foreground">
+          {data.exam_has_subjects_for_class
+            ? "You are not assigned to teach any of this exam's subjects for this class/section. If you should have access, check this teacher's Subject-Teacher Assignment in Settings."
+            : "This exam has no subjects configured for this class/section — it may not have been set up for this class. Double-check the exam and class selection."}
+        </p>
+      )}
 
       {readOnly && data.subjects.length > 0 && (
         <p className="text-sm text-muted-foreground">You can view marks for your class, but only Subject Teachers, Exam Controllers, and Admins can enter or edit them.</p>

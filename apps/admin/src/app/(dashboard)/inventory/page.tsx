@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface DashboardData {
@@ -29,7 +29,7 @@ function fmt(n: number) {
 
 export default function InventoryDashboardPage() {
   const { data } = useQuery<DashboardData>({ queryKey: ["inventory", "dashboard"], queryFn: async () => (await api.get("/api/inventory/dashboard")).data.data });
-  const { data: recentGrns } = useQuery<GrnSummary[]>({
+  const { data: recentGrns, isLoading: grnsLoading, isError: grnsError, error: grnsErrorObj, refetch: refetchGrns } = useQuery<GrnSummary[]>({
     queryKey: ["inventory", "purchase-history"],
     queryFn: async () => (await api.get("/api/inventory/reports/purchase-history")).data.data,
   });
@@ -59,7 +59,11 @@ export default function InventoryDashboardPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="mb-3 font-medium">Recent Purchases</p>
-          {!recentGrns?.length ? <EmptyState title="No purchases yet" /> : (
+          {grnsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : grnsError ? (
+            <ErrorState title="Failed to load recent purchases" description={extractErrorMessage(grnsErrorObj)} retryLabel="Retry" onRetry={() => refetchGrns()} />
+          ) : !recentGrns?.length ? <EmptyState title="No purchases yet" /> : (
             <div className="space-y-2">
               {recentGrns.slice(0, 5).map((g) => (
                 <div key={g.id} className="flex items-center justify-between rounded-md border p-2 text-sm">

@@ -9,6 +9,7 @@ import { gradingScaleSchema } from "@education-erp/validators";
 import { validateGradeRanges, GRADING_PRESETS } from "../../lib/grade-range-validation";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { z } from "zod";
+import { logAudit } from "../../lib/audit-log";
 
 export const gradingRouter = Router();
 gradingRouter.use(authenticate);
@@ -52,6 +53,7 @@ gradingRouter.post(
       },
       include: { ranges: true },
     });
+    await logAudit("GRADING_SCALE_CREATE", { userId: req.user!.sub, targetType: "GradingScale", targetId: scale.id, metadata: { name: scale.name, scale_type: scale.scale_type }, req });
     res.status(201).json({ success: true, data: scale });
   }),
 );
@@ -92,8 +94,10 @@ gradingRouter.delete(
   asyncHandler(async (req, res) => {
     const usedByExam = await prisma.exam.findFirst({ where: { grading_scale_id: reqParam(req, "id") } });
     if (usedByExam) throw conflict("This grading scale is used by an exam and cannot be deleted");
+    const scale = await prisma.gradingScale.findUnique({ where: { id: reqParam(req, "id") }, select: { name: true } });
     await prisma.gradeRange.deleteMany({ where: { grading_scale_id: reqParam(req, "id") } });
     await prisma.gradingScale.delete({ where: { id: reqParam(req, "id") } });
+    await logAudit("GRADING_SCALE_DELETE", { userId: req.user!.sub, targetType: "GradingScale", targetId: reqParam(req, "id"), metadata: { name: scale?.name }, req });
     res.status(204).send();
   }),
 );
@@ -106,6 +110,7 @@ gradingRouter.post(
       prisma.gradingScale.updateMany({ data: { is_default: false }, where: {} }),
       prisma.gradingScale.update({ where: { id: reqParam(req, "id") }, data: { is_default: true } }),
     ]);
+    await logAudit("GRADING_SCALE_SET_DEFAULT", { userId: req.user!.sub, targetType: "GradingScale", targetId: reqParam(req, "id"), req });
     res.json({ success: true, message: "Default grading scale updated" });
   }),
 );
@@ -126,6 +131,7 @@ gradingRouter.post(
       },
       include: { ranges: { orderBy: { display_order: "asc" } } },
     });
+    await logAudit("GRADING_SCALE_CREATE", { userId: req.user!.sub, targetType: "GradingScale", targetId: scale.id, metadata: { name: scale.name, scale_type: scale.scale_type, from_preset: body.preset }, req });
     res.status(201).json({ success: true, data: scale });
   }),
 );

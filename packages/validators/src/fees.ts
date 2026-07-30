@@ -14,6 +14,7 @@ export const feeStructureSchema = z.object({
   amount: z.number().min(0),
   frequency: z.enum(["MONTHLY", "YEARLY", "ONE_TIME"]),
   due_day: z.number().int().min(1).max(28).optional().nullable(),
+  target_due_date: z.coerce.date().optional().nullable(),
 });
 export type FeeStructureInput = z.infer<typeof feeStructureSchema>;
 

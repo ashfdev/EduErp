@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, SearchInput, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, SearchInput, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Issue {
@@ -20,7 +20,7 @@ export default function ReturnBookPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
 
-  const { data: issues } = useQuery<Issue[]>({
+  const { data: issues, isLoading, isError, error, refetch } = useQuery<Issue[]>({
     queryKey: ["library", "issues", "issued"],
     queryFn: async () => (await api.get("/api/library/issues", { params: { status: "ISSUED" } })).data.data,
   });
@@ -32,6 +32,7 @@ export default function ReturnBookPage() {
       toast.success(fine > 0 ? `Returned — fine of ৳${fine} applies` : "Returned, no fine");
       queryClient.invalidateQueries({ queryKey: ["library", "issues"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to return book"),
   });
 
   const filtered = issues?.filter((i) => {
@@ -45,6 +46,12 @@ export default function ReturnBookPage() {
       <PageHeader title="Return Book" breadcrumbs={[{ label: "Library", href: "/library" }, { label: "Return" }]} />
       <SearchInput placeholder="Filter by book title or borrower name..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load issued books" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!filtered?.length && <EmptyState title="No books currently issued" />}
       {!!filtered?.length && (
         <Card>
@@ -70,6 +77,8 @@ export default function ReturnBookPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </PageWrapper>
   );

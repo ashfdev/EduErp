@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableBody, TableRow, TableCell,
   Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -18,7 +19,9 @@ interface BalanceSheetRow { code: string; name: string; balance: number; is_cont
 interface BalanceSheetData { assets: BalanceSheetRow[]; total_assets: number; liabilities: BalanceSheetRow[]; total_liabilities: number; equity: BalanceSheetRow[]; total_equity: number; total_liabilities_and_equity: number; is_balanced: boolean }
 
 function TrialBalanceView() {
-  const { data } = useQuery<TrialBalanceData>({ queryKey: ["accounts", "trial-balance"], queryFn: async () => (await api.get("/api/accounts/reports/trial-balance")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<TrialBalanceData>({ queryKey: ["accounts", "trial-balance"], queryFn: async () => (await api.get("/api/accounts/reports/trial-balance")).data.data });
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load trial balance" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data) return null;
   return (
     <Card>
@@ -51,7 +54,9 @@ function TrialBalanceView() {
 }
 
 function IncomeExpenditureView() {
-  const { data } = useQuery<IncomeExpenditureData>({ queryKey: ["accounts", "income-expenditure"], queryFn: async () => (await api.get("/api/accounts/reports/income-expenditure")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<IncomeExpenditureData>({ queryKey: ["accounts", "income-expenditure"], queryFn: async () => (await api.get("/api/accounts/reports/income-expenditure")).data.data });
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load income & expenditure statement" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data) return null;
   return (
     <Card>
@@ -75,7 +80,9 @@ function IncomeExpenditureView() {
 }
 
 function BalanceSheetView() {
-  const { data } = useQuery<BalanceSheetData>({ queryKey: ["accounts", "balance-sheet"], queryFn: async () => (await api.get("/api/accounts/reports/balance-sheet")).data.data });
+  const { data, isLoading, isError, error, refetch } = useQuery<BalanceSheetData>({ queryKey: ["accounts", "balance-sheet"], queryFn: async () => (await api.get("/api/accounts/reports/balance-sheet")).data.data });
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load balance sheet" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data) return null;
   return (
     <Card>
@@ -133,7 +140,7 @@ interface LedgerData {
 function LedgerBookView({ endpoint }: { endpoint: string }) {
   const [fromDate, setFromDate] = useState(monthStartStr());
   const [toDate, setToDate] = useState(todayStr());
-  const { data } = useQuery<LedgerData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<LedgerData>({
     queryKey: ["accounts", endpoint, fromDate, toDate],
     queryFn: async () => (await api.get(endpoint, { params: { from_date: fromDate, to_date: toDate } })).data.data,
   });
@@ -145,8 +152,11 @@ function LedgerBookView({ endpoint }: { endpoint: string }) {
           <div className="space-y-1.5"><Label className="text-xs">From</Label><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-40" /></div>
           <div className="space-y-1.5"><Label className="text-xs">To</Label><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-40" /></div>
         </div>
-        {!data && <EmptyState title="Loading..." />}
-        {data && (
+        {isLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load ledger book" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : !data ? null : (
           <>
             <p className="text-sm text-muted-foreground">
               {data.account.name} — Opening: ৳{data.opening_balance.amount.toLocaleString()} {data.opening_balance.type}
@@ -190,7 +200,7 @@ interface DayBookVoucher {
 
 function DayBookView() {
   const [date, setDate] = useState(todayStr());
-  const { data } = useQuery<DayBookVoucher[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<DayBookVoucher[]>({
     queryKey: ["accounts", "day-book", date],
     queryFn: async () => (await api.get("/api/accounts/reports/day-book", { params: { date } })).data.data,
   });
@@ -199,6 +209,12 @@ function DayBookView() {
     <Card>
       <CardContent className="space-y-4 pt-6">
         <div className="space-y-1.5 w-40"><Label className="text-xs">Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        {isLoading ? (
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load day book" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : (
+          <>
         {!data?.length && <EmptyState title="No vouchers posted on this date" />}
         {!!data?.length && (
           <div className="space-y-3">
@@ -223,6 +239,8 @@ function DayBookView() {
             ))}
           </div>
         )}
+          </>
+        )}
       </CardContent>
     </Card>
   );
@@ -235,7 +253,7 @@ interface BudgetVsActualData { budget: { id: string; name: string; status: strin
 function BudgetVsActualView() {
   const { data: budgets } = useQuery<BudgetOption[]>({ queryKey: ["accounts", "budgets"], queryFn: async () => (await api.get("/api/accounts/budgets")).data.data });
   const [budgetId, setBudgetId] = useState("");
-  const { data } = useQuery<BudgetVsActualData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<BudgetVsActualData>({
     queryKey: ["accounts", "budget-vs-actual", budgetId],
     queryFn: async () => (await api.get("/api/accounts/reports/budget-vs-actual", { params: { budget_id: budgetId } })).data.data,
     enabled: !!budgetId,
@@ -254,8 +272,11 @@ function BudgetVsActualView() {
           </Select>
         </div>
         {!budgetId && <EmptyState title="Select a budget to compare against actuals" />}
-        {budgetId && !data && <EmptyState title="Loading..." />}
-        {data && (
+        {budgetId && isLoading && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+        {budgetId && isError && (
+          <ErrorState title="Failed to load budget comparison" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        )}
+        {budgetId && !isLoading && !isError && data && (
           <Table>
             <TableBody>
               {data.rows.map((r) => (

@@ -6,6 +6,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Input, Label, EmptyState,
   Tabs, TabsList, TabsTrigger, TabsContent,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -57,7 +58,7 @@ function EmployeeHistoryTab() {
     queryFn: async () => (await api.get("/api/hr/staff", { params: { search, limit: 10 } })).data.data,
     enabled: search.length > 1,
   });
-  const { data: history } = useQuery<PayrollHistoryRow[]>({
+  const { data: history, isLoading: historyLoading, isError: historyError, error: historyErrorObj, refetch: refetchHistory } = useQuery<PayrollHistoryRow[]>({
     queryKey: ["hr", "payroll", "reports", "employee", staffId],
     queryFn: async () => (await api.get(`/api/hr/payroll/reports/employee/${staffId}`)).data.data,
     enabled: !!staffId,
@@ -83,28 +84,36 @@ function EmployeeHistoryTab() {
         )}
       </div>
 
-      {staffId && !history?.length && <EmptyState title="No payroll history for this staff member yet" />}
-      {!!history?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow><TableHead>Month/Year</TableHead><TableHead>Gross</TableHead><TableHead>Deductions</TableHead><TableHead>Net</TableHead><TableHead>Status</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.month}/{r.year}</TableCell>
-                    <TableCell>৳{r.gross_salary.toFixed(0)}</TableCell>
-                    <TableCell>৳{r.deductions.toFixed(0)}</TableCell>
-                    <TableCell className="font-medium">৳{r.net_salary.toFixed(0)}</TableCell>
-                    <TableCell>{r.status}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {staffId && historyLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : staffId && historyError ? (
+        <ErrorState title="Failed to load payroll history" description={extractErrorMessage(historyErrorObj)} retryLabel="Retry" onRetry={() => refetchHistory()} />
+      ) : (
+        <>
+          {staffId && !history?.length && <EmptyState title="No payroll history for this staff member yet" />}
+          {!!history?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow><TableHead>Month/Year</TableHead><TableHead>Gross</TableHead><TableHead>Deductions</TableHead><TableHead>Net</TableHead><TableHead>Status</TableHead></TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>{r.month}/{r.year}</TableCell>
+                        <TableCell>৳{r.gross_salary.toFixed(0)}</TableCell>
+                        <TableCell>৳{r.deductions.toFixed(0)}</TableCell>
+                        <TableCell className="font-medium">৳{r.net_salary.toFixed(0)}</TableCell>
+                        <TableCell>{r.status}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );
@@ -114,7 +123,7 @@ function PeriodReportTab() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const { data } = useQuery<{ records: PeriodRow[]; department_subtotals: DepartmentSubtotal[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ records: PeriodRow[]; department_subtotals: DepartmentSubtotal[] }>({
     queryKey: ["hr", "payroll", "reports", "period", month, year],
     queryFn: async () => (await api.get("/api/hr/payroll/reports/period", { params: { month, year } })).data.data,
   });
@@ -126,6 +135,12 @@ function PeriodReportTab() {
         <div><Label>Year</Label><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-28" /></div>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load payroll report" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!!data?.department_subtotals?.length && (
         <Card>
           <CardContent className="pt-6">
@@ -174,16 +189,20 @@ function PeriodReportTab() {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
     </div>
   );
 }
 
 function GenerationLogTab() {
-  const { data } = useQuery<GenerationRun[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<GenerationRun[]>({
     queryKey: ["hr", "payroll", "generation-log"],
     queryFn: async () => (await api.get("/api/hr/payroll/generation-log")).data.data,
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load generation log" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!data?.length) return <EmptyState title="No payroll generation runs yet" description="Runs are logged every time Calculate Payroll is used" />;
 
   return (

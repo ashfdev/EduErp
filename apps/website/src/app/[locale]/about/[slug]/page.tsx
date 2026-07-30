@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { useContent } from "@/hooks/use-content";
 import type { StaticPageContent } from "@/lib/types";
@@ -25,12 +25,15 @@ const PAGES = [
 
 export default function AboutSlugPage() {
   const { slug } = useParams<{ slug: string }>();
+  const locale = useLocale();
   const t = useTranslations("about");
   const tCommon = useTranslations("common");
   const { data: page, error, notFound, refetch } = useContent<StaticPageContent>(`/pages/${slug}`);
 
   const currentPage = PAGES.find((p) => p.key === slug);
   const Icon = currentPage?.icon ?? FileQuestion;
+  const pageTitle = (locale === "bn" ? page?.title_bn : page?.title_en) ?? page?.title_en ?? null;
+  const pageContent = (locale === "bn" ? page?.content_bn : page?.content_en) ?? page?.content_en ?? "";
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-slate-50/50 pb-20">
@@ -95,7 +98,7 @@ export default function AboutSlugPage() {
                     <Icon className="h-6 w-6" />
                   </div>
                   <h1 className="text-2xl font-extrabold text-slate-900 leading-tight">
-                    {page.title_en ?? t(currentPage?.labelKey ?? "navAbout")}
+                    {pageTitle ?? t(currentPage?.labelKey ?? "navAbout")}
                   </h1>
                 </div>
 
@@ -119,7 +122,7 @@ export default function AboutSlugPage() {
                     prose-td:text-slate-600 prose-td:text-sm
                     prose-hr:border-slate-200 prose-hr:my-8
                   "
-                  dangerouslySetInnerHTML={{ __html: page.content_en ?? "" }}
+                  dangerouslySetInnerHTML={{ __html: pageContent }}
                 />
               </div>
             )}

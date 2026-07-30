@@ -64,6 +64,25 @@ async function resolveWaiverGrossUp(invoice: Invoice): Promise<{ waiverAmount: n
   return { waiverAmount, expenseAccountId };
 }
 
+// A collected fine was always lumped into the invoice's own category income
+// account (e.g. Tuition Fee Income) instead of the dedicated Late Fine
+// Income account (4009) that's existed, unused, since the chart of accounts
+// was first seeded — so a late-fee surcharge was invisible as its own line
+// in every accounts report. fine_amount can grow between payments (more
+// late days accrue while an invoice sits partially paid), so this tracks a
+// running recognized-so-far AMOUNT (fine_journaled_amount), not a single
+// point-in-time flag like the waiver gross-up above — a later payment only
+// recognizes the newly-accrued delta, never re-books what an earlier
+// payment already posted.
+async function resolveFineRecognition(invoice: Invoice, applied: number): Promise<{ finePortion: number; feePortion: number }> {
+  const stillToRecognize = Math.max(0, Math.round((invoice.fine_amount - invoice.fine_journaled_amount) * 100) / 100);
+  const finePortion = Math.min(stillToRecognize, applied);
+  if (finePortion > 0) {
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { fine_journaled_amount: { increment: finePortion } } });
+  }
+  return { finePortion, feePortion: applied - finePortion };
+}
+
 // appliedToInvoice defaults to the full payment amount (every existing
 // caller's behavior, unchanged). Pass a smaller value when an advance-
 // payment overpayment (Phase 81) has capped what actually applies to this
@@ -79,11 +98,16 @@ export async function createFeeReceiptJournal(payment: Payment, invoice: Invoice
     const incomeAccountId = mapping?.account_id ?? (await getAccountId("4011")); // Other Income fallback
     const cashOrBankAccountId = await getAccountId(payment.gateway === "CASH" ? "1001" : "1002");
     const grossUp = await resolveWaiverGrossUp(invoice);
+    const { finePortion, feePortion } = await resolveFineRecognition(invoice, applied);
 
     const entries: JournalEntryInput[] = [
       { debit_account_id: cashOrBankAccountId, amount: payment.amount, narration: `Fee receipt — ${invoice.description}` },
-      { credit_account_id: incomeAccountId, amount: applied + (grossUp?.waiverAmount ?? 0), narration: `Fee receipt — ${invoice.description}` },
+      { credit_account_id: incomeAccountId, amount: feePortion + (grossUp?.waiverAmount ?? 0), narration: `Fee receipt — ${invoice.description}` },
     ];
+    if (finePortion > 0) {
+      const fineIncomeAccountId = await getAccountId("4009"); // Late Fine Income
+      entries.push({ credit_account_id: fineIncomeAccountId, amount: finePortion, narration: `Late fine — ${invoice.description}` });
+    }
     if (grossUp) {
       entries.push({ debit_account_id: grossUp.expenseAccountId, amount: grossUp.waiverAmount, narration: `Scholarship/waiver granted — ${invoice.description}` });
     }

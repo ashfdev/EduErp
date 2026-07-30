@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Album {
@@ -22,7 +22,7 @@ export default function GalleryPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
-  const { data: albums } = useQuery<Album[]>({ queryKey: ["website", "gallery", "albums"], queryFn: async () => (await api.get("/api/website/gallery/albums")).data.data });
+  const { data: albums, isLoading, isError, error, refetch } = useQuery<Album[]>({ queryKey: ["website", "gallery", "albums"], queryFn: async () => (await api.get("/api/website/gallery/albums")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/website/gallery/albums", { name, description }),
@@ -32,34 +32,43 @@ export default function GalleryPage() {
       setOpen(false);
       setName(""); setDescription("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create album"),
   });
 
   return (
     <PageWrapper>
       <PageHeader title="Gallery" breadcrumbs={[{ label: "Website" }, { label: "Gallery" }]} action={<Button onClick={() => setOpen(true)}>+ New Album</Button>} />
 
-      {!albums?.length && <EmptyState title="No albums yet" />}
-      <div className="grid grid-cols-3 gap-4">
-        {albums?.map((a) => (
-          <Link key={a.id} href={`/website/gallery/${a.id}`}>
-            <Card className="transition hover:shadow-md">
-              <CardContent className="space-y-2 pt-6">
-                {a.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={a.cover_url} alt={a.name} className="h-32 w-full rounded-md object-cover" />
-                ) : (
-                  <div className="flex h-32 w-full items-center justify-center rounded-md bg-muted text-sm text-muted-foreground">No cover</div>
-                )}
-                <p className="font-medium">{a.name}</p>
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{a._count.images} photos</span>
-                  <StatusBadge status={a.is_public ? "PUBLIC" : "PRIVATE"} />
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load albums" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!albums?.length && <EmptyState title="No albums yet" />}
+          <div className="grid grid-cols-3 gap-4">
+            {albums?.map((a) => (
+              <Link key={a.id} href={`/website/gallery/${a.id}`}>
+                <Card className="transition hover:shadow-md">
+                  <CardContent className="space-y-2 pt-6">
+                    {a.cover_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={a.cover_url} alt={a.name} className="h-32 w-full rounded-md object-cover" />
+                    ) : (
+                      <div className="flex h-32 w-full items-center justify-center rounded-md bg-muted text-sm text-muted-foreground">No cover</div>
+                    )}
+                    <p className="font-medium">{a.name}</p>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{a._count.images} photos</span>
+                      <StatusBadge status={a.is_public ? "PUBLIC" : "PRIVATE"} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

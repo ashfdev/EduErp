@@ -24,6 +24,8 @@ import {
   TabsTrigger,
   TabsContent,
   extractErrorMessage,
+  ErrorState,
+  LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -56,7 +58,7 @@ export default function StudentLeaveOversightPage() {
   const [rejectTarget, setRejectTarget] = useState<{ kind: "request" | "approval"; id: string } | null>(null);
   const [reason, setReason] = useState("");
 
-  const { data: requests } = useQuery<RequestRow[]>({
+  const { data: requests, isLoading, isError, error, refetch } = useQuery<RequestRow[]>({
     queryKey: ["student-leave", "requests"],
     queryFn: async () => (await api.get("/api/student-leave/requests")).data.data,
   });
@@ -169,24 +171,30 @@ export default function StudentLeaveOversightPage() {
         breadcrumbs={[{ label: "Student Leave Requests" }]}
       />
 
-      <Tabs defaultValue="pending">
-        <TabsList>
-          <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
-          <TabsTrigger value="decided">Decided ({decided.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="pending">
-          {!pending.length && <EmptyState title="No pending leave requests" />}
-          <div className="space-y-3">
-            {pending.map((r) => <RequestCard key={r.id} r={r} />)}
-          </div>
-        </TabsContent>
-        <TabsContent value="decided">
-          {!decided.length && <EmptyState title="No decided leave requests yet" />}
-          <div className="space-y-3">
-            {decided.map((r) => <RequestCard key={r.id} r={r} />)}
-          </div>
-        </TabsContent>
-      </Tabs>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load leave requests" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <Tabs defaultValue="pending">
+          <TabsList>
+            <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
+            <TabsTrigger value="decided">Decided ({decided.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="pending">
+            {!pending.length && <EmptyState title="No pending leave requests" />}
+            <div className="space-y-3">
+              {pending.map((r) => <RequestCard key={r.id} r={r} />)}
+            </div>
+          </TabsContent>
+          <TabsContent value="decided">
+            {!decided.length && <EmptyState title="No decided leave requests yet" />}
+            <div className="space-y-3">
+              {decided.map((r) => <RequestCard key={r.id} r={r} />)}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
 
       <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
         <DialogContent>

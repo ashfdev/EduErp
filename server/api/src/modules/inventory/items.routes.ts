@@ -30,6 +30,29 @@ itemsRouter.post(
   }),
 );
 
+itemsRouter.put(
+  "/item-categories/:id",
+  authorize(INVENTORY_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = itemCategorySchema.partial().parse(req.body);
+    const category = await prisma.itemCategory.update({ where: { id }, data: body });
+    res.json({ success: true, data: category });
+  }),
+);
+
+itemsRouter.delete(
+  "/item-categories/:id",
+  authorize(INVENTORY_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const itemCount = await prisma.item.count({ where: { category_id: id } });
+    if (itemCount > 0) throw conflict("Cannot delete a category that has items assigned to it");
+    await prisma.itemCategory.delete({ where: { id } });
+    res.status(204).send();
+  }),
+);
+
 itemsRouter.get(
   "/items",
   asyncHandler(async (req, res) => {

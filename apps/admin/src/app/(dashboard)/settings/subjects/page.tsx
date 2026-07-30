@@ -23,6 +23,9 @@ import {
   TableBody,
   TableRow,
   TableCell,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -69,7 +72,7 @@ interface DuplicateSubjectRow {
 
 export default function SubjectsSettingsPage() {
   const queryClient = useQueryClient();
-  const { data: classes } = useQuery<ClassOption[]>({
+  const { data: classes, isLoading: classesLoading, isError: classesError, error: classesErrorObj, refetch: refetchClasses } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
@@ -85,7 +88,7 @@ export default function SubjectsSettingsPage() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const selectedClass = classes?.find((c) => c.id === selectedClassId);
 
-  const { data: subjects } = useQuery<Subject[]>({
+  const { data: subjects, isLoading: subjectsLoading, isError: subjectsError, error: subjectsErrorObj, refetch: refetchSubjects } = useQuery<Subject[]>({
     queryKey: ["subjects", selectedClassId],
     queryFn: async () => (await api.get("/api/subjects", { params: { class_id: selectedClassId } })).data.data,
     enabled: !!selectedClassId,
@@ -136,6 +139,7 @@ export default function SubjectsSettingsPage() {
   const moveMutation = useMutation({
     mutationFn: (reordered: { id: string; display_order: number }[]) => api.put("/api/subjects/reorder", reordered),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
+    onError: () => toast.error("Failed to reorder subjects"),
   });
 
   function move(index: number, direction: -1 | 1) {
@@ -178,6 +182,7 @@ export default function SubjectsSettingsPage() {
       toast.success("Unassigned");
       queryClient.invalidateQueries({ queryKey: ["subjects", expandedSubject, "assignments"] });
     },
+    onError: () => toast.error("Failed to unassign teacher"),
   });
 
   return (
@@ -207,15 +212,21 @@ export default function SubjectsSettingsPage() {
 
       <div className="grid grid-cols-4 gap-6">
         <div className="col-span-1 space-y-1">
-          {classes?.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedClassId(c.id)}
-              className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedClassId === c.id ? "bg-accent font-medium" : "hover:bg-accent/50"}`}
-            >
-              {c.name_en}
-            </button>
-          ))}
+          {classesLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : classesError ? (
+            <ErrorState title="Failed to load classes" description={extractErrorMessage(classesErrorObj)} retryLabel="Retry" onRetry={() => refetchClasses()} />
+          ) : (
+            classes?.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedClassId(c.id)}
+                className={`w-full rounded-md px-3 py-2 text-left text-sm ${selectedClassId === c.id ? "bg-accent font-medium" : "hover:bg-accent/50"}`}
+              >
+                {c.name_en}
+              </button>
+            ))
+          )}
         </div>
 
         <div className="col-span-3 space-y-4">
@@ -228,6 +239,12 @@ export default function SubjectsSettingsPage() {
                 <Button size="sm" onClick={() => setAddOpen(true)}>+ Add Subject</Button>
               </div>
 
+              {subjectsLoading ? (
+                <div className="flex justify-center py-16"><LoadingSpinner /></div>
+              ) : subjectsError ? (
+                <ErrorState title="Failed to load subjects" description={extractErrorMessage(subjectsErrorObj)} retryLabel="Retry" onRetry={() => refetchSubjects()} />
+              ) : (
+                <>
               {!subjects?.length && <EmptyState title="No subjects yet for this class" />}
 
               <div className="space-y-2">
@@ -314,6 +331,8 @@ export default function SubjectsSettingsPage() {
                   </Card>
                 ))}
               </div>
+                </>
+              )}
             </>
           )}
         </div>

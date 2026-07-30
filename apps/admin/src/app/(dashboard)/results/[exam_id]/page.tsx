@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -71,19 +71,28 @@ export default function ExamResultsPage() {
   const examScopedClasses = currentExam ? classes?.filter((c) => currentExam.class_ids?.includes(c.id)) ?? [] : classes;
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data: merit } = useQuery<MeritEntry[]>({
+  const { data: merit, isLoading: meritLoading, isError: meritError, error: meritErrorObj, refetch: refetchMerit } = useQuery<MeritEntry[]>({
     queryKey: ["results", "merit-list", exam_id, classId, groupId],
     queryFn: async () => (await api.get(`/api/results/reports/merit-list/${exam_id}/${classId}`, { params: { group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
   });
 
-  const { data: analysis } = useQuery<SubjectAnalysis[]>({
+  const { data: analysis, isLoading: analysisLoading, isError: analysisError, error: analysisErrorObj, refetch: refetchAnalysis } = useQuery<SubjectAnalysis[]>({
     queryKey: ["results", "subject-analysis", exam_id, classId, groupId],
     queryFn: async () => (await api.get(`/api/results/reports/subject-analysis/${exam_id}/${classId}`, { params: { group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
   });
 
-  const { data: allStudents } = useQuery<StudentResult[]>({
+  // Settings-driven "good pass rate" cutoff for the badge below (was a
+  // hardcoded `>= 80`) — same singleton AttendanceRules already holds
+  // min_attendance_percentage for the analogous at-risk classification.
+  const { data: attendanceRules } = useQuery<{ pass_rate_alert_threshold?: number | null }>({
+    queryKey: ["settings", "attendance-rules"],
+    queryFn: async () => (await api.get("/api/settings/attendance-rules")).data.data,
+  });
+  const passRateThreshold = attendanceRules?.pass_rate_alert_threshold ?? 80;
+
+  const { data: allStudents, isLoading: allStudentsLoading, isError: allStudentsError, error: allStudentsErrorObj, refetch: refetchAllStudents } = useQuery<StudentResult[]>({
     queryKey: ["results", "exam", exam_id, classId, groupId],
     queryFn: async () => (await api.get(`/api/results/exam/${exam_id}`, { params: { class_id: classId, group_id: groupId || undefined } })).data.data,
     enabled: !!classId,
@@ -148,70 +157,91 @@ export default function ExamResultsPage() {
           </TabsList>
 
           <TabsContent value="all">
-            {!allStudents?.length && <EmptyState title="No results yet" description="Marks may not be entered or approved for this class yet." />}
-            {!!allStudents?.length && (
+            {allStudentsLoading ? (
+              <div className="flex justify-center py-16"><LoadingSpinner /></div>
+            ) : allStudentsError ? (
+              <ErrorState title="Failed to load results" description={extractErrorMessage(allStudentsErrorObj)} retryLabel="Retry" onRetry={() => refetchAllStudents()} />
+            ) : (
               <>
-                <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
-                <Card>
-                  <CardContent className="pt-6">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Position</TableHead>
-                          <TableHead>Roll</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>GPA</TableHead>
-                          <TableHead>Grade</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredStudents.map((s) => (
-                          <TableRow key={s.student_id}>
-                            <TableCell>{s.has_failed ? "—" : s.position}</TableCell>
-                            <TableCell>{s.roll_no}</TableCell>
-                            <TableCell>
-                              <Link href={`/students/${s.student_id}`} className="hover:underline" target="_blank">{s.name_en}</Link>
-                            </TableCell>
-                            <TableCell>{s.total_gpa}</TableCell>
-                            <TableCell>{s.overall_grade}</TableCell>
-                            <TableCell><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
+                {!allStudents?.length && <EmptyState title="No results yet" description="Marks may not be entered or approved for this class yet." />}
+                {!!allStudents?.length && (
+                  <>
+                    <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3 max-w-xs" />
+                    <Card>
+                      <CardContent className="pt-6">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Position</TableHead>
+                              <TableHead>Roll</TableHead>
+                              <TableHead>Name</TableHead>
+                              <TableHead>GPA</TableHead>
+                              <TableHead>Grade</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredStudents.map((s) => (
+                              <TableRow key={s.student_id}>
+                                <TableCell>{s.has_failed ? "—" : s.position}</TableCell>
+                                <TableCell>{s.roll_no}</TableCell>
+                                <TableCell>
+                                  <Link href={`/students/${s.student_id}`} className="hover:underline" target="_blank">{s.name_en}</Link>
+                                </TableCell>
+                                <TableCell>{s.total_gpa}</TableCell>
+                                <TableCell>{s.overall_grade}</TableCell>
+                                <TableCell><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </>
             )}
           </TabsContent>
 
           <TabsContent value="merit">
-            {!merit?.length && <EmptyState title="No merit list yet" description="All students may have failed, or results aren't approved." />}
-            {!!merit?.length && (
-              <Card>
-                <CardContent className="pt-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow><TableHead>Rank</TableHead><TableHead>Roll</TableHead><TableHead>Name</TableHead><TableHead>GPA</TableHead></TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {merit.map((m) => (
-                        <TableRow key={m.student_uid}>
-                          <TableCell className="font-semibold">{m.rank}</TableCell>
-                          <TableCell>{m.roll_no}</TableCell>
-                          <TableCell>{m.name_en}</TableCell>
-                          <TableCell>{m.total_gpa}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+            {meritLoading ? (
+              <div className="flex justify-center py-16"><LoadingSpinner /></div>
+            ) : meritError ? (
+              <ErrorState title="Failed to load merit list" description={extractErrorMessage(meritErrorObj)} retryLabel="Retry" onRetry={() => refetchMerit()} />
+            ) : (
+              <>
+                {!merit?.length && <EmptyState title="No merit list yet" description="All students may have failed, or results aren't approved." />}
+                {!!merit?.length && (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <Table>
+                        <TableHeader>
+                          <TableRow><TableHead>Rank</TableHead><TableHead>Roll</TableHead><TableHead>Name</TableHead><TableHead>GPA</TableHead></TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {merit.map((m) => (
+                            <TableRow key={m.student_uid}>
+                              <TableCell className="font-semibold">{m.rank}</TableCell>
+                              <TableCell>{m.roll_no}</TableCell>
+                              <TableCell>{m.name_en}</TableCell>
+                              <TableCell>{m.total_gpa}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="analysis">
+            {analysisLoading ? (
+              <div className="flex justify-center py-16"><LoadingSpinner /></div>
+            ) : analysisError ? (
+              <ErrorState title="Failed to load subject analysis" description={extractErrorMessage(analysisErrorObj)} retryLabel="Retry" onRetry={() => refetchAnalysis()} />
+            ) : (
             <Card>
               <CardContent className="pt-6">
                 <Table>
@@ -224,7 +254,7 @@ export default function ExamResultsPage() {
                         <TableCell>{a.subject_name}</TableCell>
                         <TableCell>{a.appeared}</TableCell>
                         <TableCell>{a.passed}</TableCell>
-                        <TableCell>{a.pass_rate != null ? <StatusBadge status={a.pass_rate >= 80 ? "ACTIVE" : "PENDING"} /> : "—"} {a.pass_rate}%</TableCell>
+                        <TableCell>{a.pass_rate != null ? <StatusBadge status={a.pass_rate >= passRateThreshold ? "ACTIVE" : "PENDING"} /> : "—"} {a.pass_rate}%</TableCell>
                         <TableCell>{a.average_marks}</TableCell>
                       </TableRow>
                     ))}
@@ -232,6 +262,7 @@ export default function ExamResultsPage() {
                 </Table>
               </CardContent>
             </Card>
+            )}
           </TabsContent>
         </Tabs>
       )}

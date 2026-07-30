@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, EmptyState, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LinkRow {
@@ -22,7 +22,7 @@ export default function ImportantLinksPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: links } = useQuery<LinkRow[]>({
+  const { data: links, isLoading, isError, error, refetch } = useQuery<LinkRow[]>({
     queryKey: ["website", "important-links"],
     queryFn: async () => (await api.get("/api/website/important-links")).data.data,
   });
@@ -59,6 +59,7 @@ export default function ImportantLinksPage() {
       toast.success("Link removed");
       queryClient.invalidateQueries({ queryKey: ["website", "important-links"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove link"),
   });
 
   return (
@@ -70,39 +71,47 @@ export default function ImportantLinksPage() {
         action={<Button onClick={openCreate}>+ Add Link</Button>}
       />
 
-      {!links?.length && <EmptyState title="No important links yet" />}
-      {!!links?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>URL</TableHead>
-                  <TableHead>Active</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {links.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell>{l.display_order}</TableCell>
-                    <TableCell>{l.title}</TableCell>
-                    <TableCell><a href={l.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{l.url}</a></TableCell>
-                    <TableCell>
-                      <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(l)}>{l.is_active ? "Active" : "Inactive"}</Button>
-                    </TableCell>
-                    <TableCell className="space-x-2 text-right">
-                      <Button size="sm" variant="outline" onClick={() => openEdit(l)}>Edit</Button>
-                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(l.id)}>Delete</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load important links" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!links?.length && <EmptyState title="No important links yet" />}
+          {!!links?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>URL</TableHead>
+                      <TableHead>Active</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {links.map((l) => (
+                      <TableRow key={l.id}>
+                        <TableCell>{l.display_order}</TableCell>
+                        <TableCell>{l.title}</TableCell>
+                        <TableCell><a href={l.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{l.url}</a></TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(l)}>{l.is_active ? "Active" : "Inactive"}</Button>
+                        </TableCell>
+                        <TableCell className="space-x-2 text-right">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(l)}>Edit</Button>
+                          <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(l.id)}>Delete</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

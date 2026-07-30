@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Badge, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -47,7 +47,7 @@ export default function MarkAttendancePage() {
   });
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data: rows, refetch } = useQuery<AttendanceRow[]>({
+  const { data: rows, refetch, isLoading: rowsLoading, isError: rowsError, error: rowsErrorObj } = useQuery<AttendanceRow[]>({
     queryKey: ["attendance", sectionId, date],
     queryFn: async () => (await api.get("/api/attendance", { params: { section_id: sectionId, date } })).data.data,
     enabled: !!sectionId,
@@ -109,6 +109,9 @@ export default function MarkAttendancePage() {
           {selectedClass?.sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
       </div>
+
+      {rowsLoading && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+      {rowsError && <ErrorState title="Failed to load attendance" description={extractErrorMessage(rowsErrorObj)} retryLabel="Retry" onRetry={() => refetch()} />}
 
       {rows && (
         <>

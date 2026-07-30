@@ -44,6 +44,28 @@ interface Application {
   created_at: string;
 }
 
+interface FormField {
+  key: string;
+  label_en: string;
+  label_bn?: string;
+  type: "TEXT" | "NUMBER" | "DATE" | "SELECT" | "PHONE" | "EMAIL" | "TEXTAREA" | "FILE";
+  required: boolean;
+  is_default: boolean;
+  display_order: number;
+  options?: string[];
+}
+interface DocumentUploadField {
+  key: string;
+  label_en: string;
+  required: boolean;
+}
+interface FormConfig {
+  fields: FormField[];
+  document_uploads: DocumentUploadField[];
+}
+const emptyFormField: FormField = { key: "", label_en: "", type: "TEXT", required: false, is_default: false, display_order: 0 };
+const emptyDocUpload: DocumentUploadField = { key: "", label_en: "", required: false };
+
 export default function AdmissionCycleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -155,6 +177,35 @@ export default function AdmissionCycleDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to publish"),
   });
 
+  // ── Custom application-form fields (form_config) ──
+  // Backend (GET/PUT /cycles/:id/form-config) and the public website wizard
+  // that reads and renders these fields already existed and worked — the
+  // only missing piece was an admin UI to actually author them, which is
+  // what this section adds.
+  const { data: formConfig } = useQuery<FormConfig | null>({
+    queryKey: ["admission", "cycles", id, "form-config"],
+    queryFn: async () => (await api.get(`/api/admission/cycles/${id}/form-config`)).data.data,
+  });
+  const [customFields, setCustomFields] = useState<FormField[]>([]);
+  const [docUploads, setDocUploads] = useState<DocumentUploadField[]>([]);
+  useEffect(() => {
+    setCustomFields((formConfig?.fields ?? []).filter((f) => !f.is_default));
+    setDocUploads(formConfig?.document_uploads ?? []);
+  }, [formConfig]);
+
+  const saveFormConfigMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/admission/cycles/${id}/form-config`, {
+        fields: customFields.map((f, i) => ({ ...f, display_order: i })),
+        document_uploads: docUploads,
+      }),
+    onSuccess: () => {
+      toast.success("Application form fields saved");
+      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id, "form-config"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save form fields"),
+  });
+
   async function downloadAllAdmitCards() {
     const res = await api.get(`/api/admission/cycles/${id}/admit-cards`, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
@@ -220,6 +271,7 @@ export default function AdmissionCycleDetailPage() {
           <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="merit">Merit List</TabsTrigger>
           <TabsTrigger value="test">Admission Test</TabsTrigger>
+          <TabsTrigger value="form">Application Form</TabsTrigger>
         </TabsList>
 
         <TabsContent value="applications">
@@ -410,6 +462,122 @@ export default function AdmissionCycleDetailPage() {
               </Card>
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="form" className="space-y-4">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Custom Application Fields</p>
+                  <p className="text-sm text-muted-foreground">
+                    Extra fields shown on the public application form for this cycle, beyond the built-in name/guardian/contact fields.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setCustomFields((prev) => [...prev, { ...emptyFormField }])}>
+                  + Add Field
+                </Button>
+              </div>
+
+              {!customFields.length && <EmptyState title="No custom fields" description="The application form will only ask for the built-in fields." />}
+
+              {customFields.map((f, i) => (
+                <div key={i} className="grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-6 sm:items-end">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs">Field Key</Label>
+                    <Input
+                      value={f.key}
+                      placeholder="blood_group"
+                      onChange={(e) => setCustomFields((prev) => prev.map((x, xi) => (xi === i ? { ...x, key: e.target.value } : x)))}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs">Label</Label>
+                    <Input
+                      value={f.label_en}
+                      placeholder="Blood Group"
+                      onChange={(e) => setCustomFields((prev) => prev.map((x, xi) => (xi === i ? { ...x, label_en: e.target.value } : x)))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Type</Label>
+                    <select
+                      className="w-full rounded-md border px-2 py-2 text-sm"
+                      value={f.type}
+                      onChange={(e) => setCustomFields((prev) => prev.map((x, xi) => (xi === i ? { ...x, type: e.target.value as FormField["type"] } : x)))}
+                    >
+                      {(["TEXT", "NUMBER", "DATE", "SELECT", "PHONE", "EMAIL", "TEXTAREA", "FILE"] as const).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={f.required} onCheckedChange={(v) => setCustomFields((prev) => prev.map((x, xi) => (xi === i ? { ...x, required: v === true } : x)))} />
+                    <Label className="text-xs">Required</Label>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setCustomFields((prev) => prev.filter((_, xi) => xi !== i))}>
+                    Remove
+                  </Button>
+                  {f.type === "SELECT" && (
+                    <div className="space-y-1 sm:col-span-6">
+                      <Label className="text-xs">Options (comma-separated)</Label>
+                      <Input
+                        value={(f.options ?? []).join(", ")}
+                        onChange={(e) =>
+                          setCustomFields((prev) =>
+                            prev.map((x, xi) => (xi === i ? { ...x, options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) } : x)),
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Required Document Uploads</p>
+                  <p className="text-sm text-muted-foreground">Documents an applicant must upload with their application.</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setDocUploads((prev) => [...prev, { ...emptyDocUpload }])}>
+                  + Add Document
+                </Button>
+              </div>
+
+              {!docUploads.length && <EmptyState title="No required documents" description="Applicants won't be asked to upload anything." />}
+
+              {docUploads.map((d, i) => (
+                <div key={i} className="grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-4 sm:items-end">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Key</Label>
+                    <Input value={d.key} placeholder="birth_certificate" onChange={(e) => setDocUploads((prev) => prev.map((x, xi) => (xi === i ? { ...x, key: e.target.value } : x)))} />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-xs">Label</Label>
+                    <Input value={d.label_en} placeholder="Birth Certificate" onChange={(e) => setDocUploads((prev) => prev.map((x, xi) => (xi === i ? { ...x, label_en: e.target.value } : x)))} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox checked={d.required} onCheckedChange={(v) => setDocUploads((prev) => prev.map((x, xi) => (xi === i ? { ...x, required: v === true } : x)))} />
+                    <Label className="text-xs">Required</Label>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDocUploads((prev) => prev.filter((_, xi) => xi !== i))}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Button
+            onClick={() => saveFormConfigMutation.mutate()}
+            disabled={saveFormConfigMutation.isPending || customFields.some((f) => !f.key || !f.label_en) || docUploads.some((d) => !d.key || !d.label_en)}
+          >
+            {saveFormConfigMutation.isPending ? "Saving..." : "Save Application Form"}
+          </Button>
         </TabsContent>
       </Tabs>
     </PageWrapper>

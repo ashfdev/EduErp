@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, SearchInput, EmptyState, PdfPreviewModal, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, SearchInput, EmptyState, PdfPreviewModal, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -36,7 +36,7 @@ export default function FeeReceiptsPage() {
   const [page, setPage] = useState(1);
   const pdfPreview = usePdfPreview();
 
-  const { data } = useQuery<ReceiptsResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<ReceiptsResponse>({
     queryKey: ["accounts", "receipts", search, from, to, page],
     queryFn: async () =>
       (
@@ -77,6 +77,12 @@ export default function FeeReceiptsPage() {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load receipts" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!receipts.length && <EmptyState title="No receipts found" description="Try a different name, ID, receipt number, or date range." />}
       {!!receipts.length && (
         <Card>
@@ -127,6 +133,8 @@ export default function FeeReceiptsPage() {
             )}
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <PdfPreviewModal open={pdfPreview.open} onOpenChange={(open) => !open && pdfPreview.closePreview()} title={pdfPreview.title} pdfUrl={pdfPreview.url} />

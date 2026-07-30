@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Badge, Button, Card, CardContent, ConfirmDialog, EmptyState, Label, PageHeader, PageWrapper, Switch, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, EmptyState, Label, PageHeader, PageWrapper, Switch, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface UnitStatus {
@@ -35,7 +35,7 @@ export default function ApproveMarksPage() {
   const [isPublicByUnit, setIsPublicByUnit] = useState<Record<string, boolean>>({});
   const [confirmWholeCampus, setConfirmWholeCampus] = useState(false);
 
-  const { data: units, isLoading } = useQuery<UnitStatus[]>({
+  const { data: units, isLoading, isError, error, refetch } = useQuery<UnitStatus[]>({
     queryKey: ["marks", "publish-status", exam_id],
     queryFn: async () => (await api.get(`/api/marks/publish-status/${exam_id}`)).data.data,
   });
@@ -105,7 +105,9 @@ export default function ApproveMarksPage() {
         }
       />
 
-      {!isLoading && !units?.length && <EmptyState title="No classes tied to this exam yet" description="Add subjects to this exam's Subject Configuration first." />}
+      {isLoading && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load publish status" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
+      {!isLoading && !isError && !units?.length && <EmptyState title="No classes tied to this exam yet" description="Add subjects to this exam's Subject Configuration first." />}
 
       <div className="space-y-3">
         {units?.map((u) => {

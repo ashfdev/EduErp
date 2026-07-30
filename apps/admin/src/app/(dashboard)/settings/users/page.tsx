@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -24,7 +24,7 @@ interface UserRow {
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
-  const { data: users } = useQuery<UserRow[]>({
+  const { data: users, isLoading, isError, error, refetch } = useQuery<UserRow[]>({
     queryKey: ["settings", "users"],
     queryFn: async () => (await api.get("/api/settings/users")).data.data,
   });
@@ -61,6 +61,7 @@ export default function UsersPage() {
   const toggleMutation = useMutation({
     mutationFn: (id: string) => api.put(`/api/settings/users/${id}/toggle`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "users"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update user status"),
   });
 
   const resetPasswordMutation = useMutation({
@@ -105,52 +106,60 @@ export default function UsersPage() {
         }
       />
 
-      {!users?.length && <EmptyState title="No users yet" />}
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load users" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!users?.length && <EmptyState title="No users yet" />}
 
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          {!!users?.length && (
-            <div className="flex flex-wrap items-center gap-2">
-              <SearchInput placeholder="Search by name, phone, or staff ID..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="max-w-xs" />
-              <select className="rounded-md border px-3 py-2 text-sm" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                <option value="">All roles</option>
-                {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
-              </select>
-              {(userSearch || roleFilter) && (
-                <span className="text-xs text-muted-foreground">{filteredUsers.length} of {users.length}</span>
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              {!!users?.length && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <SearchInput placeholder="Search by name, phone, or staff ID..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="max-w-xs" />
+                  <select className="rounded-md border px-3 py-2 text-sm" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                    <option value="">All roles</option>
+                    {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+                  </select>
+                  {(userSearch || roleFilter) && (
+                    <span className="text-xs text-muted-foreground">{filteredUsers.length} of {users.length}</span>
+                  )}
+                </div>
               )}
-            </div>
-          )}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!!users?.length && !filteredUsers.length && (
-                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">No users match this search/filter.</TableCell></TableRow>
-              )}
-              {filteredUsers.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</TableCell>
-                  <TableCell>{u.phone}</TableCell>
-                  <TableCell><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></TableCell>
-                  <TableCell><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
-                  <TableCell className="space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => setResetTarget(u)}>Reset Password</Button>
-                    <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(u.id)}>{u.is_active ? "Disable" : "Enable"}</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!!users?.length && !filteredUsers.length && (
+                    <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">No users match this search/filter.</TableCell></TableRow>
+                  )}
+                  {filteredUsers.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">{u.name_en} {u.staff?.staff_uid && <span className="ml-1 font-mono text-xs text-muted-foreground">{u.staff.staff_uid}</span>}</TableCell>
+                      <TableCell>{u.phone}</TableCell>
+                      <TableCell><Badge variant="outline">{u.role.replace(/_/g, " ")}</Badge></TableCell>
+                      <TableCell><StatusBadge status={u.is_active ? "ACTIVE" : "INACTIVE"} /></TableCell>
+                      <TableCell className="space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => setResetTarget(u)}>Reset Password</Button>
+                        <Button size="sm" variant="outline" onClick={() => toggleMutation.mutate(u.id)}>{u.is_active ? "Disable" : "Enable"}</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

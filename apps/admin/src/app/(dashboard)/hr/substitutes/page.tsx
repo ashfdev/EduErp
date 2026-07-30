@@ -8,7 +8,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
-  extractErrorMessage,
+  extractErrorMessage, ErrorState, LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -63,7 +63,7 @@ export default function ProxySubstitutePage() {
   // convention RoutineSlot already uses (0=Sunday).
   const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
 
-  const { data: slots } = useQuery<RoutineSlotRow[]>({
+  const { data: slots, isLoading, isError, error, refetch } = useQuery<RoutineSlotRow[]>({
     queryKey: ["settings", "routine", "day", dayOfWeek],
     queryFn: async () => (await api.get("/api/settings/routine", { params: { day_of_week: dayOfWeek } })).data.data,
   });
@@ -142,6 +142,12 @@ export default function ProxySubstitutePage() {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load routine" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+      <>
       {!teachableSlots.length && <EmptyState title="No routine slots on this weekday" description="No classes are scheduled on this weekday, or no routine has been set up yet." />}
 
       {!!teachableSlots.length && (
@@ -206,6 +212,8 @@ export default function ProxySubstitutePage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
 
       <Dialog open={!!assignTarget} onOpenChange={(o) => !o && setAssignTarget(null)}>

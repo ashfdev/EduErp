@@ -324,9 +324,12 @@ vouchersRouter.post(
   authorize(VOUCHER_APPROVE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const existing = await prisma.voucher.findUnique({ where: { id } });
+    const existing = await prisma.voucher.findUnique({ where: { id }, include: { financial_year: true } });
     if (!existing) throw notFound("Voucher not found");
     if (existing.status !== "DRAFT") throw badRequest("Only DRAFT vouchers can be approved");
+    if (existing.financial_year.is_closed) {
+      throw badRequest(`Cannot approve — financial year "${existing.financial_year.label}" is closed`);
+    }
 
     const voucher = await prisma.voucher.update({ where: { id }, data: { status: "APPROVED", approved_by_id: req.user!.sub, approved_at: new Date() } });
     res.json({ success: true, data: voucher });
@@ -338,9 +341,12 @@ vouchersRouter.post(
   authorize(VOUCHER_POST_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const existing = await prisma.voucher.findUnique({ where: { id } });
+    const existing = await prisma.voucher.findUnique({ where: { id }, include: { financial_year: true } });
     if (!existing) throw notFound("Voucher not found");
     if (existing.status !== "APPROVED") throw badRequest("Only APPROVED vouchers can be posted");
+    if (existing.financial_year.is_closed) {
+      throw badRequest(`Cannot post — financial year "${existing.financial_year.label}" is closed`);
+    }
 
     const voucher = await prisma.voucher.update({ where: { id }, data: { status: "POSTED" } });
     res.json({ success: true, data: voucher });

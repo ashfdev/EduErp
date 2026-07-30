@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label, LoadingSpinner, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
@@ -143,12 +143,12 @@ export default function StudentProfilePage() {
     enabled: !!expandedHistoryId && !!expandedHistoryYearId,
   });
 
-  const { data: profile, isLoading } = useQuery<StudentProfile>({
+  const { data: profile, isLoading, isError, error, refetch } = useQuery<StudentProfile>({
     queryKey: ["students", id],
     queryFn: async () => (await api.get(`/api/students/${id}`)).data.data,
   });
 
-  const { data: documents } = useQuery<StudentDocumentRow[]>({
+  const { data: documents, isLoading: documentsLoading, isError: documentsError, error: documentsErrorObj, refetch: refetchDocuments } = useQuery<StudentDocumentRow[]>({
     queryKey: ["students", id, "documents"],
     queryFn: async () => (await api.get(`/api/students/${id}/documents`)).data.data,
   });
@@ -179,6 +179,7 @@ export default function StudentProfilePage() {
       toast.success("Document removed");
       queryClient.invalidateQueries({ queryKey: ["students", id, "documents"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove document"),
   });
 
   const replaceDocMutation = useMutation({
@@ -303,10 +304,18 @@ export default function StudentProfilePage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Refund failed"),
   });
 
-  if (isLoading || !profile) {
+  if (isLoading) {
     return (
       <PageWrapper>
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !profile) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load student" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
       </PageWrapper>
     );
   }
@@ -885,6 +894,12 @@ export default function StudentProfilePage() {
           <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setDocUploadOpen(true)}>+ Upload Document</Button></div>
           <Card>
             <CardContent className="pt-6">
+              {documentsLoading ? (
+                <div className="flex justify-center py-16"><LoadingSpinner /></div>
+              ) : documentsError ? (
+                <ErrorState title="Failed to load documents" description={extractErrorMessage(documentsErrorObj)} retryLabel="Retry" onRetry={() => refetchDocuments()} />
+              ) : (
+                <>
               {!documents?.length && <EmptyState title="No documents uploaded yet" />}
               {!!documents?.length && (
                 <Table>
@@ -917,6 +932,8 @@ export default function StudentProfilePage() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -1001,7 +1018,7 @@ function StudentHealthTab({ studentId }: { studentId: string }) {
   const [profileDraft, setProfileDraft] = useState<HealthProfile>({});
   const [incidentDraft, setIncidentDraft] = useState({ date: new Date().toISOString().slice(0, 10), description: "", action_taken: "" });
 
-  const { data } = useQuery<{ profile: HealthProfile | null; incidents: HealthIncident[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ profile: HealthProfile | null; incidents: HealthIncident[] }>({
     queryKey: ["health", studentId],
     queryFn: async () => (await api.get(`/api/student-health/student/${studentId}`)).data.data,
   });
@@ -1013,6 +1030,7 @@ function StudentHealthTab({ studentId }: { studentId: string }) {
       queryClient.invalidateQueries({ queryKey: ["health", studentId] });
       setProfileOpen(false);
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save health profile"),
   });
 
   const addIncidentMutation = useMutation({
@@ -1023,11 +1041,20 @@ function StudentHealthTab({ studentId }: { studentId: string }) {
       setIncidentOpen(false);
       setIncidentDraft({ date: new Date().toISOString().slice(0, 10), description: "", action_taken: "" });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record incident"),
   });
 
   function openProfileEditor() {
     setProfileDraft(data?.profile ?? {});
     setProfileOpen(true);
+  }
+
+  if (isLoading) {
+    return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  }
+
+  if (isError) {
+    return <ErrorState title="Failed to load health data" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   }
 
   return (
@@ -1112,7 +1139,7 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ category: "INCIDENT", description: "", action_taken: "" });
 
-  const { data: records } = useQuery<DisciplineRecord[]>({
+  const { data: records, isLoading, isError, error, refetch } = useQuery<DisciplineRecord[]>({
     queryKey: ["discipline", studentId],
     queryFn: async () => (await api.get(`/api/discipline/student/${studentId}`)).data.data,
   });
@@ -1125,6 +1152,7 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
       setOpen(false);
       setDraft({ category: "INCIDENT", description: "", action_taken: "" });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to add discipline record"),
   });
 
   return (
@@ -1135,6 +1163,12 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
       </div>
       <Card>
         <CardContent className="pt-6">
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load discipline records" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : (
+            <>
           {!records?.length && <EmptyState title="No discipline records" />}
           <Table>
             <TableBody>
@@ -1148,6 +1182,8 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
               ))}
             </TableBody>
           </Table>
+            </>
+          )}
         </CardContent>
       </Card>
 

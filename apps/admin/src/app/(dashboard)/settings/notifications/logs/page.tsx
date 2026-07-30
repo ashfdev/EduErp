@@ -6,6 +6,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, Label, StatusBadge, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  ErrorState, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -31,7 +32,7 @@ export default function NotificationLogsPage() {
   const [trigger, setTrigger] = useState<string>("");
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useQuery<{ items: NotificationLog[]; meta: { total: number; page: number; totalPages: number } }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items: NotificationLog[]; meta: { total: number; page: number; totalPages: number } }>({
     queryKey: ["settings", "notifications", "logs", status, channel, trigger, page],
     queryFn: async () => {
       const res = await api.get("/api/settings/notifications/logs", {
@@ -94,6 +95,8 @@ export default function NotificationLogsPage() {
         <CardContent className="pt-4">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : isError ? (
+            <ErrorState title="Failed to load notification logs" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
           ) : !data?.items.length ? (
             <EmptyState title="No notification logs yet" description="Logs appear here as soon as an SMS, email, or push notification is queued." />
           ) : (

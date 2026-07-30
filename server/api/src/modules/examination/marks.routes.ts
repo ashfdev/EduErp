@@ -176,12 +176,21 @@ marksRouter.get(
     // whether that class was ever selected when the exam was created,
     // falling back to a fake 100-mark default per subject since no config
     // existed to read from.
+    //
+    // Fetched WITHOUT the subjectIds (teacher-ownership) filter first, so the
+    // response can tell the two very different "you see zero subjects" cases
+    // apart: (a) this exam simply has no subject configured for this class at
+    // all — a real navigation/scope mismatch, same for every role — versus
+    // (b) the exam does cover this class, but none of ITS subjects are ones
+    // this specific teacher is assigned to. Collapsing both into one generic
+    // "no subject assigned to you" message (as this used to) is actively
+    // misleading in case (a) and gives a teacher no way to self-diagnose which
+    // situation they're in.
     const rawSubjects = await prisma.subject.findMany({
       where: {
         class_id: classId,
         is_active: true,
         exam_subject_configs: { some: { exam_id: examId } },
-        ...(subjectIds && { id: { in: subjectIds } }),
       },
       orderBy: { created_at: "asc" },
     });
@@ -191,12 +200,13 @@ marksRouter.get(
     // "which one wins" choice deterministic — the oldest row, most likely to
     // already have real MarkEntry history attached.
     const seenNames = new Set<string>();
-    const subjects = rawSubjects.filter((s) => {
+    const examSubjectsForClass = rawSubjects.filter((s) => {
       const k = s.name_en.trim().toLowerCase();
       if (seenNames.has(k)) return false;
       seenNames.add(k);
       return true;
     });
+    const subjects = subjectIds ? examSubjectsForClass.filter((s) => subjectIds!.includes(s.id)) : examSubjectsForClass;
 
     const students = await prisma.student.findMany({
       where: { current_section_id: sectionId, deleted_at: null, status: "ACTIVE" },
@@ -326,6 +336,10 @@ marksRouter.get(
           is_open: exam.status === "MARK_ENTRY",
           time_remaining: exam.mark_entry_closes_at ? Math.max(0, exam.mark_entry_closes_at.getTime() - Date.now()) : null,
         },
+        // Lets the frontend distinguish "this exam has zero subjects
+        // configured for this class" from "you're just not assigned to any
+        // of them" when `subjects` below comes back empty.
+        exam_has_subjects_for_class: examSubjectsForClass.length > 0,
         subjects: subjects.map((s) => ({
           ...s,
           config: configBySubject.get(s.id),

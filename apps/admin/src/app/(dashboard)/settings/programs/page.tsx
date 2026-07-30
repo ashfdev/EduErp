@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -43,7 +43,7 @@ export default function ProgramsPage() {
   const [degreeLevel, setDegreeLevel] = useState("UNDERGRADUATE");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name_en: string } | null>(null);
 
-  const { data: programs } = useQuery<ProgramRow[]>({
+  const { data: programs, isLoading, isError, error, refetch } = useQuery<ProgramRow[]>({
     queryKey: ["settings", "programs"],
     queryFn: async () => (await api.get("/api/settings/programs")).data.data,
   });
@@ -118,6 +118,12 @@ export default function ProgramsPage() {
         action={<Button onClick={openCreate}>+ Add Program</Button>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load programs" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!programs?.length && <EmptyState title="No programs yet" description="Create a program (e.g. BSc in CSE) to start adding courses." />}
 
       <div className="grid grid-cols-2 gap-4">
@@ -158,6 +164,8 @@ export default function ProgramsPage() {
           </Link>
         ))}
       </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

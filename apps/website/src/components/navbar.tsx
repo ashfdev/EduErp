@@ -206,9 +206,13 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-primary transition-colors line-clamp-2">
-                  {institution?.name_en ?? "Education ERP"}
-                </h1>
+                {institution?.name_en ? (
+                  <h1 className="text-base sm:text-lg lg:text-xl font-bold leading-tight tracking-tight text-slate-800 group-hover:text-primary transition-colors line-clamp-2">
+                    {institution.name_en}
+                  </h1>
+                ) : (
+                  <div className="h-5 sm:h-6 w-32 rounded-md bg-slate-200 animate-pulse" aria-hidden="true" />
+                )}
                 {institution?.tagline_en && !scrolled && (
                   <p className="text-[11px] font-medium text-slate-500 truncate mt-0.5">{institution.tagline_en}</p>
                 )}
@@ -283,7 +287,7 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
               href={portalUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="hidden lg:flex items-center gap-1.5 px-6 py-2.5 bg-[#0B5ED7] text-white hover:bg-[#0A58CA] transition-colors rounded-md font-bold text-sm shadow-sm"
+              className="hidden lg:flex items-center gap-1.5 px-6 py-2.5 bg-primary text-white hover:bg-primary/90 transition-colors rounded-md font-bold text-sm shadow-sm"
             >
               {t("portalLogin")}
             </a>

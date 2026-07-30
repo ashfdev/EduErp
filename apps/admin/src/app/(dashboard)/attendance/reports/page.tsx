@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -44,7 +44,7 @@ function DailyRegisterTab({ classes }: { classes?: ClassOption[] }) {
   const [enabled, setEnabled] = useState(false);
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["attendance", "reports", "daily-register", classId, sectionId, date],
     queryFn: async () => (await api.get("/api/attendance/reports/daily-register", { params: { class_id: classId, section_id: sectionId, date } })).data.data,
     enabled,
@@ -64,6 +64,8 @@ function DailyRegisterTab({ classes }: { classes?: ClassOption[] }) {
         </select>
         <Button size="sm" disabled={!sectionId} onClick={() => setEnabled(true)}>Generate</Button>
       </div>
+      {isLoading && <div className="flex justify-center py-8"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load daily register" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
       {data && (
         <Card>
           <CardContent className="pt-6">
@@ -90,7 +92,7 @@ function MonthlySheetTab({ classes }: { classes?: ClassOption[] }) {
   const [enabled, setEnabled] = useState(false);
   const selectedClass = classes?.find((c) => c.id === classId);
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["attendance", "reports", "monthly", classId, sectionId, month, year],
     queryFn: async () => (await api.get("/api/attendance/reports/monthly-sheet", { params: { class_id: classId, section_id: sectionId, month, year } })).data.data,
     enabled,
@@ -111,6 +113,8 @@ function MonthlySheetTab({ classes }: { classes?: ClassOption[] }) {
         </select>
         <Button size="sm" disabled={!sectionId} onClick={() => setEnabled(true)}>Generate</Button>
       </div>
+      {isLoading && <div className="flex justify-center py-8"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load monthly sheet" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
       {data && (
         <Card>
           <CardContent className="overflow-x-auto pt-6">
@@ -144,7 +148,7 @@ function DefaultersTab({ classes }: { classes?: ClassOption[] }) {
   const [threshold, setThreshold] = useState(75);
   const [enabled, setEnabled] = useState(false);
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["attendance", "defaulters", classId, threshold],
     queryFn: async () => (await api.get("/api/attendance/defaulters", { params: { class_id: classId || undefined, threshold } })).data.data,
     enabled,
@@ -160,6 +164,8 @@ function DefaultersTab({ classes }: { classes?: ClassOption[] }) {
         <Input type="number" value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} className="w-24" />
         <Button size="sm" onClick={() => setEnabled(true)}>Find Defaulters</Button>
       </div>
+      {isLoading && <div className="flex justify-center py-8"><LoadingSpinner /></div>}
+      {isError && <ErrorState title="Failed to load defaulters" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />}
       {data && !data.length && <EmptyState title="No defaulters found" />}
       {data && data.length > 0 && (
         <Card>

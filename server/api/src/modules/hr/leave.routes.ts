@@ -25,12 +25,28 @@ export const leavesRouter = Router();
 leaveTypesRouter.use(authenticate);
 leavesRouter.use(authenticate);
 
-function workingDaysBetween(from: Date, to: Date): number {
+// Non-working-day exclusion now reads the real configured
+// AttendanceRules.working_days_per_week (>=6 excludes only Friday, matching
+// a single-weekly-holiday institution; anything less excludes Friday +
+// Saturday, the BD two-day-weekend convention) instead of a hardcoded
+// Friday-only check — mirrors the same convention already used by
+// workingDaysInMonth() in utils/working-days.ts. No Holiday-calendar model
+// exists in the schema (a known, previously documented gap), so this still
+// can't account for ad hoc public holidays.
+function workingDaysBetween(from: Date, to: Date, workingDaysPerWeek: number): number {
   let count = 0;
   for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() !== 5) count++; // exclude Friday — see working-days.ts note on no Holiday model
+    const dow = d.getDay();
+    const isFriday = dow === 5;
+    const isSaturday = dow === 6;
+    if (workingDaysPerWeek >= 6 ? !isFriday : !isFriday && !isSaturday) count++;
   }
   return count;
+}
+
+async function getWorkingDaysPerWeek(): Promise<number> {
+  const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+  return rules?.working_days_per_week ?? 6;
 }
 
 leaveTypesRouter.get(
@@ -122,13 +138,14 @@ leavesRouter.get(
     const yearStart = new Date(new Date().getFullYear(), 0, 1);
     const yearEnd = new Date(new Date().getFullYear() + 1, 0, 1);
 
-    const [types, approvedLeaves] = await Promise.all([
+    const [types, approvedLeaves, workingDaysPerWeek] = await Promise.all([
       prisma.leaveType.findMany(),
       prisma.leaveRequest.findMany({ where: { staff_id: staffId, status: "APPROVED", from_date: { gte: yearStart, lt: yearEnd } } }),
+      getWorkingDaysPerWeek(),
     ]);
 
     const balance = types.map((t) => {
-      const used = approvedLeaves.filter((l) => l.leave_type_id === t.id).reduce((sum, l) => sum + workingDaysBetween(l.from_date, l.to_date), 0);
+      const used = approvedLeaves.filter((l) => l.leave_type_id === t.id).reduce((sum, l) => sum + workingDaysBetween(l.from_date, l.to_date, workingDaysPerWeek), 0);
       return { leave_type: t, total_allowed: t.days_allowed, used, remaining: Math.max(0, t.days_allowed - used) };
     });
 
@@ -148,13 +165,14 @@ leavesRouter.post(
     const leaveType = await prisma.leaveType.findUnique({ where: { id: body.leave_type_id } });
     if (!leaveType) throw notFound("Leave type not found");
 
-    const requestedDays = workingDaysBetween(body.from_date, body.to_date);
+    const workingDaysPerWeek = await getWorkingDaysPerWeek();
+    const requestedDays = workingDaysBetween(body.from_date, body.to_date, workingDaysPerWeek);
     const yearStart = new Date(body.from_date.getFullYear(), 0, 1);
     const yearEnd = new Date(body.from_date.getFullYear() + 1, 0, 1);
     const approvedLeaves = await prisma.leaveRequest.findMany({
       where: { staff_id: body.staff_id, leave_type_id: body.leave_type_id, status: "APPROVED", from_date: { gte: yearStart, lt: yearEnd } },
     });
-    const used = approvedLeaves.reduce((sum, l) => sum + workingDaysBetween(l.from_date, l.to_date), 0);
+    const used = approvedLeaves.reduce((sum, l) => sum + workingDaysBetween(l.from_date, l.to_date, workingDaysPerWeek), 0);
     if (used + requestedDays > leaveType.days_allowed) {
       throw badRequest(`Insufficient leave balance: ${leaveType.days_allowed - used} day(s) remaining for ${leaveType.name}`);
     }
@@ -179,11 +197,14 @@ leavesRouter.put(
     if (!leave) throw notFound("Leave request not found");
     if (leave.status !== "PENDING") throw badRequest("Only pending leave requests can be approved");
 
+    const workingDaysPerWeek = await getWorkingDaysPerWeek();
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.leaveRequest.update({ where: { id }, data: { status: "APPROVED", approved_by_id: req.user!.sub, approved_at: new Date() } });
 
       for (let d = new Date(leave.from_date); d <= leave.to_date; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() === 5) continue;
+        const dow = d.getDay();
+        const isNonWorkingDay = workingDaysPerWeek >= 6 ? dow === 5 : dow === 5 || dow === 6;
+        if (isNonWorkingDay) continue;
         const date = new Date(d);
         const existing = await tx.attendanceRecord.findFirst({ where: { person_id: leave.staff_id, person_type: "STAFF", date, shift_id: null, period_no: null } });
         if (existing) {

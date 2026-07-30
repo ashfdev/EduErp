@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Switch, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface SalaryStructure {
@@ -32,7 +32,7 @@ export default function SalaryStructuresPage() {
   const [editing, setEditing] = useState<SalaryStructure | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: structures } = useQuery<SalaryStructure[]>({
+  const { data: structures, isLoading, isError, error, refetch } = useQuery<SalaryStructure[]>({
     queryKey: ["hr", "salary-structures"],
     queryFn: async () => (await api.get("/api/hr/salary-structures")).data.data,
   });
@@ -82,6 +82,12 @@ export default function SalaryStructuresPage() {
         action={<Button onClick={openCreate}>+ Add Salary Structure</Button>}
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load salary structures" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+      <>
       {!structures?.length && <EmptyState title="No salary structures yet" description="Add one so it can be assigned to staff and picked up by Payroll." />}
       {!!structures?.length && (
         <Card>
@@ -122,6 +128,8 @@ export default function SalaryStructuresPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -23,7 +23,9 @@ accountsRouter.use(authenticate, authorize(ACCOUNTS_MANAGE_ROLES));
 // System accounts (is_system=true) are auto-created by the seed and cover
 // the codes every auto-journal/report relies on — never deletable, code
 // never editable, matching CLAUDE.md's "account codes are system-reserved" rule.
-const SYSTEM_RESERVED_CODES = ["1001", "1002", "1003", "2002", "2003", "2004", "3004", "4001", "4002", "4003", "5001", "5002", "5018"];
+const SYSTEM_RESERVED_CODES = [
+  "1001", "1002", "1003", "1105", "2001", "2002", "2003", "2004", "3004", "4001", "4002", "4003", "5001", "5002", "5018", "5020", "5021",
+];
 
 // Exported for reuse by analytics.routes.ts's dashboard overview (Plan
 // Thirteen, Phase I, Current Fund Balance widget) -- the same debit-minus-

@@ -31,6 +31,7 @@ interface Subject {
 }
 interface MarkEntryData {
   entry_deadline_info: { is_open: boolean; closes_at: string | null };
+  exam_has_subjects_for_class: boolean;
   subjects: Subject[];
   students: {
     id: string;
@@ -274,7 +275,11 @@ export default function TeacherMarkEntryGridPage() {
           </Card>
         )}
 
-        {data && !data.subjects.length && <p className="text-sm text-muted-foreground">{t("noSubjects")}</p>}
+        {data && !data.subjects.length && (
+          <p className="text-sm text-muted-foreground">
+            {data.exam_has_subjects_for_class ? t("noSubjects") : t("noSubjectsInExam")}
+          </p>
+        )}
 
         {data && data.subjects.length > 0 && !data.students.length && (
           <p className="text-sm text-muted-foreground">{t("noStudents")}</p>

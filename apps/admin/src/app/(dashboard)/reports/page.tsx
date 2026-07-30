@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ReportLink {
@@ -70,7 +70,7 @@ function InlineReport({ reportKey, onClose }: { reportKey: string; onClose: () =
   const to = now.toISOString().slice(0, 10);
 
   const needsRange = reportKey === "staff-attendance" || reportKey === "leave-summary";
-  const { data } = useQuery<Record<string, unknown>[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<Record<string, unknown>[]>({
     queryKey: ["reports", reportKey],
     queryFn: async () => {
       const params = needsRange ? { from_date: from, to_date: to } : {};
@@ -89,24 +89,32 @@ function InlineReport({ reportKey, onClose }: { reportKey: string; onClose: () =
             <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
-        {!data?.length && <EmptyState title="No data available" />}
-        {!!data?.length && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  {Object.keys(data[0]!).map((k) => <th key={k} className="p-2">{k}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {data.slice(0, 50).map((row, i) => (
-                  <tr key={i} className="border-b">
-                    {Object.keys(data[0]!).map((k) => <td key={k} className="p-2">{typeof row[k] === "object" ? JSON.stringify(row[k]) : String(row[k] ?? "-")}</td>)}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><LoadingSpinner /></div>
+        ) : isError ? (
+          <ErrorState title="Failed to load report" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+        ) : (
+          <>
+            {!data?.length && <EmptyState title="No data available" />}
+            {!!data?.length && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      {Object.keys(data[0]!).map((k) => <th key={k} className="p-2">{k}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.slice(0, 50).map((row, i) => (
+                      <tr key={i} className="border-b">
+                        {Object.keys(data[0]!).map((k) => <td key={k} className="p-2">{typeof row[k] === "object" ? JSON.stringify(row[k]) : String(row[k] ?? "-")}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StudentRow {
@@ -92,7 +92,7 @@ export default function CourseEnrollmentPage() {
     enabled: !!programId && search.length > 1,
   });
 
-  const { data: cgpaData } = useQuery<CgpaData>({
+  const { data: cgpaData, isLoading: cgpaLoading, isError: cgpaIsError, error: cgpaError, refetch: refetchCgpa } = useQuery<CgpaData>({
     queryKey: ["course-enrollments", "cgpa", selectedStudent?.id],
     queryFn: async () => (await api.get(`/api/course-enrollments/student/${selectedStudent!.id}/cgpa`)).data.data,
     enabled: !!selectedStudent,
@@ -226,83 +226,91 @@ export default function CourseEnrollmentPage() {
             </CardContent>
           </Card>
 
-          {!!cgpaData?.semesters.length && (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="mb-2 text-sm font-medium">Semester-wise SGPA</p>
-                <div className="flex flex-wrap gap-2">
-                  {cgpaData.semesters.map((s) => (
-                    <Badge key={s.class_id} variant="outline">
-                      {s.class_name}: {s.sgpa.toFixed(2)} ({s.credit_hours} cr)
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {cgpaLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : cgpaIsError ? (
+            <ErrorState title="Failed to load course enrollments" description={extractErrorMessage(cgpaError)} retryLabel="Retry" onRetry={() => refetchCgpa()} />
+          ) : (
+            <>
+              {!!cgpaData?.semesters.length && (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="mb-2 text-sm font-medium">Semester-wise SGPA</p>
+                    <div className="flex flex-wrap gap-2">
+                      {cgpaData.semesters.map((s) => (
+                        <Badge key={s.class_id} variant="outline">
+                          {s.class_name}: {s.sgpa.toFixed(2)} ({s.credit_hours} cr)
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
-          {!cgpaData?.courses.length && <EmptyState title="No course enrollments yet" />}
-          {!!cgpaData?.courses.length && (
-            <Card>
-              <CardContent className="pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-2">Sem</th>
-                      <th className="p-2">Course</th>
-                      <th className="p-2">Credit Hours</th>
-                      <th className="p-2">Marks</th>
-                      <th className="p-2">Status</th>
-                      <th className="p-2">Grade</th>
-                      <th className="p-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cgpaData.courses.map((e) => {
-                      const draft = gradeDrafts[e.id] ?? {};
-                      return (
-                        <tr key={e.id} className="border-b">
-                          <td className="p-2">{e.course.semester_number}</td>
-                          <td className="p-2">
-                            {e.course.code} - {e.course.name_en}
-                            {e.course.credit_hours === 0 && <Badge variant="outline" className="ml-2">Audit</Badge>}
-                          </td>
-                          <td className="p-2">{e.course.credit_hours}</td>
-                          <td className="p-1">
-                            <Input
-                              type="number"
-                              min={0}
-                              className="h-8 w-20"
-                              value={draft.marks_total ?? e.marks_total ?? ""}
-                              onChange={(ev) => setGradeDrafts((prev) => ({ ...prev, [e.id]: { ...prev[e.id], marks_total: Number(ev.target.value) } }))}
-                            />
-                          </td>
-                          <td className="p-1">
-                            <select
-                              className="h-8 rounded-md border px-2 text-sm"
-                              value={draft.status ?? e.status}
-                              onChange={(ev) => setGradeDrafts((prev) => ({ ...prev, [e.id]: { ...prev[e.id], status: ev.target.value } }))}
-                            >
-                              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </td>
-                          <td className="p-2">{e.grade_letter && <Badge variant="outline">{e.grade_letter} ({e.grade_point})</Badge>}</td>
-                          <td className="p-1">
-                            <Button
-                              size="sm"
-                              onClick={() => gradeMutation.mutate({ enrollmentId: e.id, data: draft })}
-                              disabled={gradeMutation.isPending || !draft.marks_total && !draft.status}
-                            >
-                              Save
-                            </Button>
-                          </td>
+              {!cgpaData?.courses.length && <EmptyState title="No course enrollments yet" />}
+              {!!cgpaData?.courses.length && (
+                <Card>
+                  <CardContent className="pt-6">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="p-2">Sem</th>
+                          <th className="p-2">Course</th>
+                          <th className="p-2">Credit Hours</th>
+                          <th className="p-2">Marks</th>
+                          <th className="p-2">Status</th>
+                          <th className="p-2">Grade</th>
+                          <th className="p-2" />
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
+                      </thead>
+                      <tbody>
+                        {cgpaData.courses.map((e) => {
+                          const draft = gradeDrafts[e.id] ?? {};
+                          return (
+                            <tr key={e.id} className="border-b">
+                              <td className="p-2">{e.course.semester_number}</td>
+                              <td className="p-2">
+                                {e.course.code} - {e.course.name_en}
+                                {e.course.credit_hours === 0 && <Badge variant="outline" className="ml-2">Audit</Badge>}
+                              </td>
+                              <td className="p-2">{e.course.credit_hours}</td>
+                              <td className="p-1">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  className="h-8 w-20"
+                                  value={draft.marks_total ?? e.marks_total ?? ""}
+                                  onChange={(ev) => setGradeDrafts((prev) => ({ ...prev, [e.id]: { ...prev[e.id], marks_total: Number(ev.target.value) } }))}
+                                />
+                              </td>
+                              <td className="p-1">
+                                <select
+                                  className="h-8 rounded-md border px-2 text-sm"
+                                  value={draft.status ?? e.status}
+                                  onChange={(ev) => setGradeDrafts((prev) => ({ ...prev, [e.id]: { ...prev[e.id], status: ev.target.value } }))}
+                                >
+                                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </td>
+                              <td className="p-2">{e.grade_letter && <Badge variant="outline">{e.grade_letter} ({e.grade_point})</Badge>}</td>
+                              <td className="p-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => gradeMutation.mutate({ enrollmentId: e.id, data: draft })}
+                                  disabled={gradeMutation.isPending || !draft.marks_total && !draft.status}
+                                >
+                                  Save
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
         </>
       )}

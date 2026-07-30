@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, EmptyState, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, EmptyState, ErrorState, LoadingSpinner, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -102,7 +102,7 @@ export default function PromoteStudentsPage() {
     });
   }
 
-  const { data: roster, isFetching: rosterLoading, refetch } = useQuery<RosterStudent[]>({
+  const { data: roster, isFetching: rosterLoading, isError: rosterError, error: rosterErrorObj, refetch } = useQuery<RosterStudent[]>({
     queryKey: ["students", "promotion-roster", sourceClassId, sourceSectionId],
     queryFn: async () =>
       (await api.get("/api/students/promotion-roster", { params: { class_id: sourceClassId, section_id: sourceSectionId || undefined } })).data.data,
@@ -221,6 +221,12 @@ export default function PromoteStudentsPage() {
         </Card>
       </div>
 
+      {rosterLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : rosterError ? (
+        <ErrorState title="Failed to load roster" description={extractErrorMessage(rosterErrorObj)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {roster && !roster.length && <EmptyState title="No active students in this class/section" />}
 
       {!!roster?.length && (
@@ -319,6 +325,8 @@ export default function PromoteStudentsPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       {result && (

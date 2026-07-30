@@ -14,13 +14,10 @@ import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
 import { env } from "../../lib/env";
+import { generateStaffUid } from "../../utils/staff-id.generator";
 
 export const usersRouter = Router();
 usersRouter.use(authenticate);
-
-function generateStaffUid(): string {
-  return `STF-${Date.now().toString(36).toUpperCase()}`;
-}
 
 usersRouter.get(
   "/",
@@ -66,7 +63,7 @@ usersRouter.post(
       await tx.staff.create({
         data: {
           user_id: login.userId,
-          staff_uid: generateStaffUid(),
+          staff_uid: await generateStaffUid(),
           name_en: body.name_en,
           name_bn: body.name_bn,
           designation: body.designation ?? body.role,

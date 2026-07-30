@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, RichTextEditor, StatusBadge, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, RichTextEditor, StatusBadge, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Notice {
@@ -39,7 +39,7 @@ export default function NoticesPage() {
   const [sendSms, setSendSms] = useState(false);
   const [includeSignature, setIncludeSignature] = useState(false);
 
-  const { data: notices } = useQuery<Notice[]>({
+  const { data: notices, isLoading, isError, error, refetch } = useQuery<Notice[]>({
     queryKey: ["website", "notices", filter],
     queryFn: async () => (await api.get("/api/website/notices", { params: filter ? { audience: filter } : {} })).data.data,
   });
@@ -98,6 +98,7 @@ export default function NoticesPage() {
       toast.success("Notice published");
       queryClient.invalidateQueries({ queryKey: ["website", "notices"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to publish notice"),
   });
 
   const unpublishMutation = useMutation({
@@ -106,11 +107,13 @@ export default function NoticesPage() {
       toast.success("Notice unpublished");
       queryClient.invalidateQueries({ queryKey: ["website", "notices"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to unpublish notice"),
   });
 
   const sendSmsMutation = useMutation({
     mutationFn: (id: string) => api.post(`/api/website/notices/${id}/send-sms`, {}),
     onSuccess: (res) => toast.success(`Queued SMS to ${res.data.data.queued} recipients`),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to send SMS"),
   });
 
   const deleteMutation = useMutation({
@@ -119,6 +122,7 @@ export default function NoticesPage() {
       toast.success("Notice removed");
       queryClient.invalidateQueries({ queryKey: ["website", "notices"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove notice"),
   });
 
   return (
@@ -137,45 +141,53 @@ export default function NoticesPage() {
         ))}
       </div>
 
-      {!notices?.length && <EmptyState title="No notices yet" />}
-      {!!notices?.length && (
-        <Card>
-          <CardContent className="pt-6">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead><TableHead>Audience</TableHead><TableHead>Pinned</TableHead>
-                  <TableHead>Published</TableHead><TableHead>SMS</TableHead><TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {notices.map((n) => (
-                  <TableRow key={n.id}>
-                    <TableCell>{n.title}</TableCell>
-                    <TableCell><StatusBadge status={n.audience} /></TableCell>
-                    <TableCell>{n.is_pinned ? "📌" : ""}</TableCell>
-                    <TableCell><StatusBadge status={n.is_published ? "PUBLISHED" : "DRAFT"} /></TableCell>
-                    <TableCell>{n.sms_sent_at ? "Sent" : n.send_sms ? "Pending" : "-"}</TableCell>
-                    <TableCell className="space-x-2">
-                      {n.is_published ? (
-                        <Button size="sm" variant="outline" onClick={() => unpublishMutation.mutate(n.id)}>Unpublish</Button>
-                      ) : (
-                        <Button size="sm" onClick={() => publishMutation.mutate(n.id)}>Publish</Button>
-                      )}
-                      {n.is_published && <Button size="sm" variant="outline" onClick={() => sendSmsMutation.mutate(n.id)}>Send SMS</Button>}
-                      {n.is_published && n.is_public_website && (
-                        <a href={`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/content/notices/${n.id}/pdf`} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline">PDF</Button>
-                        </a>
-                      )}
-                      <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(n.id)}>Delete</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load notices" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!notices?.length && <EmptyState title="No notices yet" />}
+          {!!notices?.length && (
+            <Card>
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead><TableHead>Audience</TableHead><TableHead>Pinned</TableHead>
+                      <TableHead>Published</TableHead><TableHead>SMS</TableHead><TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notices.map((n) => (
+                      <TableRow key={n.id}>
+                        <TableCell>{n.title}</TableCell>
+                        <TableCell><StatusBadge status={n.audience} /></TableCell>
+                        <TableCell>{n.is_pinned ? "📌" : ""}</TableCell>
+                        <TableCell><StatusBadge status={n.is_published ? "PUBLISHED" : "DRAFT"} /></TableCell>
+                        <TableCell>{n.sms_sent_at ? "Sent" : n.send_sms ? "Pending" : "-"}</TableCell>
+                        <TableCell className="space-x-2">
+                          {n.is_published ? (
+                            <Button size="sm" variant="outline" onClick={() => unpublishMutation.mutate(n.id)}>Unpublish</Button>
+                          ) : (
+                            <Button size="sm" onClick={() => publishMutation.mutate(n.id)}>Publish</Button>
+                          )}
+                          {n.is_published && <Button size="sm" variant="outline" onClick={() => sendSmsMutation.mutate(n.id)}>Send SMS</Button>}
+                          {n.is_published && n.is_public_website && (
+                            <a href={`${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/content/notices/${n.id}/pdf`} target="_blank" rel="noreferrer">
+                              <Button size="sm" variant="outline">PDF</Button>
+                            </a>
+                          )}
+                          <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(n.id)}>Delete</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

@@ -23,7 +23,13 @@ interface WaiverType {
 }
 interface StudentWaiverRow {
   id: string;
-  student: { id: string; name_en: string; student_uid: string; current_class: { name_en: string } | null };
+  student: {
+    id: string; name_en: string; student_uid: string;
+    current_class: { name_en: string } | null;
+    current_section: { name: string } | null;
+    group: { name_en: string } | null;
+    father_phone: string | null;
+  };
   waiver_type: WaiverType;
   academic_year: { id: string; label: string } | null;
   assigned_at: string;
@@ -53,30 +59,52 @@ export default function WaiverSetupPage() {
   const { data: assignments } = useQuery<StudentWaiverRow[]>({ queryKey: ["fees", "student-waivers"], queryFn: async () => (await api.get("/api/fees/student-waivers")).data.data });
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
 
-  // Waiver Type create dialog
+  // Waiver Type create/edit dialog -- one shared form, same pattern as
+  // Fee Structures' own create/edit dialog (editingTypeId set = edit mode).
   const [typeOpen, setTypeOpen] = useState(false);
+  const [editingTypeId, setEditingTypeId] = useState<string | null>(null);
   const [typeName, setTypeName] = useState("");
   const [typeDescription, setTypeDescription] = useState("");
   const [discountType, setDiscountType] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
   const [discountValue, setDiscountValue] = useState("");
   const [applicableCategories, setApplicableCategories] = useState<string[]>([]);
 
-  const createTypeMutation = useMutation({
-    mutationFn: () =>
-      api.post("/api/fees/waiver-types", {
+  function resetTypeDialog() {
+    setEditingTypeId(null);
+    setTypeName(""); setTypeDescription(""); setDiscountValue(""); setApplicableCategories([]); setDiscountType("PERCENTAGE");
+  }
+  function openCreateType() {
+    resetTypeDialog();
+    setTypeOpen(true);
+  }
+  function openEditType(t: WaiverType) {
+    setEditingTypeId(t.id);
+    setTypeName(t.name);
+    setTypeDescription(t.description ?? "");
+    setDiscountType(t.discount_type);
+    setDiscountValue(String(t.discount_value));
+    setApplicableCategories(t.applicable_categories);
+    setTypeOpen(true);
+  }
+
+  const saveTypeMutation = useMutation({
+    mutationFn: () => {
+      const body = {
         name: typeName,
         description: typeDescription || undefined,
         discount_type: discountType,
         discount_value: Number(discountValue),
         applicable_categories: applicableCategories,
-      }),
+      };
+      return editingTypeId ? api.put(`/api/fees/waiver-types/${editingTypeId}`, body) : api.post("/api/fees/waiver-types", body);
+    },
     onSuccess: () => {
-      toast.success("Waiver type created");
+      toast.success(editingTypeId ? "Waiver type updated" : "Waiver type created");
       queryClient.invalidateQueries({ queryKey: ["fees", "waiver-types"] });
       setTypeOpen(false);
-      setTypeName(""); setTypeDescription(""); setDiscountValue(""); setApplicableCategories([]); setDiscountType("PERCENTAGE");
+      resetTypeDialog();
     },
-    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create waiver type"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save waiver type"),
   });
 
   // Assign Waiver dialog -- roster picker (Class/Section filter, real
@@ -105,9 +133,13 @@ export default function WaiverSetupPage() {
     mutationFn: () =>
       api.post("/api/fees/student-waivers/bulk", { student_ids: selectedStudentIds, waiver_type_id: selectedTypeId }),
     onSuccess: (res) => {
-      const { created, skipped } = res.data.data as { created: number; skipped: string[] };
-      toast.success(`Waiver assigned to ${created} student(s)${skipped.length ? ` — ${skipped.length} skipped` : ""}`);
+      const { created, skipped, invoices_affected, total_discount } = res.data.data as {
+        created: number; skipped: string[]; invoices_affected: number; total_discount: number;
+      };
+      const retroNote = invoices_affected > 0 ? ` — applied to ${invoices_affected} existing invoice${invoices_affected === 1 ? "" : "s"} (৳${total_discount} discounted)` : "";
+      toast.success(`Waiver assigned to ${created} student(s)${skipped.length ? ` — ${skipped.length} skipped` : ""}${retroNote}`);
       queryClient.invalidateQueries({ queryKey: ["fees", "student-waivers"] });
+      queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
       setAssignOpen(false);
       resetAssignDialog();
     },
@@ -142,7 +174,7 @@ export default function WaiverSetupPage() {
         breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Waivers" }]}
         action={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setTypeOpen(true)}>+ New Waiver Type</Button>
+            <Button variant="outline" onClick={openCreateType}>+ New Waiver Type</Button>
             <Button onClick={() => setAssignOpen(true)} disabled={!types?.length}>+ Assign Waiver</Button>
           </div>
         }
@@ -168,6 +200,7 @@ export default function WaiverSetupPage() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t.applicable_categories.length ? t.applicable_categories.join(", ") : "All categories"}
                     </p>
+                    <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => openEditType(t)}>Edit</Button>
                   </CardContent>
                 </Card>
               ))}
@@ -185,7 +218,9 @@ export default function WaiverSetupPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>Class</TableHead>
+                  <TableHead>Class / Section</TableHead>
+                  <TableHead>Group</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Waiver Type</TableHead>
                   <TableHead>Discount</TableHead>
                   <TableHead>Session</TableHead>
@@ -198,7 +233,9 @@ export default function WaiverSetupPage() {
                 {assignments.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="font-medium">{a.student.name_en} <span className="font-mono text-xs text-muted-foreground">{a.student.student_uid}</span></TableCell>
-                    <TableCell>{a.student.current_class?.name_en ?? "—"}</TableCell>
+                    <TableCell>{a.student.current_class?.name_en ?? "—"}{a.student.current_section ? ` · ${a.student.current_section.name}` : ""}</TableCell>
+                    <TableCell className="text-muted-foreground">{a.student.group?.name_en ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{a.student.father_phone ?? "—"}</TableCell>
                     <TableCell>{a.waiver_type.name}</TableCell>
                     <TableCell>{a.waiver_type.discount_type === "PERCENTAGE" ? `${a.waiver_type.discount_value}%` : `৳${a.waiver_type.discount_value}`}</TableCell>
                     <TableCell>{a.academic_year?.label ?? "Every year"}</TableCell>
@@ -217,12 +254,12 @@ export default function WaiverSetupPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={typeOpen} onOpenChange={setTypeOpen}>
+      <Dialog open={typeOpen} onOpenChange={(v) => { setTypeOpen(v); if (!v) resetTypeDialog(); }}>
         <DialogContent
           onEscapeKeyDown={(e) => typeDirty && e.preventDefault()}
           onPointerDownOutside={(e) => typeDirty && e.preventDefault()}
         >
-          <DialogHeader><DialogTitle>New Waiver Type</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingTypeId ? "Edit Waiver Type" : "New Waiver Type"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Name</Label><Input value={typeName} onChange={(e) => setTypeName(e.target.value)} placeholder="e.g. Staff Child" /></div>
             <div className="space-y-1.5"><Label>Description</Label><Input value={typeDescription} onChange={(e) => setTypeDescription(e.target.value)} /></div>
@@ -259,8 +296,8 @@ export default function WaiverSetupPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button disabled={!typeName || !discountValue || createTypeMutation.isPending} onClick={() => createTypeMutation.mutate()}>
-              {createTypeMutation.isPending ? "Creating..." : "Create"}
+            <Button disabled={!typeName || !discountValue || saveTypeMutation.isPending} onClick={() => saveTypeMutation.mutate()}>
+              {saveTypeMutation.isPending ? "Saving..." : editingTypeId ? "Save Changes" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

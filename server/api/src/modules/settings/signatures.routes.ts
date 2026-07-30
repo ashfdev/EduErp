@@ -10,6 +10,7 @@ import { uploadBuffer } from "../../services/storage.service";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { authoritySignatureSchema, authorityConfigSlotSchema } from "@education-erp/validators";
 import { hasSignatureSlot } from "../../services/pdf.service";
+import { logAudit } from "../../lib/audit-log";
 import type { DocumentType } from "@education-erp/types";
 
 export const signaturesRouter = Router();
@@ -59,6 +60,7 @@ signaturesRouter.post(
       if (willBeActive) await tx.authoritySignature.updateMany({ where: { role: body.role, is_active: true }, data: { is_active: false } });
       return tx.authoritySignature.create({ data: { ...body, signature_url, seal_url } });
     });
+    await logAudit("SIGNATURE_CREATE", { userId: req.user!.sub, targetType: "AuthoritySignature", targetId: signature.id, metadata: { role: signature.role }, req });
     res.status(201).json({ success: true, data: signature });
   }),
 );
@@ -98,7 +100,10 @@ signaturesRouter.delete(
   "/:id",
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
-    await prisma.authoritySignature.delete({ where: { id: reqParam(req, "id") } });
+    const id = reqParam(req, "id");
+    const existing = await prisma.authoritySignature.findUnique({ where: { id }, select: { role: true } });
+    await prisma.authoritySignature.delete({ where: { id } });
+    await logAudit("SIGNATURE_DELETE", { userId: req.user!.sub, targetType: "AuthoritySignature", targetId: id, metadata: { role: existing?.role }, req });
     res.status(204).send();
   }),
 );

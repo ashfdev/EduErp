@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Badge, EmptyState, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Asset {
@@ -36,14 +36,23 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function AssetsPage() {
   const [search, setSearch] = useState("");
-  const { data } = useQuery<{ items: Asset[] }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items: Asset[] }>({
     queryKey: ["inventory", "assets", search],
     queryFn: async () => ({ items: (await api.get("/api/inventory/assets", { params: { search: search || undefined, limit: 50 } })).data.data }),
   });
 
   return (
     <PageWrapper>
-      <PageHeader title="Fixed Assets" breadcrumbs={[{ label: "Inventory" }, { label: "Assets" }]} action={<Link href="/inventory/assets/new"><Button size="sm">+ Add Asset</Button></Link>} />
+      <PageHeader
+        title="Fixed Assets"
+        breadcrumbs={[{ label: "Inventory" }, { label: "Assets" }]}
+        action={
+          <div className="flex gap-2">
+            <Link href="/inventory/asset-categories"><Button variant="outline" size="sm">Asset Categories</Button></Link>
+            <Link href="/inventory/assets/new"><Button size="sm">+ Add Asset</Button></Link>
+          </div>
+        }
+      />
 
       <Card>
         <CardContent className="pt-6">
@@ -53,7 +62,11 @@ export default function AssetsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {!data?.items.length ? (
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load assets" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : !data?.items.length ? (
             <EmptyState title="No assets yet" description="Add a fixed asset, or receive one via a purchase order GRN." />
           ) : (
             <Table>

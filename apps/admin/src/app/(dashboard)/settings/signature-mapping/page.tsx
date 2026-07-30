@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, CardHeader, CardTitle, Button, Input, Switch, Label } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, CardHeader, CardTitle, Button, Input, Switch, Label, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 const DOC_TYPES = [
@@ -30,7 +30,7 @@ interface Coverage {
 
 export default function SignatureMappingPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery<Slot[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<Slot[]>({
     queryKey: ["settings", "authority-config"],
     queryFn: async () => (await api.get("/api/settings/authority-config")).data.data,
   });
@@ -62,6 +62,7 @@ export default function SignatureMappingPage() {
       toast.success("Authority mapping saved");
       queryClient.invalidateQueries({ queryKey: ["settings", "authority-config"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save authority mapping"),
   });
 
   function updateSlot(docType: string, slotNum: number, patch: Partial<Slot>) {
@@ -75,6 +76,11 @@ export default function SignatureMappingPage() {
     <PageWrapper>
       <PageHeader title="Signature Mapping" subtitle="Which authority signs which document, per slot" breadcrumbs={[{ label: "Settings" }, { label: "Signature Mapping" }]} />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load signature mapping" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <div className="space-y-3">
         {DOC_TYPES.map((docType) => (
           <Card key={docType}>
@@ -112,6 +118,7 @@ export default function SignatureMappingPage() {
       <Button className="sticky bottom-4" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
         {saveMutation.isPending ? "Saving..." : "Save All Mappings"}
       </Button>
+      )}
     </PageWrapper>
   );
 }

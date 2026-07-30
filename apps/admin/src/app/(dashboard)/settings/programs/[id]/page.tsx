@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ProgramRow {
@@ -44,7 +44,7 @@ export default function ProgramDetailPage() {
   });
   const program = programs?.find((p) => p.id === id);
 
-  const { data: courses } = useQuery<CourseRow[]>({
+  const { data: courses, isLoading, isError, error, refetch } = useQuery<CourseRow[]>({
     queryKey: ["settings", "courses", id],
     queryFn: async () => (await api.get("/api/settings/courses", { params: { program_id: id } })).data.data,
   });
@@ -161,6 +161,7 @@ export default function ProgramDetailPage() {
       toast.success("Prerequisite removed");
       queryClient.invalidateQueries({ queryKey: ["settings", "courses", id] });
     },
+    onError: (err: unknown) => toast.error(errMsg(err, "Failed to remove prerequisite")),
   });
 
   return (
@@ -177,6 +178,12 @@ export default function ProgramDetailPage() {
         }
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load courses" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!courses?.length && <EmptyState title="No courses yet" description="Add courses semester by semester, then wire up prerequisites between them." />}
 
       {!!courses?.length && (
@@ -216,6 +223,8 @@ export default function ProgramDetailPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={courseOpen} onOpenChange={setCourseOpen}>

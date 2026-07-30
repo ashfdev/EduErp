@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, EmptyState, Input, PageHeader, PageWrapper, PdfPreviewModal, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, EmptyState, Input, PageHeader, PageWrapper, PdfPreviewModal, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -60,11 +60,11 @@ export default function SeatPlanPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const pdfPreview = usePdfPreview();
 
-  const { data: plans } = useQuery<SeatPlanRow[]>({
+  const { data: plans, isLoading: plansLoading, isError: plansError, error: plansErrorObj, refetch: refetchPlans } = useQuery<SeatPlanRow[]>({
     queryKey: ["exams", id, "seat-plan"],
     queryFn: async () => (await api.get(`/api/exams/${id}/seat-plan`)).data.data,
   });
-  const { data: sessions } = useQuery<ExamSession[]>({
+  const { data: sessions, isLoading: sessionsLoading, isError: sessionsError, error: sessionsErrorObj, refetch: refetchSessions } = useQuery<ExamSession[]>({
     queryKey: ["exams", id, "sessions"],
     queryFn: async () => (await api.get(`/api/exams/${id}/sessions`)).data.data,
   });
@@ -80,6 +80,7 @@ export default function SeatPlanPage() {
       setSelected(new Set());
       queryClient.invalidateQueries({ queryKey: ["exams", id, "seat-plan"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to approve selected students"),
   });
 
   function toggle(studentId: string) {
@@ -112,12 +113,26 @@ export default function SeatPlanPage() {
 
       <AddSessionForm examId={id} classes={classes} />
 
+      {sessionsLoading ? (
+        <div className="flex justify-center py-8"><LoadingSpinner /></div>
+      ) : sessionsError ? (
+        <ErrorState title="Failed to load exam sessions" description={extractErrorMessage(sessionsErrorObj)} retryLabel="Retry" onRetry={() => refetchSessions()} />
+      ) : (
+        <>
       {!sessions?.length && <EmptyState title="No sessions defined yet" description="Add a session above before generating seats — even a single-sitting exam needs one session covering all its classes." />}
 
       {sessions?.map((session) => (
         <SessionCard key={session.id} examId={id} session={session} />
       ))}
+        </>
+      )}
 
+      {plansLoading ? (
+        <div className="flex justify-center py-8"><LoadingSpinner /></div>
+      ) : plansError ? (
+        <ErrorState title="Failed to load seat plan" description={extractErrorMessage(plansErrorObj)} retryLabel="Retry" onRetry={() => refetchPlans()} />
+      ) : (
+        <>
       {!plans?.length && !!sessions?.length && <EmptyState title="No seats generated yet" description="Generate a session above to see its seat plan here." />}
       {plans && plans.length > 0 && (
         <Card>
@@ -152,6 +167,8 @@ export default function SeatPlanPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <PdfPreviewModal
@@ -278,6 +295,7 @@ function SessionCard({ examId, session }: { examId: string; session: ExamSession
       toast.success("Session removed");
       queryClient.invalidateQueries({ queryKey: ["exams", examId, "sessions"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove session"),
   });
 
   return (

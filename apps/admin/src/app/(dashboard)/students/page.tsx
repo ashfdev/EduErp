@@ -10,6 +10,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/api";
@@ -122,7 +123,7 @@ export default function StudentsPage() {
     academic_year_id: academicYearId || undefined,
   };
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["students", { ...filterParams, page }],
     queryFn: async () => (await api.get("/api/students", { params: { ...filterParams, page, limit: 20 } })).data,
   });
@@ -244,85 +245,93 @@ export default function StudentsPage() {
         </Select>
       </div>
 
-      {!!students.length && students[0]?.is_historical && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Showing historical placement for <strong>{students[0].historical_year_label}</strong> — this was each student&apos;s class/section
-          in that past session, not necessarily their current one.
-        </div>
-      )}
-
-      {!students.length && <EmptyState title={t("noStudentsFound")} description={t("noStudentsHint")} />}
-
-      <Card>
-        <CardContent className="pt-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10"></TableHead>
-                <TableHead>{t("colUid")}</TableHead>
-                <TableHead>{t("colName")}</TableHead>
-                <TableHead>{terms.term_class} / {terms.term_section}</TableHead>
-                <TableHead>{t("colRoll")}</TableHead>
-                <TableHead>{t("colGuardianPhone")}</TableHead>
-                <TableHead>{t("colStatus")}</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((s) => (
-                <TableRow key={s.id} className="cursor-pointer" onClick={() => router.push(`/students/${s.id}`)}>
-                  <TableCell>
-                    {s.photo_url ? (
-                      <img src={s.photo_url} alt="" className="h-7 w-7 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                        {s.name_en.charAt(0)}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-mono text-[11px]">{s.student_uid}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">
-                      {s.name_en}
-                      {s._count.documents === 0 && <Badge variant="warning" className="ml-2">No documents</Badge>}
-                    </div>
-                    {s.name_bn && <div className="text-[11px] text-muted-foreground">{s.name_bn}</div>}
-                  </TableCell>
-                  <TableCell>{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</TableCell>
-                  <TableCell>{s.current_roll_no ?? "—"}</TableCell>
-                  <TableCell>{s.guardian?.phone ?? "—"}</TableCell>
-                  <TableCell><StatusBadge status={s.status} /></TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/students/${s.id}`}>{t("view")}</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/students/${s.id}/edit`}>{t("edit")}</Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          {meta && meta.totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between">
-              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t("previous")}</Button>
-              <span className="text-sm text-muted-foreground">{t("pageOf", { page: meta.page, totalPages: meta.totalPages })}</span>
-              <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>{t("next")}</Button>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load students" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!!students.length && students[0]?.is_historical && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Showing historical placement for <strong>{students[0].historical_year_label}</strong> — this was each student&apos;s class/section
+              in that past session, not necessarily their current one.
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {!students.length && <EmptyState title={t("noStudentsFound")} description={t("noStudentsHint")} />}
+
+          <Card>
+            <CardContent className="pt-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>{t("colUid")}</TableHead>
+                    <TableHead>{t("colName")}</TableHead>
+                    <TableHead>{terms.term_class} / {terms.term_section}</TableHead>
+                    <TableHead>{t("colRoll")}</TableHead>
+                    <TableHead>{t("colGuardianPhone")}</TableHead>
+                    <TableHead>{t("colStatus")}</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {students.map((s) => (
+                    <TableRow key={s.id} className="cursor-pointer" onClick={() => router.push(`/students/${s.id}`)}>
+                      <TableCell>
+                        {s.photo_url ? (
+                          <img src={s.photo_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                            {s.name_en.charAt(0)}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-mono text-[11px]">{s.student_uid}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {s.name_en}
+                          {s._count.documents === 0 && <Badge variant="warning" className="ml-2">No documents</Badge>}
+                        </div>
+                        {s.name_bn && <div className="text-[11px] text-muted-foreground">{s.name_bn}</div>}
+                      </TableCell>
+                      <TableCell>{s.current_class?.name_en} {s.current_section && `· ${s.current_section.name}`} {s.group && `· ${s.group.name_en}`}</TableCell>
+                      <TableCell>{s.current_roll_no ?? "—"}</TableCell>
+                      <TableCell>{s.guardian?.phone ?? "—"}</TableCell>
+                      <TableCell><StatusBadge status={s.status} /></TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/students/${s.id}`}>{t("view")}</Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/students/${s.id}/edit`}>{t("edit")}</Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {meta && meta.totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-between">
+                  <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{t("previous")}</Button>
+                  <span className="text-sm text-muted-foreground">{t("pageOf", { page: meta.page, totalPages: meta.totalPages })}</span>
+                  <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>{t("next")}</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </PageWrapper>
   );
 }

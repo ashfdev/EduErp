@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StaffDetail {
@@ -115,7 +115,7 @@ export default function StaffDetailPage() {
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
 
-  const { data: staff } = useQuery<StaffDetail>({ queryKey: ["hr", "staff", "detail", id], queryFn: async () => (await api.get(`/api/hr/staff/${id}`)).data.data });
+  const { data: staff, isLoading: staffLoading, isError: staffError, error: staffErrorObj, refetch: refetchStaff } = useQuery<StaffDetail>({ queryKey: ["hr", "staff", "detail", id], queryFn: async () => (await api.get(`/api/hr/staff/${id}`)).data.data });
   const { data: leaveTypes } = useQuery<LeaveType[]>({ queryKey: ["hr", "leave-types"], queryFn: async () => (await api.get("/api/hr/leave-types")).data.data });
   const { data: balance } = useQuery<LeaveBalance[]>({ queryKey: ["hr", "leaves", "balance", id], queryFn: async () => (await api.get(`/api/hr/leaves/balance/${id}`)).data.data });
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
@@ -279,11 +279,11 @@ export default function StaffDetailPage() {
   });
 
   // ── Experience & Reference (Plan Fourteen, Phase B4) ──────────────────
-  const { data: experienceRows } = useQuery<StaffExperienceRow[]>({
+  const { data: experienceRows, isLoading: experienceLoading, isError: experienceError, error: experienceErrorObj, refetch: refetchExperience } = useQuery<StaffExperienceRow[]>({
     queryKey: ["hr", "staff", id, "experience"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/experience`)).data.data,
   });
-  const { data: referenceRows } = useQuery<StaffReferenceRow[]>({
+  const { data: referenceRows, isLoading: referenceLoading, isError: referenceError, error: referenceErrorObj, refetch: refetchReference } = useQuery<StaffReferenceRow[]>({
     queryKey: ["hr", "staff", id, "reference"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/reference`)).data.data,
   });
@@ -345,6 +345,7 @@ export default function StaffDetailPage() {
       toast.success("Experience removed");
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "experience"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove experience"),
   });
 
   const emptyReferenceForm = { name: "", designation: "", relation: "", address: "", phone: "" };
@@ -396,9 +397,10 @@ export default function StaffDetailPage() {
       toast.success("Reference removed");
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "reference"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove reference"),
   });
 
-  const { data: documents } = useQuery<StaffDocumentRow[]>({
+  const { data: documents, isLoading: documentsLoading, isError: documentsError, error: documentsErrorObj, refetch: refetchDocuments } = useQuery<StaffDocumentRow[]>({
     queryKey: ["hr", "staff", id, "documents"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/documents`)).data.data,
   });
@@ -433,6 +435,7 @@ export default function StaffDetailPage() {
       toast.success("Document removed");
       queryClient.invalidateQueries({ queryKey: ["hr", "staff", id, "documents"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to remove document"),
   });
 
   const replaceDocMutation = useMutation({
@@ -497,6 +500,8 @@ export default function StaffDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record rejoin"),
   });
 
+  if (staffLoading) return <PageWrapper><div className="flex justify-center py-16"><LoadingSpinner /></div></PageWrapper>;
+  if (staffError) return <PageWrapper><ErrorState title="Failed to load staff member" description={extractErrorMessage(staffErrorObj)} retryLabel="Retry" onRetry={() => refetchStaff()} /></PageWrapper>;
   if (!staff) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
 
   return (
@@ -810,6 +815,12 @@ export default function StaffDetailPage() {
                 <p className="font-medium">Experience</p>
                 <Button size="sm" variant="outline" onClick={openAddExperience}>+ Add Experience</Button>
               </div>
+              {experienceLoading ? (
+                <div className="flex justify-center py-8"><LoadingSpinner /></div>
+              ) : experienceError ? (
+                <ErrorState title="Failed to load experience" description={extractErrorMessage(experienceErrorObj)} retryLabel="Retry" onRetry={() => refetchExperience()} />
+              ) : (
+                <>
               {!experienceRows?.length && <EmptyState title="No prior employment on file" />}
               {!!experienceRows?.length && (
                 <div className="space-y-2">
@@ -831,6 +842,8 @@ export default function StaffDetailPage() {
                   ))}
                 </div>
               )}
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -840,6 +853,12 @@ export default function StaffDetailPage() {
                 <p className="font-medium">Reference</p>
                 <Button size="sm" variant="outline" onClick={openAddReference}>+ Add Reference</Button>
               </div>
+              {referenceLoading ? (
+                <div className="flex justify-center py-8"><LoadingSpinner /></div>
+              ) : referenceError ? (
+                <ErrorState title="Failed to load references" description={extractErrorMessage(referenceErrorObj)} retryLabel="Retry" onRetry={() => refetchReference()} />
+              ) : (
+                <>
               {!referenceRows?.length && <EmptyState title="No references on file" />}
               {!!referenceRows?.length && (
                 <div className="space-y-2">
@@ -856,6 +875,8 @@ export default function StaffDetailPage() {
                     </div>
                   ))}
                 </div>
+              )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -1004,6 +1025,12 @@ export default function StaffDetailPage() {
           <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setDocUploadOpen(true)}>+ Upload Document</Button></div>
           <Card>
             <CardContent className="pt-6">
+              {documentsLoading ? (
+                <div className="flex justify-center py-8"><LoadingSpinner /></div>
+              ) : documentsError ? (
+                <ErrorState title="Failed to load documents" description={extractErrorMessage(documentsErrorObj)} retryLabel="Retry" onRetry={() => refetchDocuments()} />
+              ) : (
+                <>
               {!documents?.length && <EmptyState title="No documents uploaded yet" />}
               <Table>
                 <TableHeader>
@@ -1036,6 +1063,8 @@ export default function StaffDetailPage() {
                   ))}
                 </TableBody>
               </Table>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

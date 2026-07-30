@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState,
+  PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem, MultiSelectChecklist, ConfirmDialog, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -21,19 +21,20 @@ interface FeeStructure {
   amount: number;
   frequency: string;
   due_day: number | null;
+  target_due_date: string | null;
   class_id: string | null;
   classes: { class: { id: string; name_en: string } }[];
 }
 interface YearOption { id: string; label: string; is_active: boolean }
 
-const emptyForm = { name: "", category: "TUITION", fee_sub_category_id: "", amount: 0, frequency: "MONTHLY", due_day: 10 };
+const emptyForm = { name: "", category: "TUITION", fee_sub_category_id: "", amount: 0, frequency: "MONTHLY", due_day: 10, target_due_date: "" };
 
 export default function FeeStructuresPage() {
   const queryClient = useQueryClient();
   const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   const activeYear = years?.find((y) => y.is_active) ?? years?.[0];
 
-  const { data: structures } = useQuery<FeeStructure[]>({
+  const { data: structures, isLoading: structuresLoading, isError: structuresError, error: structuresErrorObj, refetch: refetchStructures } = useQuery<FeeStructure[]>({
     queryKey: ["fees", "structures", activeYear?.id],
     queryFn: async () => (await api.get("/api/fees/structures", { params: { academic_year_id: activeYear?.id } })).data.data,
     enabled: !!activeYear,
@@ -50,13 +51,21 @@ export default function FeeStructuresPage() {
   const openCreate = () => { setEditingId(null); setForm(emptyForm); setOpen(true); };
   const openEdit = (s: FeeStructure) => {
     setEditingId(s.id);
-    setForm({ name: s.name, category: s.category, fee_sub_category_id: s.fee_sub_category?.id ?? "", amount: s.amount, frequency: s.frequency, due_day: s.due_day ?? 10 });
+    setForm({
+      name: s.name, category: s.category, fee_sub_category_id: s.fee_sub_category?.id ?? "", amount: s.amount, frequency: s.frequency,
+      due_day: s.due_day ?? 10, target_due_date: s.target_due_date ? s.target_due_date.slice(0, 10) : "",
+    });
     setOpen(true);
   };
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      const body = { ...form, fee_sub_category_id: form.fee_sub_category_id || null, academic_year_id: activeYear?.id };
+      const body = {
+        ...form,
+        fee_sub_category_id: form.fee_sub_category_id || null,
+        academic_year_id: activeYear?.id,
+        target_due_date: form.target_due_date || null,
+      };
       return editingId ? api.put(`/api/fees/structures/${editingId}`, body) : api.post("/api/fees/structures", body);
     },
     onSuccess: () => {
@@ -92,9 +101,13 @@ export default function FeeStructuresPage() {
   // to 14 days out, editable before generating.
   const [generateDueDate, setGenerateDueDate] = useState("");
   function openGenerateDialog(s: FeeStructure) {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    setGenerateDueDate(d.toISOString().slice(0, 10));
+    if (s.target_due_date) {
+      setGenerateDueDate(s.target_due_date.slice(0, 10));
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() + 14);
+      setGenerateDueDate(d.toISOString().slice(0, 10));
+    }
     setGenerateTarget(s);
   }
   const generateClassIds = generateTarget
@@ -231,7 +244,15 @@ export default function FeeStructuresPage() {
                 <option value="ONE_TIME">One Time</option>
               </select>
             </div>
-            <div className="space-y-1.5"><Label>Due Day of Month</Label><Input type="number" value={form.due_day} onChange={(e) => setForm({ ...form, due_day: Number(e.target.value) })} /></div>
+            {form.frequency === "ONE_TIME" ? (
+              <div className="space-y-1.5">
+                <Label>Target Due Date</Label>
+                <Input type="date" value={form.target_due_date} onChange={(e) => setForm({ ...form, target_due_date: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Shown to families as the upcoming deadline before this fee is even generated, and used as the default due date when generating it.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5"><Label>Due Day of Month</Label><Input type="number" value={form.due_day} onChange={(e) => setForm({ ...form, due_day: Number(e.target.value) })} /></div>
+            )}
             <p className="text-xs text-muted-foreground">Use &quot;Assign to Classes&quot; from the list to scope this structure to one or more classes.</p>
           </div>
           <DialogFooter>

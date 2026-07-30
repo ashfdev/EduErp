@@ -7,6 +7,7 @@ import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, StatusBadge, EmptyState,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Table, TableBody, TableRow, TableCell,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -59,6 +60,7 @@ function DeviceCard({ device }: { device: Device }) {
   const testMutation = useMutation({
     mutationFn: () => api.post(`/api/devices/${device.id}/test-connection`),
     onSuccess: (res) => toast[res.data.data.online ? "success" : "error"](res.data.data.online ? "Device is online" : "Device appears offline"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to test device connection"),
   });
 
   const syncNowMutation = useMutation({
@@ -156,7 +158,7 @@ export default function DevicesPage() {
   const [location, setLocation] = useState("");
   const [ipAddress, setIpAddress] = useState("");
 
-  const { data: devices } = useQuery<Device[]>({ queryKey: ["devices"], queryFn: async () => (await api.get("/api/devices")).data.data });
+  const { data: devices, isLoading, isError, error, refetch } = useQuery<Device[]>({ queryKey: ["devices"], queryFn: async () => (await api.get("/api/devices")).data.data });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/api/devices", { name, type, serial_number: serialNumber || undefined, location: location || undefined, ip_address: ipAddress || undefined }),
@@ -166,16 +168,25 @@ export default function DevicesPage() {
       setOpen(false);
       setName(""); setSerialNumber(""); setLocation(""); setIpAddress("");
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to register device"),
   });
 
   return (
     <PageWrapper>
       <PageHeader title="Biometric Devices" breadcrumbs={[{ label: "Settings", href: "/settings/institution" }, { label: "Devices" }]} action={<Button onClick={() => setOpen(true)}>+ Register Device</Button>} />
 
-      {!devices?.length && <EmptyState title="No devices registered yet" description="Devices also auto-register on their first ADMS check-in" />}
-      <div className="space-y-3">
-        {devices?.map((d) => <DeviceCard key={d.id} device={d} />)}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load devices" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
+          {!devices?.length && <EmptyState title="No devices registered yet" description="Devices also auto-register on their first ADMS check-in" />}
+          <div className="space-y-3">
+            {devices?.map((d) => <DeviceCard key={d.id} device={d} />)}
+          </div>
+        </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
