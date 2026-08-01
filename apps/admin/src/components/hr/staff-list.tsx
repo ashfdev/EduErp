@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Image from "next/image";
-import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label, LoadingSpinner, PageHeader, PageWrapper, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Department {
@@ -89,7 +89,7 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
     });
   }
 
-  const { data: staff } = useQuery<StaffRow[]>({
+  const { data: staff, isLoading, isError, error, refetch } = useQuery<StaffRow[]>({
     queryKey: ["hr", "staff", category, search, departmentId],
     queryFn: async () =>
       (
@@ -146,6 +146,12 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
         </select>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title={`Failed to load ${title.toLowerCase()}`} description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!staff?.length && <EmptyState title={`No ${title.toLowerCase()} found`} />}
       {!!staff?.length && (
         <Card>
@@ -201,6 +207,8 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
 
       <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>

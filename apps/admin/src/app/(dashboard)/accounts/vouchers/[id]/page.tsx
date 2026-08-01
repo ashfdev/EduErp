@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Label, PageHeader, PageWrapper, StatusBadge, Textarea, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface JournalEntry {
@@ -39,7 +39,7 @@ export default function VoucherDetailPage() {
   const [reverseReason, setReverseReason] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const { data: voucher } = useQuery<VoucherDetail>({
+  const { data: voucher, isLoading, isError, error, refetch } = useQuery<VoucherDetail>({
     queryKey: ["accounts", "vouchers", params.id],
     queryFn: async () => (await api.get(`/api/accounts/vouchers/${params.id}`)).data.data,
   });
@@ -73,7 +73,21 @@ export default function VoucherDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to delete voucher"),
   });
 
-  if (!voucher) return null;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !voucher) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load voucher" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

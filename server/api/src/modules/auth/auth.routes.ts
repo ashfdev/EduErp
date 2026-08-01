@@ -11,6 +11,7 @@ import { unauthorized, badRequest, notFound } from "../../lib/errors";
 import { sendSms } from "../../services/sms.service";
 import { loginLimiter, loginBanGuard, forgotPasswordLimiter } from "../../middleware/rate-limit";
 import { logAudit } from "../../lib/audit-log";
+import { PORTAL_ROLES } from "../../lib/roles";
 import {
   loginSchema,
   changePasswordSchema,
@@ -75,7 +76,14 @@ authRouter.post(
       throw unauthorized("Invalid credentials");
     }
 
-    const access_token = signAccessToken({ sub: user.id, role: user.role, portal: body.portal });
+    // The token's own `portal` claim is always derived from the user's real
+    // role, never trusted verbatim from the client — `body.portal` still
+    // drives the login lookup above (resolving a student_uid), but a
+    // STUDENT/GUARDIAN account can't get a portal:"admin" claim just by
+    // requesting one. Same derivation /refresh uses below, so the two can
+    // never disagree about what portal a given account belongs to.
+    const portal = PORTAL_ROLES.includes(user.role) ? "portal" : "admin";
+    const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
     const refresh_token = signRefreshToken({ sub: user.id });
     await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
 
@@ -105,7 +113,12 @@ authRouter.post(
     if (!user || !user.is_active) throw unauthorized("Account no longer active");
 
     await redis.del(`refresh:${body.refresh_token}`);
-    const access_token = signAccessToken({ sub: user.id, role: user.role, portal: "admin" });
+    // Same role-derived portal claim as /login — was previously hardcoded
+    // to "admin" regardless of which portal the session actually belonged
+    // to, so a STUDENT/GUARDIAN session got re-minted with an admin-portal
+    // claim on every token refresh.
+    const portal = PORTAL_ROLES.includes(user.role) ? "portal" : "admin";
+    const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
     const refresh_token = signRefreshToken({ sub: user.id });
     await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
 

@@ -915,6 +915,25 @@ admissionRouter.post(
         await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
       }
 
+      // Authoritative recheck, immediately before the status flip -- the
+      // plain count() at the top of this handler is a cheap fast-path
+      // rejection (avoids doing all the work above only to roll it back in
+      // the common non-race case), but an unlocked recheck alone would NOT
+      // close the race: under Postgres's default READ COMMITTED isolation,
+      // a bare count() takes no row lock, so two concurrent enrollments for
+      // the last seat could both observe the same pre-commit count and both
+      // proceed to update their own (different) AdmissionApplication rows --
+      // no write-write conflict between them, nothing blocks either one.
+      // Locking the AdmissionCycle row (no dedicated seat-counter column
+      // exists to lock directly) is what actually serializes this: a second
+      // concurrent transaction blocks here until the first commits, so its
+      // own recheck afterward observes true, current state.
+      await tx.$queryRaw`SELECT id FROM "AdmissionCycle" WHERE id = ${application.cycle_id} FOR UPDATE`;
+      const takenSeatsFinal = await tx.admissionApplication.count({
+        where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] }, id: { not: application.id } },
+      });
+      if (takenSeatsFinal >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
+
       await tx.admissionApplication.update({ where: { id: application.id }, data: { status: "ENROLLED", enrolled_student_id: created.id } });
 
       return {

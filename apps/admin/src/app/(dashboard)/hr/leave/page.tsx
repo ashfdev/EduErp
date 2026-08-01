@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Label, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, ErrorState, LoadingSpinner, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, Label, Textarea, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface LeaveRequest {
@@ -19,7 +19,7 @@ interface LeaveRequest {
 
 function LeaveTable({ status }: { status: string }) {
   const queryClient = useQueryClient();
-  const { data: leaves } = useQuery<LeaveRequest[]>({
+  const { data: leaves, isLoading, isError, error, refetch } = useQuery<LeaveRequest[]>({
     queryKey: ["hr", "leaves", status],
     queryFn: async () => (await api.get("/api/hr/leaves", { params: status === "ALL" ? {} : { status } })).data.data,
   });
@@ -30,6 +30,7 @@ function LeaveTable({ status }: { status: string }) {
       toast.success("Leave approved");
       queryClient.invalidateQueries({ queryKey: ["hr", "leaves"] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to approve leave request"),
   });
 
   const [rejectTarget, setRejectTarget] = useState<LeaveRequest | null>(null);
@@ -47,6 +48,8 @@ function LeaveTable({ status }: { status: string }) {
     },
   });
 
+  if (isLoading) return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  if (isError) return <ErrorState title="Failed to load leave requests" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />;
   if (!leaves?.length) return <EmptyState title="No leave requests" />;
 
   return (

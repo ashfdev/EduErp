@@ -120,6 +120,25 @@ export async function createMonthlyInvoiceIfMissing(
   if (existing) return { created: false };
 
   const dueDate = new Date(year, month - 1, structure.due_day ?? 10);
+  // Deliberately NO try/catch around this create() -- both real callers
+  // (runMonthlyFeeGeneration's per-student loop, admission-enroll's
+  // monthly-structure loop) invoke this function using a `tx` that's
+  // already mid-way through a larger shared transaction with more work
+  // still to come after it. Postgres poisons an ENTIRE transaction the
+  // moment any statement inside it errors -- every subsequent statement on
+  // the same `tx` fails with "current transaction is aborted" (25P02)
+  // regardless of whether the error was "handled" in JS. Catching a P2002
+  // here and returning {created:false} would silently proceed to the next
+  // loop iteration (or admission's next step) still inside a poisoned
+  // transaction, turning a rare, already-effectively-impossible-under-
+  // today's-real-usage race into a guaranteed hard failure for everything
+  // after it. The @@unique([student_id, fee_structure_id, month, year])
+  // constraint is the real, sufficient protection here -- it guarantees the
+  // DB can never contain a duplicate row, full stop. If a genuine
+  // collision ever does occur, letting it throw and roll back the WHOLE
+  // containing transaction (generation batch / enrollment) is the correct,
+  // safe outcome -- the caller can simply retry the whole operation -- not
+  // something to paper over mid-transaction.
   let invoice = await tx.invoice.create({
     data: {
       invoice_no: await generateInvoiceNo(tx, year),

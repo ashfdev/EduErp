@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, Input, PageHeader, PageWrapper, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, ConfirmDialog, ErrorState, Input, LoadingSpinner, PageHeader, PageWrapper, SearchInput, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -68,7 +68,7 @@ export default function MarkEntryGridPage() {
   const readOnly = user?.role === "CLASS_TEACHER";
   const [groupFilter, setGroupFilter] = useState(searchParams.get("group_id") ?? "");
 
-  const { data } = useQuery<MarkEntryData>({
+  const { data, isLoading, isError, error, refetch } = useQuery<MarkEntryData>({
     queryKey: ["marks", exam_id, class_id, section_id],
     queryFn: async () => (await api.get(`/api/marks/${exam_id}/${class_id}/${section_id}`)).data.data,
   });
@@ -242,7 +242,21 @@ export default function MarkEntryGridPage() {
     return entryStatus(studentId, subjectId) === "APPROVED";
   }).length;
 
-  if (!data) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load mark entry grid" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

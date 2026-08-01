@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label, LoadingSpinner, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AcademicYear {
@@ -65,11 +65,11 @@ interface ClassRow {
 export default function AcademicSettingsPage() {
   const queryClient = useQueryClient();
 
-  const { data: years } = useQuery<AcademicYear[]>({
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<AcademicYear[]>({
     queryKey: ["settings", "academic-years"],
     queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
-  const { data: shifts } = useQuery<Shift[]>({
+  const { data: shifts, isLoading: shiftsLoading, isError: shiftsError, error: shiftsErrorObj, refetch: refetchShifts } = useQuery<Shift[]>({
     queryKey: ["settings", "shifts"],
     queryFn: async () => (await api.get("/api/settings/shifts")).data.data,
   });
@@ -77,7 +77,7 @@ export default function AcademicSettingsPage() {
     queryKey: ["settings", "programs"],
     queryFn: async () => (await api.get("/api/settings/programs")).data.data,
   });
-  const { data: classes } = useQuery<ClassRow[]>({
+  const { data: classes, isLoading: classesLoading, isError: classesError, error: classesErrorObj, refetch: refetchClasses } = useQuery<ClassRow[]>({
     queryKey: ["settings", "classes"],
     queryFn: async () => (await api.get("/api/settings/classes")).data.data,
   });
@@ -273,6 +273,12 @@ export default function AcademicSettingsPage() {
           <Button size="sm" onClick={() => setYearOpen(true)}>+ Add Academic Year</Button>
         </CardHeader>
         <CardContent>
+          {yearsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : yearsError ? (
+            <ErrorState title="Failed to load academic years" description={extractErrorMessage(yearsErrorObj)} retryLabel="Retry" onRetry={() => refetchYears()} />
+          ) : (
+          <>
           {!years?.length && <EmptyState title="No academic years yet" />}
           <Table>
             <TableBody>
@@ -288,6 +294,8 @@ export default function AcademicSettingsPage() {
               ))}
             </TableBody>
           </Table>
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -297,6 +305,12 @@ export default function AcademicSettingsPage() {
           <Button size="sm" onClick={() => setShiftOpen(true)}>+ Add Shift</Button>
         </CardHeader>
         <CardContent>
+          {shiftsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : shiftsError ? (
+            <ErrorState title="Failed to load shifts" description={extractErrorMessage(shiftsErrorObj)} retryLabel="Retry" onRetry={() => refetchShifts()} />
+          ) : (
+          <>
           {!shifts?.length && <EmptyState title="No shifts yet" />}
           <div className="flex flex-wrap gap-2">
             {shifts?.map((s) => (
@@ -306,6 +320,8 @@ export default function AcademicSettingsPage() {
               </div>
             ))}
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
@@ -315,6 +331,12 @@ export default function AcademicSettingsPage() {
           <Button size="sm" onClick={() => setClassOpen(true)}>+ Add Class</Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          {classesLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : classesError ? (
+            <ErrorState title="Failed to load classes" description={extractErrorMessage(classesErrorObj)} retryLabel="Retry" onRetry={() => refetchClasses()} />
+          ) : (
+          <>
           {!classes?.length && <EmptyState title="No classes yet" />}
           {classes?.map((c) => (
             <div key={c.id} className="rounded-md border p-3">
@@ -346,6 +368,8 @@ export default function AcademicSettingsPage() {
               )}
             </div>
           ))}
+          </>
+          )}
         </CardContent>
       </Card>
 

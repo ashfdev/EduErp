@@ -9,6 +9,7 @@ import { reqParam } from "../../lib/req-param";
 import { INVENTORY_MANAGE_ROLES, REQUISITION_APPROVE_ROLES } from "../../lib/roles";
 import { requisitionSchema, requisitionRejectSchema, purchaseOrderSchema, grnSchema } from "@education-erp/validators";
 import { createWithUniqueAssetUid } from "../../utils/asset-id.generator";
+import { createWithUniqueBusinessNo } from "../../utils/business-number.generator";
 import { uploadBuffer } from "../../services/storage.service";
 import { resolveBaseUrl } from "../../lib/env";
 import { createInventoryPurchaseJournal } from "../accounts/auto-journal.service";
@@ -30,20 +31,25 @@ purchaseRouter.post(
   asyncHandler(async (req, res) => {
     const body = requisitionSchema.parse(req.body);
     const year = new Date().getFullYear();
-    const count = await prisma.purchaseRequisition.count({ where: { created_at: { gte: new Date(year, 0, 1) } } });
-    const req_no = `REQ-${year}-${String(count + 1).padStart(4, "0")}`;
-
-    const requisition = await prisma.purchaseRequisition.create({
-      data: {
-        req_no,
-        requested_by_id: req.user!.sub,
-        department_id: body.department_id,
-        reason: body.reason,
-        required_by: body.required_by,
-        items: { create: body.items },
-      },
-      include: { items: true },
-    });
+    const requisition = await createWithUniqueBusinessNo(
+      "REQ",
+      year,
+      (range) => prisma.purchaseRequisition.count({ where: { created_at: range } }),
+      (candidate) => prisma.purchaseRequisition.findUnique({ where: { req_no: candidate } }).then((r) => r !== null),
+      "req_no",
+      (req_no) =>
+        prisma.purchaseRequisition.create({
+          data: {
+            req_no,
+            requested_by_id: req.user!.sub,
+            department_id: body.department_id,
+            reason: body.reason,
+            required_by: body.required_by,
+            items: { create: body.items },
+          },
+          include: { items: true },
+        }),
+    );
     res.status(201).json({ success: true, data: requisition });
   }),
 );
@@ -105,35 +111,41 @@ purchaseRouter.post(
   asyncHandler(async (req, res) => {
     const body = purchaseOrderSchema.parse(req.body);
     const year = new Date().getFullYear();
-    const count = await prisma.purchaseOrder.count({ where: { created_at: { gte: new Date(year, 0, 1) } } });
-    const po_no = `PO-${year}-${String(count + 1).padStart(4, "0")}`;
     const totalAmount = body.items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
 
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        po_no,
-        requisition_id: body.requisition_id ?? undefined,
-        supplier_id: body.supplier_id,
-        order_date: body.order_date,
-        delivery_date: body.delivery_date,
-        delivery_address: body.delivery_address,
-        terms: body.terms,
-        total_amount: totalAmount,
-        items: {
-          create: body.items.map((i) => ({
-            item_id: i.item_id ?? undefined,
-            description: i.description,
-            purchase_type: i.purchase_type,
-            quantity: i.quantity,
-            unit: i.unit,
-            unit_price: i.unit_price,
-            total_price: i.quantity * i.unit_price,
-            asset_category_id: i.asset_category_id ?? undefined,
-          })),
-        },
-      },
-      include: { items: true },
-    });
+    const po = await createWithUniqueBusinessNo(
+      "PO",
+      year,
+      (range) => prisma.purchaseOrder.count({ where: { created_at: range } }),
+      (candidate) => prisma.purchaseOrder.findUnique({ where: { po_no: candidate } }).then((r) => r !== null),
+      "po_no",
+      (po_no) =>
+        prisma.purchaseOrder.create({
+          data: {
+            po_no,
+            requisition_id: body.requisition_id ?? undefined,
+            supplier_id: body.supplier_id,
+            order_date: body.order_date,
+            delivery_date: body.delivery_date,
+            delivery_address: body.delivery_address,
+            terms: body.terms,
+            total_amount: totalAmount,
+            items: {
+              create: body.items.map((i) => ({
+                item_id: i.item_id ?? undefined,
+                description: i.description,
+                purchase_type: i.purchase_type,
+                quantity: i.quantity,
+                unit: i.unit,
+                unit_price: i.unit_price,
+                total_price: i.quantity * i.unit_price,
+                asset_category_id: i.asset_category_id ?? undefined,
+              })),
+            },
+          },
+          include: { items: true },
+        }),
+    );
 
     if (body.requisition_id) {
       await prisma.purchaseRequisition.update({ where: { id: body.requisition_id }, data: { status: "PO_CREATED" } });
@@ -202,8 +214,6 @@ purchaseRouter.post(
 
     const body = grnSchema.parse(req.body);
     const year = new Date().getFullYear();
-    const grnCount = await prisma.goodsReceivedNote.count({ where: { created_at: { gte: new Date(year, 0, 1) } } });
-    const grn_no = `GRN-${year}-${String(grnCount + 1).padStart(4, "0")}`;
 
     const createdAssets: string[] = [];
     const updatedStock: { item_id: string; new_stock: number }[] = [];
@@ -214,7 +224,15 @@ purchaseRouter.post(
     // legible, rather than one opaque lump sum.
     const journalLines = new Map<string, number>();
 
-    const grnItemsData = [];
+    const grnItemsData: {
+      po_item_id: string;
+      description: string;
+      ordered_qty: number;
+      received_qty: number;
+      unit_price: number;
+      total_price: number;
+      asset_id: string | undefined;
+    }[] = [];
     for (const receivedItem of body.items) {
       const poItem = po.items.find((i) => i.id === receivedItem.po_item_id);
       if (!poItem) throw badRequest(`PO item ${receivedItem.po_item_id} not found on this purchase order`);
@@ -294,24 +312,40 @@ purchaseRouter.post(
       });
     }
 
-    const grn = await prisma.goodsReceivedNote.create({
-      data: {
-        grn_no,
-        po_id: poId,
-        received_date: body.received_date,
-        received_by_id: req.user!.sub,
-        supplier_invoice_no: body.supplier_invoice_no,
-        remarks: body.remarks,
-        total_amount: totalAmount,
-        items: { create: grnItemsData },
-      },
-      include: { items: true },
-    });
+    // Only this final create() is wrapped in the retry-on-collision helper —
+    // every stock/asset/PO-item side effect above has already committed
+    // (this whole handler runs outside a $transaction, matching how GRN
+    // receiving already worked before this fix), so retrying the *entire*
+    // handler body on a grn_no collision would double-apply those side
+    // effects (double stock increment, duplicate Asset rows). Retrying only
+    // the final insert is safe: those effects already happened exactly
+    // once, and only the GRN record itself needs a fresh number.
+    const grn = await createWithUniqueBusinessNo(
+      "GRN",
+      year,
+      (range) => prisma.goodsReceivedNote.count({ where: { created_at: range } }),
+      (candidate) => prisma.goodsReceivedNote.findUnique({ where: { grn_no: candidate } }).then((r) => r !== null),
+      "grn_no",
+      (grn_no) =>
+        prisma.goodsReceivedNote.create({
+          data: {
+            grn_no,
+            po_id: poId,
+            received_date: body.received_date,
+            received_by_id: req.user!.sub,
+            supplier_invoice_no: body.supplier_invoice_no,
+            remarks: body.remarks,
+            total_amount: totalAmount,
+            items: { create: grnItemsData },
+          },
+          include: { items: true },
+        }),
+    );
 
     let voucherId: string | null = null;
     if (journalLines.size === 1) {
       const [debitAccountId, amount] = [...journalLines.entries()][0]!;
-      voucherId = await createInventoryPurchaseJournal({ grnId: grn.id, totalAmount: amount, debitAccountId, narration: `Goods received — ${grn_no}` });
+      voucherId = await createInventoryPurchaseJournal({ grnId: grn.id, totalAmount: amount, debitAccountId, narration: `Goods received — ${grn.grn_no}` });
     } else if (journalLines.size > 1) {
       // Multiple distinct debit accounts in one GRN — createInventoryPurchaseJournal
       // only handles a single debit line, so fall back to a direct multi-line
@@ -321,7 +355,7 @@ purchaseRouter.post(
       const voucher = await createVoucher(prisma, {
         voucher_type: "JOURNAL",
         date: new Date(),
-        narration: `Goods received — ${grn_no}`,
+        narration: `Goods received — ${grn.grn_no}`,
         reference_type: "INVENTORY_PURCHASE",
         reference_id: grn.id,
         entries: [

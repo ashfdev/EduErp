@@ -1570,6 +1570,17 @@ model Invoice {
   @@index([student_id])
   @@index([status])
   @@index([fee_sub_category_id])
+  // Backs createMonthlyInvoiceIfMissing()'s idempotency check with a real
+  // constraint -- previously a pure findFirst-then-create TOCTOU with
+  // nothing in the DB to stop a duplicate under concurrent calls (the bulk-
+  // monthly generator/scheduled job and admission-enroll's first-month
+  // invoicing can both call this helper). Postgres treats NULL as never
+  // equal to NULL for uniqueness, so this has zero effect on ad-hoc/manual
+  // invoices (fee_structure_id: null), which correctly keep coexisting
+  // freely -- only real MONTHLY-generated invoices (always non-null
+  // structure/month/year) are protected. Same shape as PayrollRecord's own
+  // @@unique([staff_id, month, year]) for the identical kind of problem.
+  @@unique([student_id, fee_structure_id, month, year])
 }
 
 // Plan Fourteen, Phase N1 -- optional finer-grained catalog entry nested

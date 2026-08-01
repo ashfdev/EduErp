@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Application {
@@ -34,7 +34,7 @@ export default function AdmissionApplicationDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: app } = useQuery<Application>({ queryKey: ["admission", "applications", "detail", id], queryFn: async () => (await api.get(`/api/admission/applications/${id}`)).data.data });
+  const { data: app, isLoading, isError, error, refetch } = useQuery<Application>({ queryKey: ["admission", "applications", "detail", id], queryFn: async () => (await api.get(`/api/admission/applications/${id}`)).data.data });
 
   const statusMutation = useMutation({
     mutationFn: (status: "SHORTLISTED" | "WAITLISTED" | "REJECTED") => api.put(`/api/admission/applications/${id}/status`, { status }),
@@ -68,7 +68,21 @@ export default function AdmissionApplicationDetailPage() {
     onError: () => toast.error("Only confirmed applications can be enrolled"),
   });
 
-  if (!app) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !app) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load application" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

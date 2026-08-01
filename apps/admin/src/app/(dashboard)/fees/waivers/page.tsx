@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState, extractErrorMessage,
+  PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
@@ -55,8 +55,8 @@ const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRAN
 export default function WaiverSetupPage() {
   const queryClient = useQueryClient();
 
-  const { data: types } = useQuery<WaiverType[]>({ queryKey: ["fees", "waiver-types"], queryFn: async () => (await api.get("/api/fees/waiver-types")).data.data });
-  const { data: assignments } = useQuery<StudentWaiverRow[]>({ queryKey: ["fees", "student-waivers"], queryFn: async () => (await api.get("/api/fees/student-waivers")).data.data });
+  const { data: types, isLoading: typesLoading, isError: typesError, error: typesErrorObj, refetch: refetchTypes } = useQuery<WaiverType[]>({ queryKey: ["fees", "waiver-types"], queryFn: async () => (await api.get("/api/fees/waiver-types")).data.data });
+  const { data: assignments, isLoading: assignmentsLoading, isError: assignmentsError, error: assignmentsErrorObj, refetch: refetchAssignments } = useQuery<StudentWaiverRow[]>({ queryKey: ["fees", "student-waivers"], queryFn: async () => (await api.get("/api/fees/student-waivers")).data.data });
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
 
   // Waiver Type create/edit dialog -- one shared form, same pattern as
@@ -183,6 +183,12 @@ export default function WaiverSetupPage() {
       <Card>
         <CardContent className="pt-4">
           <p className="mb-3 text-sm font-medium">Waiver Types</p>
+          {typesLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : typesError ? (
+            <ErrorState title="Failed to load waiver types" description={extractErrorMessage(typesErrorObj)} retryLabel="Retry" onRetry={() => refetchTypes()} />
+          ) : (
+            <>
           {!types?.length && <EmptyState title="No waiver types yet" description="Create one to start assigning waivers to students." />}
           {!!types?.length && (
             <div className="flex flex-wrap gap-3">
@@ -206,12 +212,20 @@ export default function WaiverSetupPage() {
               ))}
             </div>
           )}
+            </>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="pt-4">
           <p className="mb-3 text-sm font-medium">Existing Waivers</p>
+          {assignmentsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : assignmentsError ? (
+            <ErrorState title="Failed to load waivers" description={extractErrorMessage(assignmentsErrorObj)} retryLabel="Retry" onRetry={() => refetchAssignments()} />
+          ) : (
+            <>
           {!assignments?.length && <EmptyState title="No waivers assigned yet" />}
           {!!assignments?.length && (
             <Table>
@@ -250,6 +264,8 @@ export default function WaiverSetupPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -175,6 +175,12 @@ export default function FeeStructuresPage() {
     <PageWrapper>
       <PageHeader title="Fee Structures" breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Structures" }]} action={<Button onClick={openCreate}>+ Add Fee Structure</Button>} />
 
+      {structuresLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : structuresError ? (
+        <ErrorState title="Failed to load fee structures" description={extractErrorMessage(structuresErrorObj)} retryLabel="Retry" onRetry={() => refetchStructures()} />
+      ) : (
+      <>
       {!structures?.length && <EmptyState title="No fee structures yet" />}
       <Card>
         <CardContent className="pt-6">
@@ -212,6 +218,8 @@ export default function FeeStructuresPage() {
           </table>
         </CardContent>
       </Card>
+      </>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

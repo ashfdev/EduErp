@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Cycle {
@@ -74,7 +74,7 @@ export default function AdmissionCycleDetailPage() {
   const [sortBy, setSortBy] = useState<"applied" | "rank">("applied");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const { data: cycle } = useQuery<Cycle>({ queryKey: ["admission", "cycles", id], queryFn: async () => (await api.get(`/api/admission/cycles/${id}`)).data.data });
+  const { data: cycle, isLoading, isError, error, refetch } = useQuery<Cycle>({ queryKey: ["admission", "cycles", id], queryFn: async () => (await api.get(`/api/admission/cycles/${id}`)).data.data });
   const { data: applications } = useQuery<Application[]>({
     queryKey: ["admission", "applications", id, statusFilter],
     queryFn: async () => (await api.get("/api/admission/applications", { params: { cycle_id: id, status: statusFilter || undefined, limit: 100 } })).data.data,
@@ -86,6 +86,7 @@ export default function AdmissionCycleDetailPage() {
       toast.success("Cycle updated");
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update cycle"),
   });
 
   const meritListMutation = useMutation({
@@ -104,6 +105,7 @@ export default function AdmissionCycleDetailPage() {
       toast.success(`Notified ${res.data.data.notified} applicants`);
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to publish merit list"),
   });
 
   const bulkActionMutation = useMutation({
@@ -114,6 +116,7 @@ export default function AdmissionCycleDetailPage() {
       setSelected([]);
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", id] });
     },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to apply bulk action"),
   });
 
   // ── Admission Test workflow ──
@@ -242,7 +245,21 @@ export default function AdmissionCycleDetailPage() {
     .filter((a): a is Application & { merit_rank: number } => a.merit_rank != null)
     .sort((a, b) => a.merit_rank - b.merit_rank);
 
-  if (!cycle) return <PageWrapper><p className="text-sm text-muted-foreground">Loading...</p></PageWrapper>;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !cycle) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load admission cycle" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

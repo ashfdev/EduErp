@@ -121,7 +121,11 @@ export const feeRulesSchema = z.object({
   late_fee_enabled: z.boolean(),
   late_fee_type: z.enum(["FIXED", "PERCENTAGE", "DAILY"]),
   late_fee_amount: z.number().min(0),
-  late_fee_daily_cap: z.number().min(0),
+  // A cap of 0 previously validated fine but silently zeroed every late
+  // fee at calculation time (Math.min(fine, 0) === 0) with no warning —
+  // to actually disable late fees, use the separate late_fee_enabled
+  // toggle instead of setting this to 0.
+  late_fee_daily_cap: z.number().min(1),
   grace_period_days: z.number().int().min(0),
   fine_applies_to_exam_fee: z.boolean(),
   block_result_on_due: z.boolean(),

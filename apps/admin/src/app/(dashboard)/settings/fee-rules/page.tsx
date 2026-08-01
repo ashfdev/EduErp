@@ -64,7 +64,10 @@ export default function FeeRulesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Daily Cap</Label>
-                  <Input type="number" {...register("late_fee_daily_cap", { valueAsNumber: true })} />
+                  <Input type="number" min={1} {...register("late_fee_daily_cap", { valueAsNumber: true })} />
+                  <p className="text-xs text-muted-foreground">
+                    Fines are capped at this amount per invoice. To disable late fees entirely, use the &quot;Late fee enabled&quot; toggle above.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Grace Period (days)</Label>

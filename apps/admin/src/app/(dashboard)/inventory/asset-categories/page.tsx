@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage,
+  EmptyState, ErrorState, LoadingSpinner, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -48,7 +48,7 @@ export default function AssetCategoriesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: categories } = useQuery<AssetCategoryRow[]>({
+  const { data: categories, isLoading, isError, error, refetch } = useQuery<AssetCategoryRow[]>({
     queryKey: ["inventory", "asset-categories", "manage"],
     queryFn: async () => (await api.get("/api/inventory/asset-categories")).data.data,
   });
@@ -129,7 +129,11 @@ export default function AssetCategoriesPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {!categories?.length ? (
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load asset categories" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : !categories?.length ? (
             <EmptyState title="No asset categories yet" description="Create a category (e.g. Furniture, Electronics) to start adding fixed assets." />
           ) : (
             <Table>

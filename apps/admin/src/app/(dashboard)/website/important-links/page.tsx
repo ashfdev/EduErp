@@ -51,6 +51,7 @@ export default function ImportantLinksPage() {
   const toggleMutation = useMutation({
     mutationFn: (l: LinkRow) => api.put(`/api/website/important-links/${l.id}`, { is_active: !l.is_active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["website", "important-links"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update link"),
   });
 
   const deleteMutation = useMutation({

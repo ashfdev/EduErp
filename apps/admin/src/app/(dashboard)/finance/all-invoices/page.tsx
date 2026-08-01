@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Badge, StatusBadge, SearchInput, EmptyState,
+  PageWrapper, PageHeader, Card, CardContent, Badge, StatusBadge, SearchInput, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, Label,
 } from "@education-erp/ui";
@@ -44,7 +44,7 @@ export default function AllInvoicesPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const { data, isFetching } = useQuery<UnifiedInvoiceResponse>({
+  const { data, isFetching, isLoading, isError, error, refetch } = useQuery<UnifiedInvoiceResponse>({
     queryKey: ["finance", "all-invoices", type, status, search, from, to],
     queryFn: async () =>
       (
@@ -107,6 +107,12 @@ export default function AllInvoicesPage() {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load invoices" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
+        <>
       {!isFetching && !rows.length && <EmptyState title="No records match this filter" />}
 
       {!!rows.length && (
@@ -145,6 +151,8 @@ export default function AllInvoicesPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </PageWrapper>
   );

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Tabs, TabsList, TabsTrigger, TabsContent } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Tabs, TabsList, TabsTrigger, TabsContent, ErrorState, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { RichTextEditor } from "@/components/rich-text-editor";
 import { Save, Globe, Eye } from "lucide-react";
@@ -55,7 +55,7 @@ export default function StaticPageEditorPage() {
   const { page_key } = useParams<{ page_key: string }>();
   const queryClient = useQueryClient();
 
-  const { data: page, isLoading } = useQuery<StaticPageData>({
+  const { data: page, isLoading, isError, error, refetch } = useQuery<StaticPageData>({
     queryKey: ["website", "pages", page_key],
     queryFn: async () => (await api.get(`/api/website/pages/${page_key}`)).data.data,
   });
@@ -149,6 +149,8 @@ export default function StaticPageEditorPage() {
             </div>
           </CardContent>
         </Card>
+      ) : isError ? (
+        <ErrorState title="Failed to load page content" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
       ) : (
         <div className="space-y-6">
           {/* Language Tabs */}

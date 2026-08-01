@@ -81,6 +81,7 @@ export default function SignatureMappingPage() {
       ) : isError ? (
         <ErrorState title="Failed to load signature mapping" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
       ) : (
+      <>
       <div className="space-y-3">
         {DOC_TYPES.map((docType) => (
           <Card key={docType}>
@@ -118,6 +119,7 @@ export default function SignatureMappingPage() {
       <Button className="sticky bottom-4" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
         {saveMutation.isPending ? "Saving..." : "Save All Mappings"}
       </Button>
+      </>
       )}
     </PageWrapper>
   );

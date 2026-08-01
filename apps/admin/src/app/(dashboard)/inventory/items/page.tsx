@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage,
+  EmptyState, ErrorState, LoadingSpinner, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -46,7 +46,7 @@ export default function ItemsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: items } = useQuery<ItemRow[]>({
+  const { data: items, isLoading, isError, error, refetch } = useQuery<ItemRow[]>({
     queryKey: ["inventory", "items", "catalog"],
     queryFn: async () => (await api.get("/api/inventory/items", { params: { limit: 100 } })).data.data,
   });
@@ -128,7 +128,11 @@ export default function ItemsPage() {
       {!!categories?.length && (
         <Card>
           <CardContent className="pt-6">
-            {!items?.length ? (
+            {isLoading ? (
+              <div className="flex justify-center py-16"><LoadingSpinner /></div>
+            ) : isError ? (
+              <ErrorState title="Failed to load items" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+            ) : !items?.length ? (
               <EmptyState title="No items yet" description="Add a consumable item — once it exists, it can be selected on a purchase order and received via GRN." />
             ) : (
               <Table>

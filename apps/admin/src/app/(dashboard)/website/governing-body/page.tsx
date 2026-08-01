@@ -38,6 +38,7 @@ export default function GoverningBodyPage() {
   const reorderMutation = useMutation({
     mutationFn: (items: { id: string; display_order: number }[]) => api.put("/api/website/governing-body/reorder", items),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["website", "governing-body"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to reorder members"),
   });
 
   const deleteMutation = useMutation({

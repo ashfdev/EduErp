@@ -103,7 +103,7 @@ payrollRouter.post(
       const structure = staff.salary_structure!;
       const records = await prisma.attendanceRecord.findMany({
         where: { person_id: staff.id, person_type: "STAFF", date: { gte: monthStart, lt: monthEnd } },
-        include: { shift: { select: { end_time: true } } },
+        include: { shift: { select: { start_time: true, end_time: true } } },
       });
       const presentDays = records.filter((r) => r.status === "PRESENT" || r.status === "LATE" || r.status === "LEAVE" || r.status === "HALF_DAY").length;
       // Absence deduction only ever comes from an explicit ABSENT record —
@@ -120,7 +120,7 @@ payrollRouter.post(
       // check_out_at/shift data — same computeOvertime() definition the
       // staff daily-attendance summary already uses, so the two surfaces
       // can never silently disagree (Plan Fourteen, Phase J2).
-      const overtimeHours = records.reduce((sum, r) => sum + computeOvertime(r.check_out_at, r.shift?.end_time), 0);
+      const overtimeHours = records.reduce((sum, r) => sum + computeOvertime(r.check_out_at, r.shift?.start_time, r.shift?.end_time), 0);
 
       // Periods this staff member covered as a substitute this month
       // (Plan Fourteen, Phase J2) — the exact data Phase C's "Substitutions
@@ -326,16 +326,28 @@ payrollRouter.post(
       include: { staff: true },
     });
 
-    const result = await prisma.payrollRecord.updateMany({
-      where: { id: { in: records.map((r) => r.id) } },
-      data: { status: "PAID", paid_at: new Date() },
-    });
-
+    // Per-record, not a batch updateMany followed by a separate loop — a
+    // batch update marks every record PAID before any journal is even
+    // attempted, so a crash partway through the journal loop could leave
+    // records PAID with literally no journal attempt made (not even a
+    // recorded failure). createPayrollJournal() never throws (it catches
+    // its own errors and records a JournalPostingFailure + notifies
+    // ADMIN/ACCOUNTANT internally) and posts via the module-level prisma
+    // client directly, not a tx — so it can't participate in a
+    // $transaction anyway. Doing the status flip and the journal attempt
+    // one record at a time means a mid-batch crash leaves every
+    // not-yet-reached record still FINALIZED (safely re-runnable by
+    // calling this route again with the same ids), narrowing the gap from
+    // "the whole batch" to at most one record — already recoverable via
+    // POST /payroll/:id/void.
+    let updated = 0;
     for (const record of records) {
+      await prisma.payrollRecord.update({ where: { id: record.id }, data: { status: "PAID", paid_at: new Date() } });
       await createPayrollJournal(record, record.staff);
+      updated++;
     }
 
-    res.json({ success: true, data: { updated: result.count } });
+    res.json({ success: true, data: { updated } });
   }),
 );
 

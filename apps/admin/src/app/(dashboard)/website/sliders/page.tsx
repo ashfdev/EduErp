@@ -48,11 +48,13 @@ export default function SlidersPage() {
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) => api.put(`/api/website/sliders/${id}/toggle`, { is_active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["website", "sliders"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update slide"),
   });
 
   const reorderMutation = useMutation({
     mutationFn: (items: { id: string; display_order: number }[]) => api.put("/api/website/sliders/reorder", items),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["website", "sliders"] }),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to reorder slides"),
   });
 
   const deleteMutation = useMutation({

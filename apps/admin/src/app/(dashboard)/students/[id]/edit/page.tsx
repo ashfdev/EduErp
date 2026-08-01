@@ -19,6 +19,8 @@ import {
   SelectContent,
   SelectItem,
   ConfirmDialog,
+  ErrorState,
+  LoadingSpinner,
   extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -121,7 +123,7 @@ export default function EditStudentPage() {
   const [motherPhotoUrl, setMotherPhotoUrl] = useState<string | null>(null);
   const [motherPhotoUploading, setMotherPhotoUploading] = useState(false);
 
-  const { data: profile } = useQuery<StudentProfile>({
+  const { data: profile, isLoading, isError, error, refetch } = useQuery<StudentProfile>({
     queryKey: ["students", id],
     queryFn: async () => (await api.get(`/api/students/${id}`)).data.data,
   });
@@ -243,7 +245,21 @@ export default function EditStudentPage() {
     },
   });
 
-  if (!profile) return null;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !profile) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load student" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
-  EmptyState, Input, Label, PageHeader, PageWrapper, extractErrorMessage,
+  EmptyState, ErrorState, LoadingSpinner, Input, Label, PageHeader, PageWrapper, extractErrorMessage,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -26,7 +26,7 @@ export default function ItemCategoriesPage() {
   const [nameBn, setNameBn] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: categories } = useQuery<ItemCategoryRow[]>({
+  const { data: categories, isLoading, isError, error, refetch } = useQuery<ItemCategoryRow[]>({
     queryKey: ["inventory", "item-categories"],
     queryFn: async () => (await api.get("/api/inventory/item-categories")).data.data,
   });
@@ -86,7 +86,11 @@ export default function ItemCategoriesPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {!categories?.length ? (
+          {isLoading ? (
+            <div className="flex justify-center py-16"><LoadingSpinner /></div>
+          ) : isError ? (
+            <ErrorState title="Failed to load item categories" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+          ) : !categories?.length ? (
             <EmptyState title="No item categories yet" description="Create a category first, then add items under it." />
           ) : (
             <Table>

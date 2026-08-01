@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, LoadingSpinner, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, extractErrorMessage, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AssetDetail {
@@ -37,7 +37,7 @@ export default function AssetDetailPage() {
   const [maintenance, setMaintenance] = useState({ maintenance_date: new Date().toISOString().slice(0, 10), type: "Repair", description: "", cost: "0" });
   const [dispose, setDispose] = useState({ disposed_reason: "", disposed_value: "0" });
 
-  const { data: asset } = useQuery<AssetDetail>({
+  const { data: asset, isLoading, isError, error, refetch } = useQuery<AssetDetail>({
     queryKey: ["inventory", "assets", params.id],
     queryFn: async () => (await api.get(`/api/inventory/assets/${params.id}`)).data.data,
   });
@@ -62,7 +62,21 @@ export default function AssetDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to dispose asset"),
   });
 
-  if (!asset) return null;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !asset) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load asset" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

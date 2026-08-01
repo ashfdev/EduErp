@@ -282,7 +282,7 @@ attendanceRouter.get(
         check_in_at: record?.check_in_at ?? null,
         check_out_at: record?.check_out_at ?? null,
         working_hours: computeWorkingHours(record?.check_in_at ?? null, record?.check_out_at ?? null),
-        overtime_hours: computeOvertime(record?.check_out_at ?? null, record?.shift?.end_time),
+        overtime_hours: computeOvertime(record?.check_out_at ?? null, record?.shift?.start_time, record?.shift?.end_time),
         status: rowStatus,
         punch_count: punchCountByStaff.get(s.id) ?? 0,
       };

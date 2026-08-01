@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -59,7 +59,7 @@ export default function EditVoucherPage() {
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [loaded, setLoaded] = useState(false);
 
-  const { data: voucher } = useQuery<VoucherDetail>({
+  const { data: voucher, isLoading, isError, error, refetch } = useQuery<VoucherDetail>({
     queryKey: ["accounts", "vouchers", params.id],
     queryFn: async () => (await api.get(`/api/accounts/vouchers/${params.id}`)).data.data,
   });
@@ -129,7 +129,21 @@ export default function EditVoucherPage() {
     setLines((prev) => prev.filter((_, i) => i !== index));
   }
 
-  if (!voucher) return null;
+  if (isLoading) {
+    return (
+      <PageWrapper>
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      </PageWrapper>
+    );
+  }
+
+  if (isError || !voucher) {
+    return (
+      <PageWrapper>
+        <ErrorState title="Failed to load voucher" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      </PageWrapper>
+    );
+  }
 
   if (voucher.status !== "DRAFT") {
     return (
