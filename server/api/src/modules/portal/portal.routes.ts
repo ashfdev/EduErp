@@ -470,6 +470,64 @@ portalRouter.get(
   }),
 );
 
+// Transaction-level payment ledger — every real Payment ever collected for
+// this student, each row naming its real fee category/description (never a
+// lumped "Other"), who collected it, and what was receivable vs. actually
+// paid on that invoice. Distinct from GET /fees above (which is invoice-
+// centric, for the "what's still owed" view) — this is payment-centric, for
+// "what has actually been paid, transaction by transaction."
+portalRouter.get(
+  "/student/:id/payment-ledger",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+
+    const invoices = await prisma.invoice.findMany({
+      where: { student_id: id, ...(query.academic_year_id && { academic_year_id: query.academic_year_id }) },
+      include: { payments: { where: { status: "COMPLETED" }, orderBy: { paid_at: "desc" } } },
+    });
+
+    const collectorIds = [...new Set(invoices.flatMap((inv) => inv.payments.map((p) => p.collected_by_id).filter((x): x is string => !!x)))];
+    const collectors = collectorIds.length ? await prisma.user.findMany({ where: { id: { in: collectorIds } }, select: { id: true, name_en: true } }) : [];
+    const collectorNameById = new Map(collectors.map((c) => [c.id, c.name_en]));
+    const GATEWAY_LABEL: Record<string, string> = {
+      CASH: "Cash", BANK_TRANSFER: "Bank Transfer", BKASH: "bKash", NAGAD: "Nagad", ROCKET: "Rocket", SSLCOMMERZ: "SSLCommerz", AAMARPAY: "AamarPay",
+    };
+
+    const entries = invoices
+      .flatMap((inv) =>
+        inv.payments.map((p) => ({
+          id: p.id,
+          date: p.paid_at ?? p.created_at,
+          collected_by: p.collected_by_id ? (collectorNameById.get(p.collected_by_id) ?? "Staff") : (GATEWAY_LABEL[p.gateway] ?? p.gateway),
+          category: inv.category,
+          description: inv.description,
+          period: formatFeePeriod(inv.month, inv.year),
+          receivable: Math.round((inv.amount_due + inv.fine_amount) * 100) / 100,
+          paid: p.amount,
+          receipt_no: p.receipt_no,
+        })),
+      )
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    const totalPayable = invoices.reduce((sum, inv) => sum + inv.amount_due + inv.fine_amount, 0);
+    const totalPaid = invoices.reduce((sum, inv) => sum + inv.amount_paid, 0);
+
+    res.json({
+      success: true,
+      data: {
+        summary: {
+          total_payable: Math.round(totalPayable * 100) / 100,
+          total_paid: Math.round(totalPaid * 100) / 100,
+          total_due: Math.round((totalPayable - totalPaid) * 100) / 100,
+        },
+        entries,
+      },
+    });
+  }),
+);
+
 // Forecast only — diffs active FeeStructure rows against Invoices that
 // already exist for this student, so the portal can show "Exam Fee: not yet
 // invoiced, projected ৳X" ahead of time. Never creates a real Invoice and
