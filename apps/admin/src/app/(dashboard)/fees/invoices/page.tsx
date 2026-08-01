@@ -10,6 +10,7 @@ import { usePdfPreview } from "@/hooks/use-pdf-preview";
 interface Invoice {
   id: string;
   description: string;
+  period: string;
   amount_due: number;
   amount_paid: number;
   fine_amount: number;
@@ -159,7 +160,10 @@ export default function InvoicesPage() {
               {invoices?.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell>{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></TableCell>
-                  <TableCell>{inv.description}</TableCell>
+                  <TableCell>
+                    {inv.description}
+                    <div className="text-xs text-muted-foreground">{inv.period}</div>
+                  </TableCell>
                   <TableCell>৳{inv.amount_due}</TableCell>
                   <TableCell>৳{inv.amount_paid}</TableCell>
                   <TableCell>৳{inv.fine_amount}</TableCell>

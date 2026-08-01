@@ -18,7 +18,7 @@ import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { createInAppNotification } from "../../services/in-app-notification.service";
-import { syncOverdueInvoices } from "../fees/invoice-helpers";
+import { syncOverdueInvoices, formatFeePeriod } from "../fees/invoice-helpers";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import type { UserRole } from "@education-erp/types";
 
@@ -1283,7 +1283,7 @@ documentsRouter.get(
       receipt_no: payment.receipt_no ?? payment.id,
       date: payment.paid_at ?? payment.created_at,
       student: payment.invoice.student,
-      items: [{ category: payment.invoice.category, description: payment.invoice.description, amount: payment.amount, fine: 0 }],
+      items: [{ category: payment.invoice.category, description: payment.invoice.description, period: formatFeePeriod(payment.invoice.month, payment.invoice.year), amount: payment.amount, fine: 0 }],
       total: payment.amount,
       payment_method: payment.gateway,
       transaction_id: payment.transaction_id,
@@ -1339,7 +1339,7 @@ documentsRouter.get(
       receipt_no: first.receipt_no ?? first.id,
       date: first.paid_at ?? first.created_at,
       student: first.invoice.student,
-      items: payments.map((p) => ({ category: p.invoice.category, description: p.invoice.description, amount: p.amount, fine: 0 })),
+      items: payments.map((p) => ({ category: p.invoice.category, description: p.invoice.description, period: formatFeePeriod(p.invoice.month, p.invoice.year), amount: p.amount, fine: 0 })),
       total: payments.reduce((sum, p) => sum + p.amount, 0),
       payment_method: first.gateway,
       transaction_id: first.transaction_id,
@@ -1368,7 +1368,7 @@ documentsRouter.get(
       receipt_no: invoice.invoice_no ?? invoice.id,
       date: invoice.due_date,
       student: invoice.student,
-      items: [{ category: invoice.category, description: invoice.description, amount: invoice.amount_due, fine: invoice.fine_amount }],
+      items: [{ category: invoice.category, description: invoice.description, period: formatFeePeriod(invoice.month, invoice.year), amount: invoice.amount_due, fine: invoice.fine_amount }],
       total: invoice.amount_due + invoice.fine_amount,
       payment_method: "N/A",
       transaction_id: null,

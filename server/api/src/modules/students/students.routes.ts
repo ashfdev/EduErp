@@ -15,7 +15,7 @@ import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPro
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
-import { invoiceReadmissionFeeIfConfigured } from "../fees/invoice-helpers";
+import { invoiceReadmissionFeeIfConfigured, formatFeePeriod } from "../fees/invoice-helpers";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -623,7 +623,7 @@ studentsRouter.get(
         },
         results: student.mark_entries,
         fees: {
-          invoices: student.invoices,
+          invoices: student.invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })),
           outstanding_total: outstandingTotal,
           paid_total: paidTotal,
           credit_balance: student.credit_balance,

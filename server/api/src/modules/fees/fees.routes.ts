@@ -17,13 +17,11 @@ import {
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration, applyWaiverToExistingInvoices } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration, applyWaiverToExistingInvoices, formatFeePeriod } from "./invoice-helpers";
 import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
-
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const feesRouter = Router();
 feesRouter.use(authenticate);
@@ -336,7 +334,7 @@ feesRouter.get(
       include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } } },
       orderBy: { due_date: "desc" },
     });
-    res.json({ success: true, data: invoices });
+    res.json({ success: true, data: invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })) });
   }),
 );
 
@@ -710,7 +708,7 @@ feesRouter.get(
         const fine = await resolveFineForInvoice(prisma, inv, student.current_class_id, rules);
         const fineSource = fine > 0 ? await describeFineSource(prisma, inv, student.current_class_id, rules) : null;
         const outstanding = Math.max(0, inv.amount_due + fine - inv.amount_paid);
-        const period = inv.month && inv.year ? `${MONTH_NAMES[inv.month - 1]} ${inv.year}` : inv.year ? `${inv.year}` : "One-time";
+        const period = formatFeePeriod(inv.month, inv.year);
         return {
           invoice_id: inv.id,
           category: inv.category,

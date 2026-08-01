@@ -73,6 +73,7 @@ interface StudentProfile {
     invoices: {
       id: string;
       description: string;
+      period: string;
       category: string;
       month?: number | null;
       amount_due: number;
@@ -799,9 +800,10 @@ export default function StudentProfilePage() {
                       <TableRow>
                         <TableCell>
                           {inv.description}
-                          <div className="mt-1 flex gap-1">
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
                             <Badge variant="outline">{CATEGORY_LABEL[inv.category] ?? inv.category}</Badge>
                             <Badge variant="outline">{frequencyLabel(inv)}</Badge>
+                            {inv.month != null && <span className="text-xs text-muted-foreground">{inv.period}</span>}
                           </div>
                         </TableCell>
                         <TableCell>৳{inv.amount_due}</TableCell>

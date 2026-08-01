@@ -16,7 +16,7 @@ import { renderDocument, generateQrDataUrl } from "../../services/pdf.service";
 import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
-import { syncOverdueInvoices } from "../fees/invoice-helpers";
+import { syncOverdueInvoices, formatFeePeriod } from "../fees/invoice-helpers";
 import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
@@ -442,7 +442,8 @@ portalRouter.get(
       }),
       prisma.student.findUnique({ where: { id }, select: { credit_balance: true } }),
     ]);
-    res.json({ success: true, data: { invoices, credit_balance: student?.credit_balance ?? 0 } });
+    const invoicesWithPeriod = invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) }));
+    res.json({ success: true, data: { invoices: invoicesWithPeriod, credit_balance: student?.credit_balance ?? 0 } });
   }),
 );
 

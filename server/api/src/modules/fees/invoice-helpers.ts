@@ -5,6 +5,22 @@ import { resolveFeeStructureClassIds } from "./fee-structure-scope";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// The one shared "which billing period is this invoice for" label -- e.g.
+// "July 2026" for a monthly invoice, "2026" for a yearly one with no
+// specific month, "One-time" for an ad-hoc/exam/admission invoice. Was
+// previously computed inline only inside the Collect Fee workspace
+// endpoint, so every other screen showing the same invoices (the Invoices
+// list, a student's profile Fees tab, the portal Fees page, printed
+// receipts) showed a bare "Class 9 Monthly Tuition" with no way to tell
+// which month it actually covered without cross-referencing the due date.
+export function formatFeePeriod(month: number | null | undefined, year: number | null | undefined): string {
+  if (month && year) return `${MONTH_NAMES[month - 1]} ${year}`;
+  if (year) return `${year}`;
+  return "One-time";
+}
+
 type WaiverWithType = Prisma.StudentWaiverGetPayload<{ include: { waiver_type: true } }>;
 
 // The one shared, idempotent primitive both applyWaiversToInvoice (below,

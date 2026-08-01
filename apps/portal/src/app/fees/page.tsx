@@ -13,6 +13,7 @@ import { usePdfPreview } from "@/hooks/use-pdf-preview";
 interface Invoice {
   id: string;
   description: string;
+  period: string;
   category: string;
   month?: number | null;
   amount_due: number;
@@ -128,7 +129,7 @@ function FeesContent() {
 
   const unpaid = data?.filter((i) => i.status !== "PAID" && i.status !== "WAIVED") ?? [];
   const totalOutstanding = unpaid.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
-  const allPayments = (data ?? []).flatMap((i) => i.payments.map((p) => ({ ...p, description: i.description })));
+  const allPayments = (data ?? []).flatMap((i) => i.payments.map((p) => ({ ...p, description: i.description, period: i.month != null ? i.period : null })));
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -199,7 +200,10 @@ function FeesContent() {
                     <StatusBadge status={inv.status} />
                     <span className="text-xs font-semibold text-slate-400 tracking-wider uppercase">{CATEGORY_LABEL[inv.category] ?? inv.category}</span>
                   </div>
-                  <p className="font-bold text-slate-800 text-lg leading-tight mt-1">{inv.description}</p>
+                  <p className="font-bold text-slate-800 text-lg leading-tight mt-1">
+                    {inv.description}
+                    {inv.month != null && <span className="font-medium text-slate-500"> — {inv.period}</span>}
+                  </p>
                   <div className="flex items-center gap-3 text-sm text-slate-500 mt-2">
                     <span className="flex items-center gap-1"><CalendarClock className="h-4 w-4" /> {t("due", { date: new Date(inv.due_date).toLocaleDateString() })}</span>
                   </div>
@@ -278,7 +282,10 @@ function FeesContent() {
                   <Card key={p.id} className="shadow-sm">
                     <CardContent className="flex items-center justify-between p-4">
                       <div>
-                        <p className="font-bold text-slate-800 text-sm">{p.description}</p>
+                        <p className="font-bold text-slate-800 text-sm">
+                          {p.description}
+                          {p.period && <span className="font-medium text-slate-500"> — {p.period}</span>}
+                        </p>
                         <p className="text-xs font-medium text-slate-500 mt-1">{p.gateway} · {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "-"}</p>
                         <button
                           type="button"

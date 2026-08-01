@@ -64,7 +64,7 @@
     <thead><tr><th class="sl">Serial</th><th>Particulars</th><th class="amt">Amount</th></tr></thead>
     <tbody>
       {{#each items}}
-      <tr><td class="sl">{{inc @index}}</td><td>{{this.description}}{{#if this.fine}} (Fine: ৳{{this.fine}}){{/if}}</td><td class="amt">৳{{this.amount}}</td></tr>
+      <tr><td class="sl">{{inc @index}}</td><td>{{this.description}} — {{this.period}}{{#if this.fine}} (Fine: ৳{{this.fine}}){{/if}}</td><td class="amt">৳{{this.amount}}</td></tr>
       {{/each}}
       <tr class="total-row"><td colspan="2">Total</td><td class="amt">৳{{total}}</td></tr>
     </tbody>
