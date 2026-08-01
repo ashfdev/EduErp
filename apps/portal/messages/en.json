@@ -63,7 +63,14 @@
     "homeworkDue": "Homework Due",
     "pendingCount": "{count} pending",
     "view": "View →",
-    "viewAll": "View All →"
+    "viewAll": "View All →",
+    "paymentOverview": "Payment Overview",
+    "paymentOverviewHint": "What's been paid so far, by category",
+    "tuitionPaid": "Tuition Paid",
+    "examPaid": "Exam Fees Paid",
+    "otherPaid": "Other Fees Paid",
+    "finesPaid": "Late Fines Paid",
+    "totalPaid": "Total Paid"
   },
   "attendance": {
     "title": "Attendance",

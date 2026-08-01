@@ -63,7 +63,14 @@
     "homeworkDue": "বাড়ির কাজ বাকি",
     "pendingCount": "{count}টি বাকি",
     "view": "দেখুন →",
-    "viewAll": "সব দেখুন →"
+    "viewAll": "সব দেখুন →",
+    "paymentOverview": "পেমেন্ট ওভারভিউ",
+    "paymentOverviewHint": "এখন পর্যন্ত কোন খাতে কত টাকা পরিশোধ হয়েছে",
+    "tuitionPaid": "টিউশন ফি পরিশোধিত",
+    "examPaid": "পরীক্ষার ফি পরিশোধিত",
+    "otherPaid": "অন্যান্য ফি পরিশোধিত",
+    "finesPaid": "লেট ফাইন পরিশোধিত",
+    "totalPaid": "মোট পরিশোধিত"
   },
   "attendance": {
     "title": "উপস্থিতি",

@@ -20,6 +20,7 @@ interface Dashboard {
   upcoming_exams: { id: string; name: string; start_date: string | null }[];
   recent_results: { exam_name: string; gpa: number; grade: string }[];
   fee_dues: { total_outstanding: number; next_due_date: string | null; next_due_amount: number | null };
+  payment_overview: { tuition_paid: number; exam_paid: number; other_paid: number; fines_paid: number; total_paid: number };
   recent_notices: { id: string; title: string; audience: string; created_at: string }[];
   homework: { pending: number; submitted: number; recent: { id: string; title: string; due_date: string }[] };
 }
@@ -175,6 +176,42 @@ function HomeContent() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment Overview */}
+      {data.payment_overview.total_paid > 0 && (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-4 sm:p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("paymentOverview")}</h3>
+                <p className="text-xs text-slate-400">{t("paymentOverviewHint")}</p>
+              </div>
+              <p className="text-right">
+                <span className="block text-lg font-bold text-slate-800">৳{data.payment_overview.total_paid}</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("totalPaid")}</span>
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.tuition_paid}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("tuitionPaid")}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.exam_paid}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("examPaid")}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.other_paid}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("otherPaid")}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-base font-bold text-rose-600">৳{data.payment_overview.fines_paid}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("finesPaid")}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Links Grid (Full Width) */}
       <div>

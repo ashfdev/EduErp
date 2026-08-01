@@ -112,12 +112,13 @@ async function buildStudentDashboard(id: string) {
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [todayRecord, monthRecords, upcomingExams, notices, invoices, homeworkAll] = await Promise.all([
+    const [todayRecord, monthRecords, upcomingExams, notices, invoices, allInvoicesForPaidTotals, homeworkAll] = await Promise.all([
       prisma.attendanceRecord.findFirst({ where: { person_id: id, person_type: "STUDENT", date: { gte: todayStart, lt: todayEnd } } }),
       prisma.attendanceRecord.findMany({ where: { person_id: id, person_type: "STUDENT", date: { gte: monthStart, lt: todayEnd } } }),
       prisma.exam.findMany({ where: { status: { in: ["ACTIVE", "MARK_ENTRY"] }, start_date: { gte: now } }, orderBy: { start_date: "asc" }, take: 2 }),
       prisma.notice.findMany({ where: { is_published: true, audience: { in: ["STUDENTS", "ALL", "PUBLIC"] } }, orderBy: [{ is_pinned: "desc" }, { publish_at: "desc" }], take: 3 }),
       prisma.invoice.findMany({ where: { student_id: id, status: { notIn: ["PAID", "WAIVED"] } }, orderBy: { due_date: "asc" } }),
+      prisma.invoice.findMany({ where: { student_id: id, amount_paid: { gt: 0 } }, select: { category: true, amount_paid: true, fine_journaled_amount: true } }),
       student.current_class_id
         ? prisma.homework.findMany({ where: { class_id: student.current_class_id, OR: [{ section_id: student.current_section_id }, { section_id: null }] }, orderBy: { due_date: "asc" } })
         : Promise.resolve([]),
@@ -126,6 +127,27 @@ async function buildStudentDashboard(id: string) {
     const monthPresent = monthRecords.filter((r) => r.status === "PRESENT").length;
     const outstandingTotal = invoices.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
     const nextInvoice = invoices[0];
+
+    // Paid-so-far overview, by category -- reuses the exact same fine-paid-
+    // first allocation already used for real accounting journals
+    // (resolveFineRecognition in auto-journal.service.ts): fine_journaled_amount
+    // is the running total of a specific invoice's fine that's already been
+    // recognized as paid, so amount_paid - fine_journaled_amount is precisely
+    // the fee portion actually paid, never an independent approximation that
+    // could disagree with the books.
+    const paymentOverview = { tuition_paid: 0, exam_paid: 0, other_paid: 0, fines_paid: 0, total_paid: 0 };
+    for (const inv of allInvoicesForPaidTotals) {
+      const finePaid = inv.fine_journaled_amount;
+      const feePaid = inv.amount_paid - inv.fine_journaled_amount;
+      paymentOverview.fines_paid += finePaid;
+      paymentOverview.total_paid += inv.amount_paid;
+      if (inv.category === "TUITION") paymentOverview.tuition_paid += feePaid;
+      else if (inv.category === "EXAM") paymentOverview.exam_paid += feePaid;
+      else paymentOverview.other_paid += feePaid;
+    }
+    (Object.keys(paymentOverview) as (keyof typeof paymentOverview)[]).forEach((k) => {
+      paymentOverview[k] = Math.round(paymentOverview[k] * 100) / 100;
+    });
 
     let recentResults: unknown[] = [];
     const latestPublication = await prisma.resultPublication.findFirst({
@@ -174,6 +196,7 @@ async function buildStudentDashboard(id: string) {
       upcoming_exams: upcomingExams.map((e) => ({ id: e.id, name: e.name, start_date: e.start_date })),
       recent_results: recentResults,
       fee_dues: { total_outstanding: Math.round(outstandingTotal * 100) / 100, next_due_date: nextInvoice?.due_date ?? null, next_due_amount: nextInvoice ? nextInvoice.amount_due + nextInvoice.fine_amount - nextInvoice.amount_paid : null },
+      payment_overview: paymentOverview,
       recent_notices: notices,
       homework: { pending: homeworkAll.filter((h) => h.due_date >= now).length, submitted: 0, recent: homeworkAll.slice(0, 3) },
     };
