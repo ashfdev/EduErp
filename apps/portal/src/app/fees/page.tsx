@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { PortalShell } from "@/components/portal-shell";
+import { FinancialSubNav } from "@/components/financial-sub-nav";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, CardContent, Button, Input, StatusBadge, LoadingSpinner, ErrorState, PdfPreviewModal } from "@education-erp/ui";
@@ -119,13 +120,23 @@ function FeesContent() {
 
   if (isError) {
     return (
-      <div className="min-h-[50vh]">
-        <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+      <div className="space-y-6">
+        <FinancialSubNav />
+        <div className="min-h-[50vh]">
+          <ErrorState title={tCommon("loadError")} description={tCommon("loadErrorDetail")} retryLabel={tCommon("retry")} onRetry={() => refetch()} />
+        </div>
       </div>
     );
   }
 
-  if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <FinancialSubNav />
+        <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>
+      </div>
+    );
+  }
 
   const unpaid = data?.filter((i) => i.status !== "PAID" && i.status !== "WAIVED") ?? [];
   const totalOutstanding = unpaid.reduce((sum, i) => sum + (i.amount_due + i.fine_amount - i.amount_paid), 0);
@@ -133,6 +144,7 @@ function FeesContent() {
 
   return (
     <div className="space-y-6 lg:space-y-8">
+      <FinancialSubNav />
       <div className="flex items-center gap-3">
         <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-600">
           <Banknote className="h-6 w-6" />

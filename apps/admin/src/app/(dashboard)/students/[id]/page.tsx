@@ -17,6 +17,15 @@ interface StudentDocumentRow {
   uploaded_at: string;
 }
 
+interface WaiverRequestSummary {
+  id: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  rejection_reason: string | null;
+  created_at: string;
+  student_waiver: { waiver_type: { name: string; discount_type: "PERCENTAGE" | "FIXED"; discount_value: number } } | null;
+}
+
 interface StudentProfile {
   personal: {
     student_uid: string;
@@ -152,6 +161,11 @@ export default function StudentProfilePage() {
   const { data: documents, isLoading: documentsLoading, isError: documentsError, error: documentsErrorObj, refetch: refetchDocuments } = useQuery<StudentDocumentRow[]>({
     queryKey: ["students", id, "documents"],
     queryFn: async () => (await api.get(`/api/students/${id}/documents`)).data.data,
+  });
+
+  const { data: waiverRequests } = useQuery<WaiverRequestSummary[]>({
+    queryKey: ["fees", "waiver-requests", id],
+    queryFn: async () => (await api.get("/api/fees/waiver-requests", { params: { student_id: id } })).data.data,
   });
   const [docUploadOpen, setDocUploadOpen] = useState(false);
   const [docType, setDocType] = useState("BIRTH_CERTIFICATE");
@@ -882,6 +896,31 @@ export default function StudentProfilePage() {
               </Table>
             </CardContent>
           </Card>
+
+          {!!waiverRequests?.length && (
+            <Card className="mt-4">
+              <CardContent className="space-y-3 pt-6">
+                <p className="text-sm font-medium">Waiver Requests</p>
+                {waiverRequests.map((r) => (
+                  <div key={r.id} className="rounded-md border p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p>{r.reason}</p>
+                      <Badge variant={r.status === "APPROVED" ? "default" : r.status === "REJECTED" ? "destructive" : "outline"}>{r.status}</Badge>
+                    </div>
+                    {r.status === "APPROVED" && r.student_waiver && (
+                      <p className="mt-1 text-xs text-emerald-600">
+                        Granted: {r.student_waiver.waiver_type.name} (
+                        {r.student_waiver.waiver_type.discount_type === "PERCENTAGE" ? `${r.student_waiver.waiver_type.discount_value}%` : `৳${r.student_waiver.waiver_type.discount_value}`}
+                        )
+                      </p>
+                    )}
+                    {r.status === "REJECTED" && r.rejection_reason && <p className="mt-1 text-xs text-destructive">Reason: {r.rejection_reason}</p>}
+                    <p className="mt-1 text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="health">

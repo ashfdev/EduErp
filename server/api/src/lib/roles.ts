@@ -44,6 +44,11 @@ export const MARK_VIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL",
 export const MARK_APPROVAL_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const RESULT_PUBLISH_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const FEE_COLLECTION_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
+// Kept as its own constant (same membership as FEE_COLLECTION_ROLES today)
+// rather than reusing it directly, so waiver-request review permission can
+// be tuned independently later -- same reasoning already used elsewhere in
+// this file for SUBJECT_ATTENDANCE_MARK_ROLES vs. ATTENDANCE_MARK_ROLES.
+export const WAIVER_REQUEST_REVIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
 export const ADMISSION_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const ADMISSION_ENROLL_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const WEBSITE_CONTENT_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "IT_ADMIN"];

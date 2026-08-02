@@ -687,6 +687,7 @@ model Student {
   visitors                Visitor[]
   documents               StudentDocument[]
   waivers                 StudentWaiver[]
+  waiver_requests          WaiverRequest[]
   leave_requests          StudentLeaveRequest[]
 
   @@index([current_class_id])
@@ -1716,8 +1717,38 @@ model StudentWaiver {
   revoked_at       DateTime?
   revoked_by_id    String?
   applications     InvoiceWaiverApplication[]
+  waiver_request   WaiverRequest?
 
   @@index([student_id])
+}
+
+enum WaiverRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Student/guardian-initiated request for financial assistance -- distinct
+// from StudentWaiver itself, which stays purely admin-granted. Approving a
+// request IS granting the waiver (student_waiver_id is set in the same
+// transaction that creates the StudentWaiver), never a bare status flip
+// with no real waiver behind it -- mirrors DocumentRequest's shape.
+model WaiverRequest {
+  id                    String              @id @default(cuid())
+  student_id            String
+  student               Student             @relation(fields: [student_id], references: [id])
+  requested_by_user_id  String
+  reason                String
+  status                WaiverRequestStatus @default(PENDING)
+  reviewed_by_id        String?
+  reviewed_at           DateTime?
+  rejection_reason      String?
+  student_waiver_id     String?             @unique
+  student_waiver        StudentWaiver?      @relation(fields: [student_waiver_id], references: [id])
+  created_at            DateTime            @default(now())
+
+  @@index([student_id])
+  @@index([status])
 }
 
 // One row per bulk/manual invoice-generation event (Plan Thirteen, Phase G
@@ -3845,6 +3876,9 @@ enum InAppNotificationType {
   // background job run in real time the way a human would notice the
   // manual button's own response.
   SCHEDULED_FEE_GENERATION_COMPLETE
+  WAIVER_REQUESTED
+  WAIVER_APPROVED
+  WAIVER_REJECTED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

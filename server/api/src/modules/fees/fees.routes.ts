@@ -8,11 +8,12 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
+import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES, WAIVER_REQUEST_REVIEW_ROLES } from "../../lib/roles";
 import {
   feeStructureSchema, feeCategorySchema, feeSubCategorySchema, feeFineRuleSchema, assignFeeStructureClassesSchema,
   generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, collectBatchSchema, adHocInvoiceSchema, adHocInvoiceBulkSchema,
   waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema, assignStudentWaiverBulkSchema,
+  approveWaiverRequestSchema, rejectWaiverRequestSchema,
 } from "@education-erp/validators";
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
@@ -21,6 +22,7 @@ import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoi
 import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
 
 export const feesRouter = Router();
@@ -528,6 +530,115 @@ feesRouter.put(
 
     const waiver = await prisma.studentWaiver.update({ where: { id }, data: { revoked_at: new Date(), revoked_by_id: req.user!.sub } });
     res.json({ success: true, data: waiver });
+  }),
+);
+
+// ── Waiver Requests (student-initiated, admin-reviewed) ────────────
+// Broad read (STAFF_ONLY_ROLES) so any staff role viewing a student's
+// profile can see request status; review/decide is narrower
+// (WAIVER_REQUEST_REVIEW_ROLES), same split as every other read/write pair
+// on this router.
+
+feesRouter.get(
+  "/waiver-requests",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(), student_id: z.string().optional() }).parse(req.query);
+    const requests = await prisma.waiverRequest.findMany({
+      where: { ...(query.status && { status: query.status }), ...(query.student_id && { student_id: query.student_id }) },
+      include: {
+        student: {
+          select: {
+            id: true, name_en: true, student_uid: true,
+            current_class: { select: { name_en: true } },
+            current_section: { select: { name: true } },
+          },
+        },
+        student_waiver: { include: { waiver_type: true } },
+      },
+      orderBy: { created_at: "asc" },
+    });
+
+    // Context the reviewer needs to decide, computed here rather than left
+    // for the admin to look up separately (same discipline as the
+    // DocumentRequest review queue).
+    const data = await Promise.all(
+      requests.map(async (r) => {
+        const [invoices, activeWaiverCount] = await Promise.all([
+          prisma.invoice.findMany({ where: { student_id: r.student_id }, select: { amount_due: true, fine_amount: true, amount_paid: true } }),
+          prisma.studentWaiver.count({ where: { student_id: r.student_id, revoked_at: null } }),
+        ]);
+        const outstanding_due = invoices.reduce((sum, inv) => sum + (inv.amount_due + inv.fine_amount - inv.amount_paid), 0);
+        return { ...r, context: { outstanding_due, active_waiver_count: activeWaiverCount } };
+      }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
+feesRouter.put(
+  "/waiver-requests/:id/approve",
+  authorize(WAIVER_REQUEST_REVIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = approveWaiverRequestSchema.parse(req.body);
+    const request = await prisma.waiverRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const waiverType = await prisma.waiverType.findUnique({ where: { id: body.waiver_type_id } });
+    if (!waiverType) throw notFound("Waiver type not found");
+
+    // Approving IS granting -- one transaction creates the real
+    // StudentWaiver (retroactively applied to already-issued invoices,
+    // same as the direct assign flow) and resolves the request together,
+    // so a request can never read "Approved" with no waiver behind it.
+    const { updated, invoicesAffected, totalDiscount } = await prisma.$transaction(async (tx) => {
+      const waiver = await tx.studentWaiver.create({
+        data: { student_id: request.student_id, waiver_type_id: body.waiver_type_id, academic_year_id: body.academic_year_id ?? null, assigned_by_id: req.user!.sub },
+      });
+      const { invoicesAffected, totalDiscount } = await applyWaiverToExistingInvoices(tx, { ...waiver, waiver_type: waiverType });
+      const updated = await tx.waiverRequest.update({
+        where: { id },
+        data: { status: "APPROVED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), student_waiver_id: waiver.id },
+      });
+      return { updated, invoicesAffected, totalDiscount };
+    });
+
+    await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "StudentWaiver", targetId: updated.student_waiver_id!, metadata: { student_id: request.student_id, waiver_type_id: body.waiver_type_id, via: "waiver_request", invoicesAffected, totalDiscount }, req });
+    await logAudit("WAIVER_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "WaiverRequest", targetId: id, metadata: { decision: "APPROVED", waiver_type_id: body.waiver_type_id }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "WAIVER_APPROVED",
+      title: "Waiver request approved",
+      body: `Your request for financial assistance has been approved — ${waiverType.name} applied.`,
+      link: "/fees/waivers",
+    });
+    res.json({ success: true, data: { ...updated, invoices_affected: invoicesAffected, total_discount: totalDiscount } });
+  }),
+);
+
+feesRouter.put(
+  "/waiver-requests/:id/reject",
+  authorize(WAIVER_REQUEST_REVIEW_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = rejectWaiverRequestSchema.parse(req.body);
+    const request = await prisma.waiverRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const updated = await prisma.waiverRequest.update({
+      where: { id },
+      data: { status: "REJECTED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), rejection_reason: body.rejection_reason },
+    });
+    await logAudit("WAIVER_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "WaiverRequest", targetId: id, metadata: { decision: "REJECTED" }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "WAIVER_REJECTED",
+      title: "Waiver request rejected",
+      body: body.rejection_reason,
+      link: "/fees/waivers",
+    });
+    res.json({ success: true, data: updated });
   }),
 );
 

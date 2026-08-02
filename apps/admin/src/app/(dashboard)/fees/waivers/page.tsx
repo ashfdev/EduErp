@@ -49,6 +49,20 @@ interface ClassOption {
   sections?: { id: string; name: string }[];
   groups?: { id: string; name_en: string }[];
 }
+interface WaiverRequestRow {
+  id: string;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  rejection_reason: string | null;
+  created_at: string;
+  student: {
+    id: string; name_en: string; student_uid: string;
+    current_class: { name_en: string } | null;
+    current_section: { name: string } | null;
+  };
+  student_waiver: { waiver_type: WaiverType } | null;
+  context: { outstanding_due: number; active_waiver_count: number };
+}
 
 const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
@@ -58,6 +72,45 @@ export default function WaiverSetupPage() {
   const { data: types, isLoading: typesLoading, isError: typesError, error: typesErrorObj, refetch: refetchTypes } = useQuery<WaiverType[]>({ queryKey: ["fees", "waiver-types"], queryFn: async () => (await api.get("/api/fees/waiver-types")).data.data });
   const { data: assignments, isLoading: assignmentsLoading, isError: assignmentsError, error: assignmentsErrorObj, refetch: refetchAssignments } = useQuery<StudentWaiverRow[]>({ queryKey: ["fees", "student-waivers"], queryFn: async () => (await api.get("/api/fees/student-waivers")).data.data });
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+
+  // Waiver Requests queue -- student/guardian-submitted requests for
+  // financial assistance. Status filter defaults to Pending (the actual
+  // queue); Approved/Rejected/All are for reviewing past decisions.
+  const [requestStatusFilter, setRequestStatusFilter] = useState<"PENDING" | "APPROVED" | "REJECTED" | "">("PENDING");
+  const { data: requests, isLoading: requestsLoading, isError: requestsError, error: requestsErrorObj, refetch: refetchRequests } = useQuery<WaiverRequestRow[]>({
+    queryKey: ["fees", "waiver-requests", requestStatusFilter],
+    queryFn: async () => (await api.get("/api/fees/waiver-requests", { params: { status: requestStatusFilter || undefined } })).data.data,
+  });
+
+  const [approveTarget, setApproveTarget] = useState<WaiverRequestRow | null>(null);
+  const [approveTypeId, setApproveTypeId] = useState("");
+  const [rejectTarget, setRejectTarget] = useState<WaiverRequestRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const approveRequestMutation = useMutation({
+    mutationFn: () => api.put(`/api/fees/waiver-requests/${approveTarget!.id}/approve`, { waiver_type_id: approveTypeId }),
+    onSuccess: (res) => {
+      const { invoices_affected, total_discount } = res.data.data as { invoices_affected: number; total_discount: number };
+      const retroNote = invoices_affected > 0 ? ` — applied to ${invoices_affected} existing invoice${invoices_affected === 1 ? "" : "s"} (৳${total_discount} discounted)` : "";
+      toast.success(`Waiver request approved${retroNote}`);
+      queryClient.invalidateQueries({ queryKey: ["fees", "waiver-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["fees", "student-waivers"] });
+      setApproveTarget(null);
+      setApproveTypeId("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to approve request"),
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: () => api.put(`/api/fees/waiver-requests/${rejectTarget!.id}/reject`, { rejection_reason: rejectReason }),
+    onSuccess: () => {
+      toast.success("Waiver request rejected");
+      queryClient.invalidateQueries({ queryKey: ["fees", "waiver-requests"] });
+      setRejectTarget(null);
+      setRejectReason("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to reject request"),
+  });
 
   // Waiver Type create/edit dialog -- one shared form, same pattern as
   // Fee Structures' own create/edit dialog (editingTypeId set = edit mode).
@@ -219,6 +272,77 @@ export default function WaiverSetupPage() {
 
       <Card>
         <CardContent className="pt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-medium">Waiver Requests</p>
+            <Select value={requestStatusFilter || "ALL"} onValueChange={(v) => setRequestStatusFilter(v === "ALL" ? "" : (v as "PENDING" | "APPROVED" | "REJECTED"))}>
+              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="ALL">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {requestsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : requestsError ? (
+            <ErrorState title="Failed to load waiver requests" description={extractErrorMessage(requestsErrorObj)} retryLabel="Retry" onRetry={() => refetchRequests()} />
+          ) : (
+            <>
+              {!requests?.length && <EmptyState title="No requests" description="No student waiver requests match this filter." />}
+              <div className="space-y-3">
+                {requests?.map((r) => (
+                  <Card key={r.id} className="border">
+                    <CardContent className="space-y-2 pt-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium">
+                            {r.student.name_en} <span className="font-mono text-xs text-muted-foreground">{r.student.student_uid}</span>
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {r.student.current_class?.name_en} {r.student.current_section && `· ${r.student.current_section.name}`}
+                          </p>
+                        </div>
+                        <Badge variant={r.status === "APPROVED" ? "default" : r.status === "REJECTED" ? "destructive" : "outline"}>{r.status}</Badge>
+                      </div>
+                      <p className="text-sm">{r.reason}</p>
+                      <div className="flex flex-wrap gap-2 text-sm">
+                        <Badge variant={r.context.outstanding_due > 0 ? "destructive" : "default"}>
+                          {r.context.outstanding_due > 0 ? `৳${r.context.outstanding_due.toFixed(2)} due` : "No dues"}
+                        </Badge>
+                        {r.context.active_waiver_count > 0 && (
+                          <Badge variant="outline">{r.context.active_waiver_count} existing waiver{r.context.active_waiver_count === 1 ? "" : "s"}</Badge>
+                        )}
+                      </div>
+                      {r.status === "APPROVED" && r.student_waiver && (
+                        <p className="text-sm font-medium text-emerald-600">
+                          Granted: {r.student_waiver.waiver_type.name} (
+                          {r.student_waiver.waiver_type.discount_type === "PERCENTAGE" ? `${r.student_waiver.waiver_type.discount_value}%` : `৳${r.student_waiver.waiver_type.discount_value}`}
+                          )
+                        </p>
+                      )}
+                      {r.status === "REJECTED" && r.rejection_reason && (
+                        <p className="text-sm text-destructive">Reason: {r.rejection_reason}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">Requested {new Date(r.created_at).toLocaleDateString()}</p>
+                      {r.status === "PENDING" && (
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" disabled={!types?.length} onClick={() => { setApproveTarget(r); setApproveTypeId(""); }}>Approve</Button>
+                          <Button size="sm" variant="destructive" onClick={() => setRejectTarget(r)}>Reject</Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-4">
           <p className="mb-3 text-sm font-medium">Existing Waivers</p>
           {assignmentsLoading ? (
             <div className="flex justify-center py-8"><LoadingSpinner /></div>
@@ -369,6 +493,61 @@ export default function WaiverSetupPage() {
           <DialogFooter>
             <Button disabled={!selectedStudentIds.length || !selectedTypeId || bulkAssignMutation.isPending} onClick={() => bulkAssignMutation.mutate()}>
               {bulkAssignMutation.isPending ? "Assigning..." : `Assign to ${selectedStudentIds.length || ""} Student${selectedStudentIds.length === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approving a request grants the waiver -- picking a type here IS
+          the accept action, never a bare status flip with no real waiver
+          behind it. */}
+      <Dialog open={!!approveTarget} onOpenChange={(v) => { if (!v) { setApproveTarget(null); setApproveTypeId(""); } }}>
+        <DialogContent
+          onEscapeKeyDown={(e) => approveTypeId !== "" && e.preventDefault()}
+          onPointerDownOutside={(e) => approveTypeId !== "" && e.preventDefault()}
+        >
+          <DialogHeader><DialogTitle>Approve Waiver Request</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {approveTarget && (
+              <p className="text-sm text-muted-foreground">
+                {approveTarget.student.name_en} ({approveTarget.student.student_uid}) — &ldquo;{approveTarget.reason}&rdquo;
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label>Grant which Waiver Type?</Label>
+              <Select value={approveTypeId} onValueChange={setApproveTypeId}>
+                <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+                <SelectContent>
+                  {types?.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name} ({t.discount_type === "PERCENTAGE" ? `${t.discount_value}%` : `৳${t.discount_value}`})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!approveTypeId || approveRequestMutation.isPending} onClick={() => approveRequestMutation.mutate()}>
+              {approveRequestMutation.isPending ? "Approving..." : "Approve & Grant Waiver"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!rejectTarget} onOpenChange={(v) => { if (!v) { setRejectTarget(null); setRejectReason(""); } }}>
+        <DialogContent
+          onEscapeKeyDown={(e) => rejectReason !== "" && e.preventDefault()}
+          onPointerDownOutside={(e) => rejectReason !== "" && e.preventDefault()}
+        >
+          <DialogHeader><DialogTitle>Reject Waiver Request</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Reason (shown to the student/guardian)</Label>
+            <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. Outstanding fee dues from a prior term" />
+          </div>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => rejectRequestMutation.mutate()} disabled={rejectRequestMutation.isPending || !rejectReason}>
+              Reject Request
             </Button>
           </DialogFooter>
         </DialogContent>

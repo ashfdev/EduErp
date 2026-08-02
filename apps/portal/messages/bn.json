@@ -16,6 +16,9 @@
     "results": "ফলাফল",
     "attendance": "উপস্থিতি",
     "fees": "ফি",
+    "financialService": "আর্থিক সেবা",
+    "paymentLedger": "পেমেন্ট লেজার",
+    "scholarshipWaiver": "স্কলারশিপ ও মওকুফ",
     "notices": "নোটিশ"
   },
   "login": {
@@ -131,6 +134,41 @@
     "gatewayError": "পেমেন্ট গেটওয়ে এখনো কনফিগার করা হয়নি — মার্চেন্ট ক্রেডেনশিয়াল বাকি",
     "slipUploaded": "স্লিপ আপলোড হয়েছে — কর্মীরা ব্যাংক স্টেটমেন্টের সাথে যাচাই করবেন",
     "slipUploadFailed": "স্লিপ আপলোড ব্যর্থ হয়েছে"
+  },
+  "paymentLedger": {
+    "title": "পেমেন্ট লেজার",
+    "subtitle": "প্রতিটি সংগ্রহ করা পেমেন্ট, লেনদেন অনুযায়ী",
+    "totalPayable": "মোট প্রদেয়",
+    "totalPaid": "মোট পরিশোধিত",
+    "totalDue": "মোট বকেয়া",
+    "allSessions": "সকল সেশন",
+    "sl": "ক্র.নং",
+    "date": "লেনদেনের তারিখ",
+    "collectedBy": "সংগ্রহকারী",
+    "headDescription": "খাতের বিবরণ",
+    "receivable": "প্রাপ্য",
+    "paid": "পরিশোধিত",
+    "noEntries": "এখনো কোনো পেমেন্ট রেকর্ড করা হয়নি।"
+  },
+  "waivers": {
+    "title": "স্কলারশিপ ও মওকুফ",
+    "subtitle": "আপনার সক্রিয় মওকুফ, এবং আর্থিক সহায়তার জন্য অনুরোধ",
+    "myWaivers": "আমার মওকুফ",
+    "noWaivers": "কোনো সক্রিয় মওকুফ নেই।",
+    "everyYear": "প্রতি বছর",
+    "myRequests": "আমার অনুরোধ",
+    "noRequests": "এখনো কোনো অনুরোধ জমা দেওয়া হয়নি।",
+    "requestButton": "+ মওকুফের অনুরোধ করুন",
+    "requestTitle": "আর্থিক সহায়তার অনুরোধ করুন",
+    "reasonLabel": "কেন মওকুফ চাইছেন তা জানান",
+    "reasonPlaceholder": "যেমন — পারিবারিক আর্থিক সংকট...",
+    "submit": "অনুরোধ জমা দিন",
+    "submitted": "অনুরোধ জমা হয়েছে",
+    "statusPending": "পর্যালোচনাধীন",
+    "statusApproved": "অনুমোদিত",
+    "statusRejected": "প্রত্যাখ্যাত",
+    "rejectionReason": "কারণ: {reason}",
+    "requestedOn": "অনুরোধের তারিখ {date}"
   },
   "homework": {
     "title": "বাড়ির কাজ",

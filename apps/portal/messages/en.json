@@ -16,6 +16,9 @@
     "results": "Results",
     "attendance": "Attendance",
     "fees": "Fees",
+    "financialService": "Financial Service",
+    "paymentLedger": "Payment Ledger",
+    "scholarshipWaiver": "Scholarship & Waiver",
     "notices": "Notices"
   },
   "login": {
@@ -131,6 +134,41 @@
     "gatewayError": "Payment gateway not configured yet — merchant credentials pending",
     "slipUploaded": "Slip uploaded — staff will verify it against the bank statement",
     "slipUploadFailed": "Failed to upload slip"
+  },
+  "paymentLedger": {
+    "title": "Payment Ledger",
+    "subtitle": "Every payment collected, transaction by transaction",
+    "totalPayable": "Total Payable",
+    "totalPaid": "Total Paid",
+    "totalDue": "Total Due",
+    "allSessions": "All Sessions",
+    "sl": "SL",
+    "date": "Transaction Date",
+    "collectedBy": "Collected By",
+    "headDescription": "Head Description",
+    "receivable": "Receivable",
+    "paid": "Paid",
+    "noEntries": "No payments recorded yet."
+  },
+  "waivers": {
+    "title": "Scholarship & Waiver",
+    "subtitle": "Your active waivers, and requests for financial assistance",
+    "myWaivers": "My Waivers",
+    "noWaivers": "No active waivers.",
+    "everyYear": "Every year",
+    "myRequests": "My Requests",
+    "noRequests": "No requests submitted yet.",
+    "requestButton": "+ Request Waiver",
+    "requestTitle": "Request Financial Assistance",
+    "reasonLabel": "Tell us why you're requesting a waiver",
+    "reasonPlaceholder": "e.g. Family financial hardship due to...",
+    "submit": "Submit Request",
+    "submitted": "Request submitted",
+    "statusPending": "Pending Review",
+    "statusApproved": "Approved",
+    "statusRejected": "Rejected",
+    "rejectionReason": "Reason: {reason}",
+    "requestedOn": "Requested {date}"
   },
   "homework": {
     "title": "Homework",

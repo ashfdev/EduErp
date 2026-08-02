@@ -111,6 +111,29 @@ export const assignStudentWaiverBulkSchema = z.object({
 });
 export type AssignStudentWaiverBulkInput = z.infer<typeof assignStudentWaiverBulkSchema>;
 
+// Student/guardian-submitted request for financial assistance -- just a
+// reason, no waiver-type selection (the admin decides which template
+// actually applies after reviewing the case, mirroring DocumentRequest's
+// own "just a reason" simplicity).
+export const createWaiverRequestSchema = z.object({
+  reason: z.string().min(1),
+});
+export type CreateWaiverRequestInput = z.infer<typeof createWaiverRequestSchema>;
+
+// Approving a request IS assigning the waiver -- same fields the direct
+// assign flow needs, since this creates a real StudentWaiver in the same
+// transaction that resolves the request.
+export const approveWaiverRequestSchema = z.object({
+  waiver_type_id: z.string().min(1),
+  academic_year_id: z.string().optional().nullable(),
+});
+export type ApproveWaiverRequestInput = z.infer<typeof approveWaiverRequestSchema>;
+
+export const rejectWaiverRequestSchema = z.object({
+  rejection_reason: z.string().min(1),
+});
+export type RejectWaiverRequestInput = z.infer<typeof rejectWaiverRequestSchema>;
+
 // Bulk ad-hoc fee/fine -- same shape as adHocInvoiceSchema below, applied to
 // a roster of students at once (e.g. "fine every student in Class 9 who was
 // late submitting a form ৳100").
