@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "NotificationTrigger" ADD VALUE 'ADMISSION_STAGE_SCHEDULED';
+

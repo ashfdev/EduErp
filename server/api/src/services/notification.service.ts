@@ -29,6 +29,7 @@ const TRIGGER_EMAIL_SUBJECT: Record<NotificationTrigger, string> = {
   ADMISSION_APPLICATION_RECEIVED: "Application Received",
   ADMISSION_PAYMENT_RECEIVED: "Payment Received",
   ADMISSION_PAYMENT_PENDING_VERIFICATION: "Payment Awaiting Verification",
+  ADMISSION_STAGE_SCHEDULED: "You Have Been Called",
 };
 
 // Triggers whose template_data contains a secret (a plaintext temporary

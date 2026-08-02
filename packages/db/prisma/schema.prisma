@@ -2829,21 +2829,26 @@ model AdmissionCycle {
   // committing) but that must not be visible to applicants until the admin
   // deliberately publishes.
   merit_list_published_at DateTime?
-  // Offline admission-test workflow (alternative/supplement to pure merit
-  // selection) — requires_test gates whether the Admission Test tab's
-  // schedule/seat-plan/admit-card actions apply to this cycle at all.
-  requires_test           Boolean   @default(false)
-  test_date               DateTime?
-  test_venue              String?
-  test_duration_minutes   Int?
-  test_instructions       String?   @db.Text
-  // Mirrors merit_list_published_at's gate pattern — admit cards can be
-  // generated/previewed by staff before this is set, but only become
-  // self-downloadable by applicants once this is set.
-  admit_card_published_at DateTime?
+  // Plan Twenty-Three Phase 5 -- Written Test and Interview are two
+  // independent, separately-schedulable stages, each with its own
+  // per-applicant date/venue/room and its own pass/fail-equivalent outcome
+  // (AdmissionApplicationStage). These cycle-level fields are only ever
+  // used as the bulk-assign form's default pre-fill -- the actual
+  // authoritative schedule lives per-applicant, since staff can always
+  // individually override one candidate's slot.
+  requires_written_test         Boolean   @default(false)
+  written_test_date             DateTime?
+  written_test_venue            String?
+  written_test_duration_minutes Int?
+  written_test_instructions     String?   @db.Text
+  requires_interview             Boolean   @default(false)
+  interview_date                 DateTime?
+  interview_venue                String?
+  interview_duration_minutes     Int?
+  interview_instructions         String?   @db.Text
   created_at       DateTime               @default(now())
   applications     AdmissionApplication[]
-  test_seat_plans  AdmissionTestSeatPlan[]
+  stages           AdmissionApplicationStage[]
 }
 
 model AdmissionApplication {
@@ -2870,24 +2875,63 @@ model AdmissionApplication {
   invoices             Invoice[]
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
-  test_seat            AdmissionTestSeatPlan?
+  stages               AdmissionApplicationStage[]
 
   @@index([cycle_id])
 }
 
-// Per-candidate hall/seat for the offline admission test — keyed to the
-// application (not Student), since no Student row exists until enrollment.
-model AdmissionTestSeatPlan {
-  id             String               @id @default(cuid())
-  application_id String               @unique
-  application    AdmissionApplication @relation(fields: [application_id], references: [id])
-  cycle_id       String // denormalized for bulk query/delete-by-cycle
-  cycle          AdmissionCycle       @relation(fields: [cycle_id], references: [id])
-  hall_name      String?
-  seat_number    String?
-  created_at     DateTime             @default(now())
-  updated_at     DateTime             @updatedAt
+enum AdmissionStageType {
+  WRITTEN_TEST
+  INTERVIEW
+}
 
+enum AdmissionStageStatus {
+  SCHEDULED
+  PASSED
+  FAILED
+  NO_SHOW
+}
+
+// Plan Twenty-Three Phase 5 -- Written Test and Interview are two
+// independent, separately-schedulable stages (0, 1, or 2 rows per
+// application, enforced by the unique pair below), each with its own
+// per-applicant date/venue/room and its own pass/fail-equivalent outcome.
+// Replaces the old cycle-wide test_date/venue/AdmissionTestSeatPlan
+// combination, which couldn't express "this one candidate needs a
+// different room" or "Interview is scheduled separately from the Written
+// Test." hall_name/seat_number only ever apply to WRITTEN_TEST rows
+// (folded onto this same row rather than a second overlapping seat-plan
+// table, since only one stage type needs seating at all).
+model AdmissionApplicationStage {
+  id               String                @id @default(cuid())
+  application_id   String
+  application      AdmissionApplication  @relation(fields: [application_id], references: [id])
+  // Denormalized for bulk query/delete-by-cycle, mirroring
+  // AdmissionTestSeatPlan's own already-proven cycle_id convention.
+  cycle_id         String
+  cycle            AdmissionCycle        @relation(fields: [cycle_id], references: [id])
+  stage_type       AdmissionStageType
+  scheduled_date   DateTime?
+  venue            String?
+  duration_minutes Int?
+  instructions     String?               @db.Text
+  hall_name        String?
+  seat_number      String?
+  status           AdmissionStageStatus  @default(SCHEDULED)
+  // The applicant-facing personalized note shown once notified (e.g. "You
+  // have been called for interview based on your written test score").
+  notice_message   String?               @db.Text
+  // Null until a deliberate "Notify" action -- the per-row visibility gate
+  // (not cycle-wide) that lets staff bulk-assign/notify in separate
+  // batches over time without a later batch disturbing an earlier one, and
+  // lets a stage the applicant was never called for cleanly not appear on
+  // their status page at all.
+  notified_at      DateTime?
+  scheduled_by_id  String?
+  created_at       DateTime              @default(now())
+  updated_at       DateTime              @updatedAt
+
+  @@unique([application_id, stage_type])
   @@index([cycle_id])
 }
 
@@ -3907,6 +3951,9 @@ enum NotificationTrigger {
   // Plan Twenty-Three, Phase 3
   ADMISSION_PAYMENT_RECEIVED
   ADMISSION_PAYMENT_PENDING_VERIFICATION
+  // Plan Twenty-Three, Phase 5 -- replaces the raw sendSms() previously
+  // used on the old cycle-wide admit-card-publish route.
+  ADMISSION_STAGE_SCHEDULED
 }
 
 enum InAppNotificationType {

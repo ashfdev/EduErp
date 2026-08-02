@@ -139,7 +139,7 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   READMISSION: "4013",
 };
 
-const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED", "ADMISSION_STATUS_UPDATE", "ADMISSION_APPLICATION_RECEIVED", "ADMISSION_PAYMENT_RECEIVED", "ADMISSION_PAYMENT_PENDING_VERIFICATION"] as const;
+const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED", "ADMISSION_STATUS_UPDATE", "ADMISSION_APPLICATION_RECEIVED", "ADMISSION_PAYMENT_RECEIVED", "ADMISSION_PAYMENT_PENDING_VERIFICATION", "ADMISSION_STAGE_SCHEDULED"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
 const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
@@ -190,6 +190,10 @@ const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { b
   ADMISSION_PAYMENT_PENDING_VERIFICATION: {
     bn: "{{applicant_name}} (রোল: {{admission_roll}}) এর পেমেন্ট যাচাইয়ের জন্য অপেক্ষমাণ।",
     en: "A payment for {{applicant_name}} (Roll: {{admission_roll}}) is awaiting staff verification.",
+  },
+  ADMISSION_STAGE_SCHEDULED: {
+    bn: "{{applicant_name}} (রোল: {{admission_roll}}) কে {{stage_name}} এর জন্য ডাকা হয়েছে। তারিখ: {{date}}, স্থান: {{venue}}। ওয়েবসাইটে বিস্তারিত দেখুন।",
+    en: "{{applicant_name}} (Roll: {{admission_roll}}) has been called for {{stage_name}}. Date: {{date}}, Venue: {{venue}}. See details on our website status page.",
   },
 };
 

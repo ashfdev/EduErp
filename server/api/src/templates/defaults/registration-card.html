@@ -33,7 +33,7 @@
       <h1>{{institution.name_en}}</h1>
       <p>{{institution.address}} | EIIN: {{institution.eiin}}</p>
     </div>
-    <div class="title">ADMISSION TEST<br/>REGISTRATION CARD</div>
+    <div class="title">{{stage_title}}<br/>REGISTRATION CARD</div>
   </div>
 
   {{#if applicant.photo_url}}<img class="photo" src="{{applicant.photo_url}}" />{{else}}<div class="photo"></div>{{/if}}
