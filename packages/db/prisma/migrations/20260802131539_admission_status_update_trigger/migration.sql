@@ -1,0 +1,2 @@
+ALTER TYPE "NotificationTrigger" ADD VALUE 'ADMISSION_STATUS_UPDATE';
+

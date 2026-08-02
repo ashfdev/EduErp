@@ -723,7 +723,13 @@ feesRouter.post(
     if (!invoice) throw notFound("Invoice not found");
     if (invoice.status === "PAID") throw badRequest("Invoice is already fully paid");
 
-    const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
+    // invoice.student_id is null for a pre-enrollment, application-linked
+    // invoice (Plan Twenty-Three, Phase 3) -- resolve whichever side is
+    // real and use it for the recipient name/phone below instead of
+    // dereferencing student unconditionally.
+    const student = invoice.student_id ? await prisma.student.findUnique({ where: { id: invoice.student_id } }) : null;
+    const application = invoice.application_id ? await prisma.admissionApplication.findUnique({ where: { id: invoice.application_id } }) : null;
+    const applicationGuardianPhone = (application?.guardian_info as { phone?: string } | null)?.phone;
     const rules = await getFeeRules();
     // Class/sub-category-scoped fine engine (Phase N2) -- falls back to the
     // unmodified calculateLateFee() when no FeeFineRule matches, so a
@@ -764,18 +770,24 @@ feesRouter.post(
       data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
     });
 
-    if (overflow > 0) {
+    // Advance-credit overflow only has somewhere to land once a real
+    // Student exists -- an application has no credit_balance concept
+    // (in practice this path isn't reachable pre-enrollment anyway, since
+    // an applicant only ever owes a fixed app_fee/form_fee amount).
+    if (overflow > 0 && invoice.student_id) {
       await prisma.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
     }
 
     await createFeeReceiptJournal(payment, updated, appliedToInvoice);
 
-    if (student?.father_phone) {
+    const recipientName = student?.name_en ?? application?.applicant_name;
+    const recipientPhone = student?.father_phone ?? applicationGuardianPhone;
+    if (recipientPhone) {
       await sendSms(
-        student.father_phone,
+        recipientPhone,
         overflow > 0
-          ? `Payment of ৳${body.amount} received for ${student.name_en}. ৳${overflow} credited as advance balance. Thank you.`
-          : `Payment of ৳${body.amount} received for ${student.name_en}. Thank you.`,
+          ? `Payment of ৳${body.amount} received for ${recipientName}. ৳${overflow} credited as advance balance. Thank you.`
+          : `Payment of ৳${body.amount} received for ${recipientName}. Thank you.`,
       );
     }
 
@@ -914,7 +926,11 @@ feesRouter.post(
         if (invoice.status === "PAID") throw badRequest(`"${invoice.description}" is already fully paid`);
         studentId = invoice.student_id;
 
-        const invStudent = await tx.student.findUnique({ where: { id: invoice.student_id }, select: { current_class_id: true } });
+        // invoice.student_id is null for a pre-enrollment, application-
+        // linked invoice (Plan Twenty-Three, Phase 3) -- this batch-collect
+        // workspace is realistically only ever used against a real
+        // student's existing invoices, but stays null-safe regardless.
+        const invStudent = invoice.student_id ? await tx.student.findUnique({ where: { id: invoice.student_id }, select: { current_class_id: true } }) : null;
         const fine = await resolveFineForInvoice(tx, invoice, invStudent?.current_class_id ?? null, rules);
 
         // Waiver override (Plan Fifteen, Phase E) — "collect the full amount
@@ -976,7 +992,7 @@ feesRouter.post(
           data: { amount_due: effectiveAmountDue, amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
         });
 
-        if (overflow > 0) {
+        if (overflow > 0 && invoice.student_id) {
           await tx.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
         }
 
@@ -1151,8 +1167,11 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), days_overdue: z.coerce.number().default(30) }).parse(req.query);
+    // A pre-enrollment application-linked due (Plan Twenty-Three, Phase 3)
+    // isn't a "defaulter" in this report's sense -- that's tracked via the
+    // admission module's own payment_status, not this enrolled-student view.
     const invoices = await prisma.invoice.findMany({
-      where: { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] }, ...(query.class_id && { student: { current_class_id: query.class_id } }) },
+      where: { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] }, student_id: { not: null }, ...(query.class_id && { student: { current_class_id: query.class_id } }) },
       include: { student: { select: { id: true, name_en: true, student_uid: true, father_phone: true } } },
     });
 
@@ -1161,6 +1180,7 @@ feesRouter.get(
 
     const byStudent = new Map<string, { student: unknown; total_due: number; invoice_count: number }>();
     for (const inv of overdue) {
+      if (!inv.student_id) continue;
       const key = inv.student_id;
       const entry = byStudent.get(key) ?? { student: inv.student, total_due: 0, invoice_count: 0 };
       entry.total_due += inv.amount_due + inv.fine_amount - inv.amount_paid;
@@ -1177,8 +1197,12 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ from: z.coerce.date(), to: z.coerce.date() }).parse(req.query);
+    // Scoped to real (post-enrollment) student fee collections -- a
+    // pre-enrollment application-linked payment (Plan Twenty-Three, Phase
+    // 3) has no Student ID/class to report here; it isn't excluded from the
+    // real accounts ledger, just from this specific per-student export.
     const payments = await prisma.payment.findMany({
-      where: { paid_at: { gte: query.from, lte: query.to }, status: "COMPLETED" },
+      where: { paid_at: { gte: query.from, lte: query.to }, status: "COMPLETED", invoice: { student_id: { not: null } } },
       include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
       orderBy: { paid_at: "asc" },
     });
@@ -1196,8 +1220,8 @@ feesRouter.get(
     for (const p of payments) {
       sheet.addRow({
         date: p.paid_at?.toISOString().slice(0, 10),
-        uid: p.invoice.student.student_uid,
-        name: p.invoice.student.name_en,
+        uid: p.invoice.student?.student_uid ?? "-",
+        name: p.invoice.student?.name_en ?? "-",
         category: p.invoice.category,
         amount: p.amount,
         gateway: p.gateway,
@@ -1233,6 +1257,9 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().min(1) }).parse(req.query);
+    // Application-linked (student: null) invoices bucket under "Unassigned"
+    // alongside real students with no current_class_id, rather than being
+    // silently dropped from the summary (Plan Twenty-Three, Phase 3).
     const invoices = await prisma.invoice.findMany({
       where: { academic_year_id: query.academic_year_id },
       select: { amount_due: true, amount_paid: true, status: true, student: { select: { current_class_id: true, current_class: { select: { name_en: true } } } } },
@@ -1240,8 +1267,8 @@ feesRouter.get(
 
     const byClass = new Map<string, { class_name: string; generated: number; collected: number; due: number }>();
     for (const inv of invoices) {
-      const classId = inv.student.current_class_id ?? "unassigned";
-      const className = inv.student.current_class?.name_en ?? "Unassigned";
+      const classId = inv.student?.current_class_id ?? "unassigned";
+      const className = inv.student?.current_class?.name_en ?? "Unassigned";
       const entry = byClass.get(classId) ?? { class_name: className, generated: 0, collected: 0, due: 0 };
       entry.generated += inv.amount_due;
       entry.collected += inv.amount_paid;
@@ -1258,13 +1285,17 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().min(1), class_id: z.string().optional() }).parse(req.query);
+    // Inherently a per-Student report -- a pre-enrollment application-linked
+    // invoice has no student_id to key by, so it's excluded here rather
+    // than needing a synthetic "student" shape (Plan Twenty-Three, Phase 3).
     const invoices = await prisma.invoice.findMany({
-      where: { academic_year_id: query.academic_year_id, ...(query.class_id && { student: { current_class_id: query.class_id } }) },
+      where: { academic_year_id: query.academic_year_id, student_id: { not: null }, ...(query.class_id && { student: { current_class_id: query.class_id } }) },
       select: { amount_due: true, amount_paid: true, status: true, student_id: true, student: { select: { name_en: true, student_uid: true } } },
     });
 
     const byStudent = new Map<string, { name_en: string; student_uid: string; generated: number; collected: number; due: number }>();
     for (const inv of invoices) {
+      if (!inv.student_id || !inv.student) continue;
       const entry = byStudent.get(inv.student_id) ?? { name_en: inv.student.name_en, student_uid: inv.student.student_uid, generated: 0, collected: 0, due: 0 };
       entry.generated += inv.amount_due;
       entry.collected += inv.amount_paid;

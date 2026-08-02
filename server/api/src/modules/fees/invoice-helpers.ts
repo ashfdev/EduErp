@@ -73,6 +73,10 @@ async function applySingleWaiverToInvoice(tx: Tx, invoice: Invoice, waiver: Waiv
 // opaquely mutating amount_due, since the Student-wise Waivers report
 // (Phase G) needs this trail.
 export async function applyWaiversToInvoice(tx: Tx, invoice: Invoice): Promise<Invoice> {
+  // Pre-enrollment, application-linked invoice (Plan Twenty-Three, Phase 3)
+  // -- no real Student exists yet to hold a waiver against, so there is
+  // structurally nothing to apply. Waivers only ever attach post-enrollment.
+  if (!invoice.student_id) return invoice;
   const waivers = await tx.studentWaiver.findMany({
     where: {
       student_id: invoice.student_id,

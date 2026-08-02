@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Link } from "@/i18n/routing";
 import { ErrorState } from "@education-erp/ui";
 import {
-  User, Users, FileText, BookOpen, Paperclip, CheckCheck,
+  User, Users, FileText, Paperclip, CheckCheck,
   ChevronLeft, ChevronRight, Upload, CheckCircle2, AlertCircle,
   GraduationCap, Phone, Mail, MapPin, CreditCard, ArrowLeft,
 } from "lucide-react";
@@ -15,17 +15,59 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 interface FormField {
   key: string; label_en: string; type: string; required: boolean; is_default: boolean; options?: string[];
 }
+
+type StagedDoc = {
+  doc_type: "BIRTH_CERTIFICATE" | "NID" | "MARKSHEET" | "TESTIMONIAL" | "TRANSFER_CERTIFICATE" | "OTHER";
+  slot?: "FRONT" | "BACK";
+  label_key?: string;
+  blob_key: string;
+  preview_url: string;
+  original_filename: string;
+  mime_type: string;
+};
+
+// One upload slot, reused for every document row in the Documents step's
+// table (Plan Twenty-Three, Phase 2) — hideLabel skips the redundant inline
+// label when the row's own left-column label already names the document.
+function DocSlot({ label, doc, uploading, error, onSelect, hideLabel }: {
+  label: string; rowKey: string; doc: StagedDoc | undefined; uploading: boolean; error: string | undefined;
+  onSelect: (file: File | undefined) => void; hideLabel?: boolean;
+}) {
+  return (
+    <div>
+      <label className={`flex items-center gap-3 rounded-xl border-2 border-dashed p-3 cursor-pointer transition-all ${doc ? "border-green-300 bg-green-50" : "border-slate-200 bg-slate-50 hover:border-primary/40 hover:bg-white"}`}>
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${doc ? "bg-green-100" : "bg-white border border-slate-200"}`}>
+          {uploading ? <div className="h-3.5 w-3.5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /> : doc ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Upload className="h-3.5 w-3.5 text-slate-400" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          {!hideLabel && <p className={`text-xs font-bold ${doc ? "text-green-700" : "text-slate-500"}`}>{label}</p>}
+          <p className={`text-xs ${doc ? "text-green-700 font-semibold" : "text-slate-500"}`}>
+            {uploading ? "Uploading…" : doc ? doc.original_filename : "Click to upload"}
+          </p>
+          {doc && <a href={doc.preview_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-[11px] text-primary underline">Preview</a>}
+        </div>
+        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploading} onChange={(e) => onSelect(e.target.files?.[0])} className="sr-only" />
+      </label>
+      {error && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {error}</p>}
+    </div>
+  );
+}
 interface CycleDetail {
   id: string; name: string; class: { name_en: string }; app_fee: number; seat_count: number; is_open: boolean;
   form_config: { fields: FormField[]; document_uploads: { key: string; label_en: string; required: boolean }[] } | null;
   subjects: { compulsory: { id: string; name_en: string }[]; optional: { id: string; name_en: string }[] };
 }
 
+// Subjects deliberately removed (Plan Twenty-Three, Phase 1) -- compulsory
+// subjects auto-inherit server-side at enroll time regardless of anything
+// collected here, and optional-subject selection is a post-enrollment admin
+// task like it already is for every other student today. An applicant only
+// needs to see which class/cycle they're applying to, already shown in the
+// header above this stepper.
 const STEPS = [
   { label: "Personal Info", short: "Personal", icon: User },
   { label: "Guardian Info", short: "Guardian", icon: Users },
   { label: "Previous Record", short: "Record", icon: FileText },
-  { label: "Subjects", short: "Subjects", icon: BookOpen },
   { label: "Documents", short: "Documents", icon: Paperclip },
   { label: "Review & Submit", short: "Review", icon: CheckCheck },
 ];
@@ -70,32 +112,70 @@ export default function AdmissionApplyPage() {
   const [error, setError] = useState<string | null>(null);
   const [duplicateApplication, setDuplicateApplication] = useState(false);
   const [submitted, setSubmitted] = useState<{ id: string; admission_roll: string; app_fee: number } | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const [applicantName, setApplicantName] = useState("");
   const [personalInfo, setPersonalInfo] = useState<Record<string, string>>({});
   const [guardian, setGuardian] = useState({ father_name: "", mother_name: "", phone: "", email: "", address: "" });
   const [previousResult, setPreviousResult] = useState({ institution: "", class_passed: "", gpa: "", gpa_scale: "5", marks_obtained: "", marks_total_out_of: "" });
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-  const [documents, setDocuments] = useState<Record<string, string>>({});
+
+  // Documents/photo (Plan Twenty-Three, Phase 2) — a fixed base document
+  // set plus any cycle-specific extras, staged client-side keyed by a local
+  // row key ("BIRTH_CERTIFICATE" | "NID_FRONT" | "NID_BACK" | "MARKSHEET" |
+  // "TESTIMONIAL" | "TRANSFER_CERTIFICATE" | `extra:${cycleDocKey}`) until
+  // the final submit, which sends the whole staged set as one array.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [identityType, setIdentityType] = useState<"BIRTH_CERTIFICATE" | "NID">("BIRTH_CERTIFICATE");
+  const [stagedDocs, setStagedDocs] = useState<Record<string, StagedDoc>>({});
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
 
-  async function handleDocumentSelect(key: string, file: File | undefined) {
+  async function handlePhotoSelect(file: File | undefined) {
     if (!file) return;
-    setUploadingKey(key);
-    setUploadErrors((p) => ({ ...p, [key]: "" }));
+    setUploadingPhoto(true);
+    setPhotoError(null);
+    try {
+      const form = new FormData();
+      form.append("photo", file);
+      const res = await fetch(`${API_URL}/api/admission/upload-photo`, { method: "POST", body: form });
+      const body = await res.json();
+      if (!res.ok) { setPhotoError(body.error?.message ?? "Upload failed"); return; }
+      setPhotoUrl(body.data.photo_url);
+    } catch { setPhotoError("Could not reach the server."); }
+    finally { setUploadingPhoto(false); }
+  }
+
+  async function handleDocumentSelect(rowKey: string, docType: StagedDoc["doc_type"], slot: "FRONT" | "BACK" | undefined, labelKey: string | undefined, file: File | undefined) {
+    if (!file) return;
+    setUploadingKey(rowKey);
+    setUploadErrors((p) => ({ ...p, [rowKey]: "" }));
     try {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`${API_URL}/api/admission/upload-document`, { method: "POST", body: form });
       const body = await res.json();
-      if (!res.ok) { setUploadErrors((p) => ({ ...p, [key]: body.error?.message ?? "Upload failed" })); return; }
-      setDocuments((p) => ({ ...p, [key]: body.data.url }));
-    } catch { setUploadErrors((p) => ({ ...p, [key]: "Could not reach the server." })); }
+      if (!res.ok) { setUploadErrors((p) => ({ ...p, [rowKey]: body.error?.message ?? "Upload failed" })); return; }
+      setStagedDocs((p) => ({
+        ...p,
+        [rowKey]: { doc_type: docType, slot, label_key: labelKey, blob_key: body.data.blob_key, preview_url: body.data.preview_url, original_filename: body.data.original_filename, mime_type: body.data.mime_type },
+      }));
+    } catch { setUploadErrors((p) => ({ ...p, [rowKey]: "Could not reach the server." })); }
     finally { setUploadingKey(null); }
+  }
+
+  function switchIdentityType(next: "BIRTH_CERTIFICATE" | "NID") {
+    setIdentityType(next);
+    // Clear whichever type's staged file(s) no longer apply, so a stale
+    // upload from before switching the toggle is never silently submitted.
+    setStagedDocs((p) => {
+      const copy = { ...p };
+      delete copy.BIRTH_CERTIFICATE;
+      delete copy.NID_FRONT;
+      delete copy.NID_BACK;
+      return copy;
+    });
   }
 
   const loadCycle = useCallback(() => {
@@ -120,7 +200,12 @@ export default function AdmissionApplyPage() {
           previous_result: previousResult.institution || previousResult.gpa
             ? { institution: previousResult.institution, class_passed: previousResult.class_passed, gpa: previousResult.gpa ? Number(previousResult.gpa) : undefined, gpa_scale: previousResult.gpa_scale, marks_obtained: previousResult.marks_obtained ? Number(previousResult.marks_obtained) : undefined, marks_total_out_of: previousResult.marks_total_out_of ? Number(previousResult.marks_total_out_of) : undefined }
             : undefined,
-          selected_subjects: selectedSubjects, documents,
+          photo_url: photoUrl,
+          identity_type: identityType,
+          uploaded_documents: Object.values(stagedDocs).map((d) => ({
+            doc_type: d.doc_type, slot: d.slot, label_key: d.label_key,
+            blob_key: d.blob_key, original_filename: d.original_filename, mime_type: d.mime_type,
+          })),
         }),
       });
       const body = await res.json();
@@ -130,17 +215,6 @@ export default function AdmissionApplyPage() {
     finally { setSubmitting(false); }
   }
 
-  async function payNow(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ") {
-    if (!submitted) return;
-    setPaying(true); setPaymentError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/admission/payment/initiate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ application_id: submitted.id, gateway }) });
-      const body = await res.json();
-      if (!res.ok) { setPaymentError(body.error?.message ?? "Could not start payment"); return; }
-      if (body.data?.payment_url) window.location.href = body.data.payment_url;
-    } catch { setPaymentError("Could not reach the server."); }
-    finally { setPaying(false); }
-  }
 
   function getValidationMessage(i: number): string | null {
     if (i === 0) {
@@ -149,8 +223,12 @@ export default function AdmissionApplyPage() {
       if (!req.every((f) => !!personalInfo[f.key])) return "Please fill in all required fields.";
     }
     if (i === 1 && !/^01\d{9}$/.test(guardian.phone)) return "Enter a valid guardian phone number (01XXXXXXXXX).";
-    if (i === 4) {
-      const missing = (cycle?.form_config?.document_uploads ?? []).filter((d) => d.required && !documents[d.key]);
+    if (i === 3) {
+      if (!photoUrl) return "Please upload a student photo.";
+      if (identityType === "BIRTH_CERTIFICATE" && !stagedDocs.BIRTH_CERTIFICATE) return "Please upload the Birth Certificate.";
+      if (identityType === "NID" && (!stagedDocs.NID_FRONT || !stagedDocs.NID_BACK)) return "Please upload both sides of the NID.";
+      if (!stagedDocs.MARKSHEET) return "Please upload the previous class's pass transcript/result card.";
+      const missing = (cycle?.form_config?.document_uploads ?? []).filter((d) => d.required && !stagedDocs[`extra:${d.key}`]);
       if (missing.length) return `Please upload: ${missing.map((d) => d.label_en).join(", ")}`;
     }
     return null;
@@ -205,15 +283,13 @@ export default function AdmissionApplyPage() {
           {submitted.app_fee > 0 && (
             <div className="border border-slate-100 rounded-2xl p-5 mb-5 text-left">
               <p className="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2"><CreditCard className="h-4 w-4 text-primary" /> Fee: ৳{submitted.app_fee}</p>
-              <p className="text-xs text-slate-500 mb-4">Pay to complete your application.</p>
-              <div className="grid grid-cols-3 gap-2">
-                {(["BKASH", "NAGAD", "SSLCOMMERZ"] as const).map((g) => (
-                  <button key={g} disabled={paying} onClick={() => payNow(g)} className="rounded-xl border border-green-200 bg-[#f0fdf4] py-2 text-xs font-bold text-green-800 hover:bg-green-100 transition disabled:opacity-50">
-                    {g === "SSLCOMMERZ" ? "SSLCommerz" : g.charAt(0) + g.slice(1).toLowerCase()}
-                  </button>
-                ))}
-              </div>
-              {paymentError && <p className="mt-2 text-xs text-red-500">{paymentError}</p>}
+              <p className="text-xs text-slate-500 mb-4">Your application won&apos;t be shortlisted until this is paid. Pay now on the status page.</p>
+              <Link
+                href={`/admission/status?admission_roll=${encodeURIComponent(submitted.admission_roll)}&phone=${encodeURIComponent(guardian.phone)}`}
+                className="flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 transition"
+              >
+                <CreditCard className="h-4 w-4" /> Pay Now
+              </Link>
             </div>
           )}
           <Link href="/admission/status" className="text-sm font-semibold text-primary hover:underline">Check Application Status →</Link>
@@ -384,72 +460,104 @@ export default function AdmissionApplyPage() {
               </div>
             )}
 
-            {/* ── Step 3: Subjects ── */}
+            {/* ── Step 3: Documents ── */}
             {step === 3 && (
-              <div className="space-y-6">
-                <div className="rounded-2xl bg-[#f0fdf4] border border-green-100 p-5">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Compulsory Subjects</p>
-                  <div className="flex flex-wrap gap-2">
-                    {cycle.subjects.compulsory.map((s) => (
-                      <span key={s.id} className="rounded-full border border-green-200 bg-white px-4 py-1.5 text-sm font-semibold text-green-800">{s.name_en}</span>
-                    ))}
-                    {!cycle.subjects.compulsory.length && <p className="text-sm text-slate-400">None specified</p>}
-                  </div>
-                </div>
-                {cycle.subjects.optional.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Optional Subjects <span className="normal-case font-normal text-slate-400">— select one or more</span></p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {cycle.subjects.optional.map((s) => {
-                        const checked = selectedSubjects.includes(s.id);
-                        return (
-                          <label key={s.id} className={`flex items-center gap-3 rounded-2xl border-2 p-4 cursor-pointer transition-all ${checked ? "border-primary bg-primary/5" : "border-slate-100 bg-slate-50 hover:border-green-200"}`}>
-                            <input type="checkbox" checked={checked} onChange={(e) => setSelectedSubjects((prev) => e.target.checked ? [...prev, s.id] : prev.filter((x) => x !== s.id))} className="accent-green-600 h-4 w-4" />
-                            <span className={`text-sm font-semibold ${checked ? "text-primary" : "text-slate-700"}`}>{s.name_en}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Step 4: Documents ── */}
-            {step === 4 && (
               <div className="space-y-5">
                 <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3 text-xs text-slate-500">
                   Accepted: JPG, PNG, WebP or PDF — max 10 MB each.
                 </div>
-                {!(cycle.form_config?.document_uploads ?? []).length && (
-                  <div className="rounded-2xl bg-[#f0fdf4] border border-green-100 p-8 text-center">
-                    <CheckCircle2 className="h-10 w-10 text-primary mx-auto mb-3" />
-                    <p className="font-semibold text-slate-700">No documents required</p>
+
+                {/* Rendered as a real row-per-document table/form, not a
+                    dropdown, per the explicit ask. */}
+                <div className="rounded-2xl border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+
+                  {/* Photo — required, its own dedicated slot */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                    <div className="sm:w-48 shrink-0">
+                      <p className="text-sm font-semibold text-slate-700">Student Photo <span className="text-primary">*</span></p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className={`flex items-center gap-4 rounded-2xl border-2 border-dashed p-4 cursor-pointer transition-all ${photoUrl ? "border-green-300 bg-green-50" : "border-slate-200 bg-slate-50 hover:border-primary/40 hover:bg-white"}`}>
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${photoUrl ? "bg-green-100" : "bg-white border border-slate-200"}`}>
+                          {uploadingPhoto ? <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /> : photoUrl ? <CheckCircle2 className="h-4 w-4 text-primary" /> : <Upload className="h-4 w-4 text-slate-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-semibold ${photoUrl ? "text-green-700" : "text-slate-600"}`}>{uploadingPhoto ? "Uploading…" : photoUrl ? "Photo uploaded" : "Click to upload"}</p>
+                          {photoUrl && <a href={photoUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Preview</a>}
+                        </div>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploadingPhoto} onChange={(e) => handlePhotoSelect(e.target.files?.[0])} className="sr-only" />
+                      </label>
+                      {photoError && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {photoError}</p>}
+                    </div>
                   </div>
-                )}
-                {(cycle.form_config?.document_uploads ?? []).map((d) => (
-                  <div key={d.key}>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">{d.label_en}{d.required && <span className="ml-1 text-primary">*</span>}</label>
-                    <label className={`flex items-center gap-4 rounded-2xl border-2 border-dashed p-5 cursor-pointer transition-all ${documents[d.key] ? "border-green-300 bg-green-50" : "border-slate-200 bg-slate-50 hover:border-primary/40 hover:bg-white"}`}>
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${documents[d.key] ? "bg-green-100" : "bg-white border border-slate-200"}`}>
-                        {uploadingKey === d.key ? <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /> : documents[d.key] ? <CheckCircle2 className="h-5 w-5 text-primary" /> : <Upload className="h-4 w-4 text-slate-400" />}
+
+                  {/* Identity: Birth Certificate OR NID, toggle picks which */}
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-3 p-4">
+                    <div className="sm:w-48 shrink-0">
+                      <p className="text-sm font-semibold text-slate-700">Identity Document <span className="text-primary">*</span></p>
+                      <div className="mt-2 flex gap-2">
+                        <button type="button" onClick={() => switchIdentityType("BIRTH_CERTIFICATE")} className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${identityType === "BIRTH_CERTIFICATE" ? "bg-primary text-white" : "bg-slate-100 text-slate-500"}`}>Birth Certificate</button>
+                        <button type="button" onClick={() => switchIdentityType("NID")} className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${identityType === "NID" ? "bg-primary text-white" : "bg-slate-100 text-slate-500"}`}>NID</button>
                       </div>
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-3">
+                      {identityType === "BIRTH_CERTIFICATE" ? (
+                        <DocSlot label="Birth Certificate" rowKey="BIRTH_CERTIFICATE" doc={stagedDocs.BIRTH_CERTIFICATE} uploading={uploadingKey === "BIRTH_CERTIFICATE"} error={uploadErrors.BIRTH_CERTIFICATE}
+                          onSelect={(f) => handleDocumentSelect("BIRTH_CERTIFICATE", "BIRTH_CERTIFICATE", undefined, undefined, f)} />
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <DocSlot label="NID — Front" rowKey="NID_FRONT" doc={stagedDocs.NID_FRONT} uploading={uploadingKey === "NID_FRONT"} error={uploadErrors.NID_FRONT}
+                            onSelect={(f) => handleDocumentSelect("NID_FRONT", "NID", "FRONT", undefined, f)} />
+                          <DocSlot label="NID — Back" rowKey="NID_BACK" doc={stagedDocs.NID_BACK} uploading={uploadingKey === "NID_BACK"} error={uploadErrors.NID_BACK}
+                            onSelect={(f) => handleDocumentSelect("NID_BACK", "NID", "BACK", undefined, f)} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Previous result transcript — required */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                    <div className="sm:w-48 shrink-0"><p className="text-sm font-semibold text-slate-700">Previous Result / Transcript <span className="text-primary">*</span></p></div>
+                    <div className="flex-1 min-w-0">
+                      <DocSlot label="Marksheet / Result Card" rowKey="MARKSHEET" doc={stagedDocs.MARKSHEET} uploading={uploadingKey === "MARKSHEET"} error={uploadErrors.MARKSHEET}
+                        onSelect={(f) => handleDocumentSelect("MARKSHEET", "MARKSHEET", undefined, undefined, f)} hideLabel />
+                    </div>
+                  </div>
+
+                  {/* Testimonial — optional */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                    <div className="sm:w-48 shrink-0"><p className="text-sm font-semibold text-slate-700">Testimonial <span className="text-slate-400 font-normal">(optional)</span></p></div>
+                    <div className="flex-1 min-w-0">
+                      <DocSlot label="Testimonial" rowKey="TESTIMONIAL" doc={stagedDocs.TESTIMONIAL} uploading={uploadingKey === "TESTIMONIAL"} error={uploadErrors.TESTIMONIAL}
+                        onSelect={(f) => handleDocumentSelect("TESTIMONIAL", "TESTIMONIAL", undefined, undefined, f)} hideLabel />
+                    </div>
+                  </div>
+
+                  {/* Transfer Certificate — optional */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                    <div className="sm:w-48 shrink-0"><p className="text-sm font-semibold text-slate-700">Transfer Certificate <span className="text-slate-400 font-normal">(optional)</span></p></div>
+                    <div className="flex-1 min-w-0">
+                      <DocSlot label="Transfer Certificate" rowKey="TRANSFER_CERTIFICATE" doc={stagedDocs.TRANSFER_CERTIFICATE} uploading={uploadingKey === "TRANSFER_CERTIFICATE"} error={uploadErrors.TRANSFER_CERTIFICATE}
+                        onSelect={(f) => handleDocumentSelect("TRANSFER_CERTIFICATE", "TRANSFER_CERTIFICATE", undefined, undefined, f)} hideLabel />
+                    </div>
+                  </div>
+
+                  {/* Cycle-specific extras, if this cycle's admin configured any */}
+                  {(cycle.form_config?.document_uploads ?? []).map((d) => (
+                    <div key={d.key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                      <div className="sm:w-48 shrink-0"><p className="text-sm font-semibold text-slate-700">{d.label_en} {d.required ? <span className="text-primary">*</span> : <span className="text-slate-400 font-normal">(optional)</span>}</p></div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${documents[d.key] ? "text-green-700" : "text-slate-600"}`}>
-                          {uploadingKey === d.key ? "Uploading…" : documents[d.key] ? "File uploaded successfully" : "Click to upload"}
-                        </p>
-                        {documents[d.key] && <a href={documents[d.key]} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Preview file</a>}
+                        <DocSlot label={d.label_en} rowKey={`extra:${d.key}`} doc={stagedDocs[`extra:${d.key}`]} uploading={uploadingKey === `extra:${d.key}`} error={uploadErrors[`extra:${d.key}`]}
+                          onSelect={(f) => handleDocumentSelect(`extra:${d.key}`, "OTHER", undefined, d.key, f)} hideLabel />
                       </div>
-                      <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={uploadingKey === d.key} onChange={(e) => handleDocumentSelect(d.key, e.target.files?.[0])} className="sr-only" />
-                    </label>
-                    {uploadErrors[d.key] && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {uploadErrors[d.key]}</p>}
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* ── Step 5: Review ── */}
-            {step === 5 && (
+            {/* ── Step 4: Review ── */}
+            {step === 4 && (
               <div className="space-y-4">
                 <div className="rounded-2xl overflow-hidden border border-slate-100 divide-y divide-slate-100">
                   {[

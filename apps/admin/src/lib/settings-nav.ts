@@ -21,6 +21,7 @@ export const SETTINGS_GROUPS = [
       { href: "/settings/mark-composition-templates", label: "Mark Composition Templates" },
       { href: "/settings/marksheet-display", label: "Marksheet Display" },
       { href: "/settings/fee-rules", label: "Fee Rules" },
+      { href: "/settings/admission-payment-instructions", label: "Admission Payment Instructions" },
       { href: "/settings/attendance-rules", label: "Attendance Rules" },
       { href: "/settings/leave-types", label: "Leave Types" },
     ],

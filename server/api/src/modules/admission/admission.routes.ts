@@ -6,10 +6,10 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { publicEndpointLimiter } from "../../middleware/rate-limit";
-import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
-import { uploadBuffer } from "../../services/storage.service";
+import { documentUpload, verifyDocumentMagicBytes, imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
+import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
-import { ADMISSION_MANAGE_ROLES, ADMISSION_ENROLL_ROLES } from "../../lib/roles";
+import { ADMISSION_MANAGE_ROLES, ADMISSION_ENROLL_ROLES, ADMISSION_READ_ROLES } from "../../lib/roles";
 import {
   createAdmissionCycleSchema,
   updateAdmissionCycleSchema,
@@ -18,8 +18,10 @@ import {
   submitAdmissionApplicationSchema,
   admissionApplicationStatusSchema,
   admissionBulkActionSchema,
+  admissionNotesSchema,
   admissionEnrollSchema,
-  admissionPaymentInitiateSchema,
+  admissionPaymentGatewaySchema,
+  admissionPaymentManualSchema,
   admissionStatusLookupSchema,
   scheduleAdmissionTestSchema,
   generateTestSeatPlanSchema,
@@ -31,10 +33,13 @@ import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
+import { notifyRoles } from "../../services/in-app-notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
 import { assertSectionCapacity } from "../../lib/section-capacity";
 import { env } from "../../lib/env";
 import { getPaymentAdapter } from "../../services/payment";
+import { completePayment } from "../fees/payments.routes";
+import { computeApplicationPaymentStatus } from "./admission-payment-status";
 import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
 import { badRequest, notFound, conflict } from "../../lib/errors";
 import type { AdmissionApplication, AdmissionCycle, AdmissionTestSeatPlan, Class, AcademicYear, AdmissionStatus } from "@education-erp/db";
@@ -74,7 +79,6 @@ type ApplicationForCard = AdmissionApplication & {
 // academic student.* shape, since no Student row exists pre-enrollment.
 function buildRegistrationCardData(application: ApplicationForCard) {
   const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string } | null;
-  const documents = application.documents as Record<string, string> | null;
   const cycle = application.cycle;
   const seat = application.test_seat;
 
@@ -85,7 +89,10 @@ function buildRegistrationCardData(application: ApplicationForCard) {
       father_name: guardianInfo?.father_name ?? "",
       mother_name: guardianInfo?.mother_name ?? "",
       class_name: cycle.class.name_en,
-      photo_url: documents?.photo ?? null,
+      // Own dedicated column now (Plan Twenty-Three, Phase 2) -- was
+      // previously read from the untyped documents Json map, which broke
+      // once real document tracking moved to StudentDocument rows.
+      photo_url: application.photo_url ?? null,
     },
     test: {
       date: cycle.test_date,
@@ -336,6 +343,26 @@ admissionRouter.get(
   }),
 );
 
+// Pre-application photo upload -- no AdmissionApplication row exists yet,
+// mirrors students.routes.ts's own pre-creation photo route exactly.
+admissionRouter.post(
+  "/upload-photo",
+  publicEndpointLimiter,
+  imageUpload.single("photo"),
+  verifyImageMagicBytes,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("A photo file is required");
+    const { url } = await uploadBuffer("admission-photos", req.file.originalname, req.file.buffer, req.file.mimetype);
+    res.status(201).json({ success: true, data: { photo_url: url } });
+  }),
+);
+
+// Returns blob_key (not a permanent public URL) -- the wizard stages
+// {doc_type, slot?, blob_key, ...} client-side and sends the whole array to
+// POST /apply, which creates the real StudentDocument rows transactionally
+// once an application actually exists (Plan Twenty-Three, Phase 2).
+// preview_url is a short-lived signed link for the wizard's own "preview
+// file" affordance only -- never persisted anywhere.
 admissionRouter.post(
   "/upload-document",
   publicEndpointLimiter,
@@ -343,8 +370,12 @@ admissionRouter.post(
   verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A file is required");
-    const { url } = await uploadBuffer("admission-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
-    res.status(201).json({ success: true, data: { url } });
+    const { blobKey } = await uploadBuffer("admission-documents", req.file.originalname, req.file.buffer, req.file.mimetype);
+    const preview_url = await getSignedDownloadUrl(blobKey, 60);
+    res.status(201).json({
+      success: true,
+      data: { blob_key: blobKey, preview_url, original_filename: req.file.originalname, mime_type: req.file.mimetype },
+    });
   }),
 );
 
@@ -367,11 +398,34 @@ admissionRouter.post(
         .filter((f) => body.personal_info[f.key] === undefined || body.personal_info[f.key] === "")
         .map((f) => f.key);
       if (missing.length) throw badRequest(`Missing required fields: ${missing.join(", ")}`, missing);
+    }
 
-      const missingDocs = (config.document_uploads ?? [])
-        .filter((d) => d.required)
-        .filter((d) => !body.documents?.[d.key])
-        .map((d) => d.key);
+    // Base document requirements, always on for every cycle (Plan
+    // Twenty-Three, Phase 2) -- replaces "No documents required" as the
+    // default for every new cycle, which was really just an empty
+    // form_config.document_uploads[] with nothing filling it in.
+    const uploaded = body.uploaded_documents;
+    if (!body.photo_url) throw badRequest("A student photo is required");
+    if (!body.identity_type) throw badRequest("Select which identity document you're providing: Birth Certificate or NID");
+    if (body.identity_type === "BIRTH_CERTIFICATE") {
+      const count = uploaded.filter((d) => d.doc_type === "BIRTH_CERTIFICATE").length;
+      if (count !== 1) throw badRequest("Upload exactly one Birth Certificate file");
+    } else {
+      const front = uploaded.some((d) => d.doc_type === "NID" && d.slot === "FRONT");
+      const back = uploaded.some((d) => d.doc_type === "NID" && d.slot === "BACK");
+      if (!front || !back) throw badRequest("Upload both the front and back of the NID");
+    }
+    if (uploaded.filter((d) => d.doc_type === "MARKSHEET").length !== 1) {
+      throw badRequest("Upload your previous class's pass transcript/result card");
+    }
+
+    // Cycle-specific extras (form_config.document_uploads[]) stay separate
+    // from the fixed base set above -- kept as the mechanism for a
+    // cycle-specific ask beyond Birth Cert/NID/Marksheet/Testimonial/TC,
+    // matched by label_key rather than doc_type (they all land as OTHER).
+    if (config?.document_uploads?.length) {
+      const providedKeys = new Set(uploaded.filter((d) => d.doc_type === "OTHER").map((d) => d.label_key));
+      const missingDocs = config.document_uploads.filter((d) => d.required && !providedKeys.has(d.key)).map((d) => d.key);
       if (missingDocs.length) throw badRequest(`Missing required documents: ${missingDocs.join(", ")}`, missingDocs);
     }
 
@@ -431,6 +485,7 @@ admissionRouter.post(
             previous_result: body.previous_result ?? undefined,
             selected_subjects: body.selected_subjects ?? undefined,
             documents: body.documents ?? undefined,
+            photo_url: body.photo_url,
             status: "PENDING",
           },
         });
@@ -444,54 +499,237 @@ admissionRouter.post(
     }
     if (!application) throw new Error("Could not create application with a unique admission roll after 5 attempts");
 
-    await sendSms(body.guardian_info.phone, `Application received for ${body.applicant_name}. Roll: ${admission_roll}. Track status at our website.`);
+    // Deliberately outside the roll-number retry loop above, not wrapped
+    // together in one $transaction -- retrying a *poisoned* Postgres
+    // transaction on a caught error is a real, previously-hit bug in this
+    // exact codebase (a statement error poisons every later statement on
+    // the same tx client, even if caught in JS). The retry loop above needs
+    // a fresh, unpoisoned client on every attempt, so it stays a plain
+    // sequential prisma call, not tx.create(). Document rows are created
+    // immediately after the application successfully commits instead.
+    if (uploaded.length) {
+      await prisma.studentDocument.createMany({
+        data: uploaded.map((d) => ({
+          application_id: application!.id,
+          doc_type: d.doc_type,
+          slot: d.slot ?? null,
+          blob_key: d.blob_key,
+          original_filename: d.original_filename,
+          mime_type: d.mime_type,
+        })),
+      });
+    }
+
+    // Plan Twenty-Three Phase 3 -- invoices are created here, at apply time,
+    // not lazily at enroll time, so "payment due" is knowable the moment an
+    // application is submitted and the payment-status gate on shortlist/
+    // confirm/merit-list has something real to check from day one.
+    // Application-linked (student_id: null) until enroll-time "claims" them
+    // by filling in student_id rather than creating fresh ones. Deliberately
+    // its own $transaction, separate from the roll-number retry loop above
+    // (which must stay a plain sequential call, never a poisoned-tx retry).
+    if (cycle.app_fee > 0 || cycle.form_fee > 0) {
+      const feeRules = await prisma.feeRules.findFirst();
+      const dueDate = new Date(Date.now() + (feeRules?.grace_period_days ?? 7) * 24 * 60 * 60 * 1000);
+      await prisma.$transaction(async (tx) => {
+        if (cycle.app_fee > 0) {
+          const admissionInvoice = await tx.invoice.create({
+            data: {
+              invoice_no: await generateInvoiceNo(tx),
+              application_id: application!.id,
+              academic_year_id: cycle.academic_year_id,
+              category: "ADMISSION",
+              description: `Admission Fee — ${cycle.name}`,
+              amount_due: cycle.app_fee,
+              due_date: dueDate,
+              status: "PENDING",
+            },
+          });
+          await applyWaiversToInvoice(tx, admissionInvoice);
+        }
+        if (cycle.form_fee > 0) {
+          const formInvoice = await tx.invoice.create({
+            data: {
+              invoice_no: await generateInvoiceNo(tx),
+              application_id: application!.id,
+              academic_year_id: cycle.academic_year_id,
+              category: "FORM",
+              description: `Form Fee — ${cycle.name}`,
+              amount_due: cycle.form_fee,
+              due_date: dueDate,
+              status: "PENDING",
+            },
+          });
+          await applyWaiversToInvoice(tx, formInvoice);
+        }
+      });
+    }
+
+    await sendNotification({
+      trigger: "ADMISSION_APPLICATION_RECEIVED",
+      recipients: [{ name: body.applicant_name, phone: body.guardian_info.phone }],
+      template_data: { applicant_name: body.applicant_name, admission_roll },
+    });
+    await notifyRoles(ADMISSION_MANAGE_ROLES, {
+      type: "ADMISSION_APPLICATION_SUBMITTED",
+      title: "New admission application",
+      body: `${body.applicant_name} applied (Roll: ${admission_roll})`,
+      link: `/admission/applications/${application.id}`,
+    });
 
     res.status(201).json({ success: true, data: { id: application.id, admission_roll, app_fee: cycle.app_fee } });
   }),
 );
 
-admissionRouter.post(
-  "/payment/initiate",
+// ───────────────────────── Payment (Plan Twenty-Three, Phase 3) ─────────────────────────
+// Invoices are now created at /apply time (see above), real Invoice/
+// Payment rows linked via Invoice.application_id -- every route below is
+// keyed by admission_roll+phone (same identity pair the status-check page
+// already uses), never a raw application_id, so a payment action can't be
+// taken by anyone who only knows the internal cuid.
+
+admissionRouter.get(
+  "/application/payment-info",
   publicEndpointLimiter,
   asyncHandler(async (req, res) => {
-    const body = admissionPaymentInitiateSchema.parse(req.body);
-    const application = await prisma.admissionApplication.findUnique({ where: { id: body.application_id }, include: { cycle: true } });
+    const query = admissionStatusLookupSchema.parse(req.query);
+    const application = await prisma.admissionApplication.findUnique({
+      where: { admission_roll: query.admission_roll },
+      include: { invoices: { orderBy: { created_at: "asc" }, include: { payments: { orderBy: { created_at: "desc" } } } } },
+    });
     if (!application) throw notFound("Application not found");
+    const guardianInfo = application.guardian_info as { phone?: string } | null;
+    if (guardianInfo?.phone !== query.phone) throw notFound("Application not found");
 
-    const adapter = getPaymentAdapter(body.gateway);
-    if (!(await adapter.isConfigured())) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
+    const gatewayNames = ["BKASH", "NAGAD", "SSLCOMMERZ", "ROCKET"] as const;
+    const gateways: Record<string, boolean> = {};
+    for (const g of gatewayNames) gateways[g] = await getPaymentAdapter(g).isConfigured();
 
-    const transactionId = randomUUID();
-    const result = await adapter.initiatePayment({ invoice_id: application.id, amount: application.cycle.app_fee, transaction_id: transactionId });
-    await prisma.admissionApplication.update({ where: { id: application.id }, data: { payment_id: transactionId } });
+    const instructions = await prisma.admissionPaymentInstructions.findUnique({ where: { id: "singleton" } });
 
-    res.json({ success: true, data: { payment_url: result.payment_url, session_id: result.session_id } });
+    res.json({
+      success: true,
+      data: {
+        payment_status: computeApplicationPaymentStatus(application.invoices),
+        invoices: application.invoices.map((inv) => ({
+          id: inv.id,
+          category: inv.category,
+          description: inv.description,
+          amount_due: inv.amount_due,
+          amount_paid: inv.amount_paid,
+          fine_amount: inv.fine_amount,
+          status: inv.status,
+          // Distinguishes "unpaid, no action taken yet" from "already
+          // self-reported, awaiting staff verification" on the status page.
+          pending_verification: inv.payments.some((p) => p.status === "INITIATED"),
+        })),
+        gateways,
+        payment_instructions: instructions,
+      },
+    });
   }),
 );
 
-// Only PENDING/SHORTLISTED/WAITLISTED may move to CONFIRMED via a payment
-// callback — a REJECTED application must not be re-confirmable this way, and
-// an already-CONFIRMED/ENROLLED application must not be touched again by a
-// replayed or duplicate gateway callback (idempotent no-op instead).
-const CONFIRMABLE_STATUSES: AdmissionStatus[] = ["PENDING", "SHORTLISTED", "WAITLISTED"];
+admissionRouter.post(
+  "/application/payment/gateway",
+  publicEndpointLimiter,
+  asyncHandler(async (req, res) => {
+    const body = admissionPaymentGatewaySchema.parse(req.body);
+    const application = await prisma.admissionApplication.findUnique({ where: { admission_roll: body.admission_roll } });
+    if (!application) throw notFound("Application not found");
+    const guardianInfo = application.guardian_info as { phone?: string } | null;
+    if (guardianInfo?.phone !== body.phone) throw notFound("Application not found");
 
-async function handleAdmissionCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ", payload: unknown) {
+    const invoice = await prisma.invoice.findUnique({ where: { id: body.invoice_id } });
+    if (!invoice || invoice.application_id !== application.id) throw notFound("Invoice not found for this application");
+    if (invoice.status === "PAID" || invoice.status === "WAIVED") throw badRequest("This invoice is already fully paid");
+
+    const adapter = getPaymentAdapter(body.gateway);
+    if (!(await adapter.isConfigured())) {
+      // Deliberately a graceful {configured:false}, not a 400 -- every
+      // gateway remains a non-functional stub (real merchant credentials
+      // are pending), so this is the expected, common response here, not an
+      // error state to alarm the applicant with. The frontend falls back to
+      // the manual self-report flow below when it sees this.
+      res.json({ success: true, data: { configured: false } });
+      return;
+    }
+
+    const transactionId = randomUUID();
+    const outstanding = Math.max(0, invoice.amount_due + invoice.fine_amount - invoice.amount_paid);
+    const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: outstanding, transaction_id: transactionId });
+    await prisma.payment.create({
+      data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: outstanding, status: "INITIATED" },
+    });
+
+    res.json({ success: true, data: { configured: true, payment_url: result.payment_url, session_id: result.session_id } });
+  }),
+);
+
+admissionRouter.post(
+  "/application/payment/manual",
+  publicEndpointLimiter,
+  asyncHandler(async (req, res) => {
+    const body = admissionPaymentManualSchema.parse(req.body);
+    const application = await prisma.admissionApplication.findUnique({ where: { admission_roll: body.admission_roll } });
+    if (!application) throw notFound("Application not found");
+    const guardianInfo = application.guardian_info as { phone?: string } | null;
+    if (guardianInfo?.phone !== body.phone) throw notFound("Application not found");
+
+    const invoice = await prisma.invoice.findUnique({ where: { id: body.invoice_id } });
+    if (!invoice || invoice.application_id !== application.id) throw notFound("Invoice not found for this application");
+    if (invoice.status === "PAID" || invoice.status === "WAIVED") throw badRequest("This invoice is already fully paid");
+
+    let payment;
+    try {
+      payment = await prisma.payment.create({
+        data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: body.transaction_id, amount: body.amount, status: "INITIATED" },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw conflict("This transaction ID has already been reported for a payment");
+      }
+      throw err;
+    }
+
+    await notifyRoles(ADMISSION_MANAGE_ROLES, {
+      type: "ADMISSION_PAYMENT_PENDING_VERIFICATION",
+      title: "Payment awaiting verification",
+      body: `${application.applicant_name} (Roll: ${application.admission_roll}) reported a ${body.gateway} payment of ৳${body.amount}`,
+      link: `/admission/applications/${application.id}`,
+    });
+
+    res.status(201).json({ success: true, data: payment });
+  }),
+);
+
+async function handleAdmissionCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ" | "ROCKET", payload: unknown) {
   const adapter = getPaymentAdapter(gateway);
   const verified = await adapter.verifyCallback(payload);
 
-  const application = await prisma.admissionApplication.findFirst({ where: { payment_id: verified.transaction_id } });
-  if (!application) throw notFound("Application not found for this transaction");
+  const payment = await prisma.payment.findUnique({ where: { transaction_id: verified.transaction_id } });
+  if (!payment) throw notFound("Payment not found for this transaction");
 
-  if (verified.success && CONFIRMABLE_STATUSES.includes(application.status)) {
-    await prisma.admissionApplication.update({ where: { id: application.id }, data: { status: "CONFIRMED" } });
+  if (verified.success) {
+    await completePayment(payment);
+  } else {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
   }
+  // Deliberately does NOT touch AdmissionApplication.status -- payment
+  // completion only ever affects invoice/payment/receipt/journal state now
+  // (Plan Twenty-Three, Phase 3). Moving an application to CONFIRMED stays a
+  // separate, explicit staff action via PUT /applications/:id/status, which
+  // is itself gated on payment_status being satisfied. This is a deliberate
+  // behavior change from the previous auto-confirm-on-payment shortcut,
+  // which bypassed both the shortlist step and the seat-count check that
+  // /confirm and /enroll both carefully enforce.
   return { received: true };
 }
 
 admissionRouter.post("/payment/callback/:gateway", asyncHandler(async (req, res) => {
   const gateway = reqParam(req, "gateway").toUpperCase();
-  if (!["BKASH", "NAGAD", "SSLCOMMERZ"].includes(gateway)) throw badRequest("Unknown gateway");
-  res.json({ success: true, data: await handleAdmissionCallback(gateway as "BKASH" | "NAGAD" | "SSLCOMMERZ", req.body) });
+  if (!["BKASH", "NAGAD", "SSLCOMMERZ", "ROCKET"].includes(gateway)) throw badRequest("Unknown gateway");
+  res.json({ success: true, data: await handleAdmissionCallback(gateway as "BKASH" | "NAGAD" | "SSLCOMMERZ" | "ROCKET", req.body) });
 }));
 
 admissionRouter.get(
@@ -572,12 +810,18 @@ admissionRouter.get(
 admissionRouter.get(
   "/applications",
   authenticate,
-  authorize(ADMISSION_MANAGE_ROLES),
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
         cycle_id: z.string().optional(),
         status: z.string().optional(),
+        // Plan Twenty-Three Phase 3 -- payment_status is derived (never a
+        // stored column), so it can't be pushed into the Prisma `where`
+        // clause directly; filtered in application code after computing it
+        // per row (fine at this scale -- one admission cycle's applications,
+        // not the whole institution's invoice table).
+        payment_status: z.enum(["NOT_REQUIRED", "DUE", "PARTIAL", "PENDING_VERIFICATION", "PAID"]).optional(),
         search: z.string().optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -595,16 +839,17 @@ admissionRouter.get(
       }),
     };
 
-    const [items, total] = await Promise.all([
-      prisma.admissionApplication.findMany({
-        where,
-        include: { cycle: { select: { id: true, name: true } } },
-        skip: (query.page - 1) * query.limit,
-        take: query.limit,
-        orderBy: { created_at: "desc" },
-      }),
-      prisma.admissionApplication.count({ where }),
-    ]);
+    const all = await prisma.admissionApplication.findMany({
+      where,
+      include: { cycle: { select: { id: true, name: true } }, invoices: { include: { payments: true } } },
+      orderBy: { created_at: "desc" },
+    });
+
+    const withPaymentStatus = all.map((a) => ({ ...a, payment_status: computeApplicationPaymentStatus(a.invoices) }));
+    const filtered = query.payment_status ? withPaymentStatus.filter((a) => a.payment_status === query.payment_status) : withPaymentStatus;
+
+    const total = filtered.length;
+    const items = filtered.slice((query.page - 1) * query.limit, (query.page - 1) * query.limit + query.limit).map(({ invoices: _invoices, ...rest }) => rest);
 
     res.json({ success: true, data: items, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
@@ -613,12 +858,30 @@ admissionRouter.get(
 admissionRouter.get(
   "/applications/:id",
   authenticate,
-  authorize(ADMISSION_MANAGE_ROLES),
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true } });
+    const application = await prisma.admissionApplication.findUnique({
+      where: { id },
+      include: {
+        cycle: true,
+        documents_uploaded: { orderBy: { uploaded_at: "asc" } },
+        invoices: { orderBy: { created_at: "asc" }, include: { payments: { orderBy: { created_at: "desc" } } } },
+      },
+    });
     if (!application) throw notFound("Application not found");
-    res.json({ success: true, data: application });
+
+    // Signed URLs resolved server-side -- the frontend never sees a raw
+    // blob_key, matching the same discipline already used for e.g. bank-
+    // transfer slips (Plan Twenty-Three, Phase 2).
+    const documentsWithUrls = await Promise.all(
+      application.documents_uploaded.map(async (d) => ({ ...d, url: await getSignedDownloadUrl(d.blob_key, 15) })),
+    );
+
+    res.json({
+      success: true,
+      data: { ...application, documents_uploaded: documentsWithUrls, payment_status: computeApplicationPaymentStatus(application.invoices) },
+    });
   }),
 );
 
@@ -637,6 +900,43 @@ const ALLOWED_STATUS_TRANSITIONS: Record<AdmissionStatus, AdmissionStatus[]> = {
   ENROLLED: [],
 };
 
+// Shared by the single-application status route, bulk-action, and confirm --
+// previously each had its own independent (and inconsistent) guard, which is
+// exactly how bulk-action ended up able to flip a REJECTED/CONFIRMED row
+// backward despite this same table already existing. CONFIRMED targets get
+// an additional seat-count check (previously only enforced at merit-list
+// generation and at the old dedicated /confirm route) since CONFIRMED is now
+// reachable through more than one route.
+//
+// Plan Twenty-Three Phase 3 -- payment-status gate, strict per the owner's
+// explicit instruction: an application with anything outstanding (DUE,
+// PARTIAL, or a self-report still PENDING_VERIFICATION) cannot be moved to
+// SHORTLISTED/WAITLISTED/CONFIRMED at all, no exceptions. REJECTED bypasses
+// the gate entirely -- an unpaid application can always still be cleared
+// out. NOT_REQUIRED (a free cycle) and PAID both pass through untouched.
+async function assertCanTransition(
+  application: AdmissionApplication & { invoices: Parameters<typeof computeApplicationPaymentStatus>[0] },
+  targetStatus: AdmissionStatus,
+  cycle: AdmissionCycle,
+): Promise<void> {
+  if (application.status === "ENROLLED") throw conflict("Cannot change status of an already-enrolled application");
+  if (!ALLOWED_STATUS_TRANSITIONS[application.status].includes(targetStatus)) {
+    throw conflict(`Cannot change status from ${application.status} to ${targetStatus}`);
+  }
+  if (targetStatus !== "REJECTED") {
+    const paymentStatus = computeApplicationPaymentStatus(application.invoices);
+    if (paymentStatus !== "NOT_REQUIRED" && paymentStatus !== "PAID") {
+      throw conflict(`Cannot shortlist/waitlist/confirm this application — payment is not complete (${paymentStatus})`);
+    }
+  }
+  if (targetStatus === "CONFIRMED") {
+    const takenSeats = await prisma.admissionApplication.count({
+      where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] }, id: { not: application.id } },
+    });
+    if (takenSeats >= cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
+  }
+}
+
 admissionRouter.put(
   "/applications/:id/status",
   authenticate,
@@ -644,20 +944,38 @@ admissionRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = admissionApplicationStatusSchema.parse(req.body);
-    const existing = await prisma.admissionApplication.findUnique({ where: { id } });
+    const existing = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true, invoices: { include: { payments: true } } } });
     if (!existing) throw notFound("Application not found");
-    if (existing.status === "ENROLLED") throw conflict("Cannot change status of an already-enrolled application");
-    if (!ALLOWED_STATUS_TRANSITIONS[existing.status].includes(body.status)) {
-      throw conflict(`Cannot change status from ${existing.status} to ${body.status}`);
-    }
+    await assertCanTransition(existing, body.status, existing.cycle);
 
-    const updated = await prisma.admissionApplication.update({ where: { id }, data: { status: body.status } });
+    const updated = await prisma.admissionApplication.update({
+      where: { id },
+      data: { status: body.status, ...(body.notes !== undefined && { notes: body.notes }) },
+    });
 
     const guardianInfo = existing.guardian_info as { phone?: string } | null;
     if (guardianInfo?.phone) {
-      await sendSms(guardianInfo.phone, `Application ${existing.admission_roll ?? ""} status updated: ${body.status}.`);
+      await sendNotification({
+        trigger: "ADMISSION_STATUS_UPDATE",
+        recipients: [{ name: existing.applicant_name, phone: guardianInfo.phone }],
+        template_data: { applicant_name: existing.applicant_name, admission_roll: existing.admission_roll ?? "", status: body.status },
+      });
     }
 
+    res.json({ success: true, data: updated });
+  }),
+);
+
+admissionRouter.put(
+  "/applications/:id/notes",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = admissionNotesSchema.parse(req.body);
+    const existing = await prisma.admissionApplication.findUnique({ where: { id } });
+    if (!existing) throw notFound("Application not found");
+    const updated = await prisma.admissionApplication.update({ where: { id }, data: { notes: body.notes } });
     res.json({ success: true, data: updated });
   }),
 );
@@ -668,11 +986,35 @@ admissionRouter.post(
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const body = admissionBulkActionSchema.parse(req.body);
-    const result = await prisma.admissionApplication.updateMany({
-      where: { id: { in: body.application_ids }, status: { notIn: ["ENROLLED"] } },
-      data: { status: body.status },
+    const applications = await prisma.admissionApplication.findMany({
+      where: { id: { in: body.application_ids } },
+      include: { cycle: true, invoices: { include: { payments: true } } },
     });
-    res.json({ success: true, data: { updated: result.count } });
+    const byId = new Map(applications.map((a) => [a.id, a]));
+
+    // Sequential, not Promise.all -- CONFIRMED targets re-check the seat
+    // count fresh on every iteration, so a batch that includes more
+    // applicants than remaining seats correctly fills only what's left
+    // instead of a race where every row in the batch reads the same
+    // pre-loop count and all pass.
+    const succeeded: string[] = [];
+    const skipped: { id: string; reason: string }[] = [];
+    for (const appId of body.application_ids) {
+      const application = byId.get(appId);
+      if (!application) {
+        skipped.push({ id: appId, reason: "Application not found" });
+        continue;
+      }
+      try {
+        await assertCanTransition(application, body.status, application.cycle);
+        await prisma.admissionApplication.update({ where: { id: appId }, data: { status: body.status } });
+        succeeded.push(appId);
+      } catch (err) {
+        skipped.push({ id: appId, reason: err instanceof Error ? err.message : "Transition not allowed" });
+      }
+    }
+
+    res.json({ success: true, data: { succeeded, skipped } });
   }),
 );
 
@@ -685,11 +1027,35 @@ admissionRouter.post(
     const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
     if (!cycle) throw notFound("Admission cycle not found");
 
+    // CONFIRMED/ENROLLED are excluded too, not just REJECTED -- a
+    // CONFIRMED application (possibly already paid) was previously eligible
+    // to be silently re-ranked back to SHORTLISTED/WAITLISTED by a second
+    // merit-list generation run, the same terminal-status bug class already
+    // fixed for bulk-action above.
     const applications = await prisma.admissionApplication.findMany({
-      where: { cycle_id: id, status: { notIn: ["REJECTED", "ENROLLED"] } },
+      where: { cycle_id: id, status: { notIn: ["REJECTED", "CONFIRMED", "ENROLLED"] } },
+      include: { invoices: { include: { payments: true } } },
     });
 
-    const ranked = applications
+    // Payment-status gate (Plan Twenty-Three Phase 3, same strict rule as
+    // /status, /bulk-action, /confirm) -- an unpaid applicant is excluded
+    // from this run's ranking pool entirely (not just left un-shortlisted),
+    // so a paid-but-lower-scoring applicant correctly fills the seat instead
+    // of one still owing money. Left completely untouched (no merit_rank,
+    // status stays whatever it was) so a later re-run after they pay ranks
+    // them fairly against whoever's still in the pool at that point.
+    const eligible: typeof applications = [];
+    const skippedUnpaid: { id: string; admission_roll: string | null; applicant_name: string }[] = [];
+    for (const a of applications) {
+      const paymentStatus = computeApplicationPaymentStatus(a.invoices);
+      if (paymentStatus === "NOT_REQUIRED" || paymentStatus === "PAID") {
+        eligible.push(a);
+      } else {
+        skippedUnpaid.push({ id: a.id, admission_roll: a.admission_roll, applicant_name: a.applicant_name });
+      }
+    }
+
+    const ranked = eligible
       .map((a) => ({ app: a, score: meritScoreOf(a.previous_result) }))
       .sort((a, b) => b.score - a.score);
 
@@ -704,6 +1070,7 @@ admissionRouter.post(
     res.json({
       success: true,
       data: results.map((r) => ({ id: r.id, admission_roll: r.admission_roll, applicant_name: r.applicant_name, merit_rank: r.merit_rank, status: r.status })),
+      skipped_unpaid: skippedUnpaid,
     });
   }),
 );
@@ -741,17 +1108,14 @@ admissionRouter.post(
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true } });
+    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true, invoices: { include: { payments: true } } } });
     if (!application) throw notFound("Application not found");
-    if (application.status !== "SHORTLISTED") throw badRequest("Only shortlisted applications can be confirmed");
-
-    // Previously only enforced at merit-list generation — an admin could
-    // still confirm/enroll past the configured seat count with no guard at
-    // this actual commit point.
-    const takenSeats = await prisma.admissionApplication.count({
-      where: { cycle_id: application.cycle_id, status: { in: ["CONFIRMED", "ENROLLED"] } },
-    });
-    if (takenSeats >= application.cycle.seat_count) throw conflict("No seats remaining for this admission cycle");
+    // WAITLISTED can now confirm directly here too -- previously excluded,
+    // which meant a waitlisted applicant needed two separate admin actions
+    // (route to SHORTLISTED via /status first, then this route) to ever
+    // reach CONFIRMED. assertCanTransition's own transition-table lookup
+    // already allows both SHORTLISTED and WAITLISTED -> CONFIRMED.
+    await assertCanTransition(application, "CONFIRMED", application.cycle);
 
     const updated = await prisma.admissionApplication.update({ where: { id }, data: { status: "CONFIRMED" } });
     res.json({ success: true, data: updated });
@@ -831,6 +1195,11 @@ admissionRouter.post(
           father_phone: guardianInfo.phone,
           mother_name: guardianInfo.mother_name,
           address_permanent: guardianInfo.address,
+          // Pre-existing gap, fixed here: the applicant's photo (required at
+          // apply time since Phase 2) was never carried over to the new
+          // Student row -- every enrolled student showed no photo despite
+          // having uploaded a real one during application.
+          photo_url: application.photo_url,
           current_class_id: application.cycle.class_id,
           current_section_id: body.section_id,
           group_id: body.group_id,
@@ -848,6 +1217,14 @@ admissionRouter.post(
         body.group_id,
       );
 
+      // Claim every document uploaded during application (Plan Twenty-Three
+      // Phase 2's two-owner nullable-FK pattern, same claim-at-enroll shape
+      // as the invoices below) -- so the newly-enrolled student's own
+      // Documents tab shows the birth certificate/NID/marksheet/photo they
+      // already uploaded, instead of those being stranded on the now-closed
+      // application with no link to the real student.
+      await tx.studentDocument.updateMany({ where: { application_id: application.id }, data: { student_id: created.id } });
+
       // Previously due_date: new Date() — "due today, right now," so both
       // invoices below showed as OVERDUE within moments of being created.
       // Every other fee-generation path in this codebase (monthly tuition,
@@ -857,13 +1234,25 @@ admissionRouter.post(
       const feeRules = await tx.feeRules.findFirst();
       const admissionInvoiceDueDate = new Date(Date.now() + (feeRules?.grace_period_days ?? 7) * 24 * 60 * 60 * 1000);
 
-      // Waiver auto-apply (Plan Twenty-One follow-up) -- a waiver whose
-      // applicable_categories includes ADMISSION/FORM (or is empty = all
-      // categories) must actually reduce these invoices, same as every
-      // other invoice-creation path. In practice a brand-new student rarely
-      // has a StudentWaiver yet, but this keeps the behavior consistent
-      // rather than being a silent, undocumented exception.
-      if (application.cycle.app_fee > 0) {
+      // Plan Twenty-Three Phase 3 -- invoices are now created at /apply
+      // time (see POST /apply above), not here. Claim the existing
+      // application-linked invoice by filling in student_id
+      // (application_id stays set afterward as historical provenance)
+      // instead of creating a fresh, duplicate one. Falls back to creating
+      // fresh only if no pre-enrollment invoice exists for that category
+      // (e.g. the cycle's fee changed from 0 to nonzero between apply and
+      // enroll, or this application predates apply-time invoicing) --
+      // never silently missing a fee either way. Waiver auto-apply
+      // (Plan Twenty-One follow-up) runs after claiming too -- in practice
+      // a brand-new student rarely has a StudentWaiver yet, but
+      // applyWaiversToInvoice is idempotent per waiver, so this stays
+      // consistent with every other invoice-creation path rather than
+      // being a silent, undocumented exception.
+      const existingAdmissionInvoice = await tx.invoice.findFirst({ where: { application_id: application.id, category: "ADMISSION" } });
+      if (existingAdmissionInvoice) {
+        const claimed = await tx.invoice.update({ where: { id: existingAdmissionInvoice.id }, data: { student_id: created.id } });
+        await applyWaiversToInvoice(tx, claimed);
+      } else if (application.cycle.app_fee > 0) {
         const admissionInvoice = await tx.invoice.create({
           data: {
             invoice_no: await generateInvoiceNo(tx),
@@ -879,7 +1268,11 @@ admissionRouter.post(
         await applyWaiversToInvoice(tx, admissionInvoice);
       }
 
-      if (application.cycle.form_fee > 0) {
+      const existingFormInvoice = await tx.invoice.findFirst({ where: { application_id: application.id, category: "FORM" } });
+      if (existingFormInvoice) {
+        const claimed = await tx.invoice.update({ where: { id: existingFormInvoice.id }, data: { student_id: created.id } });
+        await applyWaiversToInvoice(tx, claimed);
+      } else if (application.cycle.form_fee > 0) {
         const formInvoice = await tx.invoice.create({
           data: {
             invoice_no: await generateInvoiceNo(tx),

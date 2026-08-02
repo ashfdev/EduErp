@@ -17,4 +17,4 @@ export function generateOpenApiDocument(): OpenAPIObject {
     },
     servers: [{ url: "/", description: "Same origin as this API" }],
   });
-}
+} 

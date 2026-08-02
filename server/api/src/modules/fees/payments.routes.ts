@@ -9,6 +9,7 @@ import { initiatePaymentSchema } from "@education-erp/validators";
 import { getPaymentAdapter } from "../../services/payment";
 import { getSignedDownloadUrl } from "../../services/storage.service";
 import { sendSms } from "../../services/sms.service";
+import { sendNotification } from "../../services/notification.service";
 import { createFeeReceiptJournal, reverseVoucher } from "../accounts/auto-journal.service";
 import { generateReceiptNo } from "./fee-number.generator";
 import { reqParam } from "../../lib/req-param";
@@ -116,9 +117,30 @@ export async function completePayment(payment: Payment) {
 
   await createFeeReceiptJournal(payment, updatedInvoice);
 
-  const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
-  if (student?.father_phone) {
-    await sendSms(student.father_phone, `Payment of ৳${payment.amount} received for ${student.name_en}. Thank you.`);
+  // Plan Twenty-Three Phase 3 -- a pre-enrollment admission-fee invoice has
+  // no Student yet (student_id null, application_id set instead); resolve
+  // the recipient from the applicant's own guardian_info in that case.
+  // Existing regular-fee behavior is unchanged when a real student exists.
+  if (invoice.student_id) {
+    const student = await prisma.student.findUnique({ where: { id: invoice.student_id } });
+    if (student?.father_phone) {
+      await sendSms(student.father_phone, `Payment of ৳${payment.amount} received for ${student.name_en}. Thank you.`);
+    }
+  } else if (invoice.application_id) {
+    const application = await prisma.admissionApplication.findUnique({ where: { id: invoice.application_id } });
+    const guardianInfo = application?.guardian_info as { phone?: string } | null;
+    if (application && guardianInfo?.phone) {
+      // Routed through sendNotification (bilingual, config-driven, audited)
+      // rather than a raw sendSms call -- the real student branch above is a
+      // pre-existing pattern left untouched, but this new admission branch
+      // follows the plan's stated intent of replacing raw sendSms() calls
+      // at every new admission touchpoint.
+      await sendNotification({
+        trigger: "ADMISSION_PAYMENT_RECEIVED",
+        recipients: [{ name: application.applicant_name, phone: guardianInfo.phone }],
+        template_data: { applicant_name: application.applicant_name, admission_roll: application.admission_roll ?? "", amount: String(payment.amount) },
+      });
+    }
   }
 }
 
@@ -142,12 +164,19 @@ paymentsRouter.post("/callback/bkash", asyncHandler(async (req, res) => res.json
 paymentsRouter.post("/callback/nagad", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("NAGAD", req.body) })));
 paymentsRouter.post("/callback/sslcommerz", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("SSLCOMMERZ", req.body) })));
 
-// ── Bank transfer manual verification ─────────────────────────────
-// Bank transfers have no webhook — a student uploads a slip (sets
-// Payment.slip_blob_key via the portal), then staff cross-checks it against
-// the actual bank statement and verifies here. The slip is a financial
-// document with account numbers/names, so it's served as a short-lived
-// signed URL to FEE_COLLECTION_ROLES only, never a permanent public link.
+// ── Manual payment verification (bank transfer + self-reported wallets) ──
+// Bank transfers have no webhook — a payer uploads a slip (sets
+// Payment.slip_blob_key), then staff cross-checks it against the actual
+// bank statement and verifies here. Every wallet gateway (BKASH/NAGAD/
+// ROCKET) is a non-functional stub today (real merchant integration
+// remains deferred) — a self-reported wallet payment (a payer sends money
+// manually and enters the transaction ID, mirroring the standard BD
+// mobile-banking "Send Money" pattern) always lands as Payment(INITIATED)
+// too, so this same queue is where staff verifies those, not just bank
+// transfers (Plan Twenty-Three, Phase 3). The slip is a financial document
+// with account numbers/names, so it's served as a short-lived signed URL to
+// FEE_COLLECTION_ROLES only, never a permanent public link.
+const MANUAL_VERIFICATION_GATEWAYS = ["BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET"] as const;
 
 paymentsRouter.get(
   "/bank-transfers/pending",
@@ -155,8 +184,15 @@ paymentsRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const payments = await prisma.payment.findMany({
-      where: { gateway: "BANK_TRANSFER", status: "INITIATED" },
-      include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
+      where: { gateway: { in: [...MANUAL_VERIFICATION_GATEWAYS] }, status: "INITIATED" },
+      include: {
+        invoice: {
+          include: {
+            student: { select: { name_en: true, student_uid: true } },
+            application: { select: { applicant_name: true, admission_roll: true } },
+          },
+        },
+      },
       orderBy: { created_at: "desc" },
     });
     const withSlipUrls = await Promise.all(
@@ -174,8 +210,10 @@ paymentsRouter.post(
     const id = reqParam(req, "id");
     const payment = await prisma.payment.findUnique({ where: { id } });
     if (!payment) throw notFound("Payment not found");
-    if (payment.gateway !== "BANK_TRANSFER") throw badRequest("This is not a bank-transfer payment");
-    if (payment.status !== "INITIATED") throw badRequest("Only a pending bank-transfer payment can be verified");
+    if (!MANUAL_VERIFICATION_GATEWAYS.includes(payment.gateway as (typeof MANUAL_VERIFICATION_GATEWAYS)[number])) {
+      throw badRequest("This payment method is not eligible for manual verification");
+    }
+    if (payment.status !== "INITIATED") throw badRequest("Only a pending payment can be verified");
 
     await completePayment(payment);
     const updated = await prisma.payment.findUnique({ where: { id } });
@@ -191,8 +229,10 @@ paymentsRouter.post(
     const id = reqParam(req, "id");
     const payment = await prisma.payment.findUnique({ where: { id } });
     if (!payment) throw notFound("Payment not found");
-    if (payment.gateway !== "BANK_TRANSFER") throw badRequest("This is not a bank-transfer payment");
-    if (payment.status !== "INITIATED") throw badRequest("Only a pending bank-transfer payment can be rejected");
+    if (!MANUAL_VERIFICATION_GATEWAYS.includes(payment.gateway as (typeof MANUAL_VERIFICATION_GATEWAYS)[number])) {
+      throw badRequest("This payment method is not eligible for manual verification");
+    }
+    if (payment.status !== "INITIATED") throw badRequest("Only a pending payment can be rejected");
 
     const updated = await prisma.payment.update({ where: { id }, data: { status: "FAILED" } });
     res.json({ success: true, data: updated });

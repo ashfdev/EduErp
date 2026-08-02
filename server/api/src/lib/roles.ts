@@ -50,6 +50,11 @@ export const FEE_COLLECTION_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUN
 // this file for SUBJECT_ATTENDANCE_MARK_ROLES vs. ATTENDANCE_MARK_ROLES.
 export const WAIVER_REQUEST_REVIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];
 export const ADMISSION_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
+// Read-only widening (Plan Twenty-Three, Phase 3) -- an accountant needs to
+// see who owes what on an application to collect against it, but every
+// mutation route (status change, bulk-action, confirm, enroll, scheduling)
+// stays ADMISSION_MANAGE_ROLES-only, matching real separation of duties.
+export const ADMISSION_READ_ROLES: UserRole[] = [...ADMISSION_MANAGE_ROLES, "ACCOUNTANT"];
 export const ADMISSION_ENROLL_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];
 export const WEBSITE_CONTENT_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "IT_ADMIN"];
 export const HR_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL"];

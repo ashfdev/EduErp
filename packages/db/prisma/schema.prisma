@@ -1526,8 +1526,15 @@ model FeeStructure {
 model Invoice {
   id               String        @id @default(cuid())
   invoice_no       String        @unique
-  student_id       String
-  student          Student       @relation(fields: [student_id], references: [id])
+  // CHANGED, Plan Twenty-Three Phase 3 -- nullable so a pre-enrollment
+  // admission-fee invoice can exist (linked via application_id instead).
+  // Application-layer invariant, not DB-enforced: exactly one of
+  // student_id/application_id is set until enrollment "claims" the row by
+  // filling in student_id (application_id stays as provenance afterward).
+  student_id       String?
+  student          Student?      @relation(fields: [student_id], references: [id])
+  application_id   String?
+  application      AdmissionApplication? @relation(fields: [application_id], references: [id])
   fee_structure_id String?
   fee_structure    FeeStructure? @relation(fields: [fee_structure_id], references: [id])
   academic_year_id String
@@ -1569,6 +1576,7 @@ model Invoice {
   fine_journaled_amount Float @default(0)
 
   @@index([student_id])
+  @@index([application_id])
   @@index([status])
   @@index([fee_sub_category_id])
   // Backs createMonthlyInvoiceIfMissing()'s idempotency check with a real
@@ -2497,18 +2505,31 @@ model StaffReference {
 // open-ended vault, no separate free-text title needed). Staff-uploaded only
 // (during admission/edit) -- no student/guardian self-service path exists
 // for this, unlike some other student-facing models in this schema.
+// student_id/application_id: exactly one of the two is set at any time --
+// application_id for a pre-enrollment admission upload, student_id once
+// enrollment "claims" the row (Plan Twenty-Three, Phase 2). Not DB-enforced
+// (no CHECK constraint), application-layer invariant only, matching this
+// project's existing convention for similar dual-owner fields.
 model StudentDocument {
-  id                String          @id @default(cuid())
-  student_id        String
-  student           Student         @relation(fields: [student_id], references: [id])
+  id                String                @id @default(cuid())
+  student_id        String?
+  student           Student?              @relation(fields: [student_id], references: [id])
+  application_id    String?
+  application       AdmissionApplication? @relation(fields: [application_id], references: [id])
   doc_type          StudentDocType
+  // "FRONT" | "BACK" -- only meaningful when doc_type == NID (a 2-file
+  // document); every other doc_type leaves this null. A plain nullable
+  // string, not a new enum, matching this schema's existing convention for
+  // small free-form labels (e.g. AdmissionTestSeatPlan.hall_name).
+  slot              String?
   blob_key          String
   original_filename String
   mime_type         String
-  uploaded_at       DateTime        @default(now())
+  uploaded_at       DateTime              @default(now())
   uploaded_by_id    String?
 
   @@index([student_id])
+  @@index([application_id])
 }
 
 enum StudentDocType {
@@ -2519,6 +2540,9 @@ enum StudentDocType {
   MARKSHEET
   FATHER_NID
   MOTHER_NID
+  // Plan Twenty-Three, Phase 2 -- the applicant/student's own NID (distinct
+  // from FATHER_NID/MOTHER_NID above), a 2-file document via `slot`.
+  NID
   OTHER
 }
 
@@ -2837,6 +2861,13 @@ model AdmissionApplication {
   merit_rank           Int?
   payment_id           String?
   enrolled_student_id  String?
+  notes                String?         @db.Text
+  // NEW, Plan Twenty-Three Phase 2 -- mirrors Student.photo_url's own
+  // dedicated-column shape exactly (never a StudentDocument row, matching
+  // this schema's existing "photos are their own column" convention).
+  photo_url            String?
+  documents_uploaded   StudentDocument[]
+  invoices             Invoice[]
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
   test_seat            AdmissionTestSeatPlan?
@@ -2858,6 +2889,24 @@ model AdmissionTestSeatPlan {
   updated_at     DateTime             @updatedAt
 
   @@index([cycle_id])
+}
+
+// Admin-editable manual payment instructions shown on the public admission
+// payment flow (Plan Twenty-Three, Phase 3) -- singleton row, same
+// convention as FeeRules/AttendanceRules/MarksheetDisplaySettings. Every
+// field starts as a clearly-labeled placeholder (owner confirmed the real
+// numbers will be entered later, via Settings, no code change needed then).
+model AdmissionPaymentInstructions {
+  id                  String   @id @default(cuid())
+  bkash_number        String?
+  nagad_number        String?
+  rocket_number       String?
+  bank_name           String?
+  bank_account_name   String?
+  bank_account_number String?
+  bank_routing_number String?
+  note                String?  @db.Text
+  updated_at          DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────
@@ -3849,6 +3898,15 @@ enum NotificationTrigger {
   ADMISSION_CONFIRM
   PORTAL_LOGIN_CREATED
   EXAM_SCHEDULED
+  // Plan Twenty-Three, Phase 1 -- replaces the raw sendSms() previously used
+  // on a manual status change (PUT /applications/:id/status).
+  ADMISSION_STATUS_UPDATE
+  // Plan Twenty-Three, Phase 2 -- replaces the raw sendSms() previously
+  // used on POST /apply.
+  ADMISSION_APPLICATION_RECEIVED
+  // Plan Twenty-Three, Phase 3
+  ADMISSION_PAYMENT_RECEIVED
+  ADMISSION_PAYMENT_PENDING_VERIFICATION
 }
 
 enum InAppNotificationType {
@@ -3879,6 +3937,11 @@ enum InAppNotificationType {
   WAIVER_REQUESTED
   WAIVER_APPROVED
   WAIVER_REJECTED
+  // Plan Twenty-Three, Phase 2
+  ADMISSION_APPLICATION_SUBMITTED
+  // Plan Twenty-Three, Phase 3
+  ADMISSION_PAYMENT_RECEIVED
+  ADMISSION_PAYMENT_PENDING_VERIFICATION
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

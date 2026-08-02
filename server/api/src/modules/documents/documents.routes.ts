@@ -1266,6 +1266,30 @@ function receiptCopyLabel(copy: unknown): string | undefined {
   return undefined;
 }
 
+// Plan Twenty-Three Phase 3 -- an invoice may be linked to a pre-enrollment
+// AdmissionApplication instead of a real Student (student_id stays null
+// until enrollment "claims" the invoice). Every FEE_RECEIPT/invoice render
+// below needs a student-shaped object regardless of which one applies --
+// this resolves the real Student when one exists, or synthesizes an
+// equivalent view from the application when it doesn't, so a pre-enrollment
+// receipt/invoice shows the applicant's real name/roll instead of blanks.
+function resolveReceiptStudent(invoice: {
+  student: { name_en: string; student_uid: string; current_roll_no: string | null; current_class: { name_en: string } | null; current_section: { name: string } | null } | null;
+  application: { applicant_name: string; admission_roll: string | null; cycle: { class: { name_en: string } } } | null;
+}) {
+  if (invoice.student) return invoice.student;
+  if (invoice.application) {
+    return {
+      name_en: invoice.application.applicant_name,
+      student_uid: invoice.application.admission_roll ?? "Applicant",
+      current_roll_no: null,
+      current_class: { name_en: invoice.application.cycle.class.name_en },
+      current_section: null,
+    };
+  }
+  return null;
+}
+
 documentsRouter.get(
   "/fee/receipt/:payment_id",
   allowIframeEmbed,
@@ -1273,7 +1297,14 @@ documentsRouter.get(
     const paymentId = reqParam(req, "payment_id");
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { invoice: { include: { student: { include: { current_class: true, current_section: true } } } } },
+      include: {
+        invoice: {
+          include: {
+            student: { include: { current_class: true, current_section: true } },
+            application: { include: { cycle: { include: { class: true } } } },
+          },
+        },
+      },
     });
     if (!payment) throw notFound("Payment not found");
 
@@ -1282,7 +1313,7 @@ documentsRouter.get(
     const pdf = await renderDocument("FEE_RECEIPT", {
       receipt_no: payment.receipt_no ?? payment.id,
       date: payment.paid_at ?? payment.created_at,
-      student: payment.invoice.student,
+      student: resolveReceiptStudent(payment.invoice),
       items: [{ category: payment.invoice.category, description: payment.invoice.description, period: formatFeePeriod(payment.invoice.month, payment.invoice.year), amount: payment.amount, fine: 0 }],
       total: payment.amount,
       payment_method: payment.gateway,
@@ -1319,7 +1350,14 @@ documentsRouter.get(
     const batchId = reqParam(req, "receipt_batch_id");
     const payments = await prisma.payment.findMany({
       where: { receipt_batch_id: batchId },
-      include: { invoice: { include: { student: { include: { current_class: true, current_section: true } } } } },
+      include: {
+        invoice: {
+          include: {
+            student: { include: { current_class: true, current_section: true } },
+            application: { include: { cycle: { include: { class: true } } } },
+          },
+        },
+      },
       orderBy: { created_at: "asc" },
     });
     if (!payments.length) throw notFound("Receipt batch not found");
@@ -1338,7 +1376,7 @@ documentsRouter.get(
     const pdf = await renderDocument("FEE_RECEIPT", {
       receipt_no: first.receipt_no ?? first.id,
       date: first.paid_at ?? first.created_at,
-      student: first.invoice.student,
+      student: resolveReceiptStudent(first.invoice),
       items: payments.map((p) => ({ category: p.invoice.category, description: p.invoice.description, period: formatFeePeriod(p.invoice.month, p.invoice.year), amount: p.amount, fine: 0 })),
       total: payments.reduce((sum, p) => sum + p.amount, 0),
       payment_method: first.gateway,
@@ -1360,14 +1398,23 @@ documentsRouter.get(
     const invoiceId = reqParam(req, "invoice_id");
     const existing = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { student_id: true } });
     if (!existing) throw notFound("Invoice not found");
-    await syncOverdueInvoices(prisma, existing.student_id);
-    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { student: { include: { current_class: true, current_section: true } } } });
+    // Application-linked invoices (student_id null, pre-enrollment) have no
+    // student to scope the sync to -- skip it rather than passing undefined,
+    // which would broaden the sync to every overdue invoice system-wide.
+    if (existing.student_id) await syncOverdueInvoices(prisma, existing.student_id);
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        student: { include: { current_class: true, current_section: true } },
+        application: { include: { cycle: { include: { class: true } } } },
+      },
+    });
     if (!invoice) throw notFound("Invoice not found");
 
     const pdf = await renderDocument("FEE_RECEIPT", {
       receipt_no: invoice.invoice_no ?? invoice.id,
       date: invoice.due_date,
-      student: invoice.student,
+      student: resolveReceiptStudent(invoice),
       items: [{ category: invoice.category, description: invoice.description, period: formatFeePeriod(invoice.month, invoice.year), amount: invoice.amount_due, fine: invoice.fine_amount }],
       total: invoice.amount_due + invoice.fine_amount,
       payment_method: "N/A",
@@ -1389,11 +1436,18 @@ documentsRouter.get(
         ...(query.class_id && { student: { current_class_id: query.class_id } }),
         status: (query.status as never) ?? { in: ["PENDING", "PARTIAL", "OVERDUE"] },
       },
-      include: { student: true },
+      include: { student: true, application: true },
     });
 
     const rows = invoices
-      .map((inv) => `<tr><td>${inv.student.name_en}</td><td>${inv.student.student_uid}</td><td>${inv.description}</td><td>৳${inv.amount_due - inv.amount_paid}</td><td>${inv.status}</td></tr>`)
+      .map((inv) => {
+        // Pre-enrollment application-linked dues (Plan Twenty-Three Phase 3)
+        // show the applicant's own name/roll -- an unpaid admission fee is a
+        // real due too, not just an enrolled student's.
+        const name = inv.student?.name_en ?? inv.application?.applicant_name ?? "-";
+        const uid = inv.student?.student_uid ?? inv.application?.admission_roll ?? "Applicant";
+        return `<tr><td>${name}</td><td>${uid}</td><td>${inv.description}</td><td>৳${inv.amount_due - inv.amount_paid}</td><td>${inv.status}</td></tr>`;
+      })
       .join("");
     const html = `<table><thead><tr><th>Student</th><th>ID</th><th>Description</th><th>Due</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
     const pdf = await renderSimpleReport("Outstanding Dues Report", html);

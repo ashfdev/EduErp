@@ -25,6 +25,10 @@ const TRIGGER_EMAIL_SUBJECT: Record<NotificationTrigger, string> = {
   ADMISSION_CONFIRM: "Admission Confirmed",
   PORTAL_LOGIN_CREATED: "Your Portal Account",
   EXAM_SCHEDULED: "Upcoming Exam",
+  ADMISSION_STATUS_UPDATE: "Application Status Update",
+  ADMISSION_APPLICATION_RECEIVED: "Application Received",
+  ADMISSION_PAYMENT_RECEIVED: "Payment Received",
+  ADMISSION_PAYMENT_PENDING_VERIFICATION: "Payment Awaiting Verification",
 };
 
 // Triggers whose template_data contains a secret (a plaintext temporary

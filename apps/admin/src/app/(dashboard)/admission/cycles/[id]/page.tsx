@@ -42,6 +42,25 @@ interface Application {
   status: string;
   merit_rank: number | null;
   created_at: string;
+  payment_status: "NOT_REQUIRED" | "DUE" | "PARTIAL" | "PENDING_VERIFICATION" | "PAID";
+}
+
+const PAYMENT_STATUS_LABEL: Record<Application["payment_status"], string> = {
+  NOT_REQUIRED: "N/A",
+  DUE: "Due",
+  PARTIAL: "Partial",
+  PENDING_VERIFICATION: "Verifying",
+  PAID: "Paid",
+};
+const PAYMENT_STATUS_CLASS: Record<Application["payment_status"], string> = {
+  NOT_REQUIRED: "bg-muted text-muted-foreground",
+  DUE: "bg-red-100 text-red-700",
+  PARTIAL: "bg-amber-100 text-amber-700",
+  PENDING_VERIFICATION: "bg-blue-100 text-blue-700",
+  PAID: "bg-emerald-100 text-emerald-700",
+};
+function PaymentStatusBadge({ status }: { status: Application["payment_status"] }) {
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${PAYMENT_STATUS_CLASS[status]}`}>{PAYMENT_STATUS_LABEL[status]}</span>;
 }
 
 interface FormField {
@@ -70,14 +89,20 @@ export default function AdmissionCycleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"applied" | "rank">("applied");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const { data: cycle, isLoading, isError, error, refetch } = useQuery<Cycle>({ queryKey: ["admission", "cycles", id], queryFn: async () => (await api.get(`/api/admission/cycles/${id}`)).data.data });
   const { data: applications } = useQuery<Application[]>({
-    queryKey: ["admission", "applications", id, statusFilter],
-    queryFn: async () => (await api.get("/api/admission/applications", { params: { cycle_id: id, status: statusFilter || undefined, limit: 100 } })).data.data,
+    queryKey: ["admission", "applications", id, statusFilter, paymentStatusFilter],
+    queryFn: async () =>
+      (
+        await api.get("/api/admission/applications", {
+          params: { cycle_id: id, status: statusFilter || undefined, payment_status: paymentStatusFilter || undefined, limit: 100 },
+        })
+      ).data.data,
   });
 
   const toggleMutation = useMutation({
@@ -91,8 +116,12 @@ export default function AdmissionCycleDetailPage() {
 
   const meritListMutation = useMutation({
     mutationFn: () => api.post(`/api/admission/cycles/${id}/merit-list`),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const skippedUnpaid: { id: string; applicant_name: string }[] | undefined = res.data.skipped_unpaid;
       toast.success("Merit list generated");
+      if (skippedUnpaid?.length) {
+        toast(`${skippedUnpaid.length} applicant(s) skipped — payment not complete: ${skippedUnpaid.map((s) => s.applicant_name).join(", ")}`, { duration: 10000 });
+      }
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", id] });
       queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
     },
@@ -111,8 +140,18 @@ export default function AdmissionCycleDetailPage() {
   const bulkActionMutation = useMutation({
     mutationFn: (status: "SHORTLISTED" | "WAITLISTED" | "REJECTED") =>
       api.post("/api/admission/applications/bulk-action", { application_ids: selected, status }),
-    onSuccess: () => {
-      toast.success("Bulk action applied");
+    onSuccess: (res) => {
+      // Response is now {succeeded, skipped: [{id, reason}]} instead of a
+      // bare count -- bulk-action is per-row-validated now (Plan Twenty-
+      // Three, Phase 1), so some rows in a mixed-status selection can be
+      // legitimately skipped (e.g. a REJECTED row can't move backward) while
+      // the rest still succeed. Surface both, don't just report a total.
+      const { succeeded, skipped } = res.data.data as { succeeded: string[]; skipped: { id: string; reason: string }[] };
+      if (succeeded.length) toast.success(`Updated ${succeeded.length} application${succeeded.length === 1 ? "" : "s"}`);
+      if (skipped.length) {
+        const reasons = [...new Set(skipped.map((s) => s.reason))].join("; ");
+        toast.error(`${skipped.length} skipped: ${reasons}`, { duration: 8000 });
+      }
       setSelected([]);
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", id] });
     },
@@ -293,15 +332,25 @@ export default function AdmissionCycleDetailPage() {
 
         <TabsContent value="applications">
           <div className="mb-3 flex items-center justify-between">
-            <select className="w-48 rounded-md border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">All Status</option>
-              <option value="PENDING">Pending</option>
-              <option value="SHORTLISTED">Shortlisted</option>
-              <option value="WAITLISTED">Waitlisted</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="ENROLLED">Enrolled</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
+            <div className="flex gap-2">
+              <select className="w-48 rounded-md border px-3 py-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="SHORTLISTED">Shortlisted</option>
+                <option value="WAITLISTED">Waitlisted</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="ENROLLED">Enrolled</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+              <select className="w-40 rounded-md border px-3 py-2 text-sm" value={paymentStatusFilter} onChange={(e) => setPaymentStatusFilter(e.target.value)}>
+                <option value="">All Payments</option>
+                <option value="DUE">Due</option>
+                <option value="PARTIAL">Partial</option>
+                <option value="PENDING_VERIFICATION">Verifying</option>
+                <option value="PAID">Paid</option>
+                <option value="NOT_REQUIRED">N/A</option>
+              </select>
+            </div>
             {selected.length > 0 && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => bulkActionMutation.mutate("SHORTLISTED")}>Shortlist ({selected.length})</Button>
@@ -324,6 +373,7 @@ export default function AdmissionCycleDetailPage() {
                         Rank {sortBy === "rank" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                       </TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Payment</TableHead>
                       <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("applied")}>
                         Applied On {sortBy === "applied" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                       </TableHead>
@@ -337,6 +387,7 @@ export default function AdmissionCycleDetailPage() {
                         <TableCell><Link href={`/admission/applications/${a.id}`} className="text-primary hover:underline">{a.applicant_name}</Link></TableCell>
                         <TableCell>{a.merit_rank ?? "-"}</TableCell>
                         <TableCell><StatusBadge status={a.status} /></TableCell>
+                        <TableCell><PaymentStatusBadge status={a.payment_status} /></TableCell>
                         <TableCell>{new Date(a.created_at).toLocaleDateString()}</TableCell>
                       </TableRow>
                     ))}

@@ -15,6 +15,7 @@ import { permissionsRouter } from "./permissions.routes";
 import { paymentGatewaysRouter } from "./payment-gateways.routes";
 import { marksheetDisplayRouter } from "./marksheet-display.routes";
 import { markCompositionTemplatesRouter } from "./mark-composition-templates.routes";
+import { admissionPaymentInstructionsRouter } from "./admission-payment-instructions.routes";
 
 export const settingsRouter = Router();
 
@@ -44,3 +45,4 @@ settingsRouter.use("/permissions", permissionsRouter);
 settingsRouter.use("/payment-gateways", paymentGatewaysRouter);
 settingsRouter.use("/marksheet-display", marksheetDisplayRouter);
 settingsRouter.use("/mark-composition-templates", markCompositionTemplatesRouter);
+settingsRouter.use("/admission-payment-instructions", admissionPaymentInstructionsRouter);

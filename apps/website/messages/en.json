@@ -234,6 +234,7 @@
     "checking": "Checking...",
     "checkStatus": "Check Status",
     "lookupFailed": "Lookup failed",
+    "invalidPhone": "Enter a valid phone number (01XXXXXXXXX).",
     "networkError": "Could not reach the server — please try again.",
     "notFound": "No matching application found.",
     "status": "Status: {status}",

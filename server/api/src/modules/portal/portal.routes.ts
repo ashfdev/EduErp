@@ -1076,7 +1076,7 @@ portalRouter.post(
   asyncHandler(async (req, res) => {
     const body = portalPaySchema.parse(req.body);
     const invoice = await prisma.invoice.findUnique({ where: { id: body.invoice_id } });
-    if (!invoice) throw notFound("Invoice not found");
+    if (!invoice || !invoice.student_id) throw notFound("Invoice not found");
     await assertAccess(req.user!.sub, req.user!.role, invoice.student_id);
 
     const adapter = getPaymentAdapter(body.gateway);
@@ -1103,7 +1103,7 @@ portalRouter.get(
       where: { id: paymentId },
       include: { invoice: { include: { student: { include: { current_class: true, current_section: true } } } } },
     });
-    if (!payment) throw notFound("Payment not found");
+    if (!payment || !payment.invoice.student_id) throw notFound("Payment not found");
     await assertAccess(req.user!.sub, req.user!.role, payment.invoice.student_id);
 
     const qr = await generateQrDataUrl(`receipt:${payment.id}`);
@@ -1128,7 +1128,7 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const invoiceId = reqParam(req, "invoice_id");
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { student: { include: { current_class: true, current_section: true } } } });
-    if (!invoice) throw notFound("Invoice not found");
+    if (!invoice || !invoice.student_id) throw notFound("Invoice not found");
     await assertAccess(req.user!.sub, req.user!.role, invoice.student_id);
 
     const pdf = await renderDocument("FEE_RECEIPT", {
@@ -1154,7 +1154,7 @@ portalRouter.post(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const payment = await prisma.payment.findUnique({ where: { id }, include: { invoice: true } });
-    if (!payment) throw notFound("Payment not found");
+    if (!payment || !payment.invoice.student_id) throw notFound("Payment not found");
     await assertAccess(req.user!.sub, req.user!.role, payment.invoice.student_id);
     if (payment.gateway !== "BANK_TRANSFER") throw badRequest("Slip upload only applies to bank-transfer payments");
     if (!req.file) throw badRequest("A slip image/PDF is required");

@@ -1,10 +1,30 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Textarea, Input, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
+
+interface InvoicePayment {
+  id: string;
+  gateway: string;
+  amount: number;
+  status: string;
+  receipt_no: string | null;
+  paid_at: string | null;
+}
+interface Invoice {
+  id: string;
+  category: string;
+  description: string;
+  amount_due: number;
+  amount_paid: number;
+  fine_amount: number;
+  status: string;
+  payments: InvoicePayment[];
+}
 
 interface Application {
   id: string;
@@ -12,6 +32,7 @@ interface Application {
   applicant_name: string;
   status: string;
   merit_rank: number | null;
+  notes: string | null;
   guardian_info: { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
   personal_info: Record<string, unknown>;
   previous_result: {
@@ -25,8 +46,84 @@ interface Application {
   } | null;
   selected_subjects: string[] | null;
   documents: Record<string, string> | null;
+  photo_url: string | null;
+  documents_uploaded: { id: string; doc_type: string; slot: string | null; original_filename: string; url: string }[];
   enrolled_student_id: string | null;
   cycle: { id: string; name: string; class_id: string };
+  invoices: Invoice[];
+  payment_status: "NOT_REQUIRED" | "DUE" | "PARTIAL" | "PENDING_VERIFICATION" | "PAID";
+}
+
+const PAYMENT_STATUS_LABEL: Record<Application["payment_status"], string> = {
+  NOT_REQUIRED: "No payment required",
+  DUE: "Payment Due",
+  PARTIAL: "Partially Paid",
+  PENDING_VERIFICATION: "Awaiting Verification",
+  PAID: "Paid",
+};
+const PAYMENT_STATUS_CLASS: Record<Application["payment_status"], string> = {
+  NOT_REQUIRED: "bg-muted text-muted-foreground",
+  DUE: "bg-red-100 text-red-700",
+  PARTIAL: "bg-amber-100 text-amber-700",
+  PENDING_VERIFICATION: "bg-blue-100 text-blue-700",
+  PAID: "bg-emerald-100 text-emerald-700",
+};
+
+// One invoice's own collect-cash row -- kept as a nested component since it
+// carries local form state (amount/gateway) independent of every other
+// invoice on the application.
+function InvoiceRow({ invoice, applicationId }: { invoice: Invoice; applicationId: string }) {
+  const queryClient = useQueryClient();
+  const outstanding = Math.max(0, invoice.amount_due + invoice.fine_amount - invoice.amount_paid);
+  const settled = invoice.status === "PAID" || invoice.status === "WAIVED";
+  const [collecting, setCollecting] = useState(false);
+  const [amount, setAmount] = useState(String(outstanding));
+
+  const collectMutation = useMutation({
+    mutationFn: () => api.post("/api/fees/collect", { invoice_id: invoice.id, amount: Number(amount), gateway: "CASH" }),
+    onSuccess: () => {
+      toast.success("Payment recorded");
+      setCollecting(false);
+      queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", applicationId] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record payment"),
+  });
+
+  return (
+    <div className="rounded-md border p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium">{invoice.description}</p>
+          <p className="text-xs text-muted-foreground">{invoice.category} · Due ৳{outstanding}</p>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${settled ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{invoice.status}</span>
+      </div>
+
+      {invoice.payments.length > 0 && (
+        <div className="space-y-1">
+          {invoice.payments.map((p) => (
+            <p key={p.id} className="text-xs text-muted-foreground">
+              {p.gateway} — ৳{p.amount} — {p.status}{p.receipt_no ? ` — Receipt ${p.receipt_no}` : ""}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {!settled && (
+        collecting ? (
+          <div className="flex items-center gap-2">
+            <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-8 w-28 text-xs" />
+            <Button size="sm" onClick={() => collectMutation.mutate()} disabled={collectMutation.isPending}>
+              {collectMutation.isPending ? "Recording..." : "Confirm"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setCollecting(false)}>Cancel</Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setCollecting(true)}>Collect Cash</Button>
+        )
+      )}
+    </div>
+  );
 }
 
 export default function AdmissionApplicationDetailPage() {
@@ -35,6 +132,18 @@ export default function AdmissionApplicationDetailPage() {
   const queryClient = useQueryClient();
 
   const { data: app, isLoading, isError, error, refetch } = useQuery<Application>({ queryKey: ["admission", "applications", "detail", id], queryFn: async () => (await api.get(`/api/admission/applications/${id}`)).data.data });
+
+  const [notesDraft, setNotesDraft] = useState("");
+  useEffect(() => { setNotesDraft(app?.notes ?? ""); }, [app?.notes]);
+
+  const notesMutation = useMutation({
+    mutationFn: () => api.put(`/api/admission/applications/${id}/notes`, { notes: notesDraft }),
+    onSuccess: () => {
+      toast.success("Notes saved");
+      queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", id] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save notes"),
+  });
 
   const statusMutation = useMutation({
     mutationFn: (status: "SHORTLISTED" | "WAITLISTED" | "REJECTED") => api.put(`/api/admission/applications/${id}/status`, { status }),
@@ -51,7 +160,7 @@ export default function AdmissionApplicationDetailPage() {
       toast.success("Application confirmed");
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", id] });
     },
-    onError: () => toast.error("Only shortlisted applications can be confirmed"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Could not confirm this application"),
   });
 
   const enrollMutation = useMutation({
@@ -98,14 +207,23 @@ export default function AdmissionApplicationDetailPage() {
                 <Button variant="destructive" onClick={() => statusMutation.mutate("REJECTED")}>Reject</Button>
               </>
             )}
-            {app.status === "SHORTLISTED" && <Button onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending}>Confirm Seat</Button>}
+            {/* WAITLISTED can now confirm directly too -- previously needed
+                a separate SHORTLISTED detour first (Plan Twenty-Three, Phase 1). */}
+            {(app.status === "SHORTLISTED" || app.status === "WAITLISTED") && (
+              <Button onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending}>Confirm Seat</Button>
+            )}
             {app.status === "CONFIRMED" && <Button onClick={() => enrollMutation.mutate()} disabled={enrollMutation.isPending}>Enroll Student</Button>}
           </div>
         }
       />
 
       <div className="flex items-center gap-3">
+        {/* eslint-disable-next-line @next/next/no-img-element -- external/local blob URL, not a static asset */}
+        {app.photo_url && <img src={app.photo_url} alt={app.applicant_name} className="h-12 w-12 rounded-full object-cover border" />}
         <StatusBadge status={app.status} />
+        {app.payment_status !== "NOT_REQUIRED" && (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${PAYMENT_STATUS_CLASS[app.payment_status]}`}>{PAYMENT_STATUS_LABEL[app.payment_status]}</span>
+        )}
         {app.admission_roll && <span className="font-mono text-sm text-muted-foreground">{app.admission_roll}</span>}
         {app.merit_rank && <span className="text-sm text-muted-foreground">Merit Rank #{app.merit_rank}</span>}
       </div>
@@ -146,16 +264,53 @@ export default function AdmissionApplicationDetailPage() {
           </CardContent>
         </Card>
 
+        {app.invoices.length > 0 && (
+          <Card>
+            <CardContent className="space-y-2 pt-6">
+              <p className="font-medium">Payment</p>
+              <div className="space-y-2">
+                {app.invoices.map((inv) => (
+                  <InvoiceRow key={inv.id} invoice={inv} applicationId={String(id)} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardContent className="space-y-2 pt-6">
             <p className="font-medium">Documents</p>
-            {app.documents && Object.keys(app.documents).length ? (
+            {/* Real StudentDocument rows (Plan Twenty-Three, Phase 2), each
+                a signed short-lived URL resolved server-side -- falls back
+                to the legacy raw Json map only for applications submitted
+                before this phase, which have no documents_uploaded rows. */}
+            {app.documents_uploaded.length ? (
+              app.documents_uploaded.map((d) => (
+                <p key={d.id} className="text-sm">
+                  <a href={d.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    {d.doc_type.replace(/_/g, " ")}{d.slot ? ` (${d.slot})` : ""}
+                  </a>
+                  <span className="text-xs text-muted-foreground ml-2">{d.original_filename}</span>
+                </p>
+              ))
+            ) : app.documents && Object.keys(app.documents).length ? (
               Object.entries(app.documents).map(([k, url]) => (
-                <p key={k} className="text-sm"><a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{k}</a></p>
+                <p key={k} className="text-sm"><a href={url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{k}</a> <span className="text-xs text-muted-foreground">(legacy)</span></p>
               ))
             ) : (
               <p className="text-sm text-muted-foreground">No documents uploaded</p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-2">
+          <CardContent className="space-y-2 pt-6">
+            <p className="font-medium">Internal Notes</p>
+            <p className="text-xs text-muted-foreground">Staff-only — never shown to the applicant.</p>
+            <Textarea value={notesDraft} onChange={(e) => setNotesDraft(e.target.value)} rows={3} placeholder="e.g. Called guardian on 12/08, confirmed intent to enroll." />
+            <Button size="sm" onClick={() => notesMutation.mutate()} disabled={notesMutation.isPending || notesDraft === (app.notes ?? "")}>
+              {notesMutation.isPending ? "Saving..." : "Save Notes"}
+            </Button>
           </CardContent>
         </Card>
       </div>

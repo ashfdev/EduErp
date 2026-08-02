@@ -139,7 +139,7 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   READMISSION: "4013",
 };
 
-const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED"] as const;
+const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED", "ADMISSION_STATUS_UPDATE", "ADMISSION_APPLICATION_RECEIVED", "ADMISSION_PAYMENT_RECEIVED", "ADMISSION_PAYMENT_PENDING_VERIFICATION"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
 const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
@@ -174,6 +174,22 @@ const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { b
   EXAM_SCHEDULED: {
     bn: "{{student_name}} এর জন্য {{exam_name}} পরীক্ষা {{start_date}} তারিখে শুরু হবে। প্রস্তুতি নিন।",
     en: "{{exam_name}} for {{student_name}} starts on {{start_date}}. Please prepare accordingly.",
+  },
+  ADMISSION_STATUS_UPDATE: {
+    bn: "{{applicant_name}} এর আবেদন (রোল: {{admission_roll}}) এর অবস্থা পরিবর্তিত হয়েছে: {{status}}।",
+    en: "{{applicant_name}}'s application (Roll: {{admission_roll}}) status updated: {{status}}.",
+  },
+  ADMISSION_APPLICATION_RECEIVED: {
+    bn: "{{applicant_name}} এর জন্য আবেদন গৃহীত হয়েছে। রোল: {{admission_roll}}। ওয়েবসাইটে অবস্থা দেখুন।",
+    en: "Application received for {{applicant_name}}. Roll: {{admission_roll}}. Track status at our website.",
+  },
+  ADMISSION_PAYMENT_RECEIVED: {
+    bn: "{{applicant_name}} (রোল: {{admission_roll}}) এর জন্য ৳{{amount}} পেমেন্ট গৃহীত হয়েছে। ধন্যবাদ।",
+    en: "Payment of BDT {{amount}} received for {{applicant_name}} (Roll: {{admission_roll}}). Thank you.",
+  },
+  ADMISSION_PAYMENT_PENDING_VERIFICATION: {
+    bn: "{{applicant_name}} (রোল: {{admission_roll}}) এর পেমেন্ট যাচাইয়ের জন্য অপেক্ষমাণ।",
+    en: "A payment for {{applicant_name}} (Roll: {{admission_roll}}) is awaiting staff verification.",
   },
 };
 
@@ -389,6 +405,17 @@ async function main() {
   });
 
   await prisma.marksheetDisplaySettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+  });
+
+  // Every field starts null -- the real bKash/Nagad/Rocket numbers and bank
+  // details are filled in later via Settings -> Admission -> Payment
+  // Instructions, never fabricated here (CLAUDE.md: no hardcoded
+  // institution-specific values). The public payment flow shows "not yet
+  // configured" gracefully until an admin fills this in.
+  await prisma.admissionPaymentInstructions.upsert({
     where: { id: "singleton" },
     update: {},
     create: { id: "singleton" },

@@ -61,7 +61,10 @@ financeRouter.get(
           ...(query.status && { status: query.status as never }),
           ...(query.search && { student: { name_en: { contains: query.search, mode: "insensitive" } } }),
         },
-        include: { student: { select: { name_en: true, student_uid: true } } },
+        include: {
+          student: { select: { name_en: true, student_uid: true } },
+          application: { select: { applicant_name: true, admission_roll: true } },
+        },
         orderBy: { due_date: "desc" },
         take: 200,
       });
@@ -70,8 +73,11 @@ financeRouter.get(
           id: inv.id,
           type: "FEE" as const,
           reference_no: inv.invoice_no,
-          party_name: inv.student.name_en,
-          party_detail: inv.student.student_uid,
+          // Pre-enrollment application-linked invoices (Plan Twenty-Three
+          // Phase 3) have no Student yet -- show the applicant's own
+          // name/roll instead of leaving this row blank.
+          party_name: inv.student?.name_en ?? inv.application?.applicant_name ?? "-",
+          party_detail: inv.student?.student_uid ?? inv.application?.admission_roll ?? "Applicant",
           description: inv.description,
           amount: inv.amount_due + inv.fine_amount,
           paid: inv.amount_paid,
