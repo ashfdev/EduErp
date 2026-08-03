@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -318,11 +318,19 @@ export default function AdmissionApplicationDetailPage() {
     enabled: enrollDialogOpen,
   });
 
-  // Default every offered fee to selected the moment the list loads for this
-  // dialog session -- admin can uncheck individual ones before confirming,
-  // never starts from a silently-empty selection.
+  // Default every offered fee to selected the moment it's first seen --
+  // admin can uncheck individual ones before confirming, never starts from
+  // a silently-empty selection. Only newly-appeared ids get auto-checked
+  // (via seenFeeIdsRef) rather than resetting the whole selection on every
+  // refetch -- the list refetches whenever the Group changes (or a new fee
+  // is created), and a naive setSelectedFeeIds(enrollmentFees.map(...))
+  // would silently re-check anything the admin had deliberately unchecked.
+  const seenFeeIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (enrollmentFees) setSelectedFeeIds(enrollmentFees.map((f) => f.fee_structure_id));
+    if (!enrollmentFees) return;
+    const newIds = enrollmentFees.map((f) => f.fee_structure_id).filter((id) => !seenFeeIdsRef.current.has(id));
+    for (const f of enrollmentFees) seenFeeIdsRef.current.add(f.fee_structure_id);
+    if (newIds.length) setSelectedFeeIds((prev) => [...prev, ...newIds]);
   }, [enrollmentFees]);
 
   const selectedFeesTotal = (enrollmentFees ?? [])

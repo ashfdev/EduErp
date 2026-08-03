@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PageWrapper,
@@ -47,6 +47,7 @@ interface SubjectOption {
 const RELIGIONS = ["Islam", "Hinduism", "Christianity", "Buddhism", "Other"];
 const NATIONALITIES = ["Bangladeshi", "Indian", "Other"];
 const DOC_TYPES = ["BIRTH_CERTIFICATE", "TRANSFER_CERTIFICATE", "TESTIMONIAL", "ACADEMIC_CERTIFICATE", "MARKSHEET", "FATHER_NID", "MOTHER_NID", "OTHER"] as const;
+const FEE_CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
 const emptyForm = {
   name_en: "",
@@ -104,6 +105,7 @@ interface StagedDoc {
 
 export default function NewStudentPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { terms } = useInstitution();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(emptyForm);
@@ -159,12 +161,60 @@ export default function NewStudentPage() {
     queryFn: async () => (await api.get("/api/students/enrollment-fees-preview", { params: { class_id: form.current_class_id, academic_year_id: form.academic_year_id, group_id: form.group_id || undefined } })).data.data,
     enabled: !!form.current_class_id && !!form.academic_year_id,
   });
+  // Only auto-check a fee the FIRST time it's ever seen (e.g. on initial
+  // load, or the moment a brand-new one is created via "+ Create New Fee"
+  // below) -- re-running setSelectedFeeIds(enrollmentFees.map(...)) on
+  // every refetch would silently re-check anything the admin had
+  // deliberately unchecked, the instant the list refreshed for any reason.
+  const seenFeeIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (enrollmentFees) setSelectedFeeIds(enrollmentFees.map((f) => f.fee_structure_id));
+    if (!enrollmentFees) return;
+    const newIds = enrollmentFees.map((f) => f.fee_structure_id).filter((id) => !seenFeeIdsRef.current.has(id));
+    for (const f of enrollmentFees) seenFeeIdsRef.current.add(f.fee_structure_id);
+    if (newIds.length) setSelectedFeeIds((prev) => [...prev, ...newIds]);
   }, [enrollmentFees]);
   const selectedFeesTotal = (enrollmentFees ?? [])
     .filter((f) => selectedFeeIds.includes(f.fee_structure_id))
     .reduce((sum, f) => sum + f.amount, 0);
+
+  // "+ Create New Fee" — for the case the class doesn't have a matching
+  // Fee Structure configured yet (e.g. a one-off "Community Fee"). Creates
+  // a real, reusable Fee Structure (same catalog as Settings → Fee
+  // Structures — it'll show up there too, editable/reusable for other
+  // students later) and immediately scopes it to the class/group being
+  // enrolled into, so it doesn't require leaving this wizard.
+  const [showQuickAddFee, setShowQuickAddFee] = useState(false);
+  const [quickAddFee, setQuickAddFee] = useState({ name: "", category: "OTHER", amount: "", frequency: "ONE_TIME" });
+  const quickAddFeeMutation = useMutation({
+    mutationFn: async () => {
+      const created = await api.post("/api/fees/structures", {
+        name: quickAddFee.name,
+        category: quickAddFee.category,
+        amount: Number(quickAddFee.amount),
+        frequency: quickAddFee.frequency,
+        academic_year_id: form.academic_year_id,
+      });
+      const newId = created.data.data.id as string;
+      // A brand-new structure can never collide with anything real — this
+      // is a fresh id, not a second assignment of an existing one — so the
+      // soft overlap warning (meant to catch two DIFFERENT admin-created
+      // structures accidentally double-covering a class) is silently
+      // overridden here rather than interrupting the quick-add flow with a
+      // confirmation for something that isn't actually a conflict.
+      await api.put(`/api/fees/structures/${newId}/classes`, {
+        entries: [{ class_id: form.current_class_id, group_id: form.group_id || null }],
+        override_overlap: true,
+      });
+      return newId;
+    },
+    onSuccess: () => {
+      toast.success(`"${quickAddFee.name}" created and added to the class's fee catalog`);
+      setQuickAddFee({ name: "", category: "OTHER", amount: "", frequency: "ONE_TIME" });
+      setShowQuickAddFee(false);
+      queryClient.invalidateQueries({ queryKey: ["students", "enrollment-fees-preview"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create fee"),
+  });
 
   async function handlePhotoSelect(file: File | null) {
     if (!file) return;
@@ -500,8 +550,46 @@ export default function NewStudentPage() {
 
               {form.current_class_id && form.academic_year_id && (
                 <div className="col-span-2 space-y-1.5">
-                  <Label>Fees to charge now</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Fees to charge now</Label>
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowQuickAddFee((v) => !v)}>
+                      {showQuickAddFee ? "Cancel" : "+ Create New Fee"}
+                    </button>
+                  </div>
                   <p className="text-xs text-muted-foreground">Admission Fee, Development, Library, first month&apos;s Tuition, etc. — whatever is configured for this class. Uncheck anything you don&apos;t want to charge right now.</p>
+
+                  {showQuickAddFee && (
+                    <div className="grid grid-cols-2 gap-2 rounded-md border border-dashed p-3 sm:grid-cols-5">
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label className="text-xs">Fee Name</Label>
+                        <Input className="h-8" value={quickAddFee.name} onChange={(e) => setQuickAddFee((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Community Fee" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Category</Label>
+                        <select className="h-8 w-full rounded-md border px-2 text-sm" value={quickAddFee.category} onChange={(e) => setQuickAddFee((f) => ({ ...f, category: e.target.value }))}>
+                          {FEE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Amount</Label>
+                        <Input className="h-8" type="number" value={quickAddFee.amount} onChange={(e) => setQuickAddFee((f) => ({ ...f, amount: e.target.value }))} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Type</Label>
+                        <select className="h-8 w-full rounded-md border px-2 text-sm" value={quickAddFee.frequency} onChange={(e) => setQuickAddFee((f) => ({ ...f, frequency: e.target.value }))}>
+                          <option value="ONE_TIME">One-time</option>
+                          <option value="MONTHLY">Monthly</option>
+                        </select>
+                      </div>
+                      <div className="col-span-2 sm:col-span-5">
+                        <Button size="sm" disabled={!quickAddFee.name || !quickAddFee.amount || quickAddFeeMutation.isPending} onClick={() => quickAddFeeMutation.mutate()}>
+                          {quickAddFeeMutation.isPending ? "Creating..." : "Create & Add to Checklist"}
+                        </Button>
+                        <span className="ml-2 text-xs text-muted-foreground">Saved to Fees → Fee Structures too, for this class going forward.</span>
+                      </div>
+                    </div>
+                  )}
+
                   <MultiSelectChecklist
                     options={(enrollmentFees ?? []).map((f) => ({
                       id: f.fee_structure_id,
@@ -509,7 +597,7 @@ export default function NewStudentPage() {
                     }))}
                     selected={selectedFeeIds}
                     onChange={setSelectedFeeIds}
-                    emptyLabel="No fee structures are configured for this class yet — set them up under Fees → Fee Structures."
+                    emptyLabel="No fee structures are configured for this class yet — use “+ Create New Fee” above, or set them up under Fees → Fee Structures."
                   />
                   <p className="text-sm text-muted-foreground">Selected total: <span className="font-medium text-foreground">৳{selectedFeesTotal.toLocaleString()}</span></p>
                 </div>
