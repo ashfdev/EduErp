@@ -751,7 +751,10 @@ admissionRouter.get(
     const query = admissionStatusLookupSchema.parse(req.query);
     const application = await prisma.admissionApplication.findUnique({
       where: { admission_roll: query.admission_roll },
-      include: { cycle: { select: { name: true, merit_list_published_at: true } }, stages: true },
+      include: {
+        cycle: { select: { name: true, merit_list_published_at: true, requires_written_test: true, requires_interview: true } },
+        stages: true,
+      },
     });
     if (!application) return res.json({ success: true, data: { found: false } });
 
@@ -791,6 +794,12 @@ admissionRouter.get(
         cycle_name: application.cycle.name,
         status: application.status,
         merit_rank: meritPublished ? application.merit_rank : null,
+        // Plan Twenty-Three Phase 6 -- lets the public stepper render an
+        // "upcoming" (not-yet-scheduled) step for a stage this cycle
+        // actually has, distinct from a stage the cycle never had at all
+        // (which correctly never appears in `stages` below either way).
+        requires_written_test: application.cycle.requires_written_test,
+        requires_interview: application.cycle.requires_interview,
         stages,
       },
     });

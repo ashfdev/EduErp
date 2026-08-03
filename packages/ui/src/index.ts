@@ -29,3 +29,4 @@ export * from "./components/notification-bell";
 export * from "./components/routine-grid";
 export * from "./components/multi-select-checklist";
 export * from "./components/adjustment-note";
+export * from "./components/stage-tracker";

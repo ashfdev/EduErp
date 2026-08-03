@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Search, Phone, FileText, CheckCircle2, AlertCircle, Calendar, MapPin, Download, CreditCard, Send, Clock } from "lucide-react";
+import { StageTracker, type StageTrackerStep } from "@education-erp/ui";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -26,6 +27,12 @@ interface StatusResult {
   cycle_name?: string;
   status?: string;
   merit_rank?: number | null;
+  // Whether this cycle even has this stage at all -- distinct from whether
+  // it's been scheduled/notified for this specific applicant yet, which is
+  // what lets the tracker show an honest "upcoming" step instead of just
+  // omitting a stage the applicant hasn't heard about yet.
+  requires_written_test?: boolean;
+  requires_interview?: boolean;
   // Only ever populated with stages staff has deliberately notified the
   // applicant about -- an un-required/un-scheduled stage cleanly never
   // appears here at all (Plan Twenty-Three, Phase 5).
@@ -33,6 +40,78 @@ interface StatusResult {
 }
 
 const STAGE_LABEL: Record<ApplicationStage["stage_type"], string> = { WRITTEN_TEST: "Written Test", INTERVIEW: "Interview" };
+
+// Builds the top-of-page StageTracker's step list dynamically per cycle --
+// 4 steps for a cycle with neither a written test nor an interview, up to 6
+// for one with both. Never a fixed list (Plan Twenty-Three, Phase 6).
+function buildSteps(result: StatusResult, paymentStatus: PaymentInfo["payment_status"] | null): StageTrackerStep[] {
+  const steps: StageTrackerStep[] = [];
+  // Payment status hasn't loaded yet (or genuinely isn't required) --
+  // treat as "done" so the tracker doesn't show a false payment blocker
+  // while PaymentSection's own fetch is still in flight.
+  const paymentDone = paymentStatus === null || paymentStatus === "PAID" || paymentStatus === "NOT_REQUIRED";
+
+  steps.push({ key: "apply", label: "Apply Online", status: "complete" });
+  steps.push({ key: "payment", label: "Submit Documents & Fee", status: paymentDone ? "complete" : "current" });
+
+  const findStage = (type: ApplicationStage["stage_type"]) => result.stages?.find((s) => s.stage_type === type);
+  // A stage counts as "done" once it has a recorded outcome (anything but
+  // SCHEDULED), regardless of pass/fail -- the Review step is where the
+  // actual result gets interpreted, not this one.
+  const stageDone = (type: ApplicationStage["stage_type"]) => {
+    const stage = findStage(type);
+    return !!stage && stage.status !== "SCHEDULED";
+  };
+
+  const requiredStageTypes: ApplicationStage["stage_type"][] = [];
+  if (result.requires_written_test) requiredStageTypes.push("WRITTEN_TEST");
+  if (result.requires_interview) requiredStageTypes.push("INTERVIEW");
+
+  // SHORTLISTED/WAITLISTED is this system's real gateway into assessment --
+  // the backend's own bulk-assign only ever targets those two statuses, so
+  // an applicant genuinely can't be scheduled for a stage before reaching
+  // one of them. Distinct from CONFIRMED/ENROLLED/REJECTED, which is the
+  // actual final decision, not just "provisionally selected."
+  const provisionallySelected = ["SHORTLISTED", "WAITLISTED"].includes(result.status ?? "");
+  const finalDecision = ["CONFIRMED", "ENROLLED", "REJECTED"].includes(result.status ?? "");
+  // Deliberately NOT the same as "finalDecision reached" -- REJECTED, unlike
+  // CONFIRMED/ENROLLED, can happen directly from PENDING (see the backend's
+  // own ALLOWED_STATUS_TRANSITIONS), bypassing assessment entirely. Treating
+  // every REJECTED application as having "reached assessment" would show a
+  // stage that was never scheduled as "current" (in progress) instead of
+  // "upcoming" (never happened) for an applicant rejected before ever being
+  // shortlisted -- false progress on a step that simply didn't occur.
+  // CONFIRMED/ENROLLED are safe to include here because the state machine
+  // guarantees both are only reachable via SHORTLISTED/WAITLISTED first.
+  const activelyProgressing = provisionallySelected || ["CONFIRMED", "ENROLLED"].includes(result.status ?? "");
+
+  for (const type of requiredStageTypes) {
+    const stage = findStage(type);
+    // A stage record existing at all is direct evidence the applicant
+    // reached it, regardless of how their status later moved -- complete
+    // once an outcome is recorded, current while still SCHEDULED. Only
+    // when no record exists do we fall back to whether the applicant is
+    // actively progressing (payment cleared + provisionally selected or
+    // further) to decide "current" (waiting to be scheduled) vs "upcoming"
+    // (genuinely hasn't happened, e.g. rejected before ever reaching it).
+    const status: StageTrackerStep["status"] = stage
+      ? stage.status !== "SCHEDULED" ? "complete" : "current"
+      : !paymentDone || !activelyProgressing ? "upcoming" : "current";
+    steps.push({ key: type === "WRITTEN_TEST" ? "written_test" : "interview", label: STAGE_LABEL[type], status });
+  }
+
+  // Review/Outcome only become the active steps once every required stage
+  // that exists has an actual recorded result -- otherwise they'd show
+  // "current" at the same time as the assessment steps still in progress,
+  // which would read as the decision happening before what it's based on.
+  const reachedAssessment = provisionallySelected || finalDecision;
+  const allStagesDone = requiredStageTypes.every(stageDone);
+  const reviewReady = reachedAssessment && allStagesDone;
+  steps.push({ key: "review", label: "Review", status: finalDecision ? "complete" : reviewReady ? "current" : "upcoming" });
+  steps.push({ key: "outcome", label: "Admission Outcome", status: finalDecision ? "complete" : reviewReady ? "current" : "upcoming" });
+
+  return steps;
+}
 
 interface PaymentInvoice {
   id: string;
@@ -219,7 +298,7 @@ function InvoicePaymentRow({
   );
 }
 
-function PaymentSection({ admissionRoll, phone }: { admissionRoll: string; phone: string }) {
+function PaymentSection({ admissionRoll, phone, onStatusChange }: { admissionRoll: string; phone: string; onStatusChange?: (status: PaymentInfo["payment_status"]) => void }) {
   const [info, setInfo] = useState<PaymentInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -231,6 +310,7 @@ function PaymentSection({ admissionRoll, phone }: { admissionRoll: string; phone
       if (!res.ok) return;
       const body = await res.json();
       setInfo(body.data);
+      onStatusChange?.(body.data.payment_status);
     } finally {
       setLoading(false);
     }
@@ -289,11 +369,15 @@ export default function AdmissionStatusPage() {
   const [result, setResult] = useState<StatusResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Fed by PaymentSection's own fetch (via onStatusChange) rather than a
+  // second independent request -- one round-trip, two consumers.
+  const [paymentStatus, setPaymentStatus] = useState<PaymentInfo["payment_status"] | null>(null);
 
   async function check(e?: React.FormEvent) {
     e?.preventDefault();
     setError(null);
     setResult(null);
+    setPaymentStatus(null);
     // Client-side check before hitting the backend's own /^01\d{9}$/ regex --
     // previously any malformed phone reached the server first and came back
     // as the same opaque "Invalid request body" the apply-wizard bug shared
@@ -395,6 +479,10 @@ export default function AdmissionStatusPage() {
                 </div>
               </div>
 
+              <div className="bg-white px-5 py-6 border-b border-green-100">
+                <StageTracker steps={buildSteps(result, paymentStatus)} />
+              </div>
+
               {result.merit_rank && (
                 <div className="bg-white p-4 flex items-center justify-between border-b border-green-100">
                   <span className="text-sm font-semibold text-slate-600">Merit Position</span>
@@ -403,7 +491,7 @@ export default function AdmissionStatusPage() {
               )}
 
               {result.admission_roll && (
-                <PaymentSection admissionRoll={result.admission_roll} phone={phone} />
+                <PaymentSection admissionRoll={result.admission_roll} phone={phone} onStatusChange={setPaymentStatus} />
               )}
 
               {!!result.stages?.length && result.stages.map((stage) => (
