@@ -151,14 +151,64 @@ export const admissionPaymentManualSchema = z.object({
   amount: z.number().positive(),
 });
 
-export const scheduleAdmissionTestSchema = z.object({
-  requires_test: z.boolean(),
-  test_date: z.coerce.date().optional(),
-  test_venue: z.string().optional(),
-  test_duration_minutes: z.number().int().min(1).optional(),
-  test_instructions: z.string().optional(),
+export const admissionStageTypeSchema = z.enum(["WRITTEN_TEST", "INTERVIEW"]);
+
+// Cycle-level defaults for one stage type -- only ever used as the
+// bulk-assign form's pre-fill (Plan Twenty-Three, Phase 5). The actual
+// authoritative per-applicant schedule lives on AdmissionApplicationStage;
+// staff can always individually override one candidate's slot.
+export const admissionStageDefaultsSchema = z.object({
+  requires: z.boolean(),
+  scheduled_date: z.coerce.date().optional(),
+  venue: z.string().optional(),
+  duration_minutes: z.number().int().min(1).optional(),
+  instructions: z.string().optional(),
 });
-export type ScheduleAdmissionTestInput = z.infer<typeof scheduleAdmissionTestSchema>;
+export type AdmissionStageDefaultsInput = z.infer<typeof admissionStageDefaultsSchema>;
+
+// Written Test and Interview are two independent, separately-schedulable
+// stages -- halls/start_seat only ever apply to WRITTEN_TEST (an INTERVIEW
+// bulk-assign just sets date/venue/duration/instructions for every
+// selected applicant, no seating to walk).
+export const admissionStageBulkAssignSchema = z.object({
+  statuses: z.array(z.enum(["SHORTLISTED", "WAITLISTED"])).min(1),
+  scheduled_date: z.coerce.date().optional(),
+  venue: z.string().optional(),
+  duration_minutes: z.number().int().min(1).optional(),
+  instructions: z.string().optional(),
+  halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).optional(),
+  start_seat: z.number().int().min(1).default(1),
+});
+export type AdmissionStageBulkAssignInput = z.infer<typeof admissionStageBulkAssignSchema>;
+
+// Individual per-applicant override -- same fields a bulk-assign would set,
+// scoped to one application/stage_type pair.
+export const admissionStageOverrideSchema = z.object({
+  scheduled_date: z.coerce.date().optional().nullable(),
+  venue: z.string().optional().nullable(),
+  duration_minutes: z.number().int().min(1).optional().nullable(),
+  instructions: z.string().optional().nullable(),
+  hall_name: z.string().optional().nullable(),
+  seat_number: z.string().optional().nullable(),
+});
+export type AdmissionStageOverrideInput = z.infer<typeof admissionStageOverrideSchema>;
+
+// Staff observes the outcome and separately decides whether/how to move the
+// application forward -- this never automatically cascades into
+// AdmissionStatus.
+export const admissionStageOutcomeSchema = z.object({
+  status: z.enum(["PASSED", "FAILED", "NO_SHOW"]),
+});
+
+// Deliberately a separate step from bulk-assign (mirrors the existing
+// Generate Merit List -> Publish & Notify two-step pattern) -- staff can
+// review/adjust a batch's schedule before it becomes visible to applicants,
+// and can notify one batch now and a later batch afterward without
+// disturbing the first (per-row notified_at, not a cycle-wide gate).
+export const admissionStageBulkNotifySchema = z.object({
+  application_ids: z.array(z.string().min(1)).min(1),
+  notice_message: z.string().optional(),
+});
 
 // Admin-editable manual payment instructions (Settings -> Admission ->
 // Payment Instructions), shown on the public payment flow. Every field
@@ -176,10 +226,3 @@ export const admissionPaymentInstructionsSchema = z.object({
   note: z.string().optional().nullable(),
 });
 export type AdmissionPaymentInstructionsInput = z.infer<typeof admissionPaymentInstructionsSchema>;
-
-export const generateTestSeatPlanSchema = z.object({
-  statuses: z.array(z.enum(["SHORTLISTED", "WAITLISTED"])).min(1),
-  halls: z.array(z.object({ name: z.string().min(1), capacity: z.number().int().min(1) })).min(1),
-  start_seat: z.number().int().min(1).default(1),
-});
-export type GenerateTestSeatPlanInput = z.infer<typeof generateTestSeatPlanSchema>;

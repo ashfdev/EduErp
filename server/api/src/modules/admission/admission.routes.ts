@@ -23,8 +23,12 @@ import {
   admissionPaymentGatewaySchema,
   admissionPaymentManualSchema,
   admissionStatusLookupSchema,
-  scheduleAdmissionTestSchema,
-  generateTestSeatPlanSchema,
+  admissionStageTypeSchema,
+  admissionStageDefaultsSchema,
+  admissionStageBulkAssignSchema,
+  admissionStageOverrideSchema,
+  admissionStageOutcomeSchema,
+  admissionStageBulkNotifySchema,
 } from "@education-erp/validators";
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
@@ -42,7 +46,7 @@ import { completePayment } from "../fees/payments.routes";
 import { computeApplicationPaymentStatus } from "./admission-payment-status";
 import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
 import { badRequest, notFound, conflict } from "../../lib/errors";
-import type { AdmissionApplication, AdmissionCycle, AdmissionTestSeatPlan, Class, AcademicYear, AdmissionStatus } from "@education-erp/db";
+import type { AdmissionApplication, AdmissionCycle, AdmissionApplicationStage, Class, AcademicYear, AdmissionStatus, AdmissionStageType } from "@education-erp/db";
 import { Prisma } from "@education-erp/db";
 
 export const admissionRouter = Router();
@@ -71,16 +75,23 @@ function meritScoreOf(previousResult: unknown): number {
 
 type ApplicationForCard = AdmissionApplication & {
   cycle: AdmissionCycle & { class: Class; academic_year: AcademicYear };
-  test_seat: AdmissionTestSeatPlan | null;
 };
 
-// Shared by the single-application and bulk admit-card endpoints — builds
-// the REGISTRATION_CARD template's data shape (applicant/test), not the
-// academic student.* shape, since no Student row exists pre-enrollment.
-function buildRegistrationCardData(application: ApplicationForCard) {
+// Plan Twenty-Three Phase 5 -- REGISTRATION_CARD is reused, parametrized by
+// stage, rather than a new DocumentType per stage.
+const STAGE_TITLE: Record<AdmissionStageType, string> = {
+  WRITTEN_TEST: "WRITTEN TEST",
+  INTERVIEW: "INTERVIEW",
+};
+
+// Shared by the single-application, batch, and public stage-card download
+// endpoints — builds the REGISTRATION_CARD template's data shape
+// (applicant/test), not the academic student.* shape, since no Student row
+// exists pre-enrollment. One stage (Written Test OR Interview) per card —
+// an applicant scheduled for both downloads two separate cards.
+function buildRegistrationCardData(application: ApplicationForCard, stage: AdmissionApplicationStage) {
   const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string } | null;
   const cycle = application.cycle;
-  const seat = application.test_seat;
 
   return {
     applicant: {
@@ -94,15 +105,16 @@ function buildRegistrationCardData(application: ApplicationForCard) {
       // once real document tracking moved to StudentDocument rows.
       photo_url: application.photo_url ?? null,
     },
+    stage_title: STAGE_TITLE[stage.stage_type],
     test: {
-      date: cycle.test_date,
-      day: cycle.test_date ? new Date(cycle.test_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
-      time: cycle.test_date ? new Date(cycle.test_date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "",
-      duration_minutes: cycle.test_duration_minutes,
-      venue: cycle.test_venue ?? "TBA",
-      hall: seat?.hall_name ?? "TBA",
-      seat_no: seat?.seat_number ?? "TBA",
-      instructions: cycle.test_instructions ?? "Please arrive 30 minutes before the scheduled time with this card and a valid photo ID.",
+      date: stage.scheduled_date,
+      day: stage.scheduled_date ? new Date(stage.scheduled_date).toLocaleDateString("en-US", { weekday: "long" }) : "",
+      time: stage.scheduled_date ? new Date(stage.scheduled_date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "",
+      duration_minutes: stage.duration_minutes,
+      venue: stage.venue ?? "TBA",
+      hall: stage.hall_name ?? "TBA",
+      seat_no: stage.seat_number ?? "TBA",
+      instructions: stage.instructions ?? "Please arrive 30 minutes before the scheduled time with this card and a valid photo ID.",
     },
     cycle_name: cycle.name,
     academic_year_label: cycle.academic_year.label,
@@ -739,7 +751,7 @@ admissionRouter.get(
     const query = admissionStatusLookupSchema.parse(req.query);
     const application = await prisma.admissionApplication.findUnique({
       where: { admission_roll: query.admission_roll },
-      include: { cycle: { select: { name: true, merit_list_published_at: true, requires_test: true, test_date: true, test_venue: true, admit_card_published_at: true } } },
+      include: { cycle: { select: { name: true, merit_list_published_at: true } }, stages: true },
     });
     if (!application) return res.json({ success: true, data: { found: false } });
 
@@ -751,13 +763,24 @@ admissionRouter.get(
     // applicants until they deliberately click "Publish & Notify".
     const meritPublished = application.cycle.merit_list_published_at !== null;
 
-    // Same gating pattern as merit_rank above — the admit card must stay
-    // undownloadable until the admin deliberately publishes it, even though
-    // seat-plan/admit-card PDFs can already be generated by staff earlier.
-    const admitCardAvailable =
-      application.cycle.requires_test &&
-      application.cycle.admit_card_published_at !== null &&
-      (ADMIT_CARD_ELIGIBLE_STATUSES as readonly string[]).includes(application.status);
+    // Plan Twenty-Three Phase 5 -- only a stage the admin has deliberately
+    // notified (notified_at, a per-row gate, not cycle-wide) is visible to
+    // the applicant at all. An un-required/un-scheduled stage cleanly
+    // doesn't appear here, and notifying a later batch never disturbs an
+    // already-notified earlier one.
+    const stages = application.stages
+      .filter((s) => s.notified_at !== null)
+      .map((s) => ({
+        stage_type: s.stage_type,
+        scheduled_date: s.scheduled_date,
+        venue: s.venue,
+        duration_minutes: s.duration_minutes,
+        instructions: s.instructions,
+        hall_name: s.hall_name,
+        seat_number: s.seat_number,
+        status: s.status,
+        card_available: application.status !== "REJECTED",
+      }));
 
     res.json({
       success: true,
@@ -768,39 +791,34 @@ admissionRouter.get(
         cycle_name: application.cycle.name,
         status: application.status,
         merit_rank: meritPublished ? application.merit_rank : null,
-        requires_test: application.cycle.requires_test,
-        test_date: application.cycle.requires_test ? application.cycle.test_date : null,
-        test_venue: application.cycle.requires_test ? application.cycle.test_venue : null,
-        admit_card_available: admitCardAvailable,
+        stages,
       },
     });
   }),
 );
 
 admissionRouter.get(
-  "/application/admit-card",
+  "/application/stage-card",
   publicEndpointLimiter,
   asyncHandler(async (req, res) => {
-    const query = admissionStatusLookupSchema.parse(req.query);
+    const query = admissionStatusLookupSchema.extend({ stage_type: admissionStageTypeSchema }).parse(req.query);
     const application = await prisma.admissionApplication.findUnique({
       where: { admission_roll: query.admission_roll },
-      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+      include: { cycle: { include: { class: true, academic_year: true } }, stages: true },
     });
     if (!application) throw notFound("Application not found");
 
     const guardianInfo = application.guardian_info as { phone?: string } | null;
     if (guardianInfo?.phone !== query.phone) throw notFound("Application not found");
 
-    const eligible =
-      application.cycle.requires_test &&
-      application.cycle.admit_card_published_at !== null &&
-      (ADMIT_CARD_ELIGIBLE_STATUSES as readonly string[]).includes(application.status);
-    if (!eligible) throw badRequest("Admit card is not available for this application yet");
+    const stage = application.stages.find((s) => s.stage_type === query.stage_type);
+    const eligible = stage && stage.notified_at !== null && application.status !== "REJECTED";
+    if (!eligible || !stage) throw badRequest("This card is not available for this application yet");
 
-    const data = buildRegistrationCardData(application);
+    const data = buildRegistrationCardData(application, stage);
     const pdf = await renderDocument("REGISTRATION_CARD", data, { pageSize: "A4" });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="Admit_Card_${application.admission_roll}.pdf"`);
+    res.setHeader("Content-Disposition", `inline; filename="${stage.stage_type}_Card_${application.admission_roll}.pdf"`);
     res.send(pdf);
   }),
 );
@@ -815,6 +833,10 @@ admissionRouter.get(
     const query = z
       .object({
         cycle_id: z.string().optional(),
+        // Plan Twenty-Three Phase 4 -- lets the new cross-cycle list narrow
+        // to one class regardless of which specific cycle/year it ran under
+        // (a class can have several cycles across sessions).
+        class_id: z.string().optional(),
         status: z.string().optional(),
         // Plan Twenty-Three Phase 3 -- payment_status is derived (never a
         // stored column), so it can't be pushed into the Prisma `where`
@@ -830,6 +852,7 @@ admissionRouter.get(
 
     const where = {
       ...(query.cycle_id && { cycle_id: query.cycle_id }),
+      ...(query.class_id && { cycle: { class_id: query.class_id } }),
       ...(query.status && { status: query.status as never }),
       ...(query.search && {
         OR: [
@@ -841,11 +864,22 @@ admissionRouter.get(
 
     const all = await prisma.admissionApplication.findMany({
       where,
-      include: { cycle: { select: { id: true, name: true } }, invoices: { include: { payments: true } } },
+      include: {
+        cycle: { select: { id: true, name: true, class: { select: { id: true, name_en: true } } } },
+        invoices: { include: { payments: true } },
+      },
       orderBy: { created_at: "desc" },
     });
 
-    const withPaymentStatus = all.map((a) => ({ ...a, payment_status: computeApplicationPaymentStatus(a.invoices) }));
+    const withPaymentStatus = all.map((a) => ({
+      ...a,
+      payment_status: computeApplicationPaymentStatus(a.invoices),
+      // Summed across every linked invoice (admission + form can both be
+      // outstanding) -- the list row shows one combined due figure rather
+      // than making staff open each application to see the breakdown.
+      amount_due: a.invoices.reduce((sum, inv) => sum + inv.amount_due + inv.fine_amount - inv.amount_paid, 0),
+      amount_paid: a.invoices.reduce((sum, inv) => sum + inv.amount_paid, 0),
+    }));
     const filtered = query.payment_status ? withPaymentStatus.filter((a) => a.payment_status === query.payment_status) : withPaymentStatus;
 
     const total = filtered.length;
@@ -867,6 +901,7 @@ admissionRouter.get(
         cycle: true,
         documents_uploaded: { orderBy: { uploaded_at: "asc" } },
         invoices: { orderBy: { created_at: "asc" }, include: { payments: { orderBy: { created_at: "desc" } } } },
+        stages: true,
       },
     });
     if (!application) throw notFound("Application not found");
@@ -1394,167 +1429,333 @@ admissionRouter.post(
   }),
 );
 
-// ───────────────────────── Admission Test + Admit Card Workflow ─────────────────────────
-
-const ADMIT_CARD_ELIGIBLE_STATUSES = ["SHORTLISTED", "WAITLISTED", "CONFIRMED"] as const;
+// ───────────────────────── Assessment/Scheduling: Written Test + Interview (Plan Twenty-Three, Phase 5) ─────────────────────────
+// Written Test and Interview are two independent, separately-schedulable
+// stages -- each with its own per-applicant date/venue/room and its own
+// pass/fail-equivalent outcome (AdmissionApplicationStage). Every route
+// below mirrors AdmitCardOverride's already-proven "preview -> batch action
+// -> narrower-role-audited" shape from this same codebase.
 
 admissionRouter.put(
-  "/cycles/:id/test",
+  "/cycles/:id/stages/:stage_type/defaults",
   authenticate,
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const body = scheduleAdmissionTestSchema.parse(req.body);
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
+    const body = admissionStageDefaultsSchema.parse(req.body);
     const existing = await prisma.admissionCycle.findUnique({ where: { id } });
     if (!existing) throw notFound("Admission cycle not found");
 
-    const updated = await prisma.admissionCycle.update({
-      where: { id },
-      data: {
-        requires_test: body.requires_test,
-        test_date: body.test_date,
-        test_venue: body.test_venue,
-        test_duration_minutes: body.test_duration_minutes,
-        test_instructions: body.test_instructions,
-      },
-    });
+    // These cycle-level fields are only ever used as the bulk-assign form's
+    // default pre-fill -- the authoritative schedule lives per-applicant on
+    // AdmissionApplicationStage, since staff can always individually
+    // override one candidate's slot.
+    const data =
+      stageType === "WRITTEN_TEST"
+        ? {
+            requires_written_test: body.requires,
+            written_test_date: body.scheduled_date,
+            written_test_venue: body.venue,
+            written_test_duration_minutes: body.duration_minutes,
+            written_test_instructions: body.instructions,
+          }
+        : {
+            requires_interview: body.requires,
+            interview_date: body.scheduled_date,
+            interview_venue: body.venue,
+            interview_duration_minutes: body.duration_minutes,
+            interview_instructions: body.instructions,
+          };
+
+    const updated = await prisma.admissionCycle.update({ where: { id }, data });
     res.json({ success: true, data: updated });
   }),
 );
 
-admissionRouter.post(
-  "/cycles/:id/test/seat-plan",
+// Preview -- who will be included/excluded and why, before any batch action
+// actually runs (mirrors AdmitCardOverride's own preview-then-act shape).
+admissionRouter.get(
+  "/cycles/:id/stages/:stage_type/status",
   authenticate,
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const body = generateTestSeatPlanSchema.parse(req.body);
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
     const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
     if (!cycle) throw notFound("Admission cycle not found");
+
+    const applications = await prisma.admissionApplication.findMany({
+      where: { cycle_id: id, status: { in: ["SHORTLISTED", "WAITLISTED"] } },
+      include: { stages: { where: { stage_type: stageType } } },
+      orderBy: [{ merit_rank: "asc" }, { admission_roll: "asc" }],
+    });
+
+    res.json({
+      success: true,
+      data: applications.map((a) => ({
+        id: a.id,
+        admission_roll: a.admission_roll,
+        applicant_name: a.applicant_name,
+        status: a.status,
+        merit_rank: a.merit_rank,
+        stage: a.stages[0]
+          ? {
+              scheduled_date: a.stages[0].scheduled_date,
+              venue: a.stages[0].venue,
+              hall_name: a.stages[0].hall_name,
+              seat_number: a.stages[0].seat_number,
+              status: a.stages[0].status,
+              notified_at: a.stages[0].notified_at,
+            }
+          : null,
+      })),
+    });
+  }),
+);
+
+admissionRouter.post(
+  "/cycles/:id/stages/:stage_type/bulk-assign",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
+    const body = admissionStageBulkAssignSchema.parse(req.body);
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!cycle) throw notFound("Admission cycle not found");
+
+    const requiresThisStage = stageType === "WRITTEN_TEST" ? cycle.requires_written_test : cycle.requires_interview;
+    if (!requiresThisStage) {
+      throw badRequest(`This cycle does not require ${stageType === "WRITTEN_TEST" ? "a written test" : "an interview"} -- set it up in Stage Defaults first`);
+    }
 
     const applications = await prisma.admissionApplication.findMany({
       where: { cycle_id: id, status: { in: body.statuses } },
       orderBy: [{ merit_rank: "asc" }, { admission_roll: "asc" }],
     });
 
-    const totalCapacity = body.halls.reduce((sum, h) => sum + h.capacity, 0);
-    const overflow = Math.max(0, applications.length - totalCapacity);
+    const scheduledDate = body.scheduled_date ?? (stageType === "WRITTEN_TEST" ? cycle.written_test_date : cycle.interview_date) ?? undefined;
+    const venue = body.venue ?? (stageType === "WRITTEN_TEST" ? cycle.written_test_venue : cycle.interview_venue) ?? undefined;
+    const durationMinutes = body.duration_minutes ?? (stageType === "WRITTEN_TEST" ? cycle.written_test_duration_minutes : cycle.interview_duration_minutes) ?? undefined;
+    const instructions = body.instructions ?? (stageType === "WRITTEN_TEST" ? cycle.written_test_instructions : cycle.interview_instructions) ?? undefined;
 
-    const assignments: { application_id: string; cycle_id: string; hall_name: string; seat_number: string }[] = [];
-    let index = 0;
-    for (const hall of body.halls) {
-      for (let seat = body.start_seat; seat < body.start_seat + hall.capacity && index < applications.length; seat++, index++) {
-        assignments.push({ application_id: applications[index]!.id, cycle_id: id, hall_name: hall.name, seat_number: String(seat) });
+    type StageRow = {
+      application_id: string;
+      cycle_id: string;
+      stage_type: AdmissionStageType;
+      scheduled_date?: Date;
+      venue?: string;
+      duration_minutes?: number;
+      instructions?: string;
+      hall_name: string | null;
+      seat_number: string | null;
+    };
+    const rows: StageRow[] = [];
+    let overflow = 0;
+
+    if (stageType === "WRITTEN_TEST") {
+      // Preserves the existing multi-hall auto-sequencing by merit_rank/
+      // admission_roll (already-proven logic, carried over unchanged from
+      // the old cycle-wide seat-plan generator).
+      const halls = body.halls ?? [];
+      if (!halls.length) throw badRequest("At least one hall is required to assign the written test");
+      const totalCapacity = halls.reduce((sum, h) => sum + h.capacity, 0);
+      overflow = Math.max(0, applications.length - totalCapacity);
+
+      let index = 0;
+      for (const hall of halls) {
+        for (let seat = body.start_seat; seat < body.start_seat + hall.capacity && index < applications.length; seat++, index++) {
+          rows.push({ application_id: applications[index]!.id, cycle_id: id, stage_type: stageType, scheduled_date: scheduledDate, venue, duration_minutes: durationMinutes, instructions, hall_name: hall.name, seat_number: String(seat) });
+        }
+      }
+    } else {
+      // Interview has no hall/seat to walk -- every selected applicant
+      // simply gets the same date/venue/duration/instructions.
+      for (const app of applications) {
+        rows.push({ application_id: app.id, cycle_id: id, stage_type: stageType, scheduled_date: scheduledDate, venue, duration_minutes: durationMinutes, instructions, hall_name: null, seat_number: null });
       }
     }
 
-    await prisma.$transaction([
-      prisma.admissionTestSeatPlan.deleteMany({ where: { cycle_id: id } }),
-      prisma.admissionTestSeatPlan.createMany({ data: assignments }),
-    ]);
+    // Upsert per row (not delete-then-recreate) -- a second bulk-assign run
+    // naturally re-targets whoever's still SHORTLISTED/WAITLISTED at that
+    // point without needing to wipe every existing row first.
+    for (const row of rows) {
+      await prisma.admissionApplicationStage.upsert({
+        where: { application_id_stage_type: { application_id: row.application_id, stage_type: row.stage_type } },
+        create: row,
+        update: { scheduled_date: row.scheduled_date, venue: row.venue, duration_minutes: row.duration_minutes, instructions: row.instructions, hall_name: row.hall_name, seat_number: row.seat_number },
+      });
+    }
 
-    res.json({ success: true, data: { assigned: assignments.length, total_applications: applications.length, overflow } });
+    res.json({ success: true, data: { assigned: rows.length, total_applications: applications.length, overflow } });
   }),
 );
 
-admissionRouter.get(
-  "/cycles/:id/test/seat-plan",
+// Individual per-applicant override -- lets staff hand-adjust one
+// candidate's slot without disturbing anyone else's (e.g. a room conflict
+// or a genuine scheduling clash for that one family).
+admissionRouter.put(
+  "/applications/:id/stages/:stage_type",
   authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const seatPlans = await prisma.admissionTestSeatPlan.findMany({
-      where: { cycle_id: id },
-      include: { application: { select: { admission_roll: true, applicant_name: true, status: true } } },
-      orderBy: [{ hall_name: "asc" }, { seat_number: "asc" }],
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
+    const body = admissionStageOverrideSchema.parse(req.body);
+    const application = await prisma.admissionApplication.findUnique({ where: { id } });
+    if (!application) throw notFound("Application not found");
+
+    const stage = await prisma.admissionApplicationStage.upsert({
+      where: { application_id_stage_type: { application_id: id, stage_type: stageType } },
+      create: {
+        application_id: id,
+        cycle_id: application.cycle_id,
+        stage_type: stageType,
+        scheduled_date: body.scheduled_date ?? undefined,
+        venue: body.venue ?? undefined,
+        duration_minutes: body.duration_minutes ?? undefined,
+        instructions: body.instructions ?? undefined,
+        hall_name: body.hall_name ?? undefined,
+        seat_number: body.seat_number ?? undefined,
+      },
+      update: {
+        scheduled_date: body.scheduled_date,
+        venue: body.venue,
+        duration_minutes: body.duration_minutes,
+        instructions: body.instructions,
+        hall_name: body.hall_name,
+        seat_number: body.seat_number,
+      },
     });
-    res.json({
-      success: true,
-      data: seatPlans.map((s) => ({
-        hall_name: s.hall_name,
-        seat_number: s.seat_number,
-        admission_roll: s.application.admission_roll,
-        applicant_name: s.application.applicant_name,
-        status: s.application.status,
-      })),
+    res.json({ success: true, data: stage });
+  }),
+);
+
+// Staff observes the outcome and separately decides whether/how to move the
+// application forward -- this never automatically cascades into
+// AdmissionStatus.
+admissionRouter.put(
+  "/applications/:id/stages/:stage_type/outcome",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
+    const body = admissionStageOutcomeSchema.parse(req.body);
+
+    const existing = await prisma.admissionApplicationStage.findUnique({
+      where: { application_id_stage_type: { application_id: id, stage_type: stageType } },
     });
+    if (!existing) throw notFound("This applicant has no scheduled stage of this type yet");
+
+    const updated = await prisma.admissionApplicationStage.update({ where: { id: existing.id }, data: { status: body.status } });
+    res.json({ success: true, data: updated });
+  }),
+);
+
+// Deliberately a separate step from bulk-assign (mirrors the existing
+// Generate Merit List -> Publish & Notify two-step pattern) -- staff can
+// review/adjust a batch's schedule before it becomes visible to applicants.
+// notified_at is per-row, not cycle-wide, so notifying one batch today and
+// a different batch next week never disturbs the first.
+admissionRouter.post(
+  "/cycles/:id/stages/:stage_type/bulk-notify",
+  authenticate,
+  authorize(ADMISSION_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
+    const body = admissionStageBulkNotifySchema.parse(req.body);
+    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
+    if (!cycle) throw notFound("Admission cycle not found");
+
+    const stages = await prisma.admissionApplicationStage.findMany({
+      where: { cycle_id: id, stage_type: stageType, application_id: { in: body.application_ids } },
+      include: { application: true },
+    });
+
+    let notified = 0;
+    for (const stage of stages) {
+      await prisma.admissionApplicationStage.update({
+        where: { id: stage.id },
+        data: { notified_at: new Date(), notice_message: body.notice_message ?? undefined },
+      });
+
+      const guardianInfo = stage.application.guardian_info as { phone?: string } | null;
+      if (guardianInfo?.phone) {
+        await sendNotification({
+          trigger: "ADMISSION_STAGE_SCHEDULED",
+          recipients: [{ name: stage.application.applicant_name, phone: guardianInfo.phone }],
+          template_data: {
+            applicant_name: stage.application.applicant_name,
+            admission_roll: stage.application.admission_roll ?? "",
+            stage_name: stageType === "WRITTEN_TEST" ? "Written Test" : "Interview",
+            date: stage.scheduled_date ? stage.scheduled_date.toLocaleDateString() : "TBA",
+            venue: stage.venue ?? "the institution",
+          },
+        });
+        notified++;
+      }
+    }
+
+    res.json({ success: true, data: { notified } });
   }),
 );
 
 // ───────────────────────── Documents ─────────────────────────
 
+// Admin single-applicant card -- staff can always preview/download
+// regardless of notified_at (unlike the public self-download route, which
+// requires notified_at set), since staff routinely need to check a card
+// before deciding to notify.
 admissionRouter.get(
-  "/applications/:id/admit-card",
+  "/applications/:id/stages/:stage_type/card",
   authenticate,
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
     const application = await prisma.admissionApplication.findUnique({
       where: { id },
-      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+      include: { cycle: { include: { class: true, academic_year: true } }, stages: { where: { stage_type: stageType } } },
     });
     if (!application) throw notFound("Application not found");
-    if (application.status === "PENDING" || application.status === "REJECTED") throw badRequest("Admit card is only available for shortlisted/waitlisted/confirmed applications");
+    const stage = application.stages[0];
+    if (!stage) throw notFound("No scheduled stage of this type for this applicant");
 
-    const data = buildRegistrationCardData(application);
+    const data = buildRegistrationCardData(application, stage);
     const pdf = await renderDocument("REGISTRATION_CARD", data, { pageSize: "A4" });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="Admit_Card_${application.admission_roll}.pdf"`);
+    res.setHeader("Content-Disposition", `inline; filename="${stageType}_Card_${application.admission_roll}.pdf"`);
     res.send(pdf);
   }),
 );
 
+// Admin batch card -- every applicant currently scheduled for this stage in
+// this cycle, regardless of notified_at.
 admissionRouter.get(
-  "/cycles/:id/admit-cards",
+  "/cycles/:id/stages/:stage_type/cards",
   authenticate,
   authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const stageType = admissionStageTypeSchema.parse(reqParam(req, "stage_type"));
     const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
     if (!cycle) throw notFound("Admission cycle not found");
 
     const applications = await prisma.admissionApplication.findMany({
-      where: { cycle_id: id, status: { in: [...ADMIT_CARD_ELIGIBLE_STATUSES] } },
-      include: { cycle: { include: { class: true, academic_year: true } }, test_seat: true },
+      where: { cycle_id: id, stages: { some: { stage_type: stageType } } },
+      include: { cycle: { include: { class: true, academic_year: true } }, stages: { where: { stage_type: stageType } } },
       orderBy: { admission_roll: "asc" },
     });
-    if (!applications.length) throw badRequest("No eligible applications to generate admit cards for");
+    if (!applications.length) throw badRequest("No applicants scheduled for this stage yet");
 
-    const dataList = applications.map(buildRegistrationCardData);
+    const dataList = applications.map((a) => buildRegistrationCardData(a, a.stages[0]!));
     const pdf = await renderDocumentBatch("REGISTRATION_CARD", dataList, { pageSize: "A4" });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="Admit_Cards_${cycle.name.replace(/\s+/g, "_")}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${stageType}_Cards_${cycle.name.replace(/\s+/g, "_")}.pdf"`);
     res.send(pdf);
-  }),
-);
-
-admissionRouter.post(
-  "/cycles/:id/admit-card/publish",
-  authenticate,
-  authorize(ADMISSION_MANAGE_ROLES),
-  asyncHandler(async (req, res) => {
-    const id = reqParam(req, "id");
-    const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
-    if (!cycle) throw notFound("Admission cycle not found");
-    if (!cycle.requires_test) throw badRequest("This cycle does not require an admission test");
-    if (!cycle.test_date) throw badRequest("Schedule the test date and venue before publishing admit cards");
-
-    const applications = await prisma.admissionApplication.findMany({
-      where: { cycle_id: id, status: { in: [...ADMIT_CARD_ELIGIBLE_STATUSES] } },
-    });
-
-    let notified = 0;
-    for (const app of applications) {
-      const guardianInfo = app.guardian_info as { phone?: string } | null;
-      if (guardianInfo?.phone) {
-        await sendSms(
-          guardianInfo.phone,
-          `Admission test for ${app.applicant_name} (Roll: ${app.admission_roll}) is scheduled on ${cycle.test_date?.toLocaleDateString()} at ${cycle.test_venue ?? "the institution"}. Download the admit card from our website status page.`,
-        );
-        notified++;
-      }
-    }
-
-    await prisma.admissionCycle.update({ where: { id }, data: { admit_card_published_at: new Date() } });
-    res.json({ success: true, data: { notified } });
   }),
 );
 

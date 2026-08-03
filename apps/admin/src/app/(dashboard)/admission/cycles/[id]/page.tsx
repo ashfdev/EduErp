@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Card, CardContent, Checkbox, EmptyState, Input, Label, PageHeader, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -17,22 +17,36 @@ interface Cycle {
   is_open: boolean;
   is_published: boolean;
   merit_list_published_at: string | null;
-  requires_test: boolean;
-  test_date: string | null;
-  test_venue: string | null;
-  test_duration_minutes: number | null;
-  test_instructions: string | null;
-  admit_card_published_at: string | null;
+  requires_written_test: boolean;
+  written_test_date: string | null;
+  written_test_venue: string | null;
+  written_test_duration_minutes: number | null;
+  written_test_instructions: string | null;
+  requires_interview: boolean;
+  interview_date: string | null;
+  interview_venue: string | null;
+  interview_duration_minutes: number | null;
+  interview_instructions: string | null;
   stats: { total_applications: number; shortlisted: number; waitlisted: number; confirmed: number; enrolled: number; rejected: number };
   seats_remaining: number;
 }
 
-interface SeatPlanRow {
-  hall_name: string | null;
-  seat_number: string | null;
+type StageType = "WRITTEN_TEST" | "INTERVIEW";
+
+interface StagePreviewRow {
+  id: string;
   admission_roll: string | null;
   applicant_name: string;
   status: string;
+  merit_rank: number | null;
+  stage: {
+    scheduled_date: string | null;
+    venue: string | null;
+    hall_name: string | null;
+    seat_number: string | null;
+    status: string;
+    notified_at: string | null;
+  } | null;
 }
 
 interface Application {
@@ -158,67 +172,6 @@ export default function AdmissionCycleDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to apply bulk action"),
   });
 
-  // ── Admission Test workflow ──
-  const [testForm, setTestForm] = useState({ requires_test: false, test_date: "", test_venue: "", test_duration_minutes: "", test_instructions: "" });
-  const [halls, setHalls] = useState<{ name: string; capacity: string }[]>([{ name: "Hall A", capacity: "50" }]);
-  const [seatStatuses, setSeatStatuses] = useState<string[]>(["SHORTLISTED"]);
-  const [startSeat, setStartSeat] = useState("1");
-
-  useEffect(() => {
-    if (!cycle) return;
-    setTestForm({
-      requires_test: cycle.requires_test,
-      test_date: cycle.test_date ? cycle.test_date.slice(0, 16) : "",
-      test_venue: cycle.test_venue ?? "",
-      test_duration_minutes: cycle.test_duration_minutes ? String(cycle.test_duration_minutes) : "",
-      test_instructions: cycle.test_instructions ?? "",
-    });
-  }, [cycle]);
-
-  const { data: seatPlan } = useQuery<SeatPlanRow[]>({
-    queryKey: ["admission", "cycles", id, "seat-plan"],
-    queryFn: async () => (await api.get(`/api/admission/cycles/${id}/test/seat-plan`)).data.data,
-  });
-
-  const scheduleTestMutation = useMutation({
-    mutationFn: () =>
-      api.put(`/api/admission/cycles/${id}/test`, {
-        requires_test: testForm.requires_test,
-        test_date: testForm.test_date || undefined,
-        test_venue: testForm.test_venue || undefined,
-        test_duration_minutes: testForm.test_duration_minutes ? Number(testForm.test_duration_minutes) : undefined,
-        test_instructions: testForm.test_instructions || undefined,
-      }),
-    onSuccess: () => {
-      toast.success("Test schedule saved");
-      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
-    },
-    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save"),
-  });
-
-  const seatPlanMutation = useMutation({
-    mutationFn: () =>
-      api.post(`/api/admission/cycles/${id}/test/seat-plan`, {
-        statuses: seatStatuses,
-        halls: halls.filter((h) => h.name && h.capacity).map((h) => ({ name: h.name, capacity: Number(h.capacity) })),
-        start_seat: Number(startSeat) || 1,
-      }),
-    onSuccess: (res) => {
-      toast.success(`Seat plan generated for ${res.data.data.assigned} candidates${res.data.data.overflow ? ` — ${res.data.data.overflow} could not be seated (over capacity)` : ""}`);
-      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id, "seat-plan"] });
-    },
-    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate seat plan"),
-  });
-
-  const publishAdmitCardsMutation = useMutation({
-    mutationFn: () => api.post(`/api/admission/cycles/${id}/admit-card/publish`),
-    onSuccess: (res) => {
-      toast.success(`Notified ${res.data.data.notified} applicants`);
-      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", id] });
-    },
-    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to publish"),
-  });
-
   // ── Custom application-form fields (form_config) ──
   // Backend (GET/PUT /cycles/:id/form-config) and the public website wizard
   // that reads and renders these fields already existed and worked — the
@@ -247,15 +200,6 @@ export default function AdmissionCycleDetailPage() {
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save form fields"),
   });
-
-  async function downloadAllAdmitCards() {
-    const res = await api.get(`/api/admission/cycles/${id}/admit-cards`, { responseType: "blob" });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Admit_Cards_${cycle?.name ?? id}.pdf`;
-    a.click();
-  }
 
   function toggleSort(column: "applied" | "rank") {
     if (sortBy === column) {
@@ -326,7 +270,7 @@ export default function AdmissionCycleDetailPage() {
         <TabsList>
           <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="merit">Merit List</TabsTrigger>
-          <TabsTrigger value="test">Admission Test</TabsTrigger>
+          <TabsTrigger value="scheduling">Scheduling</TabsTrigger>
           <TabsTrigger value="form">Application Form</TabsTrigger>
         </TabsList>
 
@@ -441,95 +385,15 @@ export default function AdmissionCycleDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="test" className="space-y-4">
-          <Card>
-            <CardContent className="space-y-3 pt-6">
-              <p className="font-medium">Schedule Test</p>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch checked={testForm.requires_test} onCheckedChange={(v) => setTestForm((f) => ({ ...f, requires_test: v }))} />
-                This cycle requires an offline admission test
-              </label>
-              {testForm.requires_test && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5"><Label className="text-xs">Test Date &amp; Time</Label><Input type="datetime-local" value={testForm.test_date} onChange={(e) => setTestForm((f) => ({ ...f, test_date: e.target.value }))} /></div>
-                  <div className="space-y-1.5"><Label className="text-xs">Duration (minutes)</Label><Input type="number" min={1} value={testForm.test_duration_minutes} onChange={(e) => setTestForm((f) => ({ ...f, test_duration_minutes: e.target.value }))} /></div>
-                  <div className="col-span-2 space-y-1.5"><Label className="text-xs">Venue</Label><Input value={testForm.test_venue} onChange={(e) => setTestForm((f) => ({ ...f, test_venue: e.target.value }))} placeholder="e.g. Main Campus, Room 101" /></div>
-                  <div className="col-span-2 space-y-1.5"><Label className="text-xs">Instructions</Label><Textarea value={testForm.test_instructions} onChange={(e) => setTestForm((f) => ({ ...f, test_instructions: e.target.value }))} placeholder="e.g. Bring admit card and photo ID. No calculators allowed." /></div>
-                </div>
-              )}
-              <Button size="sm" onClick={() => scheduleTestMutation.mutate()} disabled={scheduleTestMutation.isPending}>Save Schedule</Button>
-            </CardContent>
-          </Card>
-
-          {testForm.requires_test && (
-            <>
-              <Card>
-                <CardContent className="space-y-3 pt-6">
-                  <p className="font-medium">Seat Plan</p>
-                  <div className="flex gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <Checkbox checked={seatStatuses.includes("SHORTLISTED")} onCheckedChange={(v) => setSeatStatuses((prev) => (v ? [...prev, "SHORTLISTED"] : prev.filter((s) => s !== "SHORTLISTED")))} />
-                      Shortlisted
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <Checkbox checked={seatStatuses.includes("WAITLISTED")} onCheckedChange={(v) => setSeatStatuses((prev) => (v ? [...prev, "WAITLISTED"] : prev.filter((s) => s !== "WAITLISTED")))} />
-                      Waitlisted
-                    </label>
-                  </div>
-                  <div className="space-y-2">
-                    {halls.map((hall, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <Input className="w-48" placeholder="Hall name" value={hall.name} onChange={(e) => setHalls((prev) => prev.map((h, idx) => (idx === i ? { ...h, name: e.target.value } : h)))} />
-                        <Input className="w-32" type="number" min={1} placeholder="Capacity" value={hall.capacity} onChange={(e) => setHalls((prev) => prev.map((h, idx) => (idx === i ? { ...h, capacity: e.target.value } : h)))} />
-                        <Button size="sm" variant="outline" onClick={() => setHalls((prev) => prev.filter((_, idx) => idx !== i))} disabled={halls.length === 1}>Remove</Button>
-                      </div>
-                    ))}
-                    <Button size="sm" variant="outline" onClick={() => setHalls((prev) => [...prev, { name: "", capacity: "" }])}>+ Add Hall</Button>
-                  </div>
-                  <div className="w-32 space-y-1.5"><Label className="text-xs">Start Seat #</Label><Input type="number" min={1} value={startSeat} onChange={(e) => setStartSeat(e.target.value)} /></div>
-                  <Button size="sm" onClick={() => seatPlanMutation.mutate()} disabled={seatPlanMutation.isPending || !seatStatuses.length}>Generate Seat Plan</Button>
-
-                  {!!seatPlan?.length && (
-                    <div className="mt-3 rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Hall</TableHead><TableHead>Seat</TableHead><TableHead>Roll</TableHead><TableHead>Applicant</TableHead><TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {seatPlan.map((s, i) => (
-                            <TableRow key={i}>
-                              <TableCell>{s.hall_name}</TableCell>
-                              <TableCell>{s.seat_number}</TableCell>
-                              <TableCell className="font-mono text-xs">{s.admission_roll}</TableCell>
-                              <TableCell>{s.applicant_name}</TableCell>
-                              <TableCell><StatusBadge status={s.status} /></TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="space-y-3 pt-6">
-                  <p className="font-medium">Admit Cards</p>
-                  <div className="flex items-center gap-3">
-                    <Button size="sm" variant="outline" onClick={downloadAllAdmitCards} disabled={!seatPlan?.length}>Download All (PDF)</Button>
-                    <Button size="sm" onClick={() => publishAdmitCardsMutation.mutate()} disabled={publishAdmitCardsMutation.isPending || !cycle.test_date}>Publish &amp; Notify</Button>
-                    {cycle.admit_card_published_at ? (
-                      <span className="text-xs text-emerald-600">Published {new Date(cycle.admit_card_published_at).toLocaleString()} — applicants can self-download</span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Not yet published — applicants can&apos;t download their admit card until you publish</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
+        <TabsContent value="scheduling" className="space-y-6">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Written Test</h3>
+            <StageSchedulingPanel cycleId={id} stageType="WRITTEN_TEST" cycle={cycle} queryClient={queryClient} />
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Interview</h3>
+            <StageSchedulingPanel cycleId={id} stageType="INTERVIEW" cycle={cycle} queryClient={queryClient} />
+          </div>
         </TabsContent>
 
         <TabsContent value="form" className="space-y-4">
@@ -649,5 +513,228 @@ export default function AdmissionCycleDetailPage() {
         </TabsContent>
       </Tabs>
     </PageWrapper>
+  );
+}
+
+// Plan Twenty-Three Phase 5 -- Written Test and Interview are two
+// independent, separately-schedulable stages; this same panel is rendered
+// twice (once per stageType) rather than duplicating the whole workflow.
+function StageSchedulingPanel({ cycleId, stageType, cycle, queryClient }: { cycleId: string; stageType: StageType; cycle: Cycle; queryClient: QueryClient }) {
+  const isWrittenTest = stageType === "WRITTEN_TEST";
+  const label = isWrittenTest ? "Written Test" : "Interview";
+
+  const [defaults, setDefaults] = useState({ requires: false, scheduled_date: "", venue: "", duration_minutes: "", instructions: "" });
+  useEffect(() => {
+    setDefaults(
+      isWrittenTest
+        ? {
+            requires: cycle.requires_written_test,
+            scheduled_date: cycle.written_test_date ? cycle.written_test_date.slice(0, 16) : "",
+            venue: cycle.written_test_venue ?? "",
+            duration_minutes: cycle.written_test_duration_minutes ? String(cycle.written_test_duration_minutes) : "",
+            instructions: cycle.written_test_instructions ?? "",
+          }
+        : {
+            requires: cycle.requires_interview,
+            scheduled_date: cycle.interview_date ? cycle.interview_date.slice(0, 16) : "",
+            venue: cycle.interview_venue ?? "",
+            duration_minutes: cycle.interview_duration_minutes ? String(cycle.interview_duration_minutes) : "",
+            instructions: cycle.interview_instructions ?? "",
+          },
+    );
+  }, [cycle, isWrittenTest]);
+
+  const saveDefaultsMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/admission/cycles/${cycleId}/stages/${stageType}/defaults`, {
+        requires: defaults.requires,
+        scheduled_date: defaults.scheduled_date || undefined,
+        venue: defaults.venue || undefined,
+        duration_minutes: defaults.duration_minutes ? Number(defaults.duration_minutes) : undefined,
+        instructions: defaults.instructions || undefined,
+      }),
+    onSuccess: () => {
+      toast.success(`${label} defaults saved`);
+      queryClient.invalidateQueries({ queryKey: ["admission", "cycles", cycleId] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to save"),
+  });
+
+  const [seatStatuses, setSeatStatuses] = useState<string[]>(["SHORTLISTED"]);
+  const [halls, setHalls] = useState<{ name: string; capacity: string }[]>([{ name: "Hall A", capacity: "50" }]);
+  const [startSeat, setStartSeat] = useState("1");
+  const [selectedForNotify, setSelectedForNotify] = useState<string[]>([]);
+
+  const { data: preview, refetch: refetchPreview } = useQuery<StagePreviewRow[]>({
+    queryKey: ["admission", "cycles", cycleId, "stages", stageType, "status"],
+    queryFn: async () => (await api.get(`/api/admission/cycles/${cycleId}/stages/${stageType}/status`)).data.data,
+  });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/api/admission/cycles/${cycleId}/stages/${stageType}/bulk-assign`, {
+        statuses: seatStatuses,
+        halls: isWrittenTest ? halls.filter((h) => h.name && h.capacity).map((h) => ({ name: h.name, capacity: Number(h.capacity) })) : undefined,
+        start_seat: Number(startSeat) || 1,
+      }),
+    onSuccess: (res) => {
+      toast.success(`Assigned ${res.data.data.assigned} candidate(s)${res.data.data.overflow ? ` — ${res.data.data.overflow} could not be seated (over capacity)` : ""}`);
+      refetchPreview();
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to bulk-assign"),
+  });
+
+  const notifyMutation = useMutation({
+    mutationFn: () => api.post(`/api/admission/cycles/${cycleId}/stages/${stageType}/bulk-notify`, { application_ids: selectedForNotify }),
+    onSuccess: (res) => {
+      toast.success(`Notified ${res.data.data.notified} applicant(s)`);
+      setSelectedForNotify([]);
+      refetchPreview();
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to notify"),
+  });
+
+  const outcomeMutation = useMutation({
+    mutationFn: ({ applicationId, status }: { applicationId: string; status: "PASSED" | "FAILED" | "NO_SHOW" }) =>
+      api.put(`/api/admission/applications/${applicationId}/stages/${stageType}/outcome`, { status }),
+    onSuccess: () => {
+      toast.success("Outcome recorded");
+      refetchPreview();
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record outcome"),
+  });
+
+  async function downloadAllCards() {
+    const res = await api.get(`/api/admission/cycles/${cycleId}/stages/${stageType}/cards`, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${label.replace(/\s+/g, "_")}_Cards.pdf`;
+    a.click();
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="space-y-3 pt-6">
+          <p className="font-medium">{label} Defaults</p>
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={defaults.requires} onCheckedChange={(v) => setDefaults((f) => ({ ...f, requires: v }))} />
+            This cycle requires {isWrittenTest ? "a written test" : "an interview"}
+          </label>
+          {defaults.requires && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label className="text-xs">Date &amp; Time</Label><Input type="datetime-local" value={defaults.scheduled_date} onChange={(e) => setDefaults((f) => ({ ...f, scheduled_date: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">Duration (minutes)</Label><Input type="number" min={1} value={defaults.duration_minutes} onChange={(e) => setDefaults((f) => ({ ...f, duration_minutes: e.target.value }))} /></div>
+              <div className="col-span-2 space-y-1.5"><Label className="text-xs">Venue</Label><Input value={defaults.venue} onChange={(e) => setDefaults((f) => ({ ...f, venue: e.target.value }))} placeholder="e.g. Main Campus, Room 101" /></div>
+              <div className="col-span-2 space-y-1.5"><Label className="text-xs">Instructions</Label><Textarea value={defaults.instructions} onChange={(e) => setDefaults((f) => ({ ...f, instructions: e.target.value }))} placeholder="e.g. Bring admit card and photo ID." /></div>
+            </div>
+          )}
+          <Button size="sm" onClick={() => saveDefaultsMutation.mutate()} disabled={saveDefaultsMutation.isPending}>Save Defaults</Button>
+        </CardContent>
+      </Card>
+
+      {defaults.requires && (
+        <>
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <p className="font-medium">Bulk Assign</p>
+              <div className="flex gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={seatStatuses.includes("SHORTLISTED")} onCheckedChange={(v) => setSeatStatuses((prev) => (v ? [...prev, "SHORTLISTED"] : prev.filter((s) => s !== "SHORTLISTED")))} />
+                  Shortlisted
+                </label>
+                <label className="flex items-center gap-2">
+                  <Checkbox checked={seatStatuses.includes("WAITLISTED")} onCheckedChange={(v) => setSeatStatuses((prev) => (v ? [...prev, "WAITLISTED"] : prev.filter((s) => s !== "WAITLISTED")))} />
+                  Waitlisted
+                </label>
+              </div>
+              {isWrittenTest && (
+                <div className="space-y-2">
+                  {halls.map((hall, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input className="w-48" placeholder="Hall name" value={hall.name} onChange={(e) => setHalls((prev) => prev.map((h, idx) => (idx === i ? { ...h, name: e.target.value } : h)))} />
+                      <Input className="w-32" type="number" min={1} placeholder="Capacity" value={hall.capacity} onChange={(e) => setHalls((prev) => prev.map((h, idx) => (idx === i ? { ...h, capacity: e.target.value } : h)))} />
+                      <Button size="sm" variant="outline" onClick={() => setHalls((prev) => prev.filter((_, idx) => idx !== i))} disabled={halls.length === 1}>Remove</Button>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" onClick={() => setHalls((prev) => [...prev, { name: "", capacity: "" }])}>+ Add Hall</Button>
+                  <div className="w-32 space-y-1.5"><Label className="text-xs">Start Seat #</Label><Input type="number" min={1} value={startSeat} onChange={(e) => setStartSeat(e.target.value)} /></div>
+                </div>
+              )}
+              <Button size="sm" onClick={() => bulkAssignMutation.mutate()} disabled={bulkAssignMutation.isPending || !seatStatuses.length}>
+                Assign {label}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">Roster &amp; Notify</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={downloadAllCards}>Download All Cards</Button>
+                  <Button size="sm" onClick={() => notifyMutation.mutate()} disabled={notifyMutation.isPending || !selectedForNotify.length}>
+                    Notify Selected ({selectedForNotify.length})
+                  </Button>
+                </div>
+              </div>
+              {!preview?.length && <EmptyState title="No shortlisted/waitlisted applicants yet" />}
+              {!!preview?.length && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead></TableHead>
+                      <TableHead>Roll</TableHead>
+                      <TableHead>Applicant</TableHead>
+                      <TableHead>Status</TableHead>
+                      {isWrittenTest && <TableHead>Hall / Seat</TableHead>}
+                      <TableHead>Scheduled</TableHead>
+                      <TableHead>Notified</TableHead>
+                      <TableHead>Outcome</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {preview.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedForNotify.includes(row.id)}
+                            disabled={!row.stage}
+                            onCheckedChange={(v) => setSelectedForNotify((prev) => (v ? [...prev, row.id] : prev.filter((x) => x !== row.id)))}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{row.admission_roll ?? "-"}</TableCell>
+                        <TableCell><Link href={`/admission/applications/${row.id}`} className="text-primary hover:underline">{row.applicant_name}</Link></TableCell>
+                        <TableCell><StatusBadge status={row.status} /></TableCell>
+                        {isWrittenTest && <TableCell className="text-xs">{row.stage?.hall_name ? `${row.stage.hall_name} / ${row.stage.seat_number}` : "-"}</TableCell>}
+                        <TableCell className="text-xs">{row.stage?.scheduled_date ? new Date(row.stage.scheduled_date).toLocaleString() : "-"}</TableCell>
+                        <TableCell>{row.stage?.notified_at ? <span className="text-xs text-emerald-600">Yes</span> : <span className="text-xs text-muted-foreground">No</span>}</TableCell>
+                        <TableCell>
+                          {row.stage ? (
+                            <select
+                              className="rounded-md border px-2 py-1 text-xs"
+                              value={row.stage.status}
+                              onChange={(e) => outcomeMutation.mutate({ applicationId: row.id, status: e.target.value as "PASSED" | "FAILED" | "NO_SHOW" })}
+                            >
+                              <option value="SCHEDULED">Scheduled</option>
+                              <option value="PASSED">Passed</option>
+                              <option value="FAILED">Failed</option>
+                              <option value="NO_SHOW">No Show</option>
+                            </select>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

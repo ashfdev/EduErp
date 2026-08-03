@@ -28,7 +28,12 @@ export default function AdmissionDashboardPage() {
         title="Online Admission"
         subtitle="Manage admission cycles and applications"
         breadcrumbs={[{ label: "Admission" }]}
-        action={<Link href="/admission/cycles/new"><Button>+ New Cycle</Button></Link>}
+        action={
+          <div className="flex gap-2">
+            <Link href="/admission/applications"><Button variant="outline">All Applications</Button></Link>
+            <Link href="/admission/cycles/new"><Button>+ New Cycle</Button></Link>
+          </div>
+        }
       />
 
       {isLoading ? (

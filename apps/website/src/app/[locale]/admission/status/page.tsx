@@ -7,6 +7,18 @@ import { Search, Phone, FileText, CheckCircle2, AlertCircle, Calendar, MapPin, D
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+interface ApplicationStage {
+  stage_type: "WRITTEN_TEST" | "INTERVIEW";
+  scheduled_date: string | null;
+  venue: string | null;
+  duration_minutes: number | null;
+  instructions: string | null;
+  hall_name: string | null;
+  seat_number: string | null;
+  status: "SCHEDULED" | "PASSED" | "FAILED" | "NO_SHOW";
+  card_available: boolean;
+}
+
 interface StatusResult {
   found: boolean;
   admission_roll?: string;
@@ -14,11 +26,13 @@ interface StatusResult {
   cycle_name?: string;
   status?: string;
   merit_rank?: number | null;
-  requires_test?: boolean;
-  test_date?: string | null;
-  test_venue?: string | null;
-  admit_card_available?: boolean;
+  // Only ever populated with stages staff has deliberately notified the
+  // applicant about -- an un-required/un-scheduled stage cleanly never
+  // appears here at all (Plan Twenty-Three, Phase 5).
+  stages?: ApplicationStage[];
 }
+
+const STAGE_LABEL: Record<ApplicationStage["stage_type"], string> = { WRITTEN_TEST: "Written Test", INTERVIEW: "Interview" };
 
 interface PaymentInvoice {
   id: string;
@@ -392,37 +406,41 @@ export default function AdmissionStatusPage() {
                 <PaymentSection admissionRoll={result.admission_roll} phone={phone} />
               )}
 
-              {result.requires_test && (
-                <div className="bg-white p-5 space-y-4 border-t border-green-100">
+              {!!result.stages?.length && result.stages.map((stage) => (
+                <div key={stage.stage_type} className="bg-white p-5 space-y-4 border-t border-green-100">
                   <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-primary" /> {t("admissionTest")}
+                    <CheckCircle2 className="h-4 w-4 text-primary" /> {STAGE_LABEL[stage.stage_type]}
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {result.test_date && (
+                    {stage.scheduled_date && (
                       <div className="flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50 p-3">
                         <Calendar className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-xs font-semibold text-slate-500 uppercase">Date & Time</p>
-                          <p className="text-sm font-semibold text-slate-800 mt-0.5">{t("date", { date: new Date(result.test_date).toLocaleString() })}</p>
+                          <p className="text-sm font-semibold text-slate-800 mt-0.5">{t("date", { date: new Date(stage.scheduled_date).toLocaleString() })}</p>
                         </div>
                       </div>
                     )}
-                    {result.test_venue && (
+                    {stage.venue && (
                       <div className="flex items-start gap-2.5 rounded-xl border border-slate-100 bg-slate-50 p-3">
                         <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-xs font-semibold text-slate-500 uppercase">Venue</p>
-                          <p className="text-sm font-semibold text-slate-800 mt-0.5">{t("venue", { venue: result.test_venue })}</p>
+                          <p className="text-sm font-semibold text-slate-800 mt-0.5">{t("venue", { venue: stage.venue })}</p>
                         </div>
                       </div>
                     )}
                   </div>
+                  {stage.stage_type === "WRITTEN_TEST" && stage.hall_name && (
+                    <p className="text-xs text-slate-500">Hall {stage.hall_name}{stage.seat_number ? `, Seat ${stage.seat_number}` : ""}</p>
+                  )}
+                  {stage.instructions && <p className="text-xs text-slate-500 italic">{stage.instructions}</p>}
 
                   <div className="pt-2">
-                    {result.admit_card_available ? (
+                    {stage.card_available ? (
                       <a
-                        href={`${API_URL}/api/admission/application/admit-card?admission_roll=${encodeURIComponent(admissionRoll)}&phone=${encodeURIComponent(phone)}`}
+                        href={`${API_URL}/api/admission/application/stage-card?admission_roll=${encodeURIComponent(admissionRoll)}&phone=${encodeURIComponent(phone)}&stage_type=${stage.stage_type}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-center gap-2 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 transition shadow-sm"
@@ -436,7 +454,7 @@ export default function AdmissionStatusPage() {
                     )}
                   </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
