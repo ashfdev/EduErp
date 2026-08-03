@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient, FeeStructure, Invoice } from "@education-erp/db";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createAdvanceCreditConsumptionJournal } from "../accounts/auto-journal.service";
-import { resolveFeeStructureClassIds } from "./fee-structure-scope";
+import { buildFeeStructureStudentWhere, feeStructureAppliesToStudent } from "./fee-structure-scope";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -226,13 +226,12 @@ export async function runMonthlyFeeGeneration(
   let created = 0;
   let skipped = 0;
   for (const structure of structures) {
-    const classIds = await resolveFeeStructureClassIds(tx, structure);
+    const scopeWhere = await buildFeeStructureStudentWhere(tx, structure);
     const students = await tx.student.findMany({
       where: {
         deleted_at: null,
         status: "ACTIVE",
-        ...(classIds && { current_class_id: { in: classIds } }),
-        ...(structure.section_id && { current_section_id: structure.section_id }),
+        ...scopeWhere,
       },
     });
     for (const student of students) {
@@ -259,18 +258,29 @@ export async function invoiceReadmissionFeeIfConfigured(
   studentId: string,
   destinationClassId: string,
   destinationAcademicYearId: string,
+  destinationGroupId: string | null = null,
 ): Promise<{ created: boolean }> {
-  // Multi-class-aware (Phase N3) -- a READMISSION structure scoped via
-  // FeeStructureClass rows (the `classes` relation) matches here exactly
-  // like one scoped via the legacy class_id scalar.
-  const structure = await tx.feeStructure.findFirst({
-    where: {
-      academic_year_id: destinationAcademicYearId,
-      category: "READMISSION",
-      is_active: true,
-      OR: [{ class_id: destinationClassId }, { classes: { some: { class_id: destinationClassId } } }],
-    },
+  // Group-aware (see fee-structure-scope.ts) -- a class with two Groups can
+  // carry two different READMISSION structures (e.g. a higher one for
+  // Science). When more than one active READMISSION structure applies to
+  // this destination class (only possible if the class/group overlap
+  // warning was explicitly overridden at assignment time), the more
+  // specific one -- a real class+group row over a whole-class row -- wins,
+  // mirroring the fee-fine-engine's own "most specific wins" resolution.
+  const candidates = await tx.feeStructure.findMany({
+    where: { academic_year_id: destinationAcademicYearId, category: "READMISSION", is_active: true },
+    include: { classes: { select: { class_id: true, group_id: true } } },
   });
+  let structure: (typeof candidates)[number] | undefined;
+  let matchedSpecific = false;
+  for (const candidate of candidates) {
+    if (!(await feeStructureAppliesToStudent(tx, candidate, destinationClassId, null, studentId, destinationGroupId))) continue;
+    const isSpecific = candidate.classes.some((c) => c.class_id === destinationClassId && c.group_id !== null);
+    if (!structure || (isSpecific && !matchedSpecific)) {
+      structure = candidate;
+      matchedSpecific = isSpecific;
+    }
+  }
   if (!structure) return { created: false };
 
   const existing = await tx.invoice.findFirst({

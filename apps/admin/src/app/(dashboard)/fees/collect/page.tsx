@@ -1,16 +1,39 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   AdjustmentNote, Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label,
-  LoadingSpinner, PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch,
+  LoadingSpinner, PageHeader, PageWrapper, SearchInput, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, StatusBadge, Switch,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
-import { useInstitution } from "@/hooks/use-institution";
+
+const GATEWAYS = [
+  { value: "CASH", label: "Cash" },
+  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+  { value: "BKASH", label: "bKash (manual)" },
+  { value: "NAGAD", label: "Nagad (manual)" },
+  { value: "ROCKET", label: "Rocket (manual)" },
+];
+const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
+const FREQUENCIES = [
+  { value: "ONE_TIME", label: "One-Time" },
+  { value: "MONTHLY", label: "Monthly" },
+  { value: "YEARLY", label: "Yearly" },
+];
+const STATUSES = [
+  { value: "PENDING", label: "Pending" },
+  { value: "PARTIAL", label: "Partial" },
+  { value: "PAID", label: "Paid" },
+  { value: "OVERDUE", label: "Overdue" },
+  { value: "WAIVED", label: "Waived" },
+];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const CURRENT_YEAR = new Date().getFullYear();
 
 interface ClassOption {
   id: string;
@@ -18,25 +41,401 @@ interface ClassOption {
   sections?: { id: string; name: string }[];
   groups?: { id: string; name_en: string }[];
 }
-interface RosterStudent {
+interface YearOption { id: string; label: string; is_active: boolean }
+interface SubCategoryOption { id: string; category: string; name: string }
+interface StudentBasic { id: string; name_en: string; student_uid: string }
+
+interface DashboardSummary {
+  total_students: number;
+  total_invoiced: number;
+  total_collected: number;
+  total_outstanding: number;
+  collection_percentage: number;
+  overdue_count: number;
+  overdue_amount: number;
+  fully_paid_count: number;
+  with_dues_count: number;
+}
+interface StructureRow {
+  fee_structure_id: string | null;
+  name: string;
+  category: string;
+  sub_category: string | null;
+  frequency: string | null;
+  invoice_count: number;
+  total_invoiced: number;
+  total_collected: number;
+  total_outstanding: number;
+  collection_percentage: number;
+}
+interface FinancialContext {
+  total_revenue: number;
+  total_expense: number;
+  net_position: number;
+  salary_paid: number;
+  current_fund_balance: number;
+}
+interface DashboardResponse {
+  academic_year: { id: string; label: string } | null;
+  period_label: string;
+  summary: DashboardSummary;
+  by_structure: StructureRow[];
+  financial_context: FinancialContext;
+}
+interface DrillDownRow {
   id: string;
-  name_en: string;
-  student_uid: string;
-  current_roll_no: string | null;
-  total_due: number;
-  total_paid: number;
+  student: { id: string; name_en: string; student_uid: string; class_name: string | null; section_name: string | null } | null;
+  description: string;
+  category: string;
+  amount_due: number;
+  amount_paid: number;
+  fine_amount: number;
   outstanding: number;
-  status: "NO_INVOICE" | "PAID" | "PARTIAL" | "DUE";
+  status: string;
+  due_date: string;
 }
-interface RosterResponse {
-  students: RosterStudent[];
-  summary: { total_students: number; with_dues: number; fully_paid: number };
+
+function money(n: number) {
+  return `৳${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
-interface StudentBasic {
-  id: string;
-  name_en: string;
-  student_uid: string;
+
+const emptyFilters = {
+  academicYearId: "", month: "", classId: "", sectionId: "", groupId: "", category: "", feeSubCategoryId: "", frequency: "", status: "",
+};
+
+export default function CollectFeePage() {
+  const searchParams = useSearchParams();
+  const directStudentId = searchParams.get("student_id");
+
+  const [filters, setFilters] = useState(emptyFilters);
+  const [collectingStudent, setCollectingStudent] = useState<StudentBasic | null>(null);
+  const [drillDown, setDrillDown] = useState<{ open: boolean; feeStructureId: string | null; label: string }>({ open: false, feeStructureId: null, label: "" });
+  const [drillSearch, setDrillSearch] = useState("");
+  const [drillPage, setDrillPage] = useState(1);
+
+  const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+  const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+  const { data: subCategories } = useQuery<SubCategoryOption[]>({ queryKey: ["fees", "sub-categories"], queryFn: async () => (await api.get("/api/fees/sub-categories", { params: { active_only: "true" } })).data.data });
+  const selectedClass = classes?.find((c) => c.id === filters.classId);
+  const relevantSubCategories = subCategories?.filter((s) => !filters.category || s.category === filters.category) ?? [];
+
+  const dashboardParams = {
+    academic_year_id: filters.academicYearId || undefined,
+    month: filters.month || undefined,
+    year: filters.month ? CURRENT_YEAR : undefined,
+    class_id: filters.classId || undefined,
+    section_id: filters.sectionId || undefined,
+    group_id: filters.groupId || undefined,
+    category: filters.category || undefined,
+    fee_sub_category_id: filters.feeSubCategoryId || undefined,
+    frequency: filters.frequency || undefined,
+    status: filters.status || undefined,
+  };
+
+  const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError, error: dashboardErrorObj, refetch: refetchDashboard } = useQuery<DashboardResponse>({
+    queryKey: ["fees", "collection-dashboard", dashboardParams],
+    queryFn: async () => (await api.get("/api/fees/collection-dashboard", { params: dashboardParams })).data.data,
+  });
+
+  const { data: drillData, isFetching: drillLoading } = useQuery<{ data: DrillDownRow[]; meta: { total: number; totalPages: number } }>({
+    queryKey: ["fees", "collection-dashboard", "invoices", dashboardParams, drillDown.feeStructureId, drillSearch, drillPage],
+    queryFn: async () =>
+      (
+        await api.get("/api/fees/collection-dashboard/invoices", {
+          params: { ...dashboardParams, fee_structure_id: drillDown.feeStructureId ?? undefined, search: drillSearch || undefined, page: drillPage, limit: 50 },
+        })
+      ).data,
+    enabled: drillDown.open,
+  });
+
+  const { data: directStudent } = useQuery<{ personal: { id: string; name_en: string; student_uid: string } }>({
+    queryKey: ["students", directStudentId],
+    queryFn: async () => (await api.get(`/api/students/${directStudentId}`)).data.data,
+    enabled: !!directStudentId,
+  });
+  useEffect(() => {
+    if (directStudent) setCollectingStudent({ id: directStudent.personal.id, name_en: directStudent.personal.name_en, student_uid: directStudent.personal.student_uid });
+  }, [directStudent]);
+
+  function setFilter<K extends keyof typeof filters>(key: K, value: string) {
+    setFilters((f) => {
+      const next = { ...f, [key]: value };
+      if (key === "classId") { next.sectionId = ""; next.groupId = ""; }
+      if (key === "category") next.feeSubCategoryId = "";
+      return next;
+    });
+  }
+
+  function openDrillDown(feeStructureId: string | null, label: string) {
+    setDrillDown({ open: true, feeStructureId, label });
+    setDrillSearch("");
+    setDrillPage(1);
+  }
+
+  const s = dashboard?.summary;
+  const fc = dashboard?.financial_context;
+
+  return (
+    <PageWrapper>
+      <PageHeader
+        title="Collect Fee"
+        subtitle="Full collection picture first — filter to narrow it, then collect from any student."
+        breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Collect" }]}
+      />
+
+      {/* ── Filters — every one of these recomputes the whole dashboard below, not just a table ── */}
+      <Card>
+        <CardContent className="flex flex-wrap items-end gap-3 pt-6">
+          <div className="space-y-1">
+            <Label className="text-xs">Session</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.academicYearId} onChange={(e) => setFilter("academicYearId", e.target.value)}>
+              <option value="">Active session</option>
+              {years?.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_active ? " (Active)" : ""}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Month</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.month} onChange={(e) => setFilter("month", e.target.value)}>
+              <option value="">Whole session</option>
+              {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m} {CURRENT_YEAR}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Class</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.classId} onChange={(e) => setFilter("classId", e.target.value)}>
+              <option value="">All classes</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Section</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.sectionId} onChange={(e) => setFilter("sectionId", e.target.value)} disabled={!filters.classId}>
+              <option value="">All sections</option>
+              {selectedClass?.sections?.map((sec) => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+            </select>
+          </div>
+          {!!selectedClass?.groups?.length && (
+            <div className="space-y-1">
+              <Label className="text-xs">Group</Label>
+              <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.groupId} onChange={(e) => setFilter("groupId", e.target.value)}>
+                <option value="">All groups</option>
+                {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs">Category</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.category} onChange={(e) => setFilter("category", e.target.value)}>
+              <option value="">All categories</option>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {!!relevantSubCategories.length && (
+            <div className="space-y-1">
+              <Label className="text-xs">Sub-Category</Label>
+              <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.feeSubCategoryId} onChange={(e) => setFilter("feeSubCategoryId", e.target.value)}>
+                <option value="">All</option>
+                {relevantSubCategories.map((sc) => <option key={sc.id} value={sc.id}>{sc.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label className="text-xs">Fee Type</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.frequency} onChange={(e) => setFilter("frequency", e.target.value)}>
+              <option value="">All types</option>
+              {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={filters.status} onChange={(e) => setFilter("status", e.target.value)}>
+              <option value="">All statuses</option>
+              {STATUSES.map((st) => <option key={st.value} value={st.value}>{st.label}</option>)}
+            </select>
+          </div>
+          {JSON.stringify(filters) !== JSON.stringify(emptyFilters) && (
+            <Button size="sm" variant="outline" onClick={() => setFilters(emptyFilters)}>Clear filters</Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {dashboardLoading && !dashboard && <div className="flex justify-center py-16"><LoadingSpinner /></div>}
+      {dashboardError && <ErrorState title="Failed to load dashboard" description={extractErrorMessage(dashboardErrorObj)} retryLabel="Retry" onRetry={() => refetchDashboard()} />}
+
+      {dashboard && s && (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Showing: <span className="font-medium text-foreground">{dashboard.academic_year?.label ?? "—"}</span> · {dashboard.period_label}
+          </p>
+
+          {/* ── Dynamic KPI cards — recompute for whatever filters are active above ── */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Students in scope</p><p className="text-xl font-semibold">{s.total_students}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Invoiced</p><p className="text-xl font-semibold">{money(s.total_invoiced)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Collected</p><p className="text-xl font-semibold text-emerald-600">{money(s.total_collected)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-xl font-semibold text-red-600">{money(s.total_outstanding)}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Collection %</p><p className="text-xl font-semibold">{s.collection_percentage}%</p></CardContent></Card>
+            <Card className="border-red-200">
+              <CardContent className="pt-4">
+                <p className="text-xs text-muted-foreground">Overdue</p>
+                <p className="text-xl font-semibold text-red-600">{s.overdue_count} · {money(s.overdue_amount)}</p>
+              </CardContent>
+            </Card>
+          </div>
+          <p className="text-xs text-muted-foreground">{s.with_dues_count} student(s) with dues · {s.fully_paid_count} fully paid, for this exact filter selection.</p>
+
+          {/* ── Financial context strip — same period, whole-institution picture, so a fee number is never seen in isolation ── */}
+          {fc && (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="mb-3 text-sm font-medium">Financial Context — {dashboard.period_label}</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <div><p className="text-xs text-muted-foreground">Total Revenue</p><p className="font-semibold text-emerald-600">{money(fc.total_revenue)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Total Expense</p><p className="font-semibold text-red-600">{money(fc.total_expense)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Net Position</p><p className={`font-semibold ${fc.net_position >= 0 ? "text-emerald-600" : "text-red-600"}`}>{money(fc.net_position)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Staff Salary Paid</p><p className="font-semibold">{money(fc.salary_paid)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Current Fund Balance</p><p className="font-semibold">{money(fc.current_fund_balance)}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Quick actions — every audit-relevant destination one click away ── */}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => openDrillDown(null, "All matching invoices")}>View Due/Paid List</Button>
+            <Link href="/fees/reports"><Button size="sm" variant="outline">Defaulters Report</Button></Link>
+            <Link href="/fees/structures"><Button size="sm" variant="outline">Generate Invoices</Button></Link>
+            <Link href="/fees/invoices"><Button size="sm" variant="outline">Bulk Monthly Invoice</Button></Link>
+            <Link href="/fees/reports"><Button size="sm" variant="outline">Export / Audit Report</Button></Link>
+            <Link href="/fees/waivers"><Button size="sm" variant="outline">Waiver Setup</Button></Link>
+          </div>
+
+          {/* ── Per-fee-structure breakdown ── */}
+          <Card>
+            <CardContent className="p-0">
+              {!dashboard.by_structure.length ? (
+                <EmptyState title="No invoices match this filter" description="Try widening the filters above, or generate invoices from Fee Structures." />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fee Structure</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Invoices</TableHead>
+                      <TableHead>Invoiced</TableHead>
+                      <TableHead>Collected</TableHead>
+                      <TableHead>Outstanding</TableHead>
+                      <TableHead>%</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dashboard.by_structure.map((row) => (
+                      <TableRow key={row.fee_structure_id ?? row.name}>
+                        <TableCell>
+                          <p className="font-medium">{row.name}</p>
+                          {row.sub_category && <p className="text-xs text-muted-foreground">{row.sub_category}</p>}
+                        </TableCell>
+                        <TableCell><Badge variant="outline">{row.category}</Badge></TableCell>
+                        <TableCell className="text-muted-foreground">{row.frequency ?? "—"}</TableCell>
+                        <TableCell>{row.invoice_count}</TableCell>
+                        <TableCell>{money(row.total_invoiced)}</TableCell>
+                        <TableCell className="text-emerald-600">{money(row.total_collected)}</TableCell>
+                        <TableCell className="text-red-600">{money(row.total_outstanding)}</TableCell>
+                        <TableCell>{row.collection_percentage}%</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" onClick={() => openDrillDown(row.fee_structure_id, row.name)}>View who owes/paid</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      <CollectDialog student={collectingStudent} onClose={() => setCollectingStudent(null)} />
+
+      {/* ── Drill-down: who owes, who's paid, for the current filters (and optionally one structure) ── */}
+      <Dialog open={drillDown.open} onOpenChange={(v) => !v && setDrillDown({ open: false, feeStructureId: null, label: "" })}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader><DialogTitle>{drillDown.label}</DialogTitle></DialogHeader>
+          <SearchInput placeholder="Search by name or ID..." value={drillSearch} onChange={(e) => { setDrillSearch(e.target.value); setDrillPage(1); }} className="max-w-xs" />
+          <div className="max-h-[55vh] overflow-y-auto rounded-md border">
+            {drillLoading && !drillData && <p className="p-4 text-sm text-muted-foreground">Loading...</p>}
+            {!drillLoading && !drillData?.data.length && <EmptyState title="No matching invoices" />}
+            {!!drillData?.data.length && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Particular</TableHead>
+                    <TableHead>Due</TableHead>
+                    <TableHead>Paid</TableHead>
+                    <TableHead>Outstanding</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {drillData.data.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        {row.student ? (
+                          <>
+                            <p className="font-medium">{row.student.name_en}</p>
+                            <p className="text-xs text-muted-foreground">{row.student.student_uid} · {row.student.class_name}{row.student.section_name ? ` — ${row.student.section_name}` : ""}</p>
+                          </>
+                        ) : <span className="text-muted-foreground">Unknown</span>}
+                      </TableCell>
+                      <TableCell className="text-xs">{row.description}</TableCell>
+                      <TableCell>{money(row.amount_due + row.fine_amount)}</TableCell>
+                      <TableCell>{money(row.amount_paid)}</TableCell>
+                      <TableCell className={row.outstanding > 0 ? "text-red-600" : ""}>{money(row.outstanding)}</TableCell>
+                      <TableCell><StatusBadge status={row.status} /></TableCell>
+                      <TableCell className="text-right">
+                        {row.student && row.outstanding > 0 && (
+                          <Button size="sm" variant="outline" onClick={() => setCollectingStudent(row.student ? { id: row.student.id, name_en: row.student.name_en, student_uid: row.student.student_uid } : null)}>
+                            Collect
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          {drillData && drillData.meta.totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm">
+              <Button size="sm" variant="outline" disabled={drillPage <= 1} onClick={() => setDrillPage((p) => p - 1)}>Prev</Button>
+              <span className="text-muted-foreground">Page {drillPage} of {drillData.meta.totalPages} ({drillData.meta.total} total)</span>
+              <Button size="sm" variant="outline" disabled={drillPage >= drillData.meta.totalPages} onClick={() => setDrillPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </PageWrapper>
+  );
 }
+
+// A batch "Receive Fee" submission may create several Payment rows (one per
+// invoice line paid together), but the parent/guardian expects ONE printed
+// receipt for the whole transaction -- this hits the combined batch-receipt
+// route instead of downloading one PDF per line.
+async function downloadBatchReceiptPdf(receiptBatchId: string, receiptNo: string, copy?: "admin" | "student") {
+  const res = await api.get(`/api/documents/fee/receipt/batch/${receiptBatchId}`, { responseType: "blob", params: copy ? { copy } : undefined });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Receipt_${receiptNo}${copy ? `_${copy}` : ""}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 interface WorkspaceLine {
   invoice_id: string;
   category: string;
@@ -56,166 +455,6 @@ interface Workspace {
   student: StudentBasic;
   credit_balance: number;
   lines: WorkspaceLine[];
-}
-
-const GATEWAYS = [
-  { value: "CASH", label: "Cash" },
-  { value: "BANK_TRANSFER", label: "Bank Transfer" },
-  { value: "BKASH", label: "bKash (manual)" },
-  { value: "NAGAD", label: "Nagad (manual)" },
-  { value: "ROCKET", label: "Rocket (manual)" },
-];
-const CATEGORIES = ["ADMISSION", "FORM", "READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
-
-function rosterStatusBadge(status: RosterStudent["status"]) {
-  if (status === "PAID") return <Badge variant="success">Paid</Badge>;
-  if (status === "PARTIAL") return <Badge variant="warning">Partial</Badge>;
-  if (status === "DUE") return <Badge variant="destructive">Due</Badge>;
-  return <Badge variant="outline">No Invoice</Badge>;
-}
-
-export default function CollectFeePage() {
-  const searchParams = useSearchParams();
-  const directStudentId = searchParams.get("student_id");
-
-  const { type } = useInstitution();
-  const isUniversity = type === "UNIVERSITY";
-
-  const [classId, setClassId] = useState("");
-  const [sectionId, setSectionId] = useState("");
-  const [groupId, setGroupId] = useState("");
-  const [rosterSearch, setRosterSearch] = useState("");
-  const [collectingStudent, setCollectingStudent] = useState<StudentBasic | null>(null);
-
-  const { data: classes } = useQuery<ClassOption[]>({
-    queryKey: ["settings", "classes"],
-    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
-  });
-  const selectedClass = classes?.find((c) => c.id === classId);
-
-  const { data: roster, isFetching: rosterLoading, isError: isRosterError, error: rosterError, refetch: refetchRoster } = useQuery<RosterResponse>({
-    queryKey: ["fees", "roster", classId, sectionId, groupId],
-    queryFn: async () =>
-      (await api.get("/api/fees/roster", { params: { class_id: classId, section_id: sectionId || undefined, group_id: groupId || undefined } })).data.data,
-    enabled: !!classId,
-  });
-
-  const { data: directStudent } = useQuery<{ personal: { id: string; name_en: string; student_uid: string } }>({
-    queryKey: ["students", directStudentId],
-    queryFn: async () => (await api.get(`/api/students/${directStudentId}`)).data.data,
-    enabled: !!directStudentId,
-  });
-
-  useEffect(() => {
-    if (directStudent) {
-      setCollectingStudent({ id: directStudent.personal.id, name_en: directStudent.personal.name_en, student_uid: directStudent.personal.student_uid });
-    }
-  }, [directStudent]);
-
-  const filteredRoster = roster?.students.filter((s) => {
-    if (!rosterSearch.trim()) return true;
-    const q = rosterSearch.trim().toLowerCase();
-    return s.name_en.toLowerCase().includes(q) || s.student_uid.toLowerCase().includes(q) || (s.current_roll_no ?? "").toLowerCase().includes(q);
-  });
-
-  return (
-    <PageWrapper>
-      <PageHeader title="Collect Fee" subtitle="Browse a roster by class/section, or collect against a specific student's invoices" breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Collect" }]} />
-
-      <div className="flex flex-wrap gap-3">
-        <select className="rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setGroupId(""); }}>
-          <option value="">{isUniversity ? "Select semester..." : "Select class..."}</option>
-          {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
-        </select>
-        <select className="rounded-md border px-3 py-2 text-sm" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
-          <option value="">All Sections</option>
-          {selectedClass?.sections?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        {!!selectedClass?.groups?.length && (
-          <select className="rounded-md border px-3 py-2 text-sm" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-            <option value="">All Groups</option>
-            {selectedClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
-          </select>
-        )}
-      </div>
-
-      {!classId && <EmptyState title="Select a class to browse its roster" description="Or open a specific student's Fees tab and use its Collect Fee button." />}
-
-      {classId && rosterLoading && !roster && (
-        <div className="flex justify-center py-16"><LoadingSpinner /></div>
-      )}
-
-      {classId && isRosterError && (
-        <ErrorState title="Failed to load roster" description={extractErrorMessage(rosterError)} retryLabel="Retry" onRetry={() => refetchRoster()} />
-      )}
-
-      {classId && roster && (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Total Students</p><p className="text-2xl font-semibold">{roster.summary.total_students}</p></CardContent></Card>
-            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">With Dues</p><p className="text-2xl font-semibold text-red-600">{roster.summary.with_dues}</p></CardContent></Card>
-            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Fully Paid</p><p className="text-2xl font-semibold text-emerald-600">{roster.summary.fully_paid}</p></CardContent></Card>
-          </div>
-
-          <SearchInput placeholder="Search by name, roll, or ID..." value={rosterSearch} onChange={(e) => setRosterSearch(e.target.value)} className="max-w-xs" />
-
-          {!filteredRoster?.length && <EmptyState title={rosterLoading ? "Loading..." : "No students in this filter"} />}
-
-          {!!filteredRoster?.length && (
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Roll</TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Outstanding</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRoster.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell>{s.current_roll_no ?? "—"}</TableCell>
-                        <TableCell>
-                          <p className="font-medium">{s.name_en}</p>
-                          <p className="font-mono text-xs text-muted-foreground">{s.student_uid}</p>
-                        </TableCell>
-                        <TableCell>{rosterStatusBadge(s.status)}</TableCell>
-                        <TableCell>৳{s.outstanding}</TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => setCollectingStudent({ id: s.id, name_en: s.name_en, student_uid: s.student_uid })}>
-                            Collect
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      <CollectDialog student={collectingStudent} onClose={() => setCollectingStudent(null)} />
-    </PageWrapper>
-  );
-}
-
-// A batch "Receive Fee" submission may create several Payment rows (one per
-// invoice line paid together), but the parent/guardian expects ONE printed
-// receipt for the whole transaction -- this hits the combined batch-receipt
-// route instead of downloading one PDF per line.
-async function downloadBatchReceiptPdf(receiptBatchId: string, receiptNo: string, copy?: "admin" | "student") {
-  const res = await api.get(`/api/documents/fee/receipt/batch/${receiptBatchId}`, { responseType: "blob", params: copy ? { copy } : undefined });
-  const url = URL.createObjectURL(res.data);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Receipt_${receiptNo}${copy ? `_${copy}` : ""}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function AdHocFeeForm({ studentId, isFine, onDone }: { studentId: string; isFine: boolean; onDone: () => void }) {
@@ -338,6 +577,7 @@ function CollectDialog({ student, onClose }: { student: StudentBasic | null; onC
       setOverriddenWaivers(new Set());
       queryClient.invalidateQueries({ queryKey: ["fees", "collect-workspace", student?.id] });
       queryClient.invalidateQueries({ queryKey: ["fees", "roster"] });
+      queryClient.invalidateQueries({ queryKey: ["fees", "collection-dashboard"] });
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to record payment"),
   });

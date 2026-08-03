@@ -16,7 +16,15 @@ interface Invoice {
   fine_amount: number;
   status: string;
   due_date: string;
-  student: { name_en: string; student_uid: string; current_class?: { name_en: string } | null };
+  // Nullable on both sides -- an admission-applicant's invoice has no
+  // Student yet (only claimed at enroll time), while every other invoice
+  // has no AdmissionApplication. Exactly one of the two is ever set.
+  student: { name_en: string; student_uid: string; current_class?: { name_en: string } | null } | null;
+  application: { id: string; applicant_name: string; admission_roll: string } | null;
+}
+
+function payerName(inv: Pick<Invoice, "student" | "application">): string {
+  return inv.student?.name_en ?? inv.application?.applicant_name ?? "Unknown payer";
 }
 
 function canWaive(status: string) {
@@ -159,7 +167,15 @@ export default function InvoicesPage() {
             <TableBody>
               {invoices?.map((inv) => (
                 <TableRow key={inv.id}>
-                  <TableCell>{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></TableCell>
+                  <TableCell>
+                    {inv.student ? (
+                      <>{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></>
+                    ) : inv.application ? (
+                      <>{inv.application.applicant_name} <span className="text-xs text-muted-foreground">(Applicant — Roll {inv.application.admission_roll})</span></>
+                    ) : (
+                      <span className="text-muted-foreground">Unknown payer</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {inv.description}
                     <div className="text-xs text-muted-foreground">{inv.period}</div>
@@ -170,7 +186,7 @@ export default function InvoicesPage() {
                   <TableCell>{new Date(inv.due_date).toLocaleDateString()}</TableCell>
                   <TableCell><StatusBadge status={inv.status} /></TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.student.name_en}`)}>View</Button>
+                    <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${payerName(inv)}`)}>View</Button>
                     <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
                     {canWaive(inv.status) && (
                       <Button size="sm" variant="outline" onClick={() => setWaiveTarget(inv)}>Waive</Button>
@@ -198,7 +214,7 @@ export default function InvoicesPage() {
           <div className="space-y-3">
             {waiveTarget && (
               <p className="text-sm text-muted-foreground">
-                {waiveTarget.student.name_en} — {waiveTarget.description} — ৳{waiveTarget.amount_due}
+                {payerName(waiveTarget)} — {waiveTarget.description} — ৳{waiveTarget.amount_due}
               </p>
             )}
             <div className="space-y-1.5">

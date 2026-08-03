@@ -898,6 +898,93 @@ admissionRouter.get(
   }),
 );
 
+// Dedicated admission-payments reconciliation view -- distinct from both the
+// global Fee Receipts screen (accounts/receipts, every completed payment
+// across the whole institution) and the global Bank Transfer Verification
+// queue (fees/bank-transfers, every pending manual payment regardless of
+// source). This one is scoped to *admission applications only*, spans both
+// pending and completed in one place, and is where staff should look
+// specifically during an open admission window to answer "what's actually
+// coming in against applications right now."
+admissionRouter.get(
+  "/payments",
+  authenticate,
+  authorize(ADMISSION_READ_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        cycle_id: z.string().optional(),
+        status: z.enum(["INITIATED", "COMPLETED", "FAILED"]).optional(),
+        search: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+      .parse(req.query);
+
+    const where = {
+      invoice: {
+        application_id: { not: null },
+        ...(query.cycle_id && { application: { cycle_id: query.cycle_id } }),
+      },
+      ...(query.status && { status: query.status }),
+      ...(query.search && {
+        OR: [
+          { transaction_id: { contains: query.search, mode: "insensitive" as const } },
+          { receipt_no: { contains: query.search, mode: "insensitive" as const } },
+          { invoice: { application: { applicant_name: { contains: query.search, mode: "insensitive" as const } } } },
+          { invoice: { application: { admission_roll: { contains: query.search, mode: "insensitive" as const } } } },
+        ],
+      }),
+    };
+
+    const [items, total, summary] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        include: {
+          invoice: {
+            select: {
+              category: true,
+              description: true,
+              amount_due: true,
+              application: { select: { id: true, applicant_name: true, admission_roll: true, cycle: { select: { id: true, name: true } } } },
+            },
+          },
+        },
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.payment.count({ where }),
+      // Summary tiles reflect the *unfiltered* admission-payments universe
+      // (or the cycle filter, if one's applied) -- deliberately ignoring the
+      // search/status filters, so the tiles stay a stable "big picture" even
+      // while someone's typing into the search box.
+      prisma.payment.groupBy({
+        by: ["status"],
+        where: { invoice: { application_id: { not: null }, ...(query.cycle_id && { application: { cycle_id: query.cycle_id } }) } },
+        _sum: { amount: true },
+        _count: true,
+      }),
+    ]);
+
+    const withSlipUrls = await Promise.all(
+      items.map(async (p) => ({ ...p, slip_url: p.slip_blob_key ? await getSignedDownloadUrl(p.slip_blob_key) : null })),
+    );
+
+    res.json({
+      success: true,
+      data: withSlipUrls,
+      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+      summary: {
+        completed_total: summary.find((s) => s.status === "COMPLETED")?._sum.amount ?? 0,
+        completed_count: summary.find((s) => s.status === "COMPLETED")?._count ?? 0,
+        pending_count: summary.find((s) => s.status === "INITIATED")?._count ?? 0,
+        failed_count: summary.find((s) => s.status === "FAILED")?._count ?? 0,
+      },
+    });
+  }),
+);
+
 admissionRouter.get(
   "/applications/:id",
   authenticate,
@@ -1166,6 +1253,61 @@ admissionRouter.post(
   }),
 );
 
+// Preview of every class-wise fee an admin can choose to charge at
+// enrollment, beyond the Admission/Form fees already collected at apply
+// time (those two come from AdmissionCycle.app_fee/form_fee directly, not
+// from the FeeStructure catalog, so they're deliberately excluded here --
+// including them would either double-charge or just silently do nothing,
+// since nothing reads an ADMISSION/FORM-category FeeStructure row for the
+// online-admission flow). Everything else configured as a ONE_TIME
+// structure for the destination class (Development Fee, ID Card Fee,
+// Library Fee, etc.) plus the active MONTHLY tuition structure (first
+// month) shows up here, exactly mirroring what /promote's readmission-fee
+// lookup already does for one category -- generalized to every fee head an
+// admin has actually set up for this class, and left to their explicit
+// choice rather than silently auto-charging all of it.
+admissionRouter.get(
+  "/applications/:id/enrollment-fees",
+  authenticate,
+  authorize(ADMISSION_READ_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const query = z.object({ group_id: z.string().optional() }).parse(req.query);
+    const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { cycle: true } });
+    if (!application) throw notFound("Application not found");
+
+    const candidates = await prisma.feeStructure.findMany({
+      where: {
+        academic_year_id: application.cycle.academic_year_id,
+        is_active: true,
+        category: { notIn: ["ADMISSION", "FORM"] },
+        frequency: { in: ["ONE_TIME", "MONTHLY"] },
+        OR: [{ class_id: application.cycle.class_id }, { classes: { some: { class_id: application.cycle.class_id } } }],
+      },
+      include: { fee_sub_category: { select: { name: true } }, classes: { select: { class_id: true, group_id: true } } },
+      orderBy: [{ frequency: "asc" }, { name: "asc" }],
+    });
+    // Group-aware narrowing (see fee-structure-scope.ts) -- same refinement
+    // as the manual Add Student preview: the DB query above is a coarse
+    // class-level filter, refined here against each row's group_id.
+    const applicable = candidates.filter((s) =>
+      s.classes.length === 0 || s.classes.some((c) => c.class_id === application.cycle.class_id && (c.group_id === null || c.group_id === query.group_id)),
+    );
+
+    res.json({
+      success: true,
+      data: applicable.map((s) => ({
+        fee_structure_id: s.id,
+        name: s.name,
+        category: s.category,
+        sub_category: s.fee_sub_category?.name ?? null,
+        amount: s.amount,
+        frequency: s.frequency,
+      })),
+    });
+  }),
+);
+
 admissionRouter.post(
   "/applications/:id/enroll",
   authenticate,
@@ -1332,24 +1474,55 @@ admissionRouter.post(
         await applyWaiversToInvoice(tx, formInvoice);
       }
 
-      // First month's tuition, invoiced immediately at enrollment rather than
-      // waiting for the next manual/scheduled generate-bulk-monthly run —
-      // reuses that same idempotent create-if-missing check, so if bulk
-      // generation for this month already ran (or runs again later), this
-      // never produces a duplicate invoice for the same student+structure.
-      // Multi-class-aware (Phase N3) -- deliberately NOT filtered by class_id
-      // in the DB query itself: a multi-class structure has its legacy
-      // class_id scalar enforced null too, so a naive `OR: [{class_id:null},
-      // ...]` here would wrongly match every multi-class structure against
-      // every class. feeStructureAppliesToStudent resolves each candidate's
-      // true scope (join-table rows first, legacy scalar fallback) instead.
+      // Class-wise fees at enrollment: Development Fee, ID Card Fee, Library
+      // Fee, first month's Tuition, or whatever else the admin has actually
+      // configured as a ONE_TIME/MONTHLY FeeStructure for this class -- see
+      // GET .../enrollment-fees, which the admin UI calls first to build the
+      // checklist this array is chosen from. Omitted (no field sent at all)
+      // falls back to the old behavior (every applicable MONTHLY structure,
+      // first month only) so any pre-existing caller of this route keeps
+      // working exactly as before this feature existed.
       const now = new Date();
-      const monthlyStructures = await tx.feeStructure.findMany({
-        where: { academic_year_id: application.cycle.academic_year_id, frequency: "MONTHLY", is_active: true },
-      });
-      for (const structure of monthlyStructures) {
-        if (!(await feeStructureAppliesToStudent(tx, structure, application.cycle.class_id, body.section_id ?? null))) continue;
-        await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
+      if (body.selected_fee_structure_ids) {
+        for (const structureId of body.selected_fee_structure_ids) {
+          const structure = await tx.feeStructure.findUnique({ where: { id: structureId } });
+          if (!structure || !structure.is_active) continue;
+          if (!(await feeStructureAppliesToStudent(tx, structure, application.cycle.class_id, body.section_id ?? null, created.id, body.group_id ?? null))) continue;
+          if (structure.frequency === "MONTHLY") {
+            await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
+          } else {
+            const existingOneTime = await tx.invoice.findFirst({ where: { student_id: created.id, fee_structure_id: structure.id } });
+            if (existingOneTime) continue;
+            const oneTimeInvoice = await tx.invoice.create({
+              data: {
+                invoice_no: await generateInvoiceNo(tx),
+                student_id: created.id,
+                fee_structure_id: structure.id,
+                academic_year_id: application.cycle.academic_year_id,
+                category: structure.category,
+                fee_sub_category_id: structure.fee_sub_category_id,
+                description: structure.name,
+                amount_due: structure.amount,
+                due_date: structure.target_due_date ?? admissionInvoiceDueDate,
+              },
+            });
+            await applyWaiversToInvoice(tx, oneTimeInvoice);
+          }
+        }
+      } else {
+        // Multi-class-aware (Phase N3) -- deliberately NOT filtered by class_id
+        // in the DB query itself: a multi-class structure has its legacy
+        // class_id scalar enforced null too, so a naive `OR: [{class_id:null},
+        // ...]` here would wrongly match every multi-class structure against
+        // every class. feeStructureAppliesToStudent resolves each candidate's
+        // true scope (join-table rows first, legacy scalar fallback) instead.
+        const monthlyStructures = await tx.feeStructure.findMany({
+          where: { academic_year_id: application.cycle.academic_year_id, frequency: "MONTHLY", is_active: true },
+        });
+        for (const structure of monthlyStructures) {
+          if (!(await feeStructureAppliesToStudent(tx, structure, application.cycle.class_id, body.section_id ?? null, created.id, body.group_id ?? null))) continue;
+          await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
+        }
       }
 
       // Authoritative recheck, immediately before the status flip -- the

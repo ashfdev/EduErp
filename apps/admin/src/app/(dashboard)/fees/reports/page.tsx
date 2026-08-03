@@ -290,7 +290,7 @@ function CollectionSummaryTab() {
 }
 
 function WaiversReportTab() {
-  const { data, isLoading, isError, error, refetch } = useQuery<{ id: string; discount_amount: number; applied_at: string; invoice: { invoice_no: string; description: string; category: string; student: { name_en: string; student_uid: string } }; student_waiver: { waiver_type: { name: string } } }[]>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ id: string; discount_amount: number; applied_at: string; invoice: { invoice_no: string; description: string; category: string; student: { name_en: string; student_uid: string } | null; application: { applicant_name: string; admission_roll: string } | null }; student_waiver: { waiver_type: { name: string } } }[]>({
     queryKey: ["fees", "reports", "waivers"],
     queryFn: async () => (await api.get("/api/fees/reports/waivers")).data.data,
   });
@@ -306,7 +306,15 @@ function WaiversReportTab() {
           <TableBody>
             {data.map((a) => (
               <TableRow key={a.id}>
-                <TableCell>{a.invoice.student.name_en} <span className="font-mono text-xs text-muted-foreground">{a.invoice.student.student_uid}</span></TableCell>
+                <TableCell>
+                  {a.invoice.student ? (
+                    <>{a.invoice.student.name_en} <span className="font-mono text-xs text-muted-foreground">{a.invoice.student.student_uid}</span></>
+                  ) : a.invoice.application ? (
+                    <>{a.invoice.application.applicant_name} <span className="text-xs text-muted-foreground">(Applicant)</span></>
+                  ) : (
+                    <span className="text-muted-foreground">Unknown</span>
+                  )}
+                </TableCell>
                 <TableCell>{a.invoice.invoice_no} — {a.invoice.description}</TableCell>
                 <TableCell>{a.student_waiver.waiver_type.name}</TableCell>
                 <TableCell>৳{a.discount_amount}</TableCell>
@@ -461,7 +469,7 @@ interface PaymentRow {
   amount: number;
   gateway: string;
   paid_at: string | null;
-  invoice: { student: { name_en: string; student_uid: string } };
+  invoice: { student: { name_en: string; student_uid: string } | null; application: { applicant_name: string; admission_roll: string } | null };
 }
 
 function ExportTab() {
@@ -506,7 +514,15 @@ function ExportTab() {
                   <TableRow key={p.id}>
                     <TableCell>{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "—"}</TableCell>
                     <TableCell className="font-mono text-xs">{p.receipt_no ?? "—"}</TableCell>
-                    <TableCell>{p.invoice.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.invoice.student.student_uid}</span></TableCell>
+                    <TableCell>
+                      {p.invoice.student ? (
+                        <>{p.invoice.student.name_en} <span className="font-mono text-xs text-muted-foreground">{p.invoice.student.student_uid}</span></>
+                      ) : p.invoice.application ? (
+                        <>{p.invoice.application.applicant_name} <span className="text-xs text-muted-foreground">(Applicant)</span></>
+                      ) : (
+                        <span className="text-muted-foreground">Unknown</span>
+                      )}
+                    </TableCell>
                     <TableCell>৳{p.amount}</TableCell>
                     <TableCell>{p.gateway.replace(/_/g, " ")}</TableCell>
                   </TableRow>

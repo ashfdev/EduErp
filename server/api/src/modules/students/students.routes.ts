@@ -15,7 +15,9 @@ import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPro
 import { generateStudentUID } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
-import { invoiceReadmissionFeeIfConfigured, formatFeePeriod } from "../fees/invoice-helpers";
+import { invoiceReadmissionFeeIfConfigured, formatFeePeriod, createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
+import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
+import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { computeStudentLibraryFines } from "../library/library-fine.helper";
 import { sendNotification } from "../../services/notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -484,6 +486,61 @@ studentsRouter.post(
   }),
 );
 
+// Same preview the online-admission enroll dialog uses (GET
+// .../enrollment-fees), generalized to take class_id/academic_year_id
+// directly instead of resolving them from an AdmissionApplication -- the
+// manual Add Student form has no application to read them from, but the
+// underlying question ("which class-wise fees should this new student be
+// charged") and the fee-catalog lookup are identical either way.
+// Registered before "/:id" -- otherwise Express would match
+// "enrollment-fees-preview" as an id (same trap already documented above
+// for "/export"/"/:id").
+//
+// Deliberately does NOT exclude ADMISSION/FORM categories the way the
+// admission-enroll version does. That exclusion exists there because an
+// online applicant already paid AdmissionCycle.app_fee/form_fee at apply
+// time -- showing an ADMISSION-category FeeStructure again would double
+// charge them. A manually-added (walk-in) student never went through an
+// AdmissionCycle at all, so nothing was ever collected -- ADMISSION/FORM
+// structures need to be selectable here or they can never be charged to
+// this student by any mechanism, which was the actual gap reported.
+studentsRouter.get(
+  "/enrollment-fees-preview",
+  authorize(STUDENT_CRUD_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z.object({ class_id: z.string().min(1), academic_year_id: z.string().min(1), group_id: z.string().optional() }).parse(req.query);
+    const candidates = await prisma.feeStructure.findMany({
+      where: {
+        academic_year_id: query.academic_year_id,
+        is_active: true,
+        frequency: { in: ["ONE_TIME", "MONTHLY"] },
+        OR: [{ class_id: query.class_id }, { classes: { some: { class_id: query.class_id } } }],
+      },
+      include: { fee_sub_category: { select: { name: true } }, classes: { select: { class_id: true, group_id: true } } },
+      orderBy: [{ frequency: "asc" }, { name: "asc" }],
+    });
+    // Group-aware narrowing (see fee-structure-scope.ts) -- a multi-class
+    // structure's own rows may scope it to just one Group within this
+    // class; the DB query above is a coarse class-level filter, refined
+    // here against each row's group_id. Legacy single-class structures
+    // (classes.length === 0) have no group concept and always pass.
+    const applicable = candidates.filter((s) =>
+      s.classes.length === 0 || s.classes.some((c) => c.class_id === query.class_id && (c.group_id === null || c.group_id === query.group_id)),
+    );
+    res.json({
+      success: true,
+      data: applicable.map((s) => ({
+        fee_structure_id: s.id,
+        name: s.name,
+        category: s.category,
+        sub_category: s.fee_sub_category?.name ?? null,
+        amount: s.amount,
+        frequency: s.frequency,
+      })),
+    });
+  }),
+);
+
 studentsRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
@@ -793,6 +850,40 @@ studentsRouter.post(
 
       await inheritSubjectsForClass(tx, created.id, body.current_class_id, body.academic_year_id, body.selected_optional_subject_ids, body.group_id, body.fourth_subject_id);
 
+      // Same class-wise fee invoicing as the online-admission enroll route
+      // (see GET /enrollment-fees-preview above) -- omitted entirely means
+      // exactly zero invoices, same as this route's own behavior before
+      // this existed, so nothing changes for an existing caller that
+      // doesn't know about the new field yet.
+      if (body.selected_fee_structure_ids) {
+        const now = new Date();
+        for (const structureId of body.selected_fee_structure_ids) {
+          const structure = await tx.feeStructure.findUnique({ where: { id: structureId } });
+          if (!structure || !structure.is_active) continue;
+          if (!(await feeStructureAppliesToStudent(tx, structure, body.current_class_id, body.current_section_id ?? null, created.id, body.group_id ?? null))) continue;
+          if (structure.frequency === "MONTHLY") {
+            await createMonthlyInvoiceIfMissing(tx, created.id, structure, now.getMonth() + 1, now.getFullYear());
+          } else {
+            const existingOneTime = await tx.invoice.findFirst({ where: { student_id: created.id, fee_structure_id: structure.id } });
+            if (existingOneTime) continue;
+            const oneTimeInvoice = await tx.invoice.create({
+              data: {
+                invoice_no: await generateInvoiceNo(tx),
+                student_id: created.id,
+                fee_structure_id: structure.id,
+                academic_year_id: body.academic_year_id,
+                category: structure.category,
+                fee_sub_category_id: structure.fee_sub_category_id,
+                description: structure.name,
+                amount_due: structure.amount,
+                due_date: structure.target_due_date ?? now,
+              },
+            });
+            await applyWaiversToInvoice(tx, oneTimeInvoice);
+          }
+        }
+      }
+
       return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid, loginWarnings };
     });
 
@@ -1044,7 +1135,7 @@ studentsRouter.post(
         body.new_group_id,
         body.fourth_subject_id,
       );
-      await invoiceReadmissionFeeIfConfigured(tx, id, body.new_class_id, body.new_academic_year_id);
+      await invoiceReadmissionFeeIfConfigured(tx, id, body.new_class_id, body.new_academic_year_id, body.new_group_id ?? null);
       return result;
     });
 
@@ -1260,7 +1351,7 @@ studentsRouter.post(
           groupId,
           body.student_fourth_subject_ids?.[studentId],
         );
-        await invoiceReadmissionFeeIfConfigured(tx, studentId, body.new_class_id, body.new_academic_year_id);
+        await invoiceReadmissionFeeIfConfigured(tx, studentId, body.new_class_id, body.new_academic_year_id, groupId ?? null);
       });
       promoted.push(studentId);
     }

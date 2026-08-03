@@ -10,7 +10,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { FEE_COLLECTION_ROLES, STAFF_ONLY_ROLES, WAIVER_REQUEST_REVIEW_ROLES } from "../../lib/roles";
 import {
-  feeStructureSchema, feeCategorySchema, feeSubCategorySchema, feeFineRuleSchema, assignFeeStructureClassesSchema,
+  feeStructureSchema, feeCategorySchema, feeSubCategorySchema, feeFineRuleSchema, assignFeeStructureClassesSchema, assignFeeStructureStudentsSchema,
   generateInvoiceSchema, generateBulkMonthlySchema, collectPaymentSchema, collectBatchSchema, adHocInvoiceSchema, adHocInvoiceBulkSchema,
   waiveInvoiceSchema, waiverTypeSchema, assignStudentWaiverSchema, assignStudentWaiverBulkSchema,
   approveWaiverRequestSchema, rejectWaiverRequestSchema,
@@ -19,11 +19,12 @@ import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
 import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration, applyWaiverToExistingInvoices, formatFeePeriod } from "./invoice-helpers";
-import { feeStructureAppliesToStudent, resolveFeeStructureClassIds } from "./fee-structure-scope";
+import { feeStructureAppliesToStudent, buildFeeStructureStudentWhere } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
 import { createInAppNotification } from "../../services/in-app-notification.service";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
+import { accountBalance } from "../accounts/accounts.routes";
 
 export const feesRouter = Router();
 feesRouter.use(authenticate);
@@ -39,7 +40,8 @@ feesRouter.get(
       where: { ...(query.academic_year_id && { academic_year_id: query.academic_year_id }), ...(query.class_id && { class_id: query.class_id }) },
       include: {
         fee_sub_category: { select: { id: true, name: true } },
-        classes: { include: { class: { select: { id: true, name_en: true } } } },
+        classes: { include: { class: { select: { id: true, name_en: true } }, group: { select: { id: true, name_en: true } } } },
+        students: { include: { student: { select: { id: true, name_en: true, student_uid: true } } } },
       },
       orderBy: { created_at: "desc" },
     });
@@ -80,12 +82,20 @@ feesRouter.delete(
   }),
 );
 
-// Full-replace multi-class assignment for a single FeeStructure (Plan
-// Fourteen, Phase N3) -- when rows exist here they win over the legacy
+// Full-replace multi-class (and, per entry, multi-group) assignment for a
+// single FeeStructure (Plan Fourteen, Phase N3; group-level narrowing
+// added later) -- when rows exist here they win over the legacy
 // class_id/section_id scalar, which is enforced null at write time below.
 // Soft-warning-with-override overlap check mirrors section-capacity.ts's
 // exact pattern (an error.code the frontend recognizes + resubmit-with-
-// override, never a silent allow or a hard dead-end).
+// override, never a silent allow or a hard dead-end). The overlap check
+// itself stays class-level only, not group-aware -- assigning "Class 9
+// Science" and "Class 9 Commerce" to two different active structures of
+// the same category will still surface a warning (it only looks at
+// class_id), but that's a deliberately cheap, safe-by-default trade-off:
+// it can never silently create an ambiguous double-charge, it just may
+// occasionally ask for one extra confirmation click the admin can
+// knowingly override.
 feesRouter.put(
   "/structures/:id/classes",
   authorize(FEE_COLLECTION_ROLES),
@@ -98,7 +108,7 @@ feesRouter.put(
     if (!body.override_overlap) {
       const overlapping = await prisma.feeStructureClass.findMany({
         where: {
-          class_id: { in: body.class_ids },
+          class_id: { in: body.entries.map((e) => e.class_id) },
           fee_structure_id: { not: id },
           fee_structure: { is_active: true, category: structure.category, fee_sub_category_id: structure.fee_sub_category_id },
         },
@@ -106,18 +116,47 @@ feesRouter.put(
       });
       if (overlapping.length > 0) {
         const names = [...new Set(overlapping.map((o) => o.class.name_en))].join(", ");
-        throw new ApiError(400, "FEE_STRUCTURE_CLASS_OVERLAP", `${names} already assigned to another active "${structure.category}" fee structure. Continue anyway?`);
+        throw new ApiError(400, "FEE_STRUCTURE_CLASS_OVERLAP", `${names} already assigned to another active "${structure.category}" fee structure. If these are different Groups within the same class, this may be intentional. Continue anyway?`);
       }
     }
 
     const classes = await prisma.$transaction(async (tx) => {
       await tx.feeStructureClass.deleteMany({ where: { fee_structure_id: id } });
-      await tx.feeStructureClass.createMany({ data: body.class_ids.map((class_id) => ({ fee_structure_id: id, class_id })) });
+      await tx.feeStructureClass.createMany({ data: body.entries.map((e) => ({ fee_structure_id: id, class_id: e.class_id, group_id: e.group_id || null })) });
       await tx.feeStructure.update({ where: { id }, data: { class_id: null, section_id: null } });
-      return tx.feeStructureClass.findMany({ where: { fee_structure_id: id }, include: { class: { select: { id: true, name_en: true } } } });
+      return tx.feeStructureClass.findMany({ where: { fee_structure_id: id }, include: { class: { select: { id: true, name_en: true } }, group: { select: { id: true, name_en: true } } } });
     });
 
     res.json({ success: true, data: classes });
+  }),
+);
+
+// Full-replace individual-student assignment for a single FeeStructure --
+// additive on top of whatever class/group scoping the structure also has
+// (see fee-structure-scope.ts). No overlap check needed here: unlike
+// class/group assignment (which two DIFFERENT structures of the same
+// category shouldn't both cover), attaching a specific student to more
+// than one fee structure at once is completely normal (they can owe
+// Tuition, Library, and an individually-assigned elective fee all at the
+// same time).
+feesRouter.put(
+  "/structures/:id/students",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = assignFeeStructureStudentsSchema.parse(req.body);
+    const structure = await prisma.feeStructure.findUnique({ where: { id } });
+    if (!structure) throw notFound("Fee structure not found");
+
+    const students = await prisma.$transaction(async (tx) => {
+      await tx.feeStructureStudent.deleteMany({ where: { fee_structure_id: id } });
+      if (body.student_ids.length) {
+        await tx.feeStructureStudent.createMany({ data: body.student_ids.map((student_id) => ({ fee_structure_id: id, student_id, assigned_by_id: req.user!.sub })) });
+      }
+      return tx.feeStructureStudent.findMany({ where: { fee_structure_id: id }, include: { student: { select: { id: true, name_en: true, student_uid: true } } } });
+    });
+
+    res.json({ success: true, data: students });
   }),
 );
 
@@ -242,17 +281,18 @@ feesRouter.post(
     const structure = await prisma.feeStructure.findUnique({ where: { id: body.fee_structure_id } });
     if (!structure) throw notFound("Fee structure not found");
 
-    // Multi-class-aware (Phase N3) -- when FeeStructureClass rows exist for
-    // this structure they win over the legacy class_id scalar; section
-    // filtering only applies to the legacy single-class form.
-    const classIds = await resolveFeeStructureClassIds(prisma, structure);
+    // Group- and individual-student-aware (see fee-structure-scope.ts) --
+    // when FeeStructureClass rows exist for this structure they win over
+    // the legacy class_id scalar, narrowed further to a specific Group
+    // where one is set; individually-assigned students (FeeStructureStudent)
+    // are always included regardless of their own class/group.
+    const scopeWhere = await buildFeeStructureStudentWhere(prisma, structure);
     const students = await prisma.student.findMany({
       where: {
         deleted_at: null,
         status: "ACTIVE",
         ...(body.student_ids?.length ? { id: { in: body.student_ids } } : {}),
-        ...(classIds && { current_class_id: { in: classIds } }),
-        ...(structure.section_id && { current_section_id: structure.section_id }),
+        ...scopeWhere,
       },
     });
 
@@ -333,7 +373,10 @@ feesRouter.get(
         ...(query.year != null && { year: query.year }),
         ...(query.class_id && { student: { current_class_id: query.class_id } }),
       },
-      include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } } },
+      include: {
+        student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } },
+        application: { select: { id: true, applicant_name: true, admission_roll: true } },
+      },
       orderBy: { due_date: "desc" },
     });
     res.json({ success: true, data: invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })) });
@@ -345,7 +388,10 @@ feesRouter.get(
   authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
-    const invoice = await prisma.invoice.findUnique({ where: { id }, include: { payments: true, student: true } });
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: { payments: true, student: true, application: { select: { id: true, applicant_name: true, admission_roll: true } } },
+    });
     if (!invoice) throw notFound("Invoice not found");
     res.json({ success: true, data: invoice });
   }),
@@ -881,7 +927,7 @@ feesRouter.post(
     let created = 0;
     let skipped = 0;
     for (const structure of structures) {
-      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id))) continue;
+      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id, student.id, student.group_id))) continue;
       const result = await createMonthlyInvoiceIfMissing(prisma, studentId, structure, now.getMonth() + 1, now.getFullYear());
       if (result.created) created++;
       else skipped++;
@@ -1096,6 +1142,309 @@ feesRouter.post(
   }),
 );
 
+// ── Collection Dashboard (the landing page an accountant sees when they
+// click "Collect Fee") ──────────────────────────────────────────────
+//
+// One shared filter set drives everything on this page: the summary KPIs,
+// the per-fee-structure breakdown, and the drill-down student/invoice
+// list all resolve from the exact same `where` clause + date range below,
+// via the same collectionDashboardQuery schema and resolveDashboardScope
+// helper -- so the numbers on the KPI cards can never silently disagree
+// with what the drill-down actually shows for the same filters (the
+// single biggest correctness risk for a "the top cards must recompute
+// per filter, not stay fixed" dashboard like this one).
+
+const collectionDashboardQuery = z.object({
+  academic_year_id: z.string().optional(),
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().optional(),
+  class_id: z.string().optional(),
+  section_id: z.string().optional(),
+  group_id: z.string().optional(),
+  category: z.string().optional(),
+  fee_sub_category_id: z.string().optional(),
+  frequency: z.enum(["ONE_TIME", "MONTHLY", "YEARLY"]).optional(),
+  status: z.enum(["PENDING", "PARTIAL", "PAID", "OVERDUE", "WAIVED"]).optional(),
+});
+type CollectionDashboardQuery = z.infer<typeof collectionDashboardQuery>;
+
+async function resolveDashboardScope(query: CollectionDashboardQuery) {
+  const academicYear = query.academic_year_id
+    ? await prisma.academicYear.findUnique({ where: { id: query.academic_year_id } })
+    : await prisma.academicYear.findFirst({ where: { is_active: true } });
+
+  // The date range used for the Financial Context strip (revenue/expense/
+  // salary paid) -- month-bounded when a month is picked, otherwise the
+  // whole academic year. Kept separate from the Invoice `where` below
+  // (which uses month/year as an OR against due_date, not a hard filter)
+  // since "what period is this money-in/money-out for" and "which
+  // invoices count toward this fee report" are related but not identical
+  // questions.
+  let periodStart: Date;
+  let periodEnd: Date;
+  let periodLabel: string;
+  if (query.month && query.year) {
+    periodStart = new Date(query.year, query.month - 1, 1);
+    periodEnd = new Date(query.year, query.month, 1);
+    periodLabel = `${MONTH_NAMES_DASHBOARD[query.month - 1]} ${query.year}`;
+  } else if (academicYear) {
+    periodStart = academicYear.start_date;
+    periodEnd = new Date(academicYear.end_date.getTime() + 24 * 60 * 60 * 1000);
+    periodLabel = academicYear.label;
+  } else {
+    periodStart = new Date(0);
+    periodEnd = new Date(8640000000000000);
+    periodLabel = "All Time";
+  }
+
+  const where: Record<string, unknown> = {
+    // A pre-enrollment application-linked due (Plan Twenty-Three) belongs
+    // to the Admission module's own payment tracking, not this
+    // per-enrolled-student collection dashboard -- same exclusion already
+    // established by /reports/dues and /reports/defaulters.
+    student_id: { not: null },
+    ...(academicYear && { academic_year_id: academicYear.id }),
+    ...(query.category && { category: query.category }),
+    ...(query.fee_sub_category_id && { fee_sub_category_id: query.fee_sub_category_id }),
+    ...(query.status && { status: query.status }),
+    ...(query.frequency && {
+      // Ad-hoc invoices (fee_structure_id: null) have no real "frequency"
+      // of their own, but behave like a one-time charge in spirit -- fold
+      // them into the ONE_TIME bucket rather than making them invisible
+      // to every frequency filter.
+      ...(query.frequency === "ONE_TIME"
+        ? { OR: [{ fee_structure: { frequency: "ONE_TIME" } }, { fee_structure_id: null }] }
+        : { fee_structure: { frequency: query.frequency } }),
+    }),
+    ...((query.class_id || query.section_id || query.group_id) && {
+      student: {
+        ...(query.class_id && { current_class_id: query.class_id }),
+        ...(query.section_id && { current_section_id: query.section_id }),
+        ...(query.group_id && { group_id: query.group_id }),
+      },
+    }),
+    ...(query.month && query.year && {
+      // Captures both real MONTHLY invoices for that exact month (via
+      // their own stored month/year) AND any ONE_TIME/YEARLY invoice that
+      // happens to be due within that calendar month -- "what's relevant
+      // to collect this month," not just "what recurring fee is this."
+      OR: [
+        { month: query.month, year: query.year },
+        { due_date: { gte: periodStart, lt: periodEnd } },
+      ],
+    }),
+  };
+
+  return { academicYear, periodStart, periodEnd, periodLabel, where };
+}
+
+const MONTH_NAMES_DASHBOARD = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Mirrors accounts/reports.routes.ts's own income/expenditure section-total
+// pattern (debit-minus-credit over EXPENSE accounts, credit-minus-debit
+// over INCOME accounts, POSTED vouchers only, date-ranged) rather than
+// re-deriving different arithmetic -- kept local since that file doesn't
+// export it, but the shape is identical on purpose so the two screens
+// never quietly disagree about what "total revenue" means for the same
+// range.
+async function ledgerSectionTotal(accountType: "INCOME" | "EXPENSE", from: Date, to: Date): Promise<number> {
+  const accounts = await prisma.account.findMany({ where: { account_group: { type: accountType }, is_active: true }, select: { id: true } });
+  if (!accounts.length) return 0;
+  const accountIds = accounts.map((a) => a.id);
+  const [debitAgg, creditAgg] = await Promise.all([
+    prisma.journalEntry.aggregate({ where: { debit_account_id: { in: accountIds }, voucher: { status: "POSTED", date: { gte: from, lt: to } } }, _sum: { amount: true } }),
+    prisma.journalEntry.aggregate({ where: { credit_account_id: { in: accountIds }, voucher: { status: "POSTED", date: { gte: from, lt: to } } }, _sum: { amount: true } }),
+  ]);
+  const debit = debitAgg._sum.amount ?? 0;
+  const credit = creditAgg._sum.amount ?? 0;
+  return accountType === "INCOME" ? credit - debit : debit - credit;
+}
+
+feesRouter.get(
+  "/collection-dashboard",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = collectionDashboardQuery.parse(req.query);
+    // Keep OVERDUE fresh on every dashboard load -- an invoice that fell
+    // past its grace-period deadline since the last write-triggered sync
+    // must not show as a stale PENDING here, since this page's whole point
+    // is being an accurate, up-to-the-moment picture.
+    await syncOverdueInvoices(prisma);
+    const { academicYear, periodStart, periodEnd, periodLabel, where } = await resolveDashboardScope(query);
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      select: {
+        student_id: true, fee_structure_id: true, category: true, amount_due: true, amount_paid: true, fine_amount: true, status: true, due_date: true,
+        fee_structure: { select: { id: true, name: true, category: true, frequency: true, fee_sub_category: { select: { name: true } } } },
+      },
+    });
+
+    const now = new Date();
+    let totalInvoiced = 0;
+    let totalCollected = 0;
+    let overdueCount = 0;
+    let overdueAmount = 0;
+    const studentTotals = new Map<string, { due: number; hasAny: boolean }>();
+    const byStructure = new Map<string, { fee_structure_id: string | null; name: string; category: string; sub_category: string | null; frequency: string | null; invoice_count: number; total_invoiced: number; total_collected: number }>();
+
+    for (const inv of invoices) {
+      const invoiced = inv.amount_due + inv.fine_amount;
+      const outstanding = Math.max(0, invoiced - inv.amount_paid);
+      totalInvoiced += invoiced;
+      totalCollected += inv.amount_paid;
+      if (inv.status === "OVERDUE" || (inv.due_date < now && outstanding > 0 && inv.status !== "PAID" && inv.status !== "WAIVED")) {
+        overdueCount++;
+        overdueAmount += outstanding;
+      }
+
+      const sKey = inv.student_id!;
+      const sEntry = studentTotals.get(sKey) ?? { due: 0, hasAny: false };
+      sEntry.due += outstanding;
+      sEntry.hasAny = true;
+      studentTotals.set(sKey, sEntry);
+
+      const structKey = inv.fee_structure_id ?? `adhoc:${inv.category}`;
+      const structEntry = byStructure.get(structKey) ?? {
+        fee_structure_id: inv.fee_structure_id,
+        name: inv.fee_structure?.name ?? `${inv.category} (ad-hoc)`,
+        category: inv.fee_structure?.category ?? inv.category,
+        sub_category: inv.fee_structure?.fee_sub_category?.name ?? null,
+        frequency: inv.fee_structure?.frequency ?? null,
+        invoice_count: 0,
+        total_invoiced: 0,
+        total_collected: 0,
+      };
+      structEntry.invoice_count++;
+      structEntry.total_invoiced += invoiced;
+      structEntry.total_collected += inv.amount_paid;
+      byStructure.set(structKey, structEntry);
+    }
+
+    const totalOutstanding = Math.round((totalInvoiced - totalCollected) * 100) / 100;
+    let fullyPaidCount = 0;
+    let withDuesCount = 0;
+    for (const s of studentTotals.values()) {
+      if (s.due <= 0) fullyPaidCount++;
+      else withDuesCount++;
+    }
+
+    const [salaryPaidAgg, cashAccount, bankAccount, totalRevenue, totalExpense] = await Promise.all([
+      prisma.payrollRecord.aggregate({ where: { status: "PAID", paid_at: { gte: periodStart, lt: periodEnd } }, _sum: { net_salary: true } }),
+      prisma.account.findUnique({ where: { code: "1001" } }),
+      prisma.account.findUnique({ where: { code: "1002" } }),
+      ledgerSectionTotal("INCOME", periodStart, periodEnd),
+      ledgerSectionTotal("EXPENSE", periodStart, periodEnd),
+    ]);
+    const [cashBalance, bankBalance] = await Promise.all([
+      cashAccount ? accountBalance(cashAccount.id) : Promise.resolve({ balance: 0 }),
+      bankAccount ? accountBalance(bankAccount.id) : Promise.resolve({ balance: 0 }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        academic_year: academicYear ? { id: academicYear.id, label: academicYear.label } : null,
+        period_label: periodLabel,
+        summary: {
+          total_students: studentTotals.size,
+          total_invoiced: Math.round(totalInvoiced * 100) / 100,
+          total_collected: Math.round(totalCollected * 100) / 100,
+          total_outstanding: totalOutstanding,
+          collection_percentage: totalInvoiced > 0 ? Math.round((totalCollected / totalInvoiced) * 1000) / 10 : 0,
+          overdue_count: overdueCount,
+          overdue_amount: Math.round(overdueAmount * 100) / 100,
+          fully_paid_count: fullyPaidCount,
+          with_dues_count: withDuesCount,
+        },
+        by_structure: [...byStructure.values()]
+          .map((s) => ({
+            ...s,
+            total_invoiced: Math.round(s.total_invoiced * 100) / 100,
+            total_collected: Math.round(s.total_collected * 100) / 100,
+            total_outstanding: Math.round((s.total_invoiced - s.total_collected) * 100) / 100,
+            collection_percentage: s.total_invoiced > 0 ? Math.round((s.total_collected / s.total_invoiced) * 1000) / 10 : 0,
+          }))
+          .sort((a, b) => b.total_outstanding - a.total_outstanding),
+        financial_context: {
+          total_revenue: Math.round(totalRevenue * 100) / 100,
+          total_expense: Math.round(totalExpense * 100) / 100,
+          net_position: Math.round((totalRevenue - totalExpense) * 100) / 100,
+          salary_paid: Math.round((salaryPaidAgg._sum.net_salary ?? 0) * 100) / 100,
+          current_fund_balance: Math.round((cashBalance.balance + bankBalance.balance) * 100) / 100,
+        },
+      },
+    });
+  }),
+);
+
+// Drill-down list -- "who owes, who's paid" for the exact same filter set
+// (plus an optional fee_structure_id to scope to one row's "View" click
+// from the breakdown table above), so a number on the dashboard and the
+// list you get by clicking it are always describing the same thing.
+feesRouter.get(
+  "/collection-dashboard/invoices",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = collectionDashboardQuery.extend({
+      fee_structure_id: z.string().optional(),
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+    }).parse(req.query);
+    const { where } = await resolveDashboardScope(query);
+
+    const fullWhere = {
+      ...where,
+      ...(query.fee_structure_id && { fee_structure_id: query.fee_structure_id }),
+      ...(query.search && {
+        student: {
+          ...(where as { student?: Record<string, unknown> }).student,
+          OR: [
+            { name_en: { contains: query.search, mode: "insensitive" as const } },
+            { student_uid: { contains: query.search, mode: "insensitive" as const } },
+          ],
+        },
+      }),
+    };
+
+    const [total, invoices] = await Promise.all([
+      prisma.invoice.count({ where: fullWhere }),
+      prisma.invoice.findMany({
+        where: fullWhere,
+        include: {
+          student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } },
+        },
+        orderBy: { due_date: "asc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: invoices.map((inv) => ({
+        id: inv.id,
+        student: inv.student ? { id: inv.student.id, name_en: inv.student.name_en, student_uid: inv.student.student_uid, class_name: inv.student.current_class?.name_en ?? null, section_name: inv.student.current_section?.name ?? null } : null,
+        description: inv.description,
+        category: inv.category,
+        amount_due: inv.amount_due,
+        amount_paid: inv.amount_paid,
+        fine_amount: inv.fine_amount,
+        // Floored at 0 for display -- a genuine overpayment isn't "negative
+        // debt," it's an advance credit (already tracked separately via
+        // Student.credit_balance and shown in the Collect dialog); showing
+        // a raw negative number here would read as a confusing error to an
+        // accountant, not as useful information.
+        outstanding: Math.max(0, Math.round((inv.amount_due + inv.fine_amount - inv.amount_paid) * 100) / 100),
+        status: inv.status,
+        due_date: inv.due_date,
+      })),
+      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+    });
+  }),
+);
+
 // ── Reports ──────────────────────────────────────────────────────
 
 feesRouter.get(
@@ -1107,7 +1456,14 @@ feesRouter.get(
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const payments = await prisma.payment.findMany({
       where: { paid_at: { gte: start, lt: end }, status: "COMPLETED" },
-      include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
+      include: {
+        invoice: {
+          include: {
+            student: { select: { name_en: true, student_uid: true } },
+            application: { select: { id: true, applicant_name: true, admission_roll: true } },
+          },
+        },
+      },
     });
     res.json({ success: true, data: { total: payments.reduce((sum, p) => sum + p.amount, 0), payments } });
   }),
@@ -1143,6 +1499,12 @@ feesRouter.get(
     const invoices = await prisma.invoice.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+        // Inherently a per-enrolled-student report (class/section filters
+        // only make sense for someone already placed in one) -- a
+        // pre-enrollment application-linked due belongs to the Admission
+        // module's own payment tracking instead, matching how
+        // /reports/defaulters already excludes it for the same reason.
+        student_id: { not: null },
         ...((query.class_id || query.section_id) && {
           student: {
             ...(query.class_id && { current_class_id: query.class_id }),
@@ -1326,7 +1688,20 @@ feesRouter.get(
     const applications = await prisma.invoiceWaiverApplication.findMany({
       where: query.student_id ? { invoice: { student_id: query.student_id } } : undefined,
       include: {
-        invoice: { select: { id: true, invoice_no: true, description: true, category: true, student: { select: { name_en: true, student_uid: true } } } },
+        invoice: {
+          select: {
+            id: true, invoice_no: true, description: true, category: true,
+            student: { select: { name_en: true, student_uid: true } },
+            // Defensive, not currently reachable in practice: a waiver only
+            // ever applies once a StudentWaiver exists, which requires a
+            // real Student -- meaning by the time a waiver is applied, the
+            // invoice's own student_id is already claimed. Included anyway
+            // so this route can't silently break if that ordering ever
+            // changes, matching the same pattern applied everywhere else
+            // an Invoice is read.
+            application: { select: { id: true, applicant_name: true, admission_roll: true } },
+          },
+        },
         student_waiver: { include: { waiver_type: { select: { name: true } } } },
       },
       orderBy: { applied_at: "desc" },

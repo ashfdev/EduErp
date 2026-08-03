@@ -115,6 +115,11 @@ export const admissionEnrollSchema = z.object({
   section_id: z.string().optional(),
   roll_no: z.string().optional(),
   group_id: z.string().optional(),
+  // Which of the class-wise FeeStructure rows (from GET .../enrollment-fees)
+  // to actually invoice at enroll time -- omitted entirely falls back to the
+  // pre-existing first-month-tuition-only behavior, so any caller that
+  // predates this field keeps working unchanged.
+  selected_fee_structure_ids: z.array(z.string()).optional(),
 });
 
 export const admissionStatusLookupSchema = z.object({

@@ -11,8 +11,17 @@ interface ReceiptRow {
   id: string;
   receipt_no: string | null;
   amount: number;
+  gateway: string;
+  transaction_id: string | null;
   paid_at: string | null;
-  invoice: { category: string; student: { id: string; name_en: string; student_uid: string } };
+  invoice: {
+    category: string;
+    // Nullable on both sides -- an admission-applicant's payment has no
+    // Student yet (only claimed at enroll time), while every other payment
+    // has no AdmissionApplication. Exactly one of the two is ever set.
+    student: { id: string; name_en: string; student_uid: string } | null;
+    application: { id: string; applicant_name: string; admission_roll: string } | null;
+  };
 }
 interface ReceiptsResponse {
   data: ReceiptRow[];
@@ -91,9 +100,11 @@ export default function FeeReceiptsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Receipt No</TableHead>
-                  <TableHead>Student</TableHead>
+                  <TableHead>Student / Applicant</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Amount</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Transaction ID</TableHead>
                   <TableHead>Paid At</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -103,16 +114,31 @@ export default function FeeReceiptsPage() {
                   <TableRow key={r.id}>
                     <TableCell className="font-mono text-xs">{r.receipt_no ?? "-"}</TableCell>
                     <TableCell>
-                      <Link href={`/students/${r.invoice.student.id}`} className="text-primary hover:underline">
-                        {r.invoice.student.name_en}
-                      </Link>
-                      <span className="ml-1 text-xs text-muted-foreground">({r.invoice.student.student_uid})</span>
+                      {r.invoice.student ? (
+                        <>
+                          <Link href={`/students/${r.invoice.student.id}`} className="text-primary hover:underline">
+                            {r.invoice.student.name_en}
+                          </Link>
+                          <span className="ml-1 text-xs text-muted-foreground">({r.invoice.student.student_uid})</span>
+                        </>
+                      ) : r.invoice.application ? (
+                        <>
+                          <Link href={`/admission/applications/${r.invoice.application.id}`} className="text-primary hover:underline">
+                            {r.invoice.application.applicant_name}
+                          </Link>
+                          <span className="ml-1 text-xs text-muted-foreground">(Applicant — Roll {r.invoice.application.admission_roll})</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Unknown payer</span>
+                      )}
                     </TableCell>
                     <TableCell>{r.invoice.category.replace(/_/g, " ")}</TableCell>
                     <TableCell>৳{r.amount.toLocaleString()}</TableCell>
+                    <TableCell>{r.gateway.replace(/_/g, " ")}</TableCell>
+                    <TableCell className="font-mono text-xs">{r.transaction_id ?? "-"}</TableCell>
                     <TableCell>{r.paid_at ? new Date(r.paid_at).toLocaleDateString() : "-"}</TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/receipt/${r.id}`, `Receipt — ${r.invoice.student.name_en}`)}>
+                      <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/receipt/${r.id}`, `Receipt — ${r.invoice.student?.name_en ?? r.invoice.application?.applicant_name ?? "Receipt"}`)}>
                         View
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => downloadReceiptPdf(r.id, r.receipt_no)}>

@@ -77,6 +77,13 @@ export const createStudentSchema = z.object({
   // field). undefined = not provided/unchanged; null = explicitly cleared.
   fourth_subject_id: z.string().optional().nullable(),
   send_portal_login_sms: z.boolean().optional(),
+  // Which of the class-wise FeeStructure rows (from GET /enrollment-fees-
+  // preview) to invoice immediately for this student -- same mechanism and
+  // same "omitted = create nothing extra" default as the online-admission
+  // enroll route, so a manually-added student isn't left with zero fee
+  // invoices just because they didn't come through the online-admission
+  // flow.
+  selected_fee_structure_ids: z.array(z.string()).optional(),
 });
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 

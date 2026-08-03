@@ -491,6 +491,7 @@ model Group {
   subjects      Subject[]
   students      Student[]
   routine_slots RoutineSlot[]
+  fee_structure_classes FeeStructureClass[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -689,6 +690,7 @@ model Student {
   waivers                 StudentWaiver[]
   waiver_requests          WaiverRequest[]
   leave_requests          StudentLeaveRequest[]
+  fee_structure_assignments FeeStructureStudent[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1518,6 +1520,7 @@ model FeeStructure {
   created_at       DateTime     @default(now())
   invoices         Invoice[]
   classes          FeeStructureClass[]
+  students         FeeStructureStudent[]
 
   @@index([program_id])
   @@index([fee_sub_category_id])
@@ -1625,9 +1628,40 @@ model FeeStructureClass {
   fee_structure    FeeStructure @relation(fields: [fee_structure_id], references: [id])
   class_id         String
   class            Class        @relation(fields: [class_id], references: [id])
+  // Additive, nullable -- null (the only value every pre-existing row has)
+  // means "whole class," unchanged from before this field existed. When
+  // set, this row scopes the structure to just that one Group within the
+  // class (e.g. a Science-only Lab Fee), letting two groups in the same
+  // class carry genuinely different fees -- the previous version of this
+  // table could only ever express "the whole class."
+  group_id         String?
+  group            Group?       @relation(fields: [group_id], references: [id])
   created_at       DateTime     @default(now())
 
-  @@unique([fee_structure_id, class_id])
+  @@unique([fee_structure_id, class_id, group_id])
+  @@index([group_id])
+}
+
+// A FeeStructure attached directly to one specific student, independent of
+// (and additive on top of) whatever class/group scoping it also has --
+// e.g. one particular student picks up an extra elective with its own fee,
+// or needs a one-off exam re-sit fee, without inventing a whole new
+// class/group just for them. Deliberately a real, reusable catalog
+// assignment (shows up in reports, can be revoked) rather than the
+// separate "Add One-Time Fee" ad-hoc flow on the Fee Collection page,
+// which stays exactly as it is for a genuinely one-off, not-worth-cataloging
+// charge.
+model FeeStructureStudent {
+  id               String       @id @default(cuid())
+  fee_structure_id String
+  fee_structure    FeeStructure @relation(fields: [fee_structure_id], references: [id])
+  student_id       String
+  student          Student      @relation(fields: [student_id], references: [id])
+  assigned_by_id   String?
+  created_at       DateTime     @default(now())
+
+  @@unique([fee_structure_id, student_id])
+  @@index([student_id])
 }
 
 // Plan Fourteen, Phase N2 -- category/sub-category/class-scoped fine

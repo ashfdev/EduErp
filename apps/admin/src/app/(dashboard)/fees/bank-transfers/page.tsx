@@ -8,10 +8,18 @@ import { api } from "@/lib/api";
 interface PendingTransfer {
   id: string;
   amount: number;
+  gateway: string;
   transaction_id: string | null;
   slip_url: string | null;
   created_at: string;
-  invoice: { description: string; student: { name_en: string; student_uid: string } };
+  invoice: {
+    description: string;
+    // Nullable on both sides -- an admission-applicant's payment has no
+    // Student yet (only claimed at enroll time), while every other payment
+    // has no AdmissionApplication. Exactly one of the two is ever set.
+    student: { name_en: string; student_uid: string } | null;
+    application: { applicant_name: string; admission_roll: string } | null;
+  };
 }
 
 export default function BankTransfersPage() {
@@ -59,18 +67,29 @@ export default function BankTransfersPage() {
           <Card key={p.id}>
             <CardContent className="flex items-center justify-between pt-6">
               <div>
-                <p className="font-medium">{p.invoice.student.name_en} <span className="text-xs text-muted-foreground">({p.invoice.student.student_uid})</span></p>
+                <p className="font-medium">
+                  {p.invoice.student ? (
+                    <>{p.invoice.student.name_en} <span className="text-xs text-muted-foreground">({p.invoice.student.student_uid})</span></>
+                  ) : p.invoice.application ? (
+                    <>{p.invoice.application.applicant_name} <span className="text-xs text-muted-foreground">(Applicant — Roll {p.invoice.application.admission_roll})</span></>
+                  ) : (
+                    <span className="text-muted-foreground">Unknown payer</span>
+                  )}
+                </p>
                 <p className="text-sm text-muted-foreground">{p.invoice.description} · ৳{p.amount}</p>
+                <p className="text-xs text-muted-foreground">{p.gateway} · Transaction ID: <span className="font-mono">{p.transaction_id ?? "—"}</span></p>
                 <p className="text-xs text-muted-foreground">Submitted {new Date(p.created_at).toLocaleDateString()}</p>
-                {p.slip_url ? (
-                  <a href={p.slip_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View Slip</a>
-                ) : (
-                  <p className="text-xs text-amber-600">No slip uploaded yet</p>
-                )}
+                {p.gateway === "BANK_TRANSFER" ? (
+                  p.slip_url ? (
+                    <a href={p.slip_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View Slip</a>
+                  ) : (
+                    <p className="text-xs text-amber-600">No slip uploaded yet</p>
+                  )
+                ) : null}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="destructive" onClick={() => rejectMutation.mutate(p.id)} disabled={rejectMutation.isPending}>Reject</Button>
-                <Button size="sm" onClick={() => verifyMutation.mutate(p.id)} disabled={verifyMutation.isPending || !p.slip_url}>Verify</Button>
+                <Button size="sm" onClick={() => verifyMutation.mutate(p.id)} disabled={verifyMutation.isPending || (p.gateway === "BANK_TRANSFER" && !p.slip_url)}>Verify</Button>
               </div>
             </CardContent>
           </Card>

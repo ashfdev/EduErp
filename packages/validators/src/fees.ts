@@ -43,12 +43,23 @@ export const feeFineRuleSchema = z.object({
 export type FeeFineRuleInput = z.infer<typeof feeFineRuleSchema>;
 
 // Plan Fourteen, Phase N3 -- full-replace multi-class assignment for a
-// single FeeStructure.
+// single FeeStructure. Each entry is a class, optionally narrowed to one
+// Group within it (group_id omitted/null = the whole class, unchanged
+// from before Group-level scoping existed).
 export const assignFeeStructureClassesSchema = z.object({
-  class_ids: z.array(z.string()).min(1),
+  entries: z.array(z.object({ class_id: z.string().min(1), group_id: z.string().nullable().optional() })).min(1),
   override_overlap: z.boolean().optional(),
 });
 export type AssignFeeStructureClassesInput = z.infer<typeof assignFeeStructureClassesSchema>;
+
+// Full-replace individual-student assignment for a single FeeStructure --
+// separate from class/group scoping (additive on top of it), for the case
+// where one specific student needs a fee attached regardless of their
+// class (an extra elective, a one-off re-sit fee).
+export const assignFeeStructureStudentsSchema = z.object({
+  student_ids: z.array(z.string()),
+});
+export type AssignFeeStructureStudentsInput = z.infer<typeof assignFeeStructureStudentsSchema>;
 
 export const generateInvoiceSchema = z.object({
   fee_structure_id: z.string().min(1),

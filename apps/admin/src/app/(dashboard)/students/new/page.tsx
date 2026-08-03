@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -20,12 +20,15 @@ import {
   SelectContent,
   SelectItem,
   ConfirmDialog,
+  MultiSelectChecklist,
   extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
 
 const STEPS = ["Personal", "Guardian", "Academic Placement", "Subjects", "Documents", "Review"];
+
+interface EnrollmentFee { fee_structure_id: string; name: string; category: string; sub_category: string | null; amount: number; frequency: "ONE_TIME" | "MONTHLY" }
 
 interface ClassOption {
   id: string;
@@ -144,6 +147,25 @@ export default function NewStudentPage() {
   const compulsory = subjects?.filter((s) => s.is_compulsory) ?? [];
   const optional = subjects?.filter((s) => s.is_optional) ?? [];
 
+  // Class-wise fees this new student can be charged immediately (Admission
+  // Fee, Development, Library, first month's Tuition, etc.) — same preview
+  // endpoint and same "default every offered fee to selected" pattern the
+  // online-admission enroll dialog already uses, generalized here since a
+  // walk-in student has no AdmissionCycle to draw Admission/Form fee from
+  // any other way.
+  const [selectedFeeIds, setSelectedFeeIds] = useState<string[]>([]);
+  const { data: enrollmentFees } = useQuery<EnrollmentFee[]>({
+    queryKey: ["students", "enrollment-fees-preview", form.current_class_id, form.academic_year_id, form.group_id],
+    queryFn: async () => (await api.get("/api/students/enrollment-fees-preview", { params: { class_id: form.current_class_id, academic_year_id: form.academic_year_id, group_id: form.group_id || undefined } })).data.data,
+    enabled: !!form.current_class_id && !!form.academic_year_id,
+  });
+  useEffect(() => {
+    if (enrollmentFees) setSelectedFeeIds(enrollmentFees.map((f) => f.fee_structure_id));
+  }, [enrollmentFees]);
+  const selectedFeesTotal = (enrollmentFees ?? [])
+    .filter((f) => selectedFeeIds.includes(f.fee_structure_id))
+    .reduce((sum, f) => sum + f.amount, 0);
+
   async function handlePhotoSelect(file: File | null) {
     if (!file) return;
     setPhotoUploading(true);
@@ -191,6 +213,7 @@ export default function NewStudentPage() {
         mother_photo_url: motherPhotoUrl || undefined,
         selected_optional_subject_ids: selectedOptional,
         fourth_subject_id: fourthSubjectId || undefined,
+        selected_fee_structure_ids: selectedFeeIds,
         override,
       }),
     onSuccess: async (res) => {
@@ -474,6 +497,23 @@ export default function NewStudentPage() {
               <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => set("admission_date", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Previous Institution</Label><Input value={form.previous_institution} onChange={(e) => set("previous_institution", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Previous Result</Label><Input value={form.previous_result} onChange={(e) => set("previous_result", e.target.value)} /></div>
+
+              {form.current_class_id && form.academic_year_id && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Fees to charge now</Label>
+                  <p className="text-xs text-muted-foreground">Admission Fee, Development, Library, first month&apos;s Tuition, etc. — whatever is configured for this class. Uncheck anything you don&apos;t want to charge right now.</p>
+                  <MultiSelectChecklist
+                    options={(enrollmentFees ?? []).map((f) => ({
+                      id: f.fee_structure_id,
+                      label: `${f.name} — ৳${f.amount.toLocaleString()} (${f.frequency === "MONTHLY" ? "Monthly" : "One-time"})`,
+                    }))}
+                    selected={selectedFeeIds}
+                    onChange={setSelectedFeeIds}
+                    emptyLabel="No fee structures are configured for this class yet — set them up under Fees → Fee Structures."
+                  />
+                  <p className="text-sm text-muted-foreground">Selected total: <span className="font-medium text-foreground">৳{selectedFeesTotal.toLocaleString()}</span></p>
+                </div>
+              )}
             </div>
           )}
 
@@ -607,6 +647,9 @@ export default function NewStudentPage() {
                 <p className="text-sm text-muted-foreground">
                   Subjects: {compulsory.length} compulsory + {selectedOptional.length} optional
                   {fourthSubjectId && ` · 4th subject: ${optional.find((s) => s.id === fourthSubjectId)?.name_en ?? ""}`}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Fees to be charged: {selectedFeeIds.length} of {enrollmentFees?.length ?? 0} — total ৳{selectedFeesTotal.toLocaleString()}
                 </p>
               </div>
 

@@ -557,7 +557,7 @@ portalRouter.get(
     const now = new Date();
     const projected: { category: string; name: string; amount: number; frequency: string; due_date: string | null }[] = [];
     for (const structure of structures) {
-      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id))) continue;
+      if (!(await feeStructureAppliesToStudent(prisma, structure, student.current_class_id, student.current_section_id, student.id, student.group_id))) continue;
 
       if (structure.frequency === "MONTHLY") {
         const existing = await prisma.invoice.findFirst({

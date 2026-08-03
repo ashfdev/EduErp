@@ -19,10 +19,25 @@ export const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+// Radix's Select/DropdownMenu/Popover/Command all render their open content
+// into a separate document.body portal, tagged with data-radix-popper-
+// content-wrapper -- outside the Dialog's own DOM subtree. Without this
+// guard, clicking an option in a <Select> nested inside a <Dialog> registers
+// as a pointer-down "outside" the dialog and closes it before the click even
+// reaches the option (a well-known Radix Dialog+Select interaction, not
+// specific to any one form on this site). Every DialogContent gets this for
+// free rather than each page working around it individually.
+function ignorePointerDownInsidePopper(event: Event) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest("[data-radix-popper-content-wrapper]")) {
+    event.preventDefault();
+  }
+}
+
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -31,6 +46,10 @@ export const DialogContent = React.forwardRef<
         "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg max-h-[90vh] overflow-y-auto",
         className,
       )}
+      onPointerDownOutside={(e) => {
+        ignorePointerDownInsidePopper(e);
+        onPointerDownOutside?.(e);
+      }}
       {...props}
     >
       {children}

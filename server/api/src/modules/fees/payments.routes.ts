@@ -51,8 +51,11 @@ paymentsRouter.get(
       ...(query.search && {
         OR: [
           { receipt_no: { contains: query.search, mode: "insensitive" as const } },
+          { transaction_id: { contains: query.search, mode: "insensitive" as const } },
           { invoice: { student: { name_en: { contains: query.search, mode: "insensitive" as const } } } },
           { invoice: { student: { student_uid: { contains: query.search, mode: "insensitive" as const } } } },
+          { invoice: { application: { applicant_name: { contains: query.search, mode: "insensitive" as const } } } },
+          { invoice: { application: { admission_roll: { contains: query.search, mode: "insensitive" as const } } } },
         ],
       }),
     };
@@ -60,7 +63,15 @@ paymentsRouter.get(
     const [items, total] = await Promise.all([
       prisma.payment.findMany({
         where,
-        include: { invoice: { select: { category: true, student: { select: { id: true, name_en: true, student_uid: true } } } } },
+        include: {
+          invoice: {
+            select: {
+              category: true,
+              student: { select: { id: true, name_en: true, student_uid: true } },
+              application: { select: { id: true, applicant_name: true, admission_roll: true } },
+            },
+          },
+        },
         orderBy: { paid_at: "desc" },
         skip: (query.page - 1) * query.limit,
         take: query.limit,

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Textarea, Input, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import {
+  PageWrapper, PageHeader, Card, CardContent, Button, StatusBadge, Textarea, Input, ErrorState, LoadingSpinner, extractErrorMessage,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  MultiSelectChecklist,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface InvoicePayment {
@@ -69,6 +74,11 @@ interface Application {
 }
 
 const STAGE_LABEL: Record<Stage["stage_type"], string> = { WRITTEN_TEST: "Written Test", INTERVIEW: "Interview" };
+
+interface SectionOption { id: string; name_en: string }
+interface GroupOption { id: string; name_en: string }
+interface ClassWithSectionsGroups { id: string; sections: SectionOption[]; groups: GroupOption[] }
+interface EnrollmentFee { fee_structure_id: string; name: string; category: string; sub_category: string | null; amount: number; frequency: "ONE_TIME" | "MONTHLY" }
 
 // One stage's own schedule/override/outcome row -- kept as a nested
 // component since it carries local edit-form state independent of the
@@ -284,18 +294,63 @@ export default function AdmissionApplicationDetailPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Could not confirm this application"),
   });
 
+  // Enroll dialog -- section/group/roll plus a checklist of every class-wise
+  // fee an admin can choose to charge right now (Development Fee, Library
+  // Fee, first month's Tuition, etc.), on top of the Admission/Form fees
+  // already collected at apply time. Queries only fire once the dialog is
+  // actually open, since neither is needed before then.
+  const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
+  const [enrollSectionId, setEnrollSectionId] = useState("");
+  const [enrollGroupId, setEnrollGroupId] = useState("");
+  const [enrollRollNo, setEnrollRollNo] = useState("");
+  const [selectedFeeIds, setSelectedFeeIds] = useState<string[]>([]);
+
+  const { data: classesForEnroll } = useQuery<ClassWithSectionsGroups[]>({
+    queryKey: ["settings", "classes", "for-enroll"],
+    queryFn: async () => (await api.get("/api/settings/classes")).data.data,
+    enabled: enrollDialogOpen,
+  });
+  const destClass = classesForEnroll?.find((c) => c.id === app?.cycle.class_id);
+
+  const { data: enrollmentFees } = useQuery<EnrollmentFee[]>({
+    queryKey: ["admission", "applications", id, "enrollment-fees", enrollGroupId],
+    queryFn: async () => (await api.get(`/api/admission/applications/${id}/enrollment-fees`, { params: { group_id: enrollGroupId || undefined } })).data.data,
+    enabled: enrollDialogOpen,
+  });
+
+  // Default every offered fee to selected the moment the list loads for this
+  // dialog session -- admin can uncheck individual ones before confirming,
+  // never starts from a silently-empty selection.
+  useEffect(() => {
+    if (enrollmentFees) setSelectedFeeIds(enrollmentFees.map((f) => f.fee_structure_id));
+  }, [enrollmentFees]);
+
+  const selectedFeesTotal = (enrollmentFees ?? [])
+    .filter((f) => selectedFeeIds.includes(f.fee_structure_id))
+    .reduce((sum, f) => sum + f.amount, 0);
+
   const enrollMutation = useMutation({
-    mutationFn: () => api.post(`/api/admission/applications/${id}/enroll`, {}),
+    mutationFn: () =>
+      api.post(`/api/admission/applications/${id}/enroll`, {
+        section_id: enrollSectionId || undefined,
+        group_id: enrollGroupId || undefined,
+        roll_no: enrollRollNo || undefined,
+        selected_fee_structure_ids: selectedFeeIds,
+      }),
     onSuccess: (res) => {
       const loginWarnings: string[] | undefined = res.data.login_warnings;
       if (loginWarnings?.length) {
         for (const warning of loginWarnings) toast(warning, { duration: 15000 });
       }
       toast.success(`Enrolled as ${res.data.data.student_uid}`);
+      setEnrollDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["admission", "applications", "detail", id] });
       router.push(`/students/${res.data.data.id}`);
     },
-    onError: () => toast.error("Only confirmed applications can be enrolled"),
+    // Real reason shown now (e.g. "a group must be selected for this class")
+    // instead of a hardcoded guess that was wrong the moment the actual
+    // cause was anything other than the application not being confirmed.
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to enroll student"),
   });
 
   if (isLoading) {
@@ -333,7 +388,7 @@ export default function AdmissionApplicationDetailPage() {
             {(app.status === "SHORTLISTED" || app.status === "WAITLISTED") && (
               <Button onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending}>Confirm Seat</Button>
             )}
-            {app.status === "CONFIRMED" && <Button onClick={() => enrollMutation.mutate()} disabled={enrollMutation.isPending}>Enroll Student</Button>}
+            {app.status === "CONFIRMED" && <Button onClick={() => setEnrollDialogOpen(true)}>Enroll Student</Button>}
           </div>
         }
       />
@@ -445,6 +500,74 @@ export default function AdmissionApplicationDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Enroll {app.applicant_name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {destClass && destClass.groups.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Group / Stream *</label>
+                <Select value={enrollGroupId} onValueChange={setEnrollGroupId}>
+                  <SelectTrigger><SelectValue placeholder="This class has Groups/Streams — pick one" /></SelectTrigger>
+                  <SelectContent>
+                    {destClass.groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name_en}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Section (optional)</label>
+                <Select value={enrollSectionId} onValueChange={setEnrollSectionId}>
+                  <SelectTrigger><SelectValue placeholder="Not assigned yet" /></SelectTrigger>
+                  <SelectContent>
+                    {destClass?.sections.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name_en}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Roll Number (optional)</label>
+                <Input value={enrollRollNo} onChange={(e) => setEnrollRollNo(e.target.value)} placeholder="e.g. 12" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium">
+                Fees to charge at enrollment
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  (beyond the Admission/Form fee already collected during application)
+                </span>
+              </label>
+              <MultiSelectChecklist
+                options={(enrollmentFees ?? []).map((f) => ({
+                  id: f.fee_structure_id,
+                  label: `${f.name} — ৳${f.amount.toLocaleString()} (${f.frequency === "MONTHLY" ? "Monthly" : "One-time"})`,
+                }))}
+                selected={selectedFeeIds}
+                onChange={setSelectedFeeIds}
+                emptyLabel="No Development/Library/Tuition/etc. fee structures are configured for this class yet — set them up under Fees → Fee Structures."
+              />
+              <p className="text-sm text-muted-foreground">Selected total: <span className="font-medium text-foreground">৳{selectedFeesTotal.toLocaleString()}</span></p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEnrollDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => enrollMutation.mutate()} disabled={enrollMutation.isPending}>
+              {enrollMutation.isPending ? "Enrolling..." : "Confirm Enrollment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }
