@@ -4004,6 +4004,40 @@ model PaymentGatewayConfig {
   created_at    DateTime               @default(now())
 }
 
+enum SmsGatewayProvider {
+  SSL_WIRELESS
+  BULKSMSBD
+  OTHER
+}
+
+// Admin-editable, encrypted-at-rest SMS gateway credentials -- mirrors
+// PaymentGatewayConfig's exact shape/discipline (api_key/api_secret AES-256-
+// GCM encrypted via lib/crypto.ts, GET responses never return plaintext or
+// ciphertext, only a has-value indicator), with one real difference: unlike
+// payment gateways (where several can be simultaneously active since the
+// payer picks one per transaction), only ONE SMS gateway can be active at a
+// time -- there's a single outgoing SMS channel for the whole institution.
+// Setting is_active on one row must deactivate every other row in the same
+// transaction (see sms-gateways.routes.ts), mirroring the exact "deactivate
+// siblings" pattern already used for document-template activation and
+// authority signatures elsewhere in this codebase. Read (and decrypted) by
+// services/notification's SMS worker, which shares this same database but
+// is a separate deployable process -- see that service's own
+// lib/sms-gateway-config.ts for why the encryption key must be identical
+// across both processes.
+model SmsGatewayConfig {
+  id            String             @id @default(cuid())
+  provider      SmsGatewayProvider @unique
+  api_key       String?
+  api_secret    String?
+  sender_id     String?
+  api_url       String?
+  is_active     Boolean            @default(false)
+  updated_by_id String?
+  updated_at    DateTime           @updatedAt
+  created_at    DateTime           @default(now())
+}
+
 enum PaymentStatus {
   INITIATED
   COMPLETED

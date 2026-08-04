@@ -45,7 +45,8 @@ export type AuditAction =
   | "GRADING_SCALE_SET_DEFAULT"
   | "SIGNATURE_CREATE"
   | "SIGNATURE_DELETE"
-  | "FEE_RECONCILIATION_FINDING_REVIEW";
+  | "FEE_RECONCILIATION_FINDING_REVIEW"
+  | "SMS_GATEWAY_CONFIG_UPDATE";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

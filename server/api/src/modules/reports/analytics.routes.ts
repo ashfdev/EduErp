@@ -149,8 +149,10 @@ analyticsRouter.get(
     const [
       studentsTotal, studentsActive, studentsNewThisYear,
       studentsPresentToday, studentsAbsentToday, studentsLateToday, studentsOnLeaveToday,
+      studentsMarkedToday,
       studentsByGender,
       staffTotal, staffActive, staffOnLeaveToday, staffPresentToday, staffAbsentToday, staffLateToday,
+      staffMarkedToday,
       todayPayments, monthPayments,
       outstandingInvoices,
       overdueInvoicesCount,
@@ -169,6 +171,14 @@ analyticsRouter.get(
       prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "ABSENT" } }),
       prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LATE" } }),
       prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LEAVE" } }),
+      // Every status together, not just PRESENT/ABSENT/LATE/LEAVE (also
+      // covers HALF_DAY and any future status) -- used below to derive
+      // "not yet marked today" without needing to enumerate every possible
+      // AttendanceStatus value. Deliberately a real count of actual
+      // AttendanceRecord rows, not `active - (present+absent+late+leave)`,
+      // which would silently under/over-count the moment a status this
+      // sum doesn't list shows up (e.g. HALF_DAY).
+      prisma.attendanceRecord.count({ where: { person_type: "STUDENT", date: { gte: todayStartUtc, lt: todayEndUtc } } }),
       prisma.student.groupBy({ by: ["gender"], where: { deleted_at: null, status: "ACTIVE" }, _count: { _all: true } }),
       prisma.staff.count({ where: { deleted_at: null } }),
       prisma.staff.count({ where: { deleted_at: null, is_active: true } }),
@@ -176,6 +186,7 @@ analyticsRouter.get(
       prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "PRESENT" } }),
       prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "ABSENT" } }),
       prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc }, status: "LATE" } }),
+      prisma.attendanceRecord.count({ where: { person_type: "STAFF", date: { gte: todayStartUtc, lt: todayEndUtc } } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: todayStart, lt: todayEnd } }, select: { amount: true } }),
       prisma.payment.findMany({ where: { status: "COMPLETED", paid_at: { gte: monthStart, lt: monthEnd } }, select: { amount: true } }),
       prisma.invoice.findMany({ where: { status: { notIn: ["PAID", "WAIVED"] } }, select: { amount_due: true, amount_paid: true, fine_amount: true } }),
@@ -239,6 +250,14 @@ analyticsRouter.get(
           today_percentage: studentsActive ? Math.round((studentsPresentToday / studentsActive) * 1000) / 10 : null,
           today_late: studentsLateToday,
           on_leave_today: studentsOnLeaveToday,
+          // How many currently-active students have no attendance record at
+          // all for today yet -- the direct, honest explanation for why
+          // Present/Absent both legitimately read 0 early in the day (or on
+          // a day nobody has marked attendance at all): confirmed via a
+          // live audit that this reads correctly (matches active count)
+          // when zero AttendanceRecord rows exist for today, not a display
+          // bug in the present/absent counts themselves.
+          today_unmarked: Math.max(0, studentsActive - studentsMarkedToday),
           by_gender: genderCounts,
         },
         staff: {
@@ -248,6 +267,7 @@ analyticsRouter.get(
           present_today: staffPresentToday,
           today_absent: staffAbsentToday,
           today_late: staffLateToday,
+          today_unmarked: Math.max(0, staffActive - staffMarkedToday),
         },
         finance: {
           today_collection: todayPayments.reduce((s, p) => s + p.amount, 0),

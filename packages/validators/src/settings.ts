@@ -291,3 +291,12 @@ export const paymentGatewayConfigSchema = z.object({
   is_active: z.boolean().optional(),
 });
 export type PaymentGatewayConfigInput = z.infer<typeof paymentGatewayConfigSchema>;
+
+export const smsGatewayConfigSchema = z.object({
+  api_key: z.string().optional(),
+  api_secret: z.string().optional(),
+  sender_id: z.string().optional(),
+  api_url: z.string().url().optional(),
+  is_active: z.boolean().optional(),
+});
+export type SmsGatewayConfigInput = z.infer<typeof smsGatewayConfigSchema>;

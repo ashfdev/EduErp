@@ -10,7 +10,8 @@ interface LeaveRequestItem {
   status: string;
 }
 interface DailySummary {
-  summary: { total: number; present: number; late: number; absent: number; on_leave: number };
+  is_working_day: boolean;
+  summary: { total: number; present: number; late: number; absent: number; on_leave: number; weekend: number; unmarked: number };
 }
 
 function todayLocalDateString(): string {
@@ -70,6 +71,24 @@ export default function HrDashboardPage() {
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{pendingLeaves?.length ?? 0}</p><p className="text-sm text-muted-foreground">Pending Leave</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">৳{payrollTotal.toLocaleString()}</p><p className="text-sm text-muted-foreground">This Month Payroll</p></CardContent></Card>
       </div>
+
+      {/* Present/Absent both reading 0 looks exactly like a broken counter
+          unless it's clear today's attendance simply hasn't been recorded
+          yet -- surfaces the backend's own already-computed "unmarked"
+          count (previously fetched but never shown) with a direct link to
+          go mark it. */}
+      {dailySummary && !dailySummary.is_working_day ? (
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+          Today isn&apos;t a configured working day, so no one is expected to be marked.
+        </p>
+      ) : (
+        !!dailySummary?.summary.unmarked && (
+          <p className="rounded-md border bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {dailySummary.summary.unmarked} of {dailySummary.summary.total} staff have no attendance recorded for today yet.{" "}
+            <Link href="/hr/attendance" className="font-medium underline">Mark attendance</Link>
+          </p>
+        )
+      )}
 
       <Card>
         <CardContent className="pt-6">

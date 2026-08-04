@@ -20,9 +20,9 @@ const AT_RISK_VISIBLE_ROLES = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "ACCOUNTANT"
 interface Overview {
   students: {
     total: number; active: number; new_this_year: number; today_present: number; today_absent: number; today_percentage: number | null;
-    today_late: number; on_leave_today: number; by_gender: { MALE: number; FEMALE: number; OTHER: number };
+    today_late: number; on_leave_today: number; today_unmarked: number; by_gender: { MALE: number; FEMALE: number; OTHER: number };
   };
-  staff: { total: number; active: number; on_leave_today: number; present_today: number; today_absent: number; today_late: number };
+  staff: { total: number; active: number; on_leave_today: number; present_today: number; today_absent: number; today_late: number; today_unmarked: number };
   finance: {
     today_collection: number; this_month_collection: number; total_outstanding: number; overdue_invoices: number; current_fund_balance: number;
     today_expense: number; this_month_expense: number;
@@ -109,7 +109,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <p className="text-2xl font-bold tracking-tight">{overview?.students.total ?? "-"}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium">
               <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                 <ArrowUpRight className="mr-1 h-3 w-3" />
                 {t("present", { count: overview?.students.today_present ?? 0 })}
@@ -118,6 +118,15 @@ export default function DashboardPage() {
                 <ArrowDownRight className="mr-1 h-3 w-3" />
                 {t("absent", { count: overview?.students.today_absent ?? 0 })}
               </span>
+              {/* Present+Absent both reading 0 looks exactly like a broken
+                  counter unless it's clear attendance for today simply
+                  hasn't been marked yet -- this makes that state explicit
+                  instead of silently ambiguous. */}
+              {!!overview?.students.today_unmarked && (
+                <span className="flex items-center text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                  {t("unmarked", { count: overview.students.today_unmarked })}
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -131,10 +140,15 @@ export default function DashboardPage() {
               </div>
             </div>
             <p className="text-2xl font-bold tracking-tight">{overview?.staff.total ?? "-"}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium">
               <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
                 {t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}
               </span>
+              {!!overview?.staff.today_unmarked && (
+                <span className="flex items-center text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                  {t("unmarked", { count: overview.staff.today_unmarked })}
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -265,8 +279,10 @@ export default function DashboardPage() {
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-emerald-600">{overview?.staff.present_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffPresentToday")}</p></CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-rose-600">{overview?.staff.today_absent ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffAbsentToday")}</p></CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.staff.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffLateToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-slate-500">{overview?.staff.today_unmarked ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffUnmarkedToday")}</p></CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.students.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsLateToday")}</p></CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-blue-600">{overview?.students.on_leave_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsOnLeaveToday")}</p></CardContent></Card>
+        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-slate-500">{overview?.students.today_unmarked ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsUnmarkedToday")}</p></CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold">৳{(overview?.finance.current_fund_balance ?? 0).toLocaleString()}</p><p className="text-xs text-muted-foreground">{t("currentFundBalance")}</p></CardContent></Card>
         {overview && (() => {
           const netToday = overview.finance.today_collection - overview.finance.today_expense;

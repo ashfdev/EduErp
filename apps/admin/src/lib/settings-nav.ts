@@ -43,6 +43,7 @@ export const SETTINGS_GROUPS = [
       { href: "/settings/notifications/logs", label: "Notification Logs" },
       { href: "/notifications/bulk-sms", label: "Bulk SMS" },
       { href: "/settings/payment-gateways", label: "Payment Gateways" },
+      { href: "/settings/sms-gateway", label: "SMS Gateway" },
       { href: "/settings/devices", label: "Biometric Devices" },
       { href: "/settings/audit-log", label: "Audit Log" },
     ],
