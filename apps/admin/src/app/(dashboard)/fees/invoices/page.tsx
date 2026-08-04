@@ -9,6 +9,7 @@ import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
 interface Invoice {
   id: string;
+  invoice_no: string | null;
   description: string;
   period: string;
   amount_due: number;
@@ -35,12 +36,12 @@ interface ClassOption { id: string; name_en: string }
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-async function downloadInvoicePdf(invoiceId: string) {
+async function downloadInvoicePdf(invoiceId: string, invoiceNo: string | null) {
   const res = await api.get(`/api/documents/fee/invoice/${invoiceId}`, { responseType: "blob" });
   const url = URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Invoice_${invoiceId}.pdf`;
+  a.download = `Invoice_${invoiceNo ?? invoiceId}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -154,6 +155,7 @@ export default function InvoicesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Invoice No</TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Due</TableHead>
@@ -167,6 +169,7 @@ export default function InvoicesPage() {
             <TableBody>
               {invoices?.map((inv) => (
                 <TableRow key={inv.id}>
+                  <TableCell className="font-mono text-xs">{inv.invoice_no ?? "—"}</TableCell>
                   <TableCell>
                     {inv.student ? (
                       <>{inv.student.name_en} <span className="font-mono text-xs text-muted-foreground">{inv.student.student_uid}</span></>
@@ -186,8 +189,8 @@ export default function InvoicesPage() {
                   <TableCell>{new Date(inv.due_date).toLocaleDateString()}</TableCell>
                   <TableCell><StatusBadge status={inv.status} /></TableCell>
                   <TableCell className="text-right space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${payerName(inv)}`)}>View</Button>
-                    <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id)}>Download</Button>
+                    <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice ${inv.invoice_no ?? ""} — ${payerName(inv)}`)}>View</Button>
+                    <Button size="sm" variant="outline" onClick={() => downloadInvoicePdf(inv.id, inv.invoice_no)}>Download</Button>
                     {canWaive(inv.status) && (
                       <Button size="sm" variant="outline" onClick={() => setWaiveTarget(inv)}>Waive</Button>
                     )}

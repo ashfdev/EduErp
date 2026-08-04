@@ -1423,7 +1423,7 @@ documentsRouter.get(
       invoice_status: invoice.status,
       invoice_outstanding: Math.max(0, invoice.amount_due + invoice.fine_amount - invoice.amount_paid),
     });
-    sendPdf(res, pdf, `invoice-${invoice.id}.pdf`, req.query.download === "true");
+    sendPdf(res, pdf, `invoice-${invoice.invoice_no ?? invoice.id}.pdf`, req.query.download === "true");
   }),
 );
 

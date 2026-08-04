@@ -54,7 +54,7 @@
     {{#if institution.email}}<p>{{institution.email}}</p>{{/if}}
   </div>
   <div class="badge-wrap"><span class="badge">{{#if is_invoice}}Fee Invoice{{else}}Fee Receipt{{/if}}</span></div>
-  <div class="meta"><span>Receipt No: {{receipt_no}}</span><span>Date: {{banglaDate date}}</span></div>
+  <div class="meta"><span>{{#if is_invoice}}Invoice No{{else}}Receipt No{{/if}}: {{receipt_no}}</span><span>Date: {{banglaDate date}}</span></div>
   <table class="details">
     <tr><td class="label">Name</td><td>{{student.name_en}}</td><td class="label">Id</td><td>{{student.student_uid}}</td></tr>
     <tr><td class="label">Class</td><td>{{student.current_class.name_en}}</td><td class="label">Section</td><td>{{student.current_section.name}}</td></tr>

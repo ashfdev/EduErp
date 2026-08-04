@@ -81,6 +81,7 @@ interface StudentProfile {
   fees: {
     invoices: {
       id: string;
+      invoice_no: string | null;
       description: string;
       period: string;
       category: string;
@@ -815,6 +816,7 @@ export default function StudentProfilePage() {
                         <TableCell>
                           {inv.description}
                           <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="font-mono text-xs text-muted-foreground">{inv.invoice_no ?? "—"}</span>
                             <Badge variant="outline">{CATEGORY_LABEL[inv.category] ?? inv.category}</Badge>
                             <Badge variant="outline">{frequencyLabel(inv)}</Badge>
                             {inv.month != null && <span className="text-xs text-muted-foreground">{inv.period}</span>}
@@ -825,10 +827,10 @@ export default function StudentProfilePage() {
                         <TableCell>{new Date(inv.due_date).toLocaleDateString()}</TableCell>
                         <TableCell><StatusBadge status={inv.status} /></TableCell>
                         <TableCell className="text-right space-x-2">
-                          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice — ${inv.id}`)}>
+                          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/fee/invoice/${inv.id}`, `Invoice ${inv.invoice_no ?? ""}`)}>
                             View
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/fee/invoice/${inv.id}`, `Invoice_${inv.id}.pdf`)}>
+                          <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/fee/invoice/${inv.id}`, `Invoice_${inv.invoice_no ?? inv.id}.pdf`)}>
                             Download
                           </Button>
                           {inv.status !== "PAID" && inv.status !== "WAIVED" && (
