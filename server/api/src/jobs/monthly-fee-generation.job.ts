@@ -5,6 +5,7 @@ import { runMonthlyFeeGeneration } from "../modules/fees/invoice-helpers";
 import { notifyRoles } from "../services/in-app-notification.service";
 import { FEE_COLLECTION_ROLES } from "../lib/roles";
 import { logger } from "../lib/logger";
+import { isStartupCheckDue } from "../lib/job-freshness";
 
 // Plan Twenty-One, Phase A -- previously monthly tuition invoicing had no
 // real scheduled trigger anywhere in this codebase; an admin had to
@@ -89,9 +90,15 @@ export async function registerMonthlyFeeGenerationJob(): Promise<void> {
   // stacking duplicate schedules.
   await monthlyFeeGenerationQueue.add("monthly-run", {}, { repeat: { pattern: "0 6 1 * *" }, removeOnComplete: 50, removeOnFail: 50 });
 
-  // Also run once immediately on startup -- covers the case where the
-  // server was down at 6am on the 1st, and is safe to call repeatedly
-  // (idempotent via createMonthlyInvoiceIfMissing) even across several
-  // restarts in the same month; a repeat run just reports 0 created.
-  await monthlyFeeGenerationQueue.add("startup-check", {}, { removeOnComplete: 50, removeOnFail: 50 });
+  // Also run once on startup -- covers the case where the server was down
+  // at 6am on the 1st -- but only if a run hasn't already happened
+  // recently. Firing this unconditionally on every process start (a crash,
+  // a redeploy, or a dev hot-reload) re-notifies FEE_COLLECTION_ROLES every
+  // single time even though nothing changed -- confirmed via real data to
+  // have produced 250+ duplicate "Scheduled monthly fee generation
+  // completed" notifications over a few days of active development.
+  const lastRun = await prisma.invoiceGenerationRun.findFirst({ orderBy: { run_at: "desc" }, select: { run_at: true } });
+  if (isStartupCheckDue(lastRun?.run_at ?? null)) {
+    await monthlyFeeGenerationQueue.add("startup-check", {}, { removeOnComplete: 50, removeOnFail: 50 });
+  }
 }

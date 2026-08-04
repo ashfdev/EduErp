@@ -5,6 +5,7 @@ import { runFeeReconciliationSweep } from "../utils/fee-reconciliation-engine";
 import { notifyRoles } from "../services/in-app-notification.service";
 import { FEE_COLLECTION_ROLES } from "../lib/roles";
 import { logger } from "../lib/logger";
+import { isStartupCheckDue } from "../lib/job-freshness";
 
 // Plan Twenty-Four -- mirrors monthly-fee-generation.job.ts's exact shape
 // (its own Queue+Worker pair living in this process, not the separate
@@ -136,9 +137,15 @@ export async function registerFeeReconciliationJob(): Promise<void> {
   // on every server start without stacking duplicate schedules.
   await feeReconciliationQueue.add("nightly-run", {}, { repeat: { pattern: "0 2 * * *" }, removeOnComplete: 50, removeOnFail: 50 });
 
-  // Also run once immediately on startup, mirroring the monthly-fee-
-  // generation job's own dual-trigger pattern -- covers the case where the
-  // server was down at 2am, and is safe to call repeatedly (each run is
-  // independent, no idempotency concern the way invoice creation has).
-  await feeReconciliationQueue.add("startup-check", {}, { removeOnComplete: 50, removeOnFail: 50 });
+  // Also run once on startup -- covers the case where the server was down
+  // at 2am -- but only if a run hasn't already happened recently. Unlike
+  // monthly-fee-generation, every run here is genuinely "independent" (no
+  // per-item idempotency gate), which is exactly why firing this
+  // unconditionally on every restart is worse, not better: confirmed via
+  // real data this produced 25+ duplicate "Fee reconciliation..."
+  // notifications within a single afternoon of active development.
+  const lastRun = await prisma.feeReconciliationRun.findFirst({ orderBy: { run_at: "desc" }, select: { run_at: true } });
+  if (isStartupCheckDue(lastRun?.run_at ?? null)) {
+    await feeReconciliationQueue.add("startup-check", {}, { removeOnComplete: 50, removeOnFail: 50 });
+  }
 }
