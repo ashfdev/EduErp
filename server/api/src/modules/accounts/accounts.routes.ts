@@ -353,6 +353,20 @@ accountsRouter.post(
     }
 
     await prisma.$transaction(async (tx) => {
+      // Row-lock + re-check is_closed here, immediately before the actual
+      // write -- the plain read at the top of this handler (before this
+      // transaction) is unguarded, so two concurrent close requests for the
+      // same year could both pass it and both reach here. Without this,
+      // the second transaction would instead fail on the voucher_no unique
+      // constraint (JV-CLOSE-{label} collides) -- no double-posting either
+      // way (Prisma rolls the whole transaction back on any thrown error,
+      // including the is_closed update), but a raw constraint violation is
+      // a confusing error for a "someone else already closed this" case
+      // that deserves a clean, expected message instead.
+      await tx.$queryRaw`SELECT id FROM "FinancialYear" WHERE id = ${id} FOR UPDATE`;
+      const freshYear = await tx.financialYear.findUniqueOrThrow({ where: { id } });
+      if (freshYear.is_closed) throw badRequest("Financial year is already closed");
+
       await tx.financialYear.update({ where: { id }, data: { is_closed: true, closed_at: new Date() } });
       if (closingLines.length > 0) {
         const voucherNo = `JV-CLOSE-${year.label}`;

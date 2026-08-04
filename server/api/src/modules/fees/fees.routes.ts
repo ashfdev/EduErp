@@ -765,64 +765,79 @@ feesRouter.post(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const body = collectPaymentSchema.parse(req.body);
-    const invoice = await prisma.invoice.findUnique({ where: { id: body.invoice_id } });
-    if (!invoice) throw notFound("Invoice not found");
-    if (invoice.status === "PAID") throw badRequest("Invoice is already fully paid");
 
-    // invoice.student_id is null for a pre-enrollment, application-linked
-    // invoice (Plan Twenty-Three, Phase 3) -- resolve whichever side is
-    // real and use it for the recipient name/phone below instead of
-    // dereferencing student unconditionally.
-    const student = invoice.student_id ? await prisma.student.findUnique({ where: { id: invoice.student_id } }) : null;
-    const application = invoice.application_id ? await prisma.admissionApplication.findUnique({ where: { id: invoice.application_id } }) : null;
-    const applicationGuardianPhone = (application?.guardian_info as { phone?: string } | null)?.phone;
-    const rules = await getFeeRules();
-    // Class/sub-category-scoped fine engine (Phase N2) -- falls back to the
-    // unmodified calculateLateFee() when no FeeFineRule matches, so a
-    // category/class that never opts in sees byte-identical behavior.
-    const fine = await resolveFineForInvoice(prisma, invoice, student?.current_class_id ?? null, rules);
+    // Everything that reads-then-writes Invoice.amount_paid runs inside one
+    // transaction, with a row lock acquired FIRST -- two concurrent
+    // payments against the SAME invoice (a counter payment racing a
+    // gateway webhook, or two staff double-submitting) used to both read
+    // the same stale amount_paid and silently lose one payment's
+    // contribution (a classic lost-update race under Postgres's default
+    // READ COMMITTED isolation, which a bare $transaction without an
+    // explicit lock does NOT prevent). FOR UPDATE serializes any concurrent
+    // transaction touching this same invoice behind this one.
+    const { payment, updated, appliedToInvoice, overflow, student, application, applicationGuardianPhone } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${body.invoice_id} FOR UPDATE`;
+      const invoice = await tx.invoice.findUnique({ where: { id: body.invoice_id } });
+      if (!invoice) throw notFound("Invoice not found");
+      if (invoice.status === "PAID") throw badRequest("Invoice is already fully paid");
 
-    // An amount beyond what's actually owed on this invoice is an
-    // overpayment, not a bigger payment against it — Invoice.amount_paid
-    // must never exceed amount_due + fine (that's what silently produced a
-    // confusing >100%-paid invoice before this check existed). Without
-    // advance_payment_allowed, reject outright; with it, cap what applies
-    // here and bank the rest as the student's credit_balance.
-    const outstanding = Math.max(0, invoice.amount_due + fine - invoice.amount_paid);
-    if (body.amount > outstanding && !rules.advance_payment_allowed) {
-      throw badRequest(`Amount exceeds the outstanding balance (৳${outstanding}). Enable advance payments in Fee Rules to accept overpayment as credit.`);
-    }
-    const appliedToInvoice = Math.min(body.amount, outstanding);
-    const overflow = body.amount - appliedToInvoice;
+      // invoice.student_id is null for a pre-enrollment, application-linked
+      // invoice (Plan Twenty-Three, Phase 3) -- resolve whichever side is
+      // real and use it for the recipient name/phone below instead of
+      // dereferencing student unconditionally.
+      const student = invoice.student_id ? await tx.student.findUnique({ where: { id: invoice.student_id } }) : null;
+      const application = invoice.application_id ? await tx.admissionApplication.findUnique({ where: { id: invoice.application_id } }) : null;
+      const applicationGuardianPhone = (application?.guardian_info as { phone?: string } | null)?.phone;
+      const rules = await getFeeRules();
+      // Class/sub-category-scoped fine engine (Phase N2) -- falls back to the
+      // unmodified calculateLateFee() when no FeeFineRule matches, so a
+      // category/class that never opts in sees byte-identical behavior.
+      const fine = await resolveFineForInvoice(tx, invoice, student?.current_class_id ?? null, rules);
 
-    const payment = await prisma.payment.create({
-      data: {
-        receipt_no: await generateReceiptNo(prisma),
-        invoice_id: invoice.id,
-        gateway: body.gateway,
-        amount: body.amount,
-        status: "COMPLETED",
-        paid_at: new Date(),
-        notes: body.notes,
-        collected_by_id: req.user!.sub,
-      },
+      // An amount beyond what's actually owed on this invoice is an
+      // overpayment, not a bigger payment against it — Invoice.amount_paid
+      // must never exceed amount_due + fine (that's what silently produced a
+      // confusing >100%-paid invoice before this check existed). Without
+      // advance_payment_allowed, reject outright; with it, cap what applies
+      // here and bank the rest as the student's credit_balance.
+      const outstanding = Math.max(0, invoice.amount_due + fine - invoice.amount_paid);
+      if (body.amount > outstanding && !rules.advance_payment_allowed) {
+        throw badRequest(`Amount exceeds the outstanding balance (৳${outstanding}). Enable advance payments in Fee Rules to accept overpayment as credit.`);
+      }
+      const appliedToInvoice = Math.min(body.amount, outstanding);
+      const overflow = body.amount - appliedToInvoice;
+
+      const payment = await tx.payment.create({
+        data: {
+          receipt_no: await generateReceiptNo(tx),
+          invoice_id: invoice.id,
+          gateway: body.gateway,
+          amount: body.amount,
+          status: "COMPLETED",
+          paid_at: new Date(),
+          notes: body.notes,
+          collected_by_id: req.user!.sub,
+        },
+      });
+
+      const newAmountPaid = invoice.amount_paid + appliedToInvoice;
+      const newStatus = newAmountPaid >= invoice.amount_due + fine ? "PAID" : newAmountPaid > 0 ? "PARTIAL" : invoice.status;
+
+      const updated = await tx.invoice.update({
+        where: { id: invoice.id },
+        data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
+      });
+
+      // Advance-credit overflow only has somewhere to land once a real
+      // Student exists -- an application has no credit_balance concept
+      // (in practice this path isn't reachable pre-enrollment anyway, since
+      // an applicant only ever owes a fixed app_fee/form_fee amount).
+      if (overflow > 0 && invoice.student_id) {
+        await tx.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
+      }
+
+      return { payment, updated, appliedToInvoice, overflow, student, application, applicationGuardianPhone };
     });
-
-    const newAmountPaid = invoice.amount_paid + appliedToInvoice;
-    const newStatus = newAmountPaid >= invoice.amount_due + fine ? "PAID" : newAmountPaid > 0 ? "PARTIAL" : invoice.status;
-
-    const updated = await prisma.invoice.update({
-      where: { id: invoice.id },
-      data: { amount_paid: newAmountPaid, fine_amount: fine, status: newStatus },
-    });
-
-    // Advance-credit overflow only has somewhere to land once a real
-    // Student exists -- an application has no credit_balance concept
-    // (in practice this path isn't reachable pre-enrollment anyway, since
-    // an applicant only ever owes a fixed app_fee/form_fee amount).
-    if (overflow > 0 && invoice.student_id) {
-      await prisma.student.update({ where: { id: invoice.student_id }, data: { credit_balance: { increment: overflow } } });
-    }
 
     await createFeeReceiptJournal(payment, updated, appliedToInvoice);
 
@@ -832,8 +847,8 @@ feesRouter.post(
       await sendSms(
         recipientPhone,
         overflow > 0
-          ? `Payment of ৳${body.amount} received for ${recipientName}. ৳${overflow} credited as advance balance. Thank you.`
-          : `Payment of ৳${body.amount} received for ${recipientName}. Thank you.`,
+          ? `Payment of ৳${payment.amount} received for ${recipientName}. ৳${overflow} credited as advance balance. Thank you.`
+          : `Payment of ৳${payment.amount} received for ${recipientName}. Thank you.`,
       );
     }
 
@@ -967,6 +982,12 @@ feesRouter.post(
       let studentId: string | null = null;
 
       for (const line of body.lines) {
+        // Same lost-update race as /collect above -- this loop already runs
+        // inside a $transaction, but under Postgres's default READ
+        // COMMITTED isolation that alone does not block a concurrent
+        // transaction from reading the same pre-write amount_paid. The
+        // explicit row lock is what actually closes it.
+        await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${line.invoice_id} FOR UPDATE`;
         const invoice = await tx.invoice.findUnique({ where: { id: line.invoice_id } });
         if (!invoice) throw notFound(`Invoice ${line.invoice_id} not found`);
         if (invoice.status === "PAID") throw badRequest(`"${invoice.description}" is already fully paid`);

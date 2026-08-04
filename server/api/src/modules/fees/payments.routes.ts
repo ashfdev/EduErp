@@ -114,17 +114,42 @@ paymentsRouter.post(
 // wallet payment) updates the invoice/journal/SMS exactly the same way an
 // automated gateway does.
 export async function completePayment(payment: Payment) {
-  await prisma.payment.update({
-    where: { id: payment.id },
-    data: { status: "COMPLETED", paid_at: new Date(), receipt_no: await generateReceiptNo(prisma) },
+  // Everything read-then-write here runs inside one transaction, with row
+  // locks acquired first -- this used to be a plain sequence of unguarded
+  // prisma calls, which had two real problems: (1) a lost-update race on
+  // Invoice.amount_paid identical to /collect's (a webhook racing a manual
+  // counter payment on the same invoice), and (2) no guard against this
+  // function itself running twice for the SAME payment -- a duplicate
+  // gateway webhook delivery (a well-documented, common real-world gateway
+  // behavior), or a webhook arriving after staff already manually verified
+  // the same payment, would previously double-increment amount_paid and
+  // post a second journal voucher for money that was only ever received
+  // once. The Payment-row lock + fresh status re-check makes this function
+  // idempotent regardless of how many times or how concurrently it's called
+  // for the same payment.
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Payment" WHERE id = ${payment.id} FOR UPDATE`;
+    const freshPayment = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+    if (freshPayment.status === "COMPLETED") return null;
+
+    await tx.payment.update({
+      where: { id: payment.id },
+      data: { status: "COMPLETED", paid_at: new Date(), receipt_no: await generateReceiptNo(tx) },
+    });
+
+    await tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${payment.invoice_id} FOR UPDATE`;
+    const invoice = await tx.invoice.findUniqueOrThrow({ where: { id: payment.invoice_id } });
+    const newAmountPaid = invoice.amount_paid + payment.amount;
+    const updatedInvoice = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: { amount_paid: newAmountPaid, status: newAmountPaid >= invoice.amount_due + invoice.fine_amount ? "PAID" : "PARTIAL" },
+    });
+
+    return { invoice, updatedInvoice };
   });
 
-  const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: payment.invoice_id } });
-  const newAmountPaid = invoice.amount_paid + payment.amount;
-  const updatedInvoice = await prisma.invoice.update({
-    where: { id: invoice.id },
-    data: { amount_paid: newAmountPaid, status: newAmountPaid >= invoice.amount_due + invoice.fine_amount ? "PAID" : "PARTIAL" },
-  });
+  if (!result) return; // already completed by an earlier/concurrent call -- no-op, never double-books
+  const { invoice, updatedInvoice } = result;
 
   await createFeeReceiptJournal(payment, updatedInvoice);
 
@@ -187,7 +212,15 @@ paymentsRouter.post("/callback/sslcommerz", asyncHandler(async (req, res) => res
 // transfers (Plan Twenty-Three, Phase 3). The slip is a financial document
 // with account numbers/names, so it's served as a short-lived signed URL to
 // FEE_COLLECTION_ROLES only, never a permanent public link.
-const MANUAL_VERIFICATION_GATEWAYS = ["BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET"] as const;
+//
+// SSLCOMMERZ and AAMARPAY are included too (audit finding) — those two are
+// only ever reachable via the real gateway-redirect flow (/initiate +
+// webhook callback), which has no staff-review path at all if the webhook
+// never arrives (payer closes the tab, network drop, gateway outage). Once
+// completePayment() is idempotent (see its own comment), it's safe to also
+// let staff resolve a stuck one from here — if the real webhook does show
+// up later, completePayment() correctly no-ops instead of double-booking.
+const MANUAL_VERIFICATION_GATEWAYS = ["BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ", "AAMARPAY"] as const;
 
 paymentsRouter.get(
   "/bank-transfers/pending",

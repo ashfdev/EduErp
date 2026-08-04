@@ -183,10 +183,27 @@ export async function createPayrollJournal(payrollRecord: PayrollRecord, staff: 
     // separate PF/TDS breakdown tracked) — modeled here as a TDS Payable
     // liability rather than splitting it further, which would require
     // changing Phase 12's payroll schema.
+    //
+    // Audit finding, fixed here: net_salary is computed (payroll.routes.ts)
+    // as gross + overtime_pay + substitution_bonus - deductions, but this
+    // voucher used to only ever debit gross_salary while crediting
+    // net_salary + deductions. The moment a staff member had any nonzero
+    // overtime_pay/substitution_bonus, total debit != total credit and
+    // validateBalance() threw -- caught by the try/catch below, so the
+    // PayrollRecord still got marked PAID (real money paid out) but NO
+    // journal voucher was ever posted for it, a silent ledger gap. Debiting
+    // overtime/substitution as their own lines against the same Salary
+    // Expense account keeps the voucher balanced for every combination.
     const entries: JournalEntryInput[] = [
       { debit_account_id: salaryExpenseAccountId, amount: payrollRecord.gross_salary, narration: `Salary expense — ${staff.name_en} (${payrollRecord.month}/${payrollRecord.year})` },
-      { credit_account_id: cashOrBankAccountId, amount: payrollRecord.net_salary, narration: `Net salary paid — ${staff.name_en}` },
     ];
+    if (payrollRecord.overtime_pay > 0) {
+      entries.push({ debit_account_id: salaryExpenseAccountId, amount: payrollRecord.overtime_pay, narration: `Overtime pay — ${staff.name_en} (${payrollRecord.month}/${payrollRecord.year})` });
+    }
+    if (payrollRecord.substitution_bonus > 0) {
+      entries.push({ debit_account_id: salaryExpenseAccountId, amount: payrollRecord.substitution_bonus, narration: `Substitution bonus — ${staff.name_en} (${payrollRecord.month}/${payrollRecord.year})` });
+    }
+    entries.push({ credit_account_id: cashOrBankAccountId, amount: payrollRecord.net_salary, narration: `Net salary paid — ${staff.name_en}` });
     if (payrollRecord.deductions > 0) {
       entries.push({ credit_account_id: tdsPayableAccountId, amount: payrollRecord.deductions, narration: `Payroll deductions — ${staff.name_en}` });
     }
