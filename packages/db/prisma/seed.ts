@@ -346,7 +346,7 @@ async function main() {
       await prisma.section.upsert({
         where: { id: `class-${level}-${sectionName}` },
         update: {},
-        create: { id: `class-${level}-${sectionName}`, class_id: cls.id, shift_id: morningShift.id, name: sectionName },
+        create: { id: `class-${level}-${sectionName}`, class_id: cls!.id, shift_id: morningShift.id, name: sectionName },
       });
     }
   }
@@ -364,7 +364,7 @@ async function main() {
         update: {},
         create: {
           id: `subject-${level}-${s.code}`,
-          class_id: cls.id,
+          class_id: cls!.id,
           name_en: s.name_en,
           code: s.code,
           is_compulsory: !s.is_optional,
@@ -478,7 +478,7 @@ async function main() {
       create: {
         id: `fee-tuition-${level}`,
         academic_year_id: academicYear.id,
-        class_id: cls.id,
+        class_id: cls!.id,
         category: "TUITION",
         name: `Class ${level} Monthly Tuition`,
         amount: TUITION_BY_LEVEL[level]!,
@@ -492,7 +492,7 @@ async function main() {
       create: {
         id: `fee-admission-${level}`,
         academic_year_id: academicYear.id,
-        class_id: cls.id,
+        class_id: cls!.id,
         category: "ADMISSION",
         name: `Class ${level} Admission Fee`,
         amount: 3000,
@@ -505,7 +505,7 @@ async function main() {
       create: {
         id: `fee-exam-${level}`,
         academic_year_id: academicYear.id,
-        class_id: cls.id,
+        class_id: cls!.id,
         category: "EXAM",
         name: `Class ${level} Exam Fee`,
         amount: 300,
@@ -749,7 +749,7 @@ async function main() {
   // hard way -- two stray rows literally named "a"/"aa" from earlier ad-hoc
   // testing) still gets inherited by every newly-seeded demo student.
   const compulsorySubjectIds = await prisma.subject
-    .findMany({ where: { class_id: classNine.id, is_compulsory: true, is_active: true }, select: { id: true } })
+    .findMany({ where: { class_id: classNine!.id, is_compulsory: true, is_active: true }, select: { id: true } })
     .then((rows) => rows.map((r) => r.id));
 
   for (const [index, s] of DEMO_STUDENTS.entries()) {
@@ -763,10 +763,10 @@ async function main() {
         name_bn: s.name_bn,
         gender: s.gender,
         father_phone: s.father_phone,
-        current_class_id: classNine.id,
+        current_class_id: classNine!.id,
         current_section_id: sectionNineA.id,
         current_roll_no: rollNo,
-        academic_history: { create: { academic_year_id: academicYear.id, class_id: classNine.id, section_id: sectionNineA.id, roll_no: rollNo, status: "PROMOTED" } },
+        academic_history: { create: { academic_year_id: academicYear.id, class_id: classNine!.id, section_id: sectionNineA.id, roll_no: rollNo, status: "PROMOTED" } },
       },
     });
 
@@ -863,7 +863,7 @@ async function main() {
   // correctly gets no marks for this Class 9 exam -- not a bug to work
   // around.
   const demoClassNineStudents = await prisma.student.findMany({
-    where: { student_uid: { in: DEMO_STUDENTS.map((_, i) => `ALh-26-${String(i + 1).padStart(4, "0")}`) }, current_class_id: classNine.id },
+    where: { student_uid: { in: DEMO_STUDENTS.map((_, i) => `ALh-26-${String(i + 1).padStart(4, "0")}`) }, current_class_id: classNine!.id },
   });
   // Per-student baseline spans the real grade range on purpose (one clear
   // fail included) so a generated marksheet/result actually exercises every
@@ -898,13 +898,13 @@ async function main() {
   // model's own schema comment) -- findFirst + conditional create instead
   // of .upsert() here.
   const existingResultPublication = await prisma.resultPublication.findFirst({
-    where: { exam_id: demoExam.id, class_id: classNine.id, group_id: null },
+    where: { exam_id: demoExam.id, class_id: classNine!.id, group_id: null },
   });
   if (!existingResultPublication) {
     await prisma.resultPublication.create({
       data: {
         exam_id: demoExam.id,
-        class_id: classNine.id,
+        class_id: classNine!.id,
         group_id: null,
         is_published: true,
         published_at: new Date("2026-06-20"),
@@ -1475,6 +1475,441 @@ async function main() {
       create: { id, ...data, is_active: true },
     });
   }
+
+
+  // --- ADDITIONAL DEMO DATA FOR UI TESTING ---
+
+  // 1. Voucher & JournalEntry
+  const demoVoucher = await prisma.voucher.upsert({
+    where: { voucher_no: "JV-2026-0001" },
+    update: {},
+    create: {
+      voucher_no: "JV-2026-0001",
+      voucher_type: "JOURNAL",
+      financial_year_id: activeFinancialYear.id,
+      date: new Date(),
+      narration: "Demo journal entry for testing",
+      total_amount: 5000,
+      status: "POSTED",
+      is_auto: false,
+    }
+  });
+  const existingJe = await prisma.journalEntry.findFirst({ where: { voucher_id: demoVoucher.id } });
+  if (!existingJe) {
+    await prisma.journalEntry.create({
+      data: { voucher_id: demoVoucher.id, debit_account_id: accountIdByCode["5019"], amount: 5000, narration: "Misc Expense" }
+    });
+    await prisma.journalEntry.create({
+      data: { voucher_id: demoVoucher.id, credit_account_id: accountIdByCode["1001"], amount: 5000, narration: "Cash Paid" }
+    });
+  }
+
+  // 2. Payroll & HR
+  const principalUserId = (await prisma.user.findUnique({ where: { phone: "01700000001" } }))?.id;
+  let principalStaff;
+  if (principalUserId) {
+    principalStaff = await prisma.staff.findUnique({ where: { user_id: principalUserId } });
+  }
+  
+  const demoSalaryStructure = await prisma.salaryStructure.upsert({
+    where: { id: "structure-principal" },
+    update: {},
+    create: {
+      id: "structure-principal",
+      name: "Principal Scale",
+      basic: 50000,
+      house_rent: 10000,
+      medical: 2000,
+      transport: 3000,
+      pf_percentage: 10,
+      tds_percentage: 5,
+    }
+  });
+
+  if (principalStaff) {
+    await prisma.payrollRecord.upsert({
+      where: { staff_id_month_year: { staff_id: principalStaff!.id, month: 1, year: 2026 } },
+      update: {},
+      create: {
+        staff_id: principalStaff!.id,
+        month: 1, // January
+        year: 2026,
+        working_days: 22,
+        present_days: 22,
+        gross_salary: 65000,
+        deductions: 7000,
+        net_salary: 58000,
+        status: "PAID",
+      }
+    });
+
+    // Staff Attendance
+    const demoDevice = await prisma.device.upsert({
+      where: { id: "demo-device" },
+      update: {},
+      create: {
+        id: "demo-device",
+        name: "Main Gate Device",
+        serial_number: "SN-DEMO-01",
+        status: "ONLINE",
+        type: "FINGERPRINT",
+      }
+    });
+    await prisma.devicePunchLog.upsert({
+      where: { id: "punch-demo" },
+      update: {},
+      create: {
+        id: "punch-demo",
+        mapped_person_id: principalStaff!.id,
+        mapped_person_type: "STAFF",
+        device_id: "demo-device",
+        device_user_id: principalStaff!.id,
+        punch_at: new Date(new Date().setHours(8, 0, 0, 0)),
+      }
+    });
+  }
+
+  // 3. Admissions
+  const demoAdmissionCycle = await prisma.admissionCycle.findFirst({ where: { academic_year_id: academicYear.id } });
+  if (demoAdmissionCycle) {
+    const demoAdmissionApplication = await prisma.admissionApplication.upsert({
+      where: { admission_roll: "APP-2026-001" },
+      update: {},
+      create: {
+        admission_roll: "APP-2026-001",
+        cycle_id: demoAdmissionCycle.id,
+        applicant_name: "Md. Demo Applicant",
+        guardian_info: { fatherName: "Demo Father", motherName: "Demo Mother", contactPhone: "01800000001" },
+        personal_info: { dateOfBirth: "2010-01-01", gender: "MALE", religion: "ISLAM", bloodGroup: "O_POS", presentAddress: "Agrabad, Chattogram" },
+        status: "PENDING",
+      }
+    });
+
+    await prisma.admissionApplicationStage.upsert({
+      where: { id: "app-stage-demo" },
+      update: {},
+      create: {
+        id: "app-stage-demo",
+        application_id: demoAdmissionApplication.id,
+        cycle_id: demoAdmissionCycle.id,
+        stage_type: "WRITTEN_TEST",
+        scheduled_date: new Date(),
+        status: "SCHEDULED",
+      }
+    });
+  }
+
+  // 4. Visitors
+  await prisma.visitor.upsert({
+    where: { id: "visitor-demo" },
+    update: {},
+    create: {
+      id: "visitor-demo",
+      visitor_name: "Abdul Karim",
+      phone: "01900000001",
+      reason: "Meeting with Principal",
+      in_time: new Date(),
+      visitor_type: "OTHER",
+    }
+  });
+
+  // 5. Waivers
+  // Sibling discount waiver type already exists in seed.ts, let's just use it
+  const existingWaiverType = await prisma.waiverType.findUnique({ where: { id: "seed-demo-waiver-sibling" } });
+
+  const rakibStudent = await prisma.student.findUnique({ where: { student_uid: "ALh-26-0001" } });
+  if (rakibStudent && existingWaiverType) {
+    const waiverReq = await prisma.waiverRequest.upsert({
+      where: { id: "waiver-req-demo" },
+      update: {},
+      create: {
+        id: "waiver-req-demo",
+        student_id: rakibStudent.id,
+        requested_by_user_id: principalUserId || rakibStudent.id,
+        reason: "Has another sibling in Class 7",
+        status: "APPROVED",
+      }
+    });
+    
+    await prisma.studentWaiver.upsert({
+      where: { id: "student-waiver-demo" },
+      update: {},
+      create: {
+        id: "student-waiver-demo",
+        student_id: rakibStudent.id,
+        waiver_type_id: existingWaiverType.id,
+        academic_year_id: academicYear.id,
+        assigned_by_id: principalStaff!.id,
+      }
+    });
+  }
+
+  // 6. Leaves
+  const sickLeaveType = await prisma.leaveType.upsert({
+    where: { id: "leave-sick" },
+    update: {},
+    create: { id: "leave-sick", name: "Sick Leave", days_allowed: 14 }
+  });
+
+  if (rakibStudent) {
+    await prisma.studentLeaveRequest.upsert({
+      where: { id: "leave-req-demo" },
+      update: {},
+      create: {
+        id: "leave-req-demo",
+        student_id: rakibStudent.id,
+        from_date: new Date(),
+        to_date: new Date(new Date().getTime() + 86400000 * 2), // +2 days
+        reason: "Fever and cold",
+        status: "PENDING",
+        requested_by_user_id: principalUserId!,
+      }
+    });
+  }
+
+  // 7. Complaints
+  await prisma.complaint.upsert({
+    where: { id: "complaint-demo" },
+    update: {},
+    create: {
+      id: "complaint-demo",
+      description: "Classroom AC not working: The AC in Class 9 Section A is making noise and not cooling.",
+      status: "OPEN",
+      category: "FACILITY",
+      raised_by_user_id: principalUserId!,
+    }
+  });
+
+  // 8. Document Requests
+  if (rakibStudent) {
+    await prisma.documentRequest.upsert({
+      where: { id: "doc-req-demo" },
+      update: {},
+      create: {
+        id: "doc-req-demo",
+        student_id: rakibStudent.id,
+        doc_type: "TESTIMONIAL",
+        reason: "Need for coaching admission",
+        status: "APPROVED",
+        requested_by_user_id: principalUserId!,
+      }
+    });
+  }
+
+  // 9. Class Routine
+  const classNineRef = classes[9];
+  const sectionNineARef = await prisma.section.findUniqueOrThrow({ where: { id: "class-9-A" } });
+  
+  await prisma.routineSlot.upsert({
+    where: { id: "routine-demo" },
+    update: {},
+    create: {
+      id: "routine-demo",
+      class_id: classNineRef!.id,
+      section_id: sectionNineARef.id,
+      day_of_week: 1, // Monday
+      period_no: 1,
+      subject_id: (await prisma.subject.findFirst({ where: { class_id: classNineRef!.id, is_compulsory: true } }))?.id,
+      teacher_id: staffIdByPhone["01700000004"],
+      start_time: "07:30",
+      end_time: "08:15",
+    }
+  });
+
+  // 10. Exam Routine & Seat Plan
+  const demoExamSession = await prisma.examSession.upsert({
+    where: { id: "exam-session-demo" },
+    update: {},
+    create: {
+      id: "exam-session-demo",
+      exam_id: (await prisma.exam.findFirst({ where: { academic_year_id: academicYear.id } }))?.id || "dummy",
+      label: "Morning Session",
+      date: new Date("2026-06-01"),
+      start_time: "10:00",
+      end_time: "13:00",
+    }
+  });
+
+  if (demoExamSession.exam_id !== "dummy") {
+    await prisma.examSessionClass.upsert({
+      where: { session_id_class_id: { session_id: demoExamSession.id, class_id: classNineRef!.id } },
+      update: {},
+      create: { session_id: demoExamSession.id, class_id: classNineRef!.id }
+    });
+  }
+
+  const demoExamHall = await prisma.examHall.upsert({
+    where: { id: "exam-hall-demo" },
+    update: {},
+    create: {
+      id: "exam-hall-demo",
+      name: "Hall Room A",
+      seats_per_row: 5,
+      capacity: 50,
+    }
+  });
+
+  if (rakibStudent && demoExamSession.exam_id !== "dummy") {
+    await prisma.examSeatPlan.upsert({
+      where: { exam_id_student_id: { exam_id: demoExamSession.exam_id, student_id: rakibStudent.id } },
+      update: {},
+      create: {
+        exam_id: demoExamSession.exam_id,
+        session_id: demoExamSession.id,
+        hall_id: demoExamHall.id,
+        student_id: rakibStudent.id,
+        hall_name: demoExamHall.name,
+        seat_number: "A-01",
+        row_number: 1,
+        seat_in_row: 1,
+      }
+    });
+  }
+
+  // 11. Transport
+  const demoVehicle = await prisma.vehicle.upsert({
+    where: { id: "vehicle-demo" },
+    update: {},
+    create: {
+      id: "vehicle-demo",
+      capacity: 29,
+      is_active: true,
+      type: "BUS",
+      vehicle_no: "Bus-01",
+    }
+  });
+
+  const demoRoute = await prisma.transportRoute.upsert({
+    where: { id: "route-demo" },
+    update: {},
+    create: {
+      id: "route-demo",
+      name: "Route 1 (Agrabad -> School)",
+    }
+  });
+
+  if (rakibStudent) {
+    await prisma.studentTransport.upsert({
+      where: { student_id: rakibStudent.id },
+      update: {},
+      create: {
+        student_id: rakibStudent.id,
+        route_id: demoRoute.id,
+        pickup_stop: "Agrabad CGS",
+      }
+    });
+  }
+
+  // 12. Hostel
+  const demoHostelBlock = await prisma.hostelBlock.upsert({
+    where: { id: "hostel-block-demo" },
+    update: {},
+    create: {
+      id: "hostel-block-demo",
+      name: "Boys Hostel A",
+      type: "MALE",
+    }
+  });
+
+  const demoHostelRoom = await prisma.hostelRoom.upsert({
+    where: { id: "hostel-room-demo" },
+    update: {},
+    create: {
+      id: "hostel-room-demo",
+      block_id: demoHostelBlock.id,
+      room_no: "101",
+      capacity: 4,
+      floor: 1,
+    }
+  });
+
+  // 13. Library
+  const demoBook = await prisma.book.upsert({
+    where: { id: "book-demo" },
+    update: {},
+    create: {
+      id: "book-demo",
+      title: "Advanced Mathematics",
+      author: "S. U. Ahmed",
+      isbn: "978-984-00-1111-2",
+      category: "Mathematics",
+      total_copies: 10,
+      available: 9,
+    }
+  });
+
+  if (rakibStudent) {
+    await prisma.bookIssue.upsert({
+      where: { id: "book-issue-demo" },
+      update: {},
+      create: {
+        id: "book-issue-demo",
+        book_id: demoBook.id,
+        person_type: "STUDENT",
+        person_id: rakibStudent.id,
+        issued_at: new Date(),
+        due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        status: "ISSUED",
+      }
+    });
+  }
+
+  // 14. Inventory
+  const demoItem = await prisma.item.upsert({
+    where: { id: "item-demo" },
+    update: {},
+    create: {
+      id: "item-demo",
+      category_id: "item-cat-stationery",
+      item_code: "WM-01",
+      name: "Whiteboard Marker",
+      unit: "Box",
+      current_stock: 50,
+      minimum_stock: 10,
+    }
+  });
+
+  const demoSupplier = await prisma.supplier.upsert({
+    where: { id: "supplier-demo" },
+    update: {},
+    create: {
+      id: "supplier-demo",
+      name: "Demo Supplier",
+      contact_person: "Mr. Supplier",
+      phone: "01700000000",
+      is_active: true,
+    }
+  });
+
+  await prisma.purchaseOrder.upsert({
+    where: { id: "po-demo" },
+    update: {},
+    create: {
+      id: "po-demo",
+      po_no: "PO-2026-0001",
+      supplier_id: demoSupplier.id,
+      order_date: new Date(),
+      status: "APPROVED",
+      total_amount: 1500,
+    }
+  });
+
+  // 15. Asset
+  await prisma.asset.upsert({
+    where: { id: "asset-demo" },
+    update: {},
+    create: {
+      id: "asset-demo",
+      asset_uid: "AST-26-0001",
+      name: "Teacher Desk",
+      category_id: "asset-cat-furniture",
+      purchase_date: new Date("2026-01-01"),
+      purchase_price: 5000,
+      book_value: 5000,
+      status: "ACTIVE",
+      current_location: "Class 9A",
+    }
+  });
 
   console.log("Seed complete.");
 }
