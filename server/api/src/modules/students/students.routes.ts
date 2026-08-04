@@ -513,7 +513,7 @@ studentsRouter.get(
       where: {
         academic_year_id: query.academic_year_id,
         is_active: true,
-        frequency: { in: ["ONE_TIME", "MONTHLY"] },
+        frequency: { in: ["ONE_TIME", "MONTHLY", "YEARLY"] },
         OR: [{ class_id: query.class_id }, { classes: { some: { class_id: query.class_id } } }],
       },
       include: { fee_sub_category: { select: { name: true } }, classes: { select: { class_id: true, group_id: true } } },

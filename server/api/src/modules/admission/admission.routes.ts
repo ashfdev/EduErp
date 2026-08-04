@@ -1281,7 +1281,7 @@ admissionRouter.get(
         academic_year_id: application.cycle.academic_year_id,
         is_active: true,
         category: { notIn: ["ADMISSION", "FORM"] },
-        frequency: { in: ["ONE_TIME", "MONTHLY"] },
+        frequency: { in: ["ONE_TIME", "MONTHLY", "YEARLY"] },
         OR: [{ class_id: application.cycle.class_id }, { classes: { some: { class_id: application.cycle.class_id } } }],
       },
       include: { fee_sub_category: { select: { name: true } }, classes: { select: { class_id: true, group_id: true } } },
