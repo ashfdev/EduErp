@@ -67,7 +67,7 @@ interface Application {
   photo_url: string | null;
   documents_uploaded: { id: string; doc_type: string; slot: string | null; original_filename: string; url: string }[];
   enrolled_student_id: string | null;
-  cycle: { id: string; name: string; class_id: string };
+  cycle: { id: string; name: string; class_id: string; academic_year_id: string };
   invoices: Invoice[];
   payment_status: "NOT_REQUIRED" | "DUE" | "PARTIAL" | "PENDING_VERIFICATION" | "PAID";
   stages: Stage[];
@@ -79,6 +79,13 @@ interface SectionOption { id: string; name_en: string }
 interface GroupOption { id: string; name_en: string }
 interface ClassWithSectionsGroups { id: string; sections: SectionOption[]; groups: GroupOption[] }
 interface EnrollmentFee { fee_structure_id: string; name: string; category: string; sub_category: string | null; amount: number; frequency: "ONE_TIME" | "MONTHLY" }
+// Deliberately excludes ADMISSION/FORM -- the enrollment-fees checklist
+// this quick-add feeds into already filters those two out server-side
+// (online applicants pay them via the Cycle's own flat app_fee/form_fee at
+// apply time, so showing them again here would double-charge). Offering
+// them as quick-add options would let an admin create a fee that then
+// silently never appears in the very checklist they just created it for.
+const FEE_CATEGORIES = ["READMISSION", "TUITION", "EXAM", "TRANSPORT", "HOSTEL", "LAB", "LIBRARY", "SPORTS", "DEVELOPMENT", "OTHER"];
 
 // One stage's own schedule/override/outcome row -- kept as a nested
 // component since it carries local edit-form state independent of the
@@ -337,6 +344,39 @@ export default function AdmissionApplicationDetailPage() {
     .filter((f) => selectedFeeIds.includes(f.fee_structure_id))
     .reduce((sum, f) => sum + f.amount, 0);
 
+  // "+ Create New Fee" -- same quick-add mirrored from the manual Add
+  // Student wizard, for the identical reason: the class this applicant is
+  // enrolling into might not have a matching Fee Structure configured yet
+  // (e.g. a one-off "Community Fee"). Creates a real, reusable Fee
+  // Structure (shows up in Fees -> Fee Structures too) scoped to this
+  // application's destination class/group, without leaving the dialog.
+  const [showQuickAddFee, setShowQuickAddFee] = useState(false);
+  const [quickAddFee, setQuickAddFee] = useState({ name: "", category: "OTHER", amount: "", frequency: "ONE_TIME" });
+  const quickAddFeeMutation = useMutation({
+    mutationFn: async () => {
+      const created = await api.post("/api/fees/structures", {
+        name: quickAddFee.name,
+        category: quickAddFee.category,
+        amount: Number(quickAddFee.amount),
+        frequency: quickAddFee.frequency,
+        academic_year_id: app!.cycle.academic_year_id,
+      });
+      const newId = created.data.data.id as string;
+      await api.put(`/api/fees/structures/${newId}/classes`, {
+        entries: [{ class_id: app!.cycle.class_id, group_id: enrollGroupId || null }],
+        override_overlap: true,
+      });
+      return newId;
+    },
+    onSuccess: () => {
+      toast.success(`"${quickAddFee.name}" created and added to the checklist`);
+      setQuickAddFee({ name: "", category: "OTHER", amount: "", frequency: "ONE_TIME" });
+      setShowQuickAddFee(false);
+      queryClient.invalidateQueries({ queryKey: ["admission", "applications", id, "enrollment-fees"] });
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create fee"),
+  });
+
   const enrollMutation = useMutation({
     mutationFn: () =>
       api.post(`/api/admission/applications/${id}/enroll`, {
@@ -549,12 +589,50 @@ export default function AdmissionApplicationDetailPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium">
-                Fees to charge at enrollment
-                <span className="ml-1 text-xs font-normal text-muted-foreground">
-                  (beyond the Admission/Form fee already collected during application)
-                </span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Fees to charge at enrollment
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    (beyond the Admission/Form fee already collected during application)
+                  </span>
+                </label>
+                <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowQuickAddFee((v) => !v)}>
+                  {showQuickAddFee ? "Cancel" : "+ Create New Fee"}
+                </button>
+              </div>
+
+              {showQuickAddFee && (
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-dashed p-3 sm:grid-cols-5">
+                  <div className="space-y-1 sm:col-span-2">
+                    <label className="text-xs">Fee Name</label>
+                    <Input className="h-8" value={quickAddFee.name} onChange={(e) => setQuickAddFee((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Community Fee" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs">Category</label>
+                    <select className="h-8 w-full rounded-md border px-2 text-sm" value={quickAddFee.category} onChange={(e) => setQuickAddFee((f) => ({ ...f, category: e.target.value }))}>
+                      {FEE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs">Amount</label>
+                    <Input className="h-8" type="number" value={quickAddFee.amount} onChange={(e) => setQuickAddFee((f) => ({ ...f, amount: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs">Type</label>
+                    <select className="h-8 w-full rounded-md border px-2 text-sm" value={quickAddFee.frequency} onChange={(e) => setQuickAddFee((f) => ({ ...f, frequency: e.target.value }))}>
+                      <option value="ONE_TIME">One-time</option>
+                      <option value="MONTHLY">Monthly</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2 sm:col-span-5">
+                    <Button size="sm" disabled={!quickAddFee.name || !quickAddFee.amount || quickAddFeeMutation.isPending} onClick={() => quickAddFeeMutation.mutate()}>
+                      {quickAddFeeMutation.isPending ? "Creating..." : "Create & Add to Checklist"}
+                    </Button>
+                    <span className="ml-2 text-xs text-muted-foreground">Saved to Fees → Fee Structures too, for this class going forward.</span>
+                  </div>
+                </div>
+              )}
+
               <MultiSelectChecklist
                 options={(enrollmentFees ?? []).map((f) => ({
                   id: f.fee_structure_id,
@@ -562,7 +640,7 @@ export default function AdmissionApplicationDetailPage() {
                 }))}
                 selected={selectedFeeIds}
                 onChange={setSelectedFeeIds}
-                emptyLabel="No Development/Library/Tuition/etc. fee structures are configured for this class yet — set them up under Fees → Fee Structures."
+                emptyLabel="No Development/Library/Tuition/etc. fee structures are configured for this class yet — use “+ Create New Fee” above, or set them up under Fees → Fee Structures."
               />
               <p className="text-sm text-muted-foreground">Selected total: <span className="font-medium text-foreground">৳{selectedFeesTotal.toLocaleString()}</span></p>
             </div>
