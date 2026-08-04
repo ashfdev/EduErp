@@ -26,6 +26,47 @@ export const analyticsRouter = Router();
 // still applies on top of this and narrows further for those specific routes.
 analyticsRouter.use(authenticate, authorize(STAFF_ONLY_ROLES));
 
+// Sidebar nav badges (Plan Twenty-Four) -- one consolidated call so the
+// nav can show a live "(N)" count next to review-queue destinations
+// (Document Requests, Payment Review, Complaints, Leave Requests, Fee
+// Assurance) without each one polling its own endpoint separately. Every
+// count here is a pending/open ACTION count, not a generic row count --
+// deliberately excludes anything that would just be noisy (e.g. total
+// students) to keep the signal meaningful. Any staff role can call this
+// (same STAFF_ONLY_ROLES floor as the rest of this router) since the
+// sidebar itself is shown to every staff role, even though a given item
+// might not be independently reachable to every role.
+analyticsRouter.get(
+  "/pending-counts",
+  asyncHandler(async (_req, res) => {
+    // feeAssurance is scoped to only the MOST RECENT run, not every OPEN
+    // finding across every run ever -- confirmed via a live check that the
+    // naive "all runs" count inflates every single re-run even when nothing
+    // new is actually wrong (the same still-unresolved gap gets a fresh row
+    // every sweep, since findings aren't deduplicated across runs by
+    // design -- each run is its own point-in-time snapshot). "How many
+    // things does the latest check think need attention" is the honest,
+    // non-inflating number; older runs' history stays fully visible on the
+    // Fee Assurance page itself, just not double-counted into this badge.
+    const latestRun = await prisma.feeReconciliationRun.findFirst({ orderBy: { run_at: "desc" }, select: { id: true } });
+
+    const [documentRequests, admissionPayments, paymentReview, complaints, staffLeaveRequests, studentLeaveRequests, feeAssurance] = await Promise.all([
+      prisma.documentRequest.count({ where: { status: "PENDING" } }),
+      prisma.payment.count({ where: { status: "INITIATED", gateway: { in: ["BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ", "AAMARPAY"] }, invoice: { application_id: { not: null } } } }),
+      prisma.payment.count({ where: { status: "INITIATED", gateway: { in: ["BANK_TRANSFER", "BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ", "AAMARPAY"] }, invoice: { application_id: null } } }),
+      prisma.complaint.count({ where: { status: "OPEN" } }),
+      prisma.leaveRequest.count({ where: { status: "PENDING" } }),
+      prisma.studentLeaveRequest.count({ where: { status: "PENDING" } }),
+      latestRun ? prisma.feeReconciliationFinding.count({ where: { status: "OPEN", run_id: latestRun.id } }) : 0,
+    ]);
+
+    res.json({
+      success: true,
+      data: { documentRequests, admissionPayments, paymentReview, complaints, staffLeaveRequests, studentLeaveRequests, feeAssurance },
+    });
+  }),
+);
+
 // Sum of debit-minus-credit across every EXPENSE-group account for a date
 // range, over POSTED vouchers only — the same shape
 // accounts/reports.routes.ts's `/income-expenditure` sectionTotal("EXPENSE")

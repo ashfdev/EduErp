@@ -12,21 +12,21 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model InstitutionProfile {
-  id                    String            @id @default(cuid())
+  id                    String          @id @default(cuid())
   name_en               String
   name_bn               String?
   tagline_en            String?
   tagline_bn            String?
   type                  InstitutionType
-  eiin                  String?           @unique
+  eiin                  String?         @unique
   board                 String?
   founded_year          Int?
   logo_url              String?
   favicon_url           String?
   student_login_bg_url  String?
   teacher_login_bg_url  String?
-  primary_color         String            @default("#1a3c4a")
-  secondary_color       String            @default("#2e7d9a")
+  primary_color         String          @default("#1a3c4a")
+  secondary_color       String          @default("#2e7d9a")
   address               String?
   district              String?
   division              String?
@@ -44,51 +44,51 @@ model InstitutionProfile {
   established_text      String?
   mission_text          String?
   vision_text           String?
-  created_at            DateTime          @default(now())
-  updated_at            DateTime          @updatedAt
+  created_at            DateTime        @default(now())
+  updated_at            DateTime        @updatedAt
 }
 
 model InstitutionConfig {
   id                             String               @id @default(cuid())
-  academic_calendar_type        AcademicCalendarType @default(YEARLY)
-  has_shifts                    Boolean              @default(true)
-  has_sections                  Boolean              @default(true)
-  has_departments               Boolean              @default(false)
-  has_semesters                 Boolean              @default(false)
-  show_hijri_calendar           Boolean              @default(false)
-  term_class                    String               @default("Class")
-  term_section                  String               @default("Section")
-  term_teacher                  String               @default("Teacher")
-  term_principal                String               @default("Principal")
-  term_exam_controller          String               @default("Exam Controller")
-  term_student_id               String               @default("Student ID")
-  term_roll                     String               @default("Roll No")
-  term_registration             String               @default("Registration No")
-  extra_course_enrollment       Boolean              @default(false)
-  show_practical_marks          Boolean              @default(false)
-  show_subject_teacher_on_result Boolean             @default(true)
-  allow_partial_fee_payment     Boolean              @default(true)
-  show_position_in_result       Boolean              @default(true)
-  show_class_position           Boolean              @default(true)
-  show_section_position         Boolean              @default(true)
-  fourth_subject_rule           Boolean              @default(false)
-  created_at                    DateTime             @default(now())
-  updated_at                    DateTime             @updatedAt
+  academic_calendar_type         AcademicCalendarType @default(YEARLY)
+  has_shifts                     Boolean              @default(true)
+  has_sections                   Boolean              @default(true)
+  has_departments                Boolean              @default(false)
+  has_semesters                  Boolean              @default(false)
+  show_hijri_calendar            Boolean              @default(false)
+  term_class                     String               @default("Class")
+  term_section                   String               @default("Section")
+  term_teacher                   String               @default("Teacher")
+  term_principal                 String               @default("Principal")
+  term_exam_controller           String               @default("Exam Controller")
+  term_student_id                String               @default("Student ID")
+  term_roll                      String               @default("Roll No")
+  term_registration              String               @default("Registration No")
+  extra_course_enrollment        Boolean              @default(false)
+  show_practical_marks           Boolean              @default(false)
+  show_subject_teacher_on_result Boolean              @default(true)
+  allow_partial_fee_payment      Boolean              @default(true)
+  show_position_in_result        Boolean              @default(true)
+  show_class_position            Boolean              @default(true)
+  show_section_position          Boolean              @default(true)
+  fourth_subject_rule            Boolean              @default(false)
+  created_at                     DateTime             @default(now())
+  updated_at                     DateTime             @updatedAt
 }
 
 model StudentIdConfig {
-  id                String          @id @default(cuid())
-  prefix            String          @default("STU")
-  include_year      Boolean         @default(true)
-  year_format       String          @default("2")
-  include_month     Boolean         @default(false)
-  separator         String          @default("-")
-  sequence_digits   Int             @default(4)
-  sequence_scope    IdSequenceScope @default(GLOBAL)
-  current_sequence  Int             @default(0)
-  preview_example   String?
-  created_at        DateTime        @default(now())
-  updated_at        DateTime        @updatedAt
+  id               String          @id @default(cuid())
+  prefix           String          @default("STU")
+  include_year     Boolean         @default(true)
+  year_format      String          @default("2")
+  include_month    Boolean         @default(false)
+  separator        String          @default("-")
+  sequence_digits  Int             @default(4)
+  sequence_scope   IdSequenceScope @default(GLOBAL)
+  current_sequence Int             @default(0)
+  preview_example  String?
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
 }
 
 model GradingScale {
@@ -183,36 +183,36 @@ model MarksheetDisplaySettings {
 }
 
 model AttendanceRules {
-  id                          String   @id @default(cuid())
-  min_attendance_percentage   Float    @default(75)
-  late_arrival_window_minutes Int      @default(15)
-  working_days_per_week       Int      @default(6)
+  id                                 String                   @id @default(cuid())
+  min_attendance_percentage          Float                    @default(75)
+  late_arrival_window_minutes        Int                      @default(15)
+  working_days_per_week              Int                      @default(6)
   // working_days_per_week is only a count — the routine auto-generator
   // (Phase 45) needs to know WHICH JS Date.getDay() values (0=Sun..6=Sat)
   // are actually working days (Friday=5 off is standard in Bangladesh), not
   // just how many. Json array of ints, e.g. [0,1,2,3,4,6] for a 6-day
   // Sat-Thu week. Nullable so existing rows don't need a backfill migration
   // — the generator falls back to the Sat-Thu default when unset.
-  working_days                Json?
-  count_late_as_absent_after  Int      @default(3)
-  sms_on_absent               Boolean  @default(true)
-  sms_on_late                 Boolean  @default(false)
+  working_days                       Json?
+  count_late_as_absent_after         Int                      @default(3)
+  sms_on_absent                      Boolean                  @default(true)
+  sms_on_late                        Boolean                  @default(false)
   // Which computation checkPromotionEligibility() uses. Default
   // DAILY_ATTENDANCE_ONLY deliberately preserves today's exact existing
   // behavior (the blanket AttendanceRecord calculation) so this migration
   // doesn't silently change any school's live promotion outcomes on deploy
   // day — an admin opts into the two new subject-wise modes explicitly.
-  promotion_attendance_mode          PromotionAttendanceMode @default(DAILY_ATTENDANCE_ONLY)
+  promotion_attendance_mode          PromotionAttendanceMode  @default(DAILY_ATTENDANCE_ONLY)
   // Mode B (EVERY_SUBJECT_MINIMUM) fairness floor — a subject with fewer
   // than this many recorded SubjectAttendance sessions so far this year is
   // excluded from the per-subject check entirely, so a brand-new elective
   // with 1-2 sessions can't single-handedly block a promotion.
-  promotion_min_sessions_per_subject Int                     @default(10)
+  promotion_min_sessions_per_subject Int                      @default(10)
   // Which approval flow a new StudentLeaveRequest goes through (Plan
   // Thirteen, Phase J) -- default CLASS_TEACHER_ONLY is the simpler/safer
   // starting behavior (single approver), same "default preserves the
   // simpler existing pattern" discipline as promotion_attendance_mode above.
-  leave_approval_mode         StudentLeaveApprovalMode @default(CLASS_TEACHER_ONLY)
+  leave_approval_mode                StudentLeaveApprovalMode @default(CLASS_TEACHER_ONLY)
   // Subject-wise pass-rate (%) at/above which the exam results page's
   // per-subject badge shows "good" instead of "needs attention" -- was a
   // hardcoded `>= 80` literal in apps/admin's exam results page with no
@@ -220,9 +220,9 @@ model AttendanceRules {
   // table) since it's the same "is this figure good enough" classification
   // shape as min_attendance_percentage above, reused by the same
   // reports/analytics surfaces. Default 80 preserves today's exact behavior.
-  pass_rate_alert_threshold   Float    @default(80)
-  created_at                  DateTime @default(now())
-  updated_at                  DateTime @updatedAt
+  pass_rate_alert_threshold          Float                    @default(80)
+  created_at                         DateTime                 @default(now())
+  updated_at                         DateTime                 @updatedAt
 }
 
 enum StudentLeaveApprovalMode {
@@ -307,21 +307,21 @@ model NotificationConfig {
 // ─────────────────────────────────────────────
 
 model AcademicYear {
-  id                        String                   @id @default(cuid())
-  label                     String                   @unique
-  start_date                DateTime
-  end_date                  DateTime
-  is_active                 Boolean                  @default(false)
-  created_at                DateTime                 @default(now())
-  updated_at                DateTime                 @updatedAt
-  classes                   Class[]
-  exams                     Exam[]
+  id                         String                   @id @default(cuid())
+  label                      String                   @unique
+  start_date                 DateTime
+  end_date                   DateTime
+  is_active                  Boolean                  @default(false)
+  created_at                 DateTime                 @default(now())
+  updated_at                 DateTime                 @updatedAt
+  classes                    Class[]
+  exams                      Exam[]
   student_academic_histories StudentAcademicHistory[]
-  admission_cycles          AdmissionCycle[]
-  fee_structures            FeeStructure[]
-  course_enrollments        CourseEnrollment[]
-  student_waivers           StudentWaiver[]
-  fee_fine_rules            FeeFineRule[]
+  admission_cycles           AdmissionCycle[]
+  fee_structures             FeeStructure[]
+  course_enrollments         CourseEnrollment[]
+  student_waivers            StudentWaiver[]
+  fee_fine_rules             FeeFineRule[]
 }
 
 model Shift {
@@ -355,115 +355,117 @@ model ShiftPeriod {
 }
 
 model Department {
-  id          String    @id @default(cuid())
-  name_en     String
-  name_bn     String?
-  code        String    @unique
-  head_id     String?   @unique
-  head        Staff?    @relation("DeptHead", fields: [head_id], references: [id])
-  staff       Staff[]   @relation("StaffDept")
-  is_active   Boolean   @default(true)
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  classes     Class[]
-  assets      Asset[]
-  programs    Program[]
+  id         String    @id @default(cuid())
+  name_en    String
+  name_bn    String?
+  code       String    @unique
+  head_id    String?   @unique
+  head       Staff?    @relation("DeptHead", fields: [head_id], references: [id])
+  staff      Staff[]   @relation("StaffDept")
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  classes    Class[]
+  assets     Asset[]
+  programs   Program[]
 }
 
 model Class {
-  id               String       @id @default(cuid())
-  academic_year_id String
-  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
-  department_id    String?
-  department       Department?  @relation(fields: [department_id], references: [id])
+  id                          String                     @id @default(cuid())
+  academic_year_id            String
+  academic_year               AcademicYear               @relation(fields: [academic_year_id], references: [id])
+  department_id               String?
+  department                  Department?                @relation(fields: [department_id], references: [id])
   // Null for every non-university row — set only when this Class row
   // represents one semester offering of a university Program (the
   // terminology cascade already renders Class as "Semester" for
   // InstitutionType.UNIVERSITY; no separate Semester model needed).
-  program_id       String?
-  program          Program?     @relation(fields: [program_id], references: [id])
-  name_en          String
-  name_bn          String?
-  numeric_level    Int
-  is_active        Boolean      @default(true)
-  created_at       DateTime     @default(now())
-  updated_at       DateTime     @updatedAt
-  sections         Section[]
-  subjects         Subject[]
-  groups           Group[]
-  students         Student[]    @relation("CurrentClass")
-  admission_cycles AdmissionCycle[]
-  homework         Homework[]
-  routine_slots    RoutineSlot[]
-  teaching_resources TeachingResource[]
-  course_enrollments CourseEnrollment[]
-  ptm_slots        PTMSlot[]
-  academic_histories StudentAcademicHistory[]
-  exam_session_classes ExamSessionClass[]
-  visitors         Visitor[]
-  fee_structure_classes FeeStructureClass[]
-  fee_fine_rule_classes FeeFineRuleClass[]
+  program_id                  String?
+  program                     Program?                   @relation(fields: [program_id], references: [id])
+  name_en                     String
+  name_bn                     String?
+  numeric_level               Int
+  is_active                   Boolean                    @default(true)
+  created_at                  DateTime                   @default(now())
+  updated_at                  DateTime                   @updatedAt
+  sections                    Section[]
+  subjects                    Subject[]
+  groups                      Group[]
+  students                    Student[]                  @relation("CurrentClass")
+  admission_cycles            AdmissionCycle[]
+  homework                    Homework[]
+  routine_slots               RoutineSlot[]
+  teaching_resources          TeachingResource[]
+  course_enrollments          CourseEnrollment[]
+  ptm_slots                   PTMSlot[]
+  academic_histories          StudentAcademicHistory[]
+  exam_session_classes        ExamSessionClass[]
+  visitors                    Visitor[]
+  fee_structure_classes       FeeStructureClass[]
+  fee_fine_rule_classes       FeeFineRuleClass[]
+  fee_reconciliation_findings FeeReconciliationFinding[]
 
   @@index([academic_year_id])
   @@index([program_id])
 }
 
 model Section {
-  id               String             @id @default(cuid())
-  class_id         String
-  class            Class              @relation(fields: [class_id], references: [id])
-  shift_id         String?
-  shift            Shift?             @relation(fields: [shift_id], references: [id])
-  class_teacher_id String?
-  class_teacher    Staff?             @relation("ClassTeacher", fields: [class_teacher_id], references: [id])
-  name             String
-  capacity         Int                @default(50)
-  is_active        Boolean            @default(true)
-  created_at       DateTime           @default(now())
-  students         Student[]          @relation("CurrentSection")
-  attendance       AttendanceRecord[]
-  subject_attendance_records SubjectAttendance[]
-  homework         Homework[]
-  routine_slots    RoutineSlot[]
-  teaching_resources TeachingResource[]
-  academic_histories StudentAcademicHistory[]
-  visitors         Visitor[]
+  id                          String                     @id @default(cuid())
+  class_id                    String
+  class                       Class                      @relation(fields: [class_id], references: [id])
+  shift_id                    String?
+  shift                       Shift?                     @relation(fields: [shift_id], references: [id])
+  class_teacher_id            String?
+  class_teacher               Staff?                     @relation("ClassTeacher", fields: [class_teacher_id], references: [id])
+  name                        String
+  capacity                    Int                        @default(50)
+  is_active                   Boolean                    @default(true)
+  created_at                  DateTime                   @default(now())
+  students                    Student[]                  @relation("CurrentSection")
+  attendance                  AttendanceRecord[]
+  subject_attendance_records  SubjectAttendance[]
+  homework                    Homework[]
+  routine_slots               RoutineSlot[]
+  teaching_resources          TeachingResource[]
+  academic_histories          StudentAcademicHistory[]
+  visitors                    Visitor[]
+  fee_reconciliation_findings FeeReconciliationFinding[]
 
   @@index([class_id])
 }
 
 model Subject {
-  id               String                     @id @default(cuid())
-  class_id         String
-  class            Class                      @relation(fields: [class_id], references: [id])
-  name_en          String
-  name_bn          String?
-  code             String
-  subject_type     SubjectType                @default(THEORY)
-  is_compulsory    Boolean                    @default(true)
-  is_optional      Boolean                    @default(false)
-  weekly_periods   Int?
+  id                         String                     @id @default(cuid())
+  class_id                   String
+  class                      Class                      @relation(fields: [class_id], references: [id])
+  name_en                    String
+  name_bn                    String?
+  code                       String
+  subject_type               SubjectType                @default(THEORY)
+  is_compulsory              Boolean                    @default(true)
+  is_optional                Boolean                    @default(false)
+  weekly_periods             Int?
   // null = applies to every group in this class (the unchanged existing
   // behavior for every current row). Set only to restrict a subject to one
   // Group/Stream (Science/Commerce/Arts) within the same class.
-  group_id         String?
-  group            Group?                     @relation(fields: [group_id], references: [id])
-  full_marks       Float                      @default(100)
-  pass_marks       Float                      @default(33)
-  display_order    Int                        @default(0)
-  is_active        Boolean                    @default(true)
-  created_at       DateTime                   @default(now())
-  updated_at       DateTime                   @updatedAt
-  assignments      SubjectTeacherAssignment[]
-  student_subjects StudentSubject[]
-  mark_entries     MarkEntry[]
-  exam_subject_configs ExamSubjectConfig[]
-  mark_components  ExamMarkComponent[]
-  homework         Homework[]
-  routine_slots    RoutineSlot[]
-  teaching_resources TeachingResource[]
-  questions        Question[]
-  quizzes          Quiz[]
+  group_id                   String?
+  group                      Group?                     @relation(fields: [group_id], references: [id])
+  full_marks                 Float                      @default(100)
+  pass_marks                 Float                      @default(33)
+  display_order              Int                        @default(0)
+  is_active                  Boolean                    @default(true)
+  created_at                 DateTime                   @default(now())
+  updated_at                 DateTime                   @updatedAt
+  assignments                SubjectTeacherAssignment[]
+  student_subjects           StudentSubject[]
+  mark_entries               MarkEntry[]
+  exam_subject_configs       ExamSubjectConfig[]
+  mark_components            ExamMarkComponent[]
+  homework                   Homework[]
+  routine_slots              RoutineSlot[]
+  teaching_resources         TeachingResource[]
+  questions                  Question[]
+  quizzes                    Quiz[]
   subject_attendance_records SubjectAttendance[]
 
   @@unique([class_id, code])
@@ -478,20 +480,21 @@ model Subject {
 // explicitly re-selected whenever the destination class defines groups —
 // see Student.group_id and Subject.group_id.
 model Group {
-  id            String    @id @default(cuid())
-  class_id      String
-  class         Class     @relation(fields: [class_id], references: [id])
-  name_en       String
-  name_bn       String?
-  code          String
-  display_order Int       @default(0)
-  is_active     Boolean   @default(true)
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-  subjects      Subject[]
-  students      Student[]
-  routine_slots RoutineSlot[]
-  fee_structure_classes FeeStructureClass[]
+  id                          String                     @id @default(cuid())
+  class_id                    String
+  class                       Class                      @relation(fields: [class_id], references: [id])
+  name_en                     String
+  name_bn                     String?
+  code                        String
+  display_order               Int                        @default(0)
+  is_active                   Boolean                    @default(true)
+  created_at                  DateTime                   @default(now())
+  updated_at                  DateTime                   @updatedAt
+  subjects                    Subject[]
+  students                    Student[]
+  routine_slots               RoutineSlot[]
+  fee_structure_classes       FeeStructureClass[]
+  fee_reconciliation_findings FeeReconciliationFinding[]
 
   @@unique([class_id, code])
   @@index([class_id])
@@ -516,13 +519,13 @@ model SubjectTeacherAssignment {
 // ─────────────────────────────────────────────
 
 model User {
-  id             String         @id @default(cuid())
-  name_en        String
-  name_bn        String?
-  role           UserRole
-  email          String?        @unique
-  phone          String         @unique
-  password_hash  String
+  id                   String             @id @default(cuid())
+  name_en              String
+  name_bn              String?
+  role                 UserRole
+  email                String?            @unique
+  phone                String             @unique
+  password_hash        String
   // True whenever the current password_hash was set by someone other than
   // this user (system-generated on create, or an admin-triggered reset) —
   // forces a change-password redirect on next login. Cleared the moment the
@@ -530,17 +533,17 @@ model User {
   // forgot-password OTP flow. Existing rows are backfilled to false in the
   // migration so this never retroactively locks out an already-active
   // account — only newly-created/reset accounts start out true.
-  must_change_password Boolean  @default(true)
-  lang_pref      Lang           @default(BN)
-  is_active      Boolean        @default(true)
-  last_login_at  DateTime?
-  created_at     DateTime       @default(now())
-  updated_at     DateTime       @updatedAt
-  student        Student?
-  staff          Staff?
-  guardian       Guardian?
-  push_subscriptions PushSubscription[]
-  refresh_tokens RefreshToken[]
+  must_change_password Boolean            @default(true)
+  lang_pref            Lang               @default(BN)
+  is_active            Boolean            @default(true)
+  last_login_at        DateTime?
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
+  student              Student?
+  staff                Staff?
+  guardian             Guardian?
+  push_subscriptions   PushSubscription[]
+  refresh_tokens       RefreshToken[]
 }
 
 model RefreshToken {
@@ -555,142 +558,143 @@ model RefreshToken {
 }
 
 model Guardian {
-  id         String           @id @default(cuid())
-  user_id    String?          @unique
-  user       User?            @relation(fields: [user_id], references: [id])
-  name_en    String
-  name_bn    String?
-  relation   GuardianRelation
-  phone      String
-  nid        String?
-  email      String?
-  occupation String?
-  address    String?
-  created_at DateTime         @default(now())
-  updated_at DateTime         @updatedAt
-  students   Student[]
+  id           String           @id @default(cuid())
+  user_id      String?          @unique
+  user         User?            @relation(fields: [user_id], references: [id])
+  name_en      String
+  name_bn      String?
+  relation     GuardianRelation
+  phone        String
+  nid          String?
+  email        String?
+  occupation   String?
+  address      String?
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+  students     Student[]
   ptm_bookings PTMBooking[]
 }
 
 model Student {
-  id                    String      @id @default(cuid())
-  user_id               String?     @unique
-  user                  User?       @relation(fields: [user_id], references: [id])
-  student_uid           String      @unique
-  name_en               String
-  name_bn               String?
+  id                          String                     @id @default(cuid())
+  user_id                     String?                    @unique
+  user                        User?                      @relation(fields: [user_id], references: [id])
+  student_uid                 String                     @unique
+  name_en                     String
+  name_bn                     String?
   // Both purely additive/nullable (Plan Thirteen, Phase C) -- neither
   // existed anywhere in the schema before, unlike nationality/
   // address_current below, which were already here just unwired from the UI.
-  middle_name           String?
-  nick_name             String?
-  date_of_birth         DateTime?
-  gender                Gender
-  religion              String?
-  blood_group           String?
-  nationality           String      @default("Bangladeshi")
-  nid_or_birth_reg      String?
-  phone                 String?
-  other_phone           String?
-  passport_no           String?
-  guardian_id           String?
-  guardian              Guardian?   @relation(fields: [guardian_id], references: [id])
-  father_name           String?
-  father_phone          String?
-  father_nid            String?
-  father_occupation     String?
+  middle_name                 String?
+  nick_name                   String?
+  date_of_birth               DateTime?
+  gender                      Gender
+  religion                    String?
+  blood_group                 String?
+  nationality                 String                     @default("Bangladeshi")
+  nid_or_birth_reg            String?
+  phone                       String?
+  other_phone                 String?
+  passport_no                 String?
+  guardian_id                 String?
+  guardian                    Guardian?                  @relation(fields: [guardian_id], references: [id])
+  father_name                 String?
+  father_phone                String?
+  father_nid                  String?
+  father_occupation           String?
   // Optional — explicitly not mandatory, unlike the student's own photo_url
   // below (Plan Fourteen, Phase B3).
-  father_photo_url      String?
-  mother_name           String?
-  mother_phone          String?
-  mother_nid            String?
-  mother_occupation     String?
-  mother_photo_url      String?
-  address_permanent     String?
-  address_current       String?
-  district              String?
+  father_photo_url            String?
+  mother_name                 String?
+  mother_phone                String?
+  mother_nid                  String?
+  mother_occupation           String?
+  mother_photo_url            String?
+  address_permanent           String?
+  address_current             String?
+  district                    String?
   // Structured Present/Permanent address (Plan Thirteen, Phase N) —
   // additive alongside address_current/address_permanent above, which are
   // kept as supplementary Road/Area free-text lines rather than replaced.
   // The legacy single `district` field predates this and is ambiguous about
   // which address it described; superseded by present_district going
   // forward (left in place, unwritten by new code, never hard-deleted).
-  present_house_name    String?
-  present_village       String?
-  present_post_code     String?
-  present_district      String?
-  present_division      String?
-  permanent_house_name  String?
-  permanent_village     String?
-  permanent_post_code   String?
-  permanent_district    String?
-  permanent_division    String?
-  current_class_id      String?
-  current_class         Class?      @relation("CurrentClass", fields: [current_class_id], references: [id])
-  current_section_id    String?
-  current_section       Section?    @relation("CurrentSection", fields: [current_section_id], references: [id])
+  present_house_name          String?
+  present_village             String?
+  present_post_code           String?
+  present_district            String?
+  present_division            String?
+  permanent_house_name        String?
+  permanent_village           String?
+  permanent_post_code         String?
+  permanent_district          String?
+  permanent_division          String?
+  current_class_id            String?
+  current_class               Class?                     @relation("CurrentClass", fields: [current_class_id], references: [id])
+  current_section_id          String?
+  current_section             Section?                   @relation("CurrentSection", fields: [current_section_id], references: [id])
   // Independent of current_section_id — a student's Group/Stream (Science/
   // Commerce/Arts) and Section are two separate axes. Per-class-scoped
   // (Group.class_id), so this goes stale on every class change and must be
   // explicitly re-selected whenever the destination class defines groups —
   // never silently carried over from the old class's group row.
-  group_id              String?
-  group                 Group?      @relation(fields: [group_id], references: [id])
-  current_roll_no       String?
-  registration_no       String?
-  board_roll            String?
-  biometric_id          String?
-  admission_date        DateTime?
-  previous_institution  String?
-  previous_class        String?
-  previous_result       String?
-  photo_url             String?
-  signature_url         String?
+  group_id                    String?
+  group                       Group?                     @relation(fields: [group_id], references: [id])
+  current_roll_no             String?
+  registration_no             String?
+  board_roll                  String?
+  biometric_id                String?
+  admission_date              DateTime?
+  previous_institution        String?
+  previous_class              String?
+  previous_result             String?
+  photo_url                   String?
+  signature_url               String?
   // Alumni directory (Phase 29) — set when status flips to GRADUATED;
   // reuses the existing status value instead of a redundant new one.
-  graduation_year       Int?
-  status                StudentStatus @default(ACTIVE)
-  has_disability        Boolean     @default(false)
-  disability_note       String?
+  graduation_year             Int?
+  status                      StudentStatus              @default(ACTIVE)
+  has_disability              Boolean                    @default(false)
+  disability_note             String?
   // Both null for every non-university student — cgpa is recomputed from
   // CourseEnrollment history (never a naive average of per-semester SGPAs)
   // whenever a course grade is finalized.
-  cgpa                  Float?
-  current_semester      Int?
+  cgpa                        Float?
+  current_semester            Int?
   // Overpayment collected while FeeRules.advance_payment_allowed is true —
   // never applied automatically at collection time to an existing invoice;
   // only auto-consumed by createMonthlyInvoiceIfMissing when a new invoice
   // is generated for this student (Phase 81).
-  credit_balance        Float       @default(0)
-  deleted_at            DateTime?
-  created_at            DateTime    @default(now())
-  updated_at            DateTime    @updatedAt
-  created_by_id         String?
-  academic_history      StudentAcademicHistory[]
-  student_subjects      StudentSubject[]
-  attendance            AttendanceRecord[]
-  mark_entries          MarkEntry[]
-  invoices              Invoice[]
-  exam_seat_plans       ExamSeatPlan[]
-  admit_card_overrides  AdmitCardOverride[]
-  subject_attendance_records SubjectAttendance[]
-  transport             StudentTransport?
-  hostel_allocations    HostelAllocation[]
-  course_enrollments    CourseEnrollment[]
-  health_profile        StudentHealthProfile?
-  health_incidents      HealthIncident[]
-  discipline_records    DisciplineRecord[]
-  ptm_bookings          PTMBooking[]
-  assignment_submissions AssignmentSubmission[]
-  quiz_attempts          QuizAttempt[]
-  document_requests      DocumentRequest[]
-  visitors                Visitor[]
-  documents               StudentDocument[]
-  waivers                 StudentWaiver[]
-  waiver_requests          WaiverRequest[]
-  leave_requests          StudentLeaveRequest[]
-  fee_structure_assignments FeeStructureStudent[]
+  credit_balance              Float                      @default(0)
+  deleted_at                  DateTime?
+  created_at                  DateTime                   @default(now())
+  updated_at                  DateTime                   @updatedAt
+  created_by_id               String?
+  academic_history            StudentAcademicHistory[]
+  student_subjects            StudentSubject[]
+  attendance                  AttendanceRecord[]
+  mark_entries                MarkEntry[]
+  invoices                    Invoice[]
+  exam_seat_plans             ExamSeatPlan[]
+  admit_card_overrides        AdmitCardOverride[]
+  subject_attendance_records  SubjectAttendance[]
+  transport                   StudentTransport?
+  hostel_allocations          HostelAllocation[]
+  course_enrollments          CourseEnrollment[]
+  health_profile              StudentHealthProfile?
+  health_incidents            HealthIncident[]
+  discipline_records          DisciplineRecord[]
+  ptm_bookings                PTMBooking[]
+  assignment_submissions      AssignmentSubmission[]
+  quiz_attempts               QuizAttempt[]
+  document_requests           DocumentRequest[]
+  visitors                    Visitor[]
+  documents                   StudentDocument[]
+  waivers                     StudentWaiver[]
+  waiver_requests             WaiverRequest[]
+  leave_requests              StudentLeaveRequest[]
+  fee_structure_assignments   FeeStructureStudent[]
+  fee_reconciliation_findings FeeReconciliationFinding[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -737,14 +741,14 @@ model StudentHealthProfile {
 }
 
 model HealthIncident {
-  id              String   @id @default(cuid())
-  student_id      String
-  student         Student  @relation(fields: [student_id], references: [id])
-  date            DateTime
-  description     String
-  action_taken    String?
-  recorded_by_id  String?
-  created_at      DateTime @default(now())
+  id             String   @id @default(cuid())
+  student_id     String
+  student        Student  @relation(fields: [student_id], references: [id])
+  date           DateTime
+  description    String
+  action_taken   String?
+  recorded_by_id String?
+  created_at     DateTime @default(now())
 
   @@index([student_id])
 }
@@ -793,16 +797,16 @@ enum ComplaintStatus {
 }
 
 model Complaint {
-  id                String            @id @default(cuid())
+  id                String             @id @default(cuid())
   raised_by_user_id String
   category          ComplaintCategory
   description       String
-  status            ComplaintStatus   @default(OPEN)
+  status            ComplaintStatus    @default(OPEN)
   assigned_to_id    String?
   resolution_notes  String?
   resolved_at       DateTime?
-  created_at        DateTime          @default(now())
-  updated_at        DateTime          @updatedAt
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @updatedAt
   messages          ComplaintMessage[]
 
   @@index([raised_by_user_id])
@@ -813,12 +817,12 @@ model Complaint {
 // push back on a RESOLVED complaint (auto-reopens it, see
 // postComplaintMessage()) instead of only ever filing a brand-new one.
 model ComplaintMessage {
-  id              String    @id @default(cuid())
-  complaint_id    String
-  complaint       Complaint @relation(fields: [complaint_id], references: [id])
-  sender_user_id  String
-  message         String
-  created_at      DateTime  @default(now())
+  id             String    @id @default(cuid())
+  complaint_id   String
+  complaint      Complaint @relation(fields: [complaint_id], references: [id])
+  sender_user_id String
+  message        String
+  created_at     DateTime  @default(now())
 
   @@index([complaint_id])
 }
@@ -843,18 +847,18 @@ enum DocumentRequestStatus {
 // stores a private blob_key — never a permanent public URL — exactly like
 // every other sensitive document in this codebase.
 model DocumentRequest {
-  id                  String                 @id @default(cuid())
-  student_id          String
-  student             Student                @relation(fields: [student_id], references: [id])
+  id                   String                @id @default(cuid())
+  student_id           String
+  student              Student               @relation(fields: [student_id], references: [id])
   requested_by_user_id String
-  doc_type            DocumentRequestType
-  reason              String?
-  status              DocumentRequestStatus  @default(PENDING)
-  reviewed_by_id      String?
-  reviewed_at         DateTime?
-  rejection_reason    String?
-  document_blob_key   String?
-  created_at          DateTime               @default(now())
+  doc_type             DocumentRequestType
+  reason               String?
+  status               DocumentRequestStatus @default(PENDING)
+  reviewed_by_id       String?
+  reviewed_at          DateTime?
+  rejection_reason     String?
+  document_blob_key    String?
+  created_at           DateTime              @default(now())
 
   @@index([student_id])
   @@index([status])
@@ -865,16 +869,16 @@ model DocumentRequest {
 // specifically. Booking a slot must be atomic (checked in a $transaction
 // at the route level) so two guardians can't win the same slot.
 model PTMSlot {
-  id         String        @id @default(cuid())
+  id         String      @id @default(cuid())
   teacher_id String
-  teacher    Staff         @relation(fields: [teacher_id], references: [id])
+  teacher    Staff       @relation(fields: [teacher_id], references: [id])
   date       DateTime
   start_time String
   end_time   String
-  is_booked  Boolean       @default(false)
+  is_booked  Boolean     @default(false)
   class_id   String?
-  class      Class?        @relation(fields: [class_id], references: [id])
-  created_at DateTime      @default(now())
+  class      Class?      @relation(fields: [class_id], references: [id])
+  created_at DateTime    @default(now())
   booking    PTMBooking?
 
   @@index([teacher_id])
@@ -887,16 +891,16 @@ enum PTMBookingStatus {
 }
 
 model PTMBooking {
-  id          String            @id @default(cuid())
-  slot_id     String            @unique
-  slot        PTMSlot           @relation(fields: [slot_id], references: [id])
+  id          String           @id @default(cuid())
+  slot_id     String           @unique
+  slot        PTMSlot          @relation(fields: [slot_id], references: [id])
   guardian_id String
-  guardian    Guardian          @relation(fields: [guardian_id], references: [id])
+  guardian    Guardian         @relation(fields: [guardian_id], references: [id])
   student_id  String
-  student     Student           @relation(fields: [student_id], references: [id])
+  student     Student          @relation(fields: [student_id], references: [id])
   notes       String?
-  status      PTMBookingStatus  @default(CONFIRMED)
-  booked_at   DateTime          @default(now())
+  status      PTMBookingStatus @default(CONFIRMED)
+  booked_at   DateTime         @default(now())
 
   @@index([guardian_id])
 }
@@ -922,93 +926,93 @@ model StudentSubject {
 }
 
 model Staff {
-  id                  String                     @id @default(cuid())
-  user_id             String                     @unique
-  user                User                       @relation(fields: [user_id], references: [id])
-  staff_uid           String                     @unique
-  name_en             String
-  name_bn             String?
-  designation         String
-  department_id       String?
-  department          Department?                @relation("StaffDept", fields: [department_id], references: [id])
+  id                               String                     @id @default(cuid())
+  user_id                          String                     @unique
+  user                             User                       @relation(fields: [user_id], references: [id])
+  staff_uid                        String                     @unique
+  name_en                          String
+  name_bn                          String?
+  designation                      String
+  department_id                    String?
+  department                       Department?                @relation("StaffDept", fields: [department_id], references: [id])
   // Faculty's primary program (university-mode) — mirrors department_id's
   // exact shape; stays null/inert for the school/college/madrasah rows this
   // deployment currently has.
-  program_id          String?
-  program             Program?                   @relation("StaffProgram", fields: [program_id], references: [id])
-  date_of_birth       DateTime?
-  gender              Gender?
-  religion            String?
-  blood_group         String?
-  nid                 String?
-  tin                 String?
-  phone               String?
-  email               String?
-  address             String?
+  program_id                       String?
+  program                          Program?                   @relation("StaffProgram", fields: [program_id], references: [id])
+  date_of_birth                    DateTime?
+  gender                           Gender?
+  religion                         String?
+  blood_group                      String?
+  nid                              String?
+  tin                              String?
+  phone                            String?
+  email                            String?
+  address                          String?
   // Structured address (Plan Thirteen, Phase M) — additive alongside the
   // existing free-text `address`, which is kept as a supplementary Road/Area
   // line rather than replaced.
-  address_house_name  String?
-  address_village     String?
-  address_post_code   String?
-  address_district    String?
-  address_division    String?
-  photo_url           String?
-  signature_url       String?
-  biometric_id        String?
+  address_house_name               String?
+  address_village                  String?
+  address_post_code                String?
+  address_district                 String?
+  address_division                 String?
+  photo_url                        String?
+  signature_url                    String?
+  biometric_id                     String?
   // Public-profile fields — only ever rendered when show_on_website is
   // true; nullable/empty on every existing row until an admin fills them
   // in, same "opt-in, never retroactively populated" convention as every
   // other Settings-driven optional field in this codebase.
-  qualifications      String?                    @db.Text
-  achievements        String?                    @db.Text
+  qualifications                   String?                    @db.Text
+  achievements                     String?                    @db.Text
   // Array of {title, url} — a short, admin-curated list, not a separate
   // table (mirrors AppraisalTemplate.criteria's exact same "small static
   // list doesn't need its own model" reasoning).
-  publications        Json?
+  publications                     Json?
   // Public-safe contact info, deliberately separate from phone/email above
   // (which are login/HR-only and never selected into any public route) —
   // an admin opts in explicitly per field, same convention as every other
   // show_on_website-gated field on this model.
-  public_contact_email    String?
-  public_office_location  String?
-  employment_type     EmploymentType             @default(PERMANENT)
-  joining_date        DateTime?
-  max_periods_per_day  Int?
-  max_periods_per_week Int?
-  salary_structure_id String?
-  salary_structure    SalaryStructure?           @relation(fields: [salary_structure_id], references: [id])
-  show_on_website     Boolean                    @default(false)
-  is_active           Boolean                    @default(true)
+  public_contact_email             String?
+  public_office_location           String?
+  employment_type                  EmploymentType             @default(PERMANENT)
+  joining_date                     DateTime?
+  max_periods_per_day              Int?
+  max_periods_per_week             Int?
+  salary_structure_id              String?
+  salary_structure                 SalaryStructure?           @relation(fields: [salary_structure_id], references: [id])
+  show_on_website                  Boolean                    @default(false)
+  is_active                        Boolean                    @default(true)
   // HR record-keeping layer (Plan Fourteen, Phase I) -- deliberately
   // alongside, not instead of, is_active (the real login/active gate).
   // rejoin_date sets is_active back to true and clears the two
   // resignation fields; the prior cycle isn't retained beyond that (a
   // full history log is a natural follow-on if repeat cycles ever need
   // to be tracked, not built here).
-  resignation_date    DateTime?
-  resignation_reason  String?
-  rejoin_date         DateTime?
-  deleted_at          DateTime?
-  created_at          DateTime                   @default(now())
-  updated_at          DateTime                   @updatedAt
-  created_by_id       String?
-  subject_assignments SubjectTeacherAssignment[]
-  department_head_of  Department?                @relation("DeptHead")
-  class_teacher_of    Section[]                  @relation("ClassTeacher")
-  leave_requests      LeaveRequest[]
-  payroll_records     PayrollRecord[]
-  assigned_assets     Asset[]
-  routine_slots       RoutineSlot[]
-  documents           StaffDocument[]
-  teaching_resources  TeachingResource[]
-  ptm_slots           PTMSlot[]
-  performance_reviews PerformanceReview[]
-  student_leave_approvals StudentLeaveApproval[]
-  original_teacher_substitutions   RoutineSubstitution[] @relation("OriginalTeacherSubstitutions")
-  substitute_teacher_substitutions RoutineSubstitution[] @relation("SubstituteTeacherSubstitutions")
-  experience          StaffExperience[]
-  references          StaffReference[]
+  resignation_date                 DateTime?
+  resignation_reason               String?
+  rejoin_date                      DateTime?
+  deleted_at                       DateTime?
+  created_at                       DateTime                   @default(now())
+  updated_at                       DateTime                   @updatedAt
+  created_by_id                    String?
+  subject_assignments              SubjectTeacherAssignment[]
+  department_head_of               Department?                @relation("DeptHead")
+  class_teacher_of                 Section[]                  @relation("ClassTeacher")
+  leave_requests                   LeaveRequest[]
+  payroll_records                  PayrollRecord[]
+  assigned_assets                  Asset[]
+  routine_slots                    RoutineSlot[]
+  documents                        StaffDocument[]
+  teaching_resources               TeachingResource[]
+  ptm_slots                        PTMSlot[]
+  performance_reviews              PerformanceReview[]
+  student_leave_approvals          StudentLeaveApproval[]
+  original_teacher_substitutions   RoutineSubstitution[]      @relation("OriginalTeacherSubstitutions")
+  substitute_teacher_substitutions RoutineSubstitution[]      @relation("SubstituteTeacherSubstitutions")
+  experience                       StaffExperience[]
+  references                       StaffReference[]
 
   @@index([department_id])
   @@index([program_id])
@@ -1071,20 +1075,20 @@ model Device {
 }
 
 model DevicePunchLog {
-  id                  String      @id @default(cuid())
-  device_id           String
-  device              Device      @relation(fields: [device_id], references: [id])
-  device_user_id      String
-  punch_at            DateTime
+  id                 String      @id @default(cuid())
+  device_id          String
+  device             Device      @relation(fields: [device_id], references: [id])
+  device_user_id     String
+  punch_at           DateTime
   // 0=check-in, 1=check-out, 4=break-out, 5=break-in — mirrors RawPunch's
   // existing convention (services/device/src/connectors/interface.ts).
   // Nullable: rows synced before this column existed have no recoverable
   // value and must never be fabricated as 0/check-in.
-  punch_type          Int?
-  synced_at           DateTime    @default(now())
-  mapped_person_id    String?
-  mapped_person_type  PersonType?
-  is_processed        Boolean     @default(false)
+  punch_type         Int?
+  synced_at          DateTime    @default(now())
+  mapped_person_id   String?
+  mapped_person_type PersonType?
+  is_processed       Boolean     @default(false)
 
   @@index([device_id, punch_at])
 }
@@ -1099,26 +1103,26 @@ model DevicePunchLog {
 // free-text location), so biometric can never write a row here — there's
 // no MANUAL-vs-BIOMETRIC conflict to reconcile, unlike AttendanceRecord.
 model SubjectAttendance {
-  id              String            @id @default(cuid())
+  id              String           @id @default(cuid())
   student_id      String
-  student         Student           @relation(fields: [student_id], references: [id])
+  student         Student          @relation(fields: [student_id], references: [id])
   subject_id      String
-  subject         Subject           @relation(fields: [subject_id], references: [id])
+  subject         Subject          @relation(fields: [subject_id], references: [id])
   section_id      String
-  section         Section           @relation(fields: [section_id], references: [id])
+  section         Section          @relation(fields: [section_id], references: [id])
   // Audit/traceability only — never read back to reconstruct historical
   // truth, since routines get edited after the fact. Nullable so a later
   // RoutineSlot deletion (Prisma's implicit SetNull default for an
   // optional relation) can never corrupt or cascade into already-recorded
   // attendance.
   routine_slot_id String?
-  routine_slot    RoutineSlot?      @relation(fields: [routine_slot_id], references: [id])
-  date            DateTime          @db.Date
+  routine_slot    RoutineSlot?     @relation(fields: [routine_slot_id], references: [id])
+  date            DateTime         @db.Date
   period_no       Int
   status          AttendanceStatus
   marked_by_id    String?
-  created_at      DateTime          @default(now())
-  updated_at      DateTime          @updatedAt
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
 
   @@unique([student_id, subject_id, date, period_no])
   @@index([section_id, subject_id, date, period_no])
@@ -1131,32 +1135,32 @@ model SubjectAttendance {
 // ─────────────────────────────────────────────
 
 model Exam {
-  id                   String              @id @default(cuid())
-  academic_year_id     String
-  academic_year        AcademicYear        @relation(fields: [academic_year_id], references: [id])
-  name                 String
-  start_date           DateTime?
-  end_date             DateTime?
-  mark_entry_opens_at  DateTime?
-  mark_entry_closes_at DateTime?
-  grading_scale_id     String?
-  grading_scale        GradingScale?       @relation(fields: [grading_scale_id], references: [id])
-  status               ExamStatus          @default(DRAFT)
+  id                       String                        @id @default(cuid())
+  academic_year_id         String
+  academic_year            AcademicYear                  @relation(fields: [academic_year_id], references: [id])
+  name                     String
+  start_date               DateTime?
+  end_date                 DateTime?
+  mark_entry_opens_at      DateTime?
+  mark_entry_closes_at     DateTime?
+  grading_scale_id         String?
+  grading_scale            GradingScale?                 @relation(fields: [grading_scale_id], references: [id])
+  status                   ExamStatus                    @default(DRAFT)
   // Set once the "exam starting soon" reminder job has actually notified
   // students/guardians for this exam — makes the daily reminder check
   // idempotent (never re-notify the same exam every day until it starts).
-  reminder_sent_at     DateTime?
-  deleted_at           DateTime?
-  created_at           DateTime            @default(now())
-  updated_at           DateTime            @updatedAt
-  subject_configs      ExamSubjectConfig[]
-  mark_components      ExamMarkComponent[]
-  mark_entries         MarkEntry[]
-  seat_plans           ExamSeatPlan[]
-  result_publications  ResultPublication[]
-  quizzes              Quiz[]
-  sessions             ExamSession[]
-  admit_card_overrides AdmitCardOverride[]
+  reminder_sent_at         DateTime?
+  deleted_at               DateTime?
+  created_at               DateTime                      @default(now())
+  updated_at               DateTime                      @updatedAt
+  subject_configs          ExamSubjectConfig[]
+  mark_components          ExamMarkComponent[]
+  mark_entries             MarkEntry[]
+  seat_plans               ExamSeatPlan[]
+  result_publications      ResultPublication[]
+  quizzes                  Quiz[]
+  sessions                 ExamSession[]
+  admit_card_overrides     AdmitCardOverride[]
   // Reverse side of ExamMarkComponentSourceExam.source_exam_id — this exam
   // is used as an explicit averaging source by some other exam's mark
   // component. Never traversed for computation (the auto-fetch logic
@@ -1223,22 +1227,22 @@ model ExamSubjectConfig {
 // no new fields read. Configured per (exam, subject) directly, optionally
 // pre-filled from a saved MarkCompositionTemplate.
 model ExamMarkComponent {
-  id             String                        @id @default(cuid())
-  exam_id        String
-  exam           Exam                          @relation(fields: [exam_id], references: [id])
-  subject_id     String
-  subject        Subject                       @relation(fields: [subject_id], references: [id])
-  key            String
-  label          String
-  max_marks      Float
-  source_type    MarkComponentSourceType       @default(MANUAL)
+  id            String                        @id @default(cuid())
+  exam_id       String
+  exam          Exam                          @relation(fields: [exam_id], references: [id])
+  subject_id    String
+  subject       Subject                       @relation(fields: [subject_id], references: [id])
+  key           String
+  label         String
+  max_marks     Float
+  source_type   MarkComponentSourceType       @default(MANUAL)
   // Set only when source_type = AVERAGE_OF_EXAMS — one or more specific,
   // admin-picked exams this component averages the student's percentage
   // from (see ExamMarkComponentSourceExam).
-  source_exams   ExamMarkComponentSourceExam[]
-  display_order  Int                           @default(0)
-  created_at     DateTime                      @default(now())
-  updated_at     DateTime                      @updatedAt
+  source_exams  ExamMarkComponentSourceExam[]
+  display_order Int                           @default(0)
+  created_at    DateTime                      @default(now())
+  updated_at    DateTime                      @updatedAt
 
   @@unique([exam_id, subject_id, key])
   @@index([exam_id, subject_id])
@@ -1253,11 +1257,11 @@ model ExamMarkComponent {
 // recreate save pattern); exams themselves are never hard-deleted in this
 // codebase, so source_exam_id never dangles.
 model ExamMarkComponentSourceExam {
-  id              String            @id @default(cuid())
-  component_id    String
-  component       ExamMarkComponent @relation(fields: [component_id], references: [id], onDelete: Cascade)
-  source_exam_id  String
-  source_exam     Exam              @relation(fields: [source_exam_id], references: [id])
+  id             String            @id @default(cuid())
+  component_id   String
+  component      ExamMarkComponent @relation(fields: [component_id], references: [id], onDelete: Cascade)
+  source_exam_id String
+  source_exam    Exam              @relation(fields: [source_exam_id], references: [id])
 
   @@unique([component_id, source_exam_id])
   @@index([source_exam_id])
@@ -1296,15 +1300,15 @@ model MarkCompositionTemplateItem {
 }
 
 model MarkEntry {
-  id              String     @id @default(cuid())
-  exam_id         String
-  exam            Exam       @relation(fields: [exam_id], references: [id])
-  student_id      String
-  student         Student    @relation(fields: [student_id], references: [id])
-  subject_id      String
-  subject         Subject    @relation(fields: [subject_id], references: [id])
-  marks_theory    Float?
-  marks_practical Float?
+  id               String     @id @default(cuid())
+  exam_id          String
+  exam             Exam       @relation(fields: [exam_id], references: [id])
+  student_id       String
+  student          Student    @relation(fields: [student_id], references: [id])
+  subject_id       String
+  subject          Subject    @relation(fields: [subject_id], references: [id])
+  marks_theory     Float?
+  marks_practical  Float?
   // Set only when ExamMarkComponent rows exist for this exam+subject —
   // { [component_key]: { value: number|null, is_override: boolean } }.
   // marks_total is then server-computed as the flat sum of every
@@ -1312,16 +1316,16 @@ model MarkEntry {
   // value: null means "no source data yet" (e.g. no published CT exams),
   // never a silent 0.
   component_values Json?
-  marks_total     Float?
-  is_absent       Boolean    @default(false)
-  grade_letter    String?
-  grade_point     Float?
-  status          MarkStatus @default(DRAFT)
-  entered_by_id   String?
-  approved_by_id  String?
-  approved_at     DateTime?
-  created_at      DateTime   @default(now())
-  updated_at      DateTime   @updatedAt
+  marks_total      Float?
+  is_absent        Boolean    @default(false)
+  grade_letter     String?
+  grade_point      Float?
+  status           MarkStatus @default(DRAFT)
+  entered_by_id    String?
+  approved_by_id   String?
+  approved_at      DateTime?
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
 
   @@unique([exam_id, student_id, subject_id])
   @@index([exam_id, student_id])
@@ -1392,38 +1396,38 @@ model ExamHall {
 }
 
 model ExamSeatPlan {
-  id             String    @id @default(cuid())
-  exam_id        String
-  exam           Exam      @relation(fields: [exam_id], references: [id])
-  student_id     String
-  student        Student   @relation(fields: [student_id], references: [id])
+  id                        String       @id @default(cuid())
+  exam_id                   String
+  exam                      Exam         @relation(fields: [exam_id], references: [id])
+  student_id                String
+  student                   Student      @relation(fields: [student_id], references: [id])
   // Nullable for plans generated before session-aware generation existed
   // (Phase 83) — every new generation run always sets this, scoping the
   // seat/hall assignment to one session so two sessions can safely reuse
   // the same hall name without colliding (their students never sit at the
   // same time).
-  session_id     String?
-  session        ExamSession? @relation(fields: [session_id], references: [id])
+  session_id                String?
+  session                   ExamSession? @relation(fields: [session_id], references: [id])
   // hall_name/seat_number stay denormalized display strings — every existing
   // template/route already reads them directly, and they remain populated
   // (from the linked Hall, when one is used) so nothing that already reads
   // them needs to change. hall_id/row_number/seat_in_row are the real
   // structured source for anything that wants to render or query the actual
   // room/floor/row/seat arrangement (e.g. the portal/public seat-plan view).
-  hall_name      String?
-  seat_number    String?
-  hall_id        String?
-  hall           ExamHall? @relation(fields: [hall_id], references: [id])
-  row_number     Int?
-  seat_in_row    Int?
-  invigilator_id String?
+  hall_name                 String?
+  seat_number               String?
+  hall_id                   String?
+  hall                      ExamHall?    @relation(fields: [hall_id], references: [id])
+  row_number                Int?
+  seat_in_row               Int?
+  invigilator_id            String?
   // Third leg of the admit-card clearance gate (accounts due -> library
   // fine -> exam office approval) — a manual sign-off, since nothing about
   // "is this student allowed to sit this specific exam" can be derived from
   // existing data the way the other two checks can.
-  exam_office_cleared      Boolean   @default(false)
+  exam_office_cleared       Boolean      @default(false)
   exam_office_cleared_by_id String?
-  exam_office_cleared_at   DateTime?
+  exam_office_cleared_at    DateTime?
 
   @@unique([exam_id, student_id])
 }
@@ -1480,9 +1484,9 @@ model ResultPublication {
 // ─────────────────────────────────────────────
 
 model FeeStructure {
-  id               String       @id @default(cuid())
-  academic_year_id String
-  academic_year    AcademicYear @relation(fields: [academic_year_id], references: [id])
+  id                      String                        @id @default(cuid())
+  academic_year_id        String
+  academic_year           AcademicYear                  @relation(fields: [academic_year_id], references: [id])
   // class_id/section_id stay as the permanent, correct representation of
   // the (overwhelmingly common) single-class case -- not a transitional
   // shim. When FeeStructureClass rows exist for this structure, they win
@@ -1490,23 +1494,23 @@ model FeeStructure {
   // site falls back to this scalar exactly as before multi-class existed
   // (see resolveFeeStructureClassIds in fee-fine-engine.ts, the one shared
   // helper every one of the 5 read call sites must use identically).
-  class_id         String?
-  section_id       String?
+  class_id                String?
+  section_id              String?
   // University fee scoping (Phase 27 F.1, folded into this migration since
   // it needs Program to exist) — e.g. a per-program semester tuition fee,
   // independent of/in addition to the existing class/section scoping.
-  program_id       String?
-  program          Program?     @relation(fields: [program_id], references: [id])
-  category         FeeCategory
+  program_id              String?
+  program                 Program?                      @relation(fields: [program_id], references: [id])
+  category                FeeCategory
   // Plan Fourteen, Phase N1 -- optional finer-grained catalog entry under
   // category (e.g. TUITION -> "Lab Fee"). Null = the structure is just a
   // plain category-level fee, unchanged from before this existed.
-  fee_sub_category_id String?
-  fee_sub_category FeeSubCategory? @relation(fields: [fee_sub_category_id], references: [id])
-  name             String
-  amount           Float
-  frequency        FeeFrequency
-  due_day          Int?
+  fee_sub_category_id     String?
+  fee_sub_category        FeeSubCategory?               @relation(fields: [fee_sub_category_id], references: [id])
+  name                    String
+  amount                  Float
+  frequency               FeeFrequency
+  due_day                 Int?
   // Explicit target due date -- specifically for a ONE_TIME structure
   // (an exam fee, a one-off levy), where "day of month" (due_day, the
   // MONTHLY-only convention above) doesn't mean anything on its own since
@@ -1515,73 +1519,72 @@ model FeeStructure {
   // due date when the structure is actually generated -- without this,
   // generation silently defaulted to "whatever day you happened to click
   // Generate," never a deadline anyone actually chose.
-  target_due_date  DateTime?
-  is_active        Boolean      @default(true)
-  created_at       DateTime     @default(now())
-  invoices         Invoice[]
-  classes          FeeStructureClass[]
-  students         FeeStructureStudent[]
+  target_due_date         DateTime?
+  is_active               Boolean                       @default(true)
+  created_at              DateTime                      @default(now())
+  invoices                Invoice[]
+  classes                 FeeStructureClass[]
+  students                FeeStructureStudent[]
+  reconciliation_findings FeeReconciliationFinding[]
+  coverage_summaries      FeeStructureCoverageSummary[] @relation("StructureCoverageSummaries")
 
   @@index([program_id])
   @@index([fee_sub_category_id])
 }
 
 model Invoice {
-  id               String        @id @default(cuid())
-  invoice_no       String        @unique
+  id                      String                     @id @default(cuid())
+  invoice_no              String                     @unique
   // CHANGED, Plan Twenty-Three Phase 3 -- nullable so a pre-enrollment
   // admission-fee invoice can exist (linked via application_id instead).
   // Application-layer invariant, not DB-enforced: exactly one of
   // student_id/application_id is set until enrollment "claims" the row by
   // filling in student_id (application_id stays as provenance afterward).
-  student_id       String?
-  student          Student?      @relation(fields: [student_id], references: [id])
-  application_id   String?
-  application      AdmissionApplication? @relation(fields: [application_id], references: [id])
-  fee_structure_id String?
-  fee_structure    FeeStructure? @relation(fields: [fee_structure_id], references: [id])
-  academic_year_id String
-  category         FeeCategory
+  student_id              String?
+  student                 Student?                   @relation(fields: [student_id], references: [id])
+  application_id          String?
+  application             AdmissionApplication?      @relation(fields: [application_id], references: [id])
+  fee_structure_id        String?
+  fee_structure           FeeStructure?              @relation(fields: [fee_structure_id], references: [id])
+  academic_year_id        String
+  category                FeeCategory
   // Denormalized copy of FeeStructure.fee_sub_category_id at invoice-
   // creation time -- same convention as the existing `category` copy, so a
   // structure's sub-category can change later without rewriting history.
-  fee_sub_category_id String?
-  fee_sub_category FeeSubCategory? @relation(fields: [fee_sub_category_id], references: [id])
-  description      String
-  amount_due       Float
-  amount_paid      Float         @default(0)
-  fine_amount      Float         @default(0)
+  fee_sub_category_id     String?
+  fee_sub_category        FeeSubCategory?            @relation(fields: [fee_sub_category_id], references: [id])
+  description             String
+  amount_due              Float
+  amount_paid             Float                      @default(0)
+  fine_amount             Float                      @default(0)
   // True only for a fine line created directly via the "Add Fine" ad-hoc
   // action (fee_structure_id: null) -- distinguishes a manually-added fine
   // invoice from fine_amount (the late-fee/fine-engine surcharge computed
   // against a real fee invoice). Purely a display/reporting flag.
-  is_manual_fine   Boolean       @default(false)
-  due_date         DateTime
-  status           InvoiceStatus @default(PENDING)
-  month            Int?
-  year             Int?
-  created_at       DateTime      @default(now())
-  updated_at       DateTime      @updatedAt
-  payments         Payment[]
-  waiver_applications InvoiceWaiverApplication[]
+  is_manual_fine          Boolean                    @default(false)
+  due_date                DateTime
+  status                  InvoiceStatus              @default(PENDING)
+  month                   Int?
+  year                    Int?
+  created_at              DateTime                   @default(now())
+  updated_at              DateTime                   @updatedAt
+  payments                Payment[]
+  waiver_applications     InvoiceWaiverApplication[]
   // Set once the total waiver discount on this invoice has been recognized
   // in the accounts ledger (a gross-up: the waived amount is journaled as
   // a Scholarship/Waiver Expense debit, with the income credit reflecting
   // the full pre-waiver amount) -- prevents double-counting the same
   // waiver if the invoice is settled across more than one payment. Null
   // for every invoice with no waiver, or one paid before this existed.
-  waiver_journaled_at DateTime?
+  waiver_journaled_at     DateTime?
   // Running total of how much of fine_amount has already been posted to
   // the Late Fine Income account (4009) across this invoice's payments --
   // fine_amount can grow between payments (more late days accrued), so
   // unlike the waiver flag this tracks an amount, not a single point in
   // time, letting a later payment recognize only the newly-accrued delta.
-  fine_journaled_amount Float @default(0)
+  fine_journaled_amount   Float                      @default(0)
+  reconciliation_findings FeeReconciliationFinding[]
 
-  @@index([student_id])
-  @@index([application_id])
-  @@index([status])
-  @@index([fee_sub_category_id])
   // Backs createMonthlyInvoiceIfMissing()'s idempotency check with a real
   // constraint -- previously a pure findFirst-then-create TOCTOU with
   // nothing in the DB to stop a duplicate under concurrent calls (the bulk-
@@ -1593,6 +1596,10 @@ model Invoice {
   // structure/month/year) are protected. Same shape as PayrollRecord's own
   // @@unique([staff_id, month, year]) for the identical kind of problem.
   @@unique([student_id, fee_structure_id, month, year])
+  @@index([student_id])
+  @@index([application_id])
+  @@index([status])
+  @@index([fee_sub_category_id])
 }
 
 // Plan Fourteen, Phase N1 -- optional finer-grained catalog entry nested
@@ -1673,19 +1680,19 @@ model FeeStructureStudent {
 // unmodified calculateLateFee() when nothing matches, guaranteeing
 // byte-identical behavior for every invoice/category that never opts in.
 model FeeFineRule {
-  id                  String            @id @default(cuid())
+  id                  String             @id @default(cuid())
   academic_year_id    String
-  academic_year       AcademicYear      @relation(fields: [academic_year_id], references: [id])
+  academic_year       AcademicYear       @relation(fields: [academic_year_id], references: [id])
   scope_mode          FineScopeMode
   fee_category        FeeCategory
   fee_sub_category_id String?
-  fee_sub_category    FeeSubCategory?   @relation(fields: [fee_sub_category_id], references: [id])
+  fee_sub_category    FeeSubCategory?    @relation(fields: [fee_sub_category_id], references: [id])
   fine_value_type     FineValueType
   fine_value          Float
-  applicable_for      FineApplicableFor @default(ALL_CLASSES)
-  is_active           Boolean           @default(true)
-  created_at          DateTime          @default(now())
-  updated_at          DateTime          @updatedAt
+  applicable_for      FineApplicableFor  @default(ALL_CLASSES)
+  is_active           Boolean            @default(true)
+  created_at          DateTime           @default(now())
+  updated_at          DateTime           @updatedAt
   classes             FeeFineRuleClass[]
 
   @@index([academic_year_id])
@@ -1724,7 +1731,7 @@ enum FineApplicableFor {
 // replacing) the simpler one-off Invoice.status=WAIVED action on
 // PUT /invoices/:id/waive for ad-hoc single-invoice cases.
 model WaiverType {
-  id                    String              @id @default(cuid())
+  id                    String             @id @default(cuid())
   name                  String
   description           String?
   discount_type         WaiverDiscountType
@@ -1732,9 +1739,9 @@ model WaiverType {
   // Empty array = applies to every FeeCategory. Stored as a Json string
   // array rather than a relation table -- a short, static enum list, not
   // worth a join table.
-  applicable_categories Json                @default("[]")
-  is_active             Boolean             @default(true)
-  created_at            DateTime            @default(now())
+  applicable_categories Json               @default("[]")
+  is_active             Boolean            @default(true)
+  created_at            DateTime           @default(now())
   student_waivers       StudentWaiver[]
 }
 
@@ -1746,16 +1753,16 @@ enum WaiverDiscountType {
 // A student can hold multiple independently-active/revocable waivers at
 // once (e.g. a scholarship + a sibling discount) -- not a single slot.
 model StudentWaiver {
-  id               String     @id @default(cuid())
+  id               String                     @id @default(cuid())
   student_id       String
-  student          Student    @relation(fields: [student_id], references: [id])
+  student          Student                    @relation(fields: [student_id], references: [id])
   waiver_type_id   String
-  waiver_type      WaiverType @relation(fields: [waiver_type_id], references: [id])
+  waiver_type      WaiverType                 @relation(fields: [waiver_type_id], references: [id])
   // Null = applies every year until explicitly revoked.
   academic_year_id String?
-  academic_year    AcademicYear? @relation(fields: [academic_year_id], references: [id])
+  academic_year    AcademicYear?              @relation(fields: [academic_year_id], references: [id])
   assigned_by_id   String
-  assigned_at      DateTime   @default(now())
+  assigned_at      DateTime                   @default(now())
   revoked_at       DateTime?
   revoked_by_id    String?
   applications     InvoiceWaiverApplication[]
@@ -1776,18 +1783,18 @@ enum WaiverRequestStatus {
 // transaction that creates the StudentWaiver), never a bare status flip
 // with no real waiver behind it -- mirrors DocumentRequest's shape.
 model WaiverRequest {
-  id                    String              @id @default(cuid())
-  student_id            String
-  student               Student             @relation(fields: [student_id], references: [id])
-  requested_by_user_id  String
-  reason                String
-  status                WaiverRequestStatus @default(PENDING)
-  reviewed_by_id        String?
-  reviewed_at           DateTime?
-  rejection_reason      String?
-  student_waiver_id     String?             @unique
-  student_waiver        StudentWaiver?      @relation(fields: [student_waiver_id], references: [id])
-  created_at            DateTime            @default(now())
+  id                   String              @id @default(cuid())
+  student_id           String
+  student              Student             @relation(fields: [student_id], references: [id])
+  requested_by_user_id String
+  reason               String
+  status               WaiverRequestStatus @default(PENDING)
+  reviewed_by_id       String?
+  reviewed_at          DateTime?
+  rejection_reason     String?
+  student_waiver_id    String?             @unique
+  student_waiver       StudentWaiver?      @relation(fields: [student_waiver_id], references: [id])
+  created_at           DateTime            @default(now())
 
   @@index([student_id])
   @@index([status])
@@ -1797,18 +1804,18 @@ model WaiverRequest {
 // -- "Fee Generations log") -- previously only transient {created,
 // skipped_duplicates} counts were returned and nothing was ever persisted.
 model InvoiceGenerationRun {
-  id             String   @id @default(cuid())
+  id               String                   @id @default(cuid())
   // Nullable specifically for a SCHEDULED (cron-triggered) run, which has no
   // real human actor -- this field is write-only today (never joined/
   // displayed anywhere), so loosening it costs nothing downstream.
-  run_by_id      String?
-  run_at         DateTime @default(now())
-  trigger        InvoiceGenerationTrigger
-  created_count  Int
-  skipped_count  Int
+  run_by_id        String?
+  run_at           DateTime                 @default(now())
+  trigger          InvoiceGenerationTrigger
+  created_count    Int
+  skipped_count    Int
   academic_year_id String?
-  month          Int?
-  year           Int?
+  month            Int?
+  year             Int?
 
   @@index([run_at])
 }
@@ -1824,6 +1831,114 @@ enum InvoiceGenerationTrigger {
   // Plan Twenty-One, Phase A -- fired by the real cron job, distinguishing
   // an automatic monthly run from a human clicking the manual bulk button.
   SCHEDULED
+}
+
+// Plan Twenty-Four -- Fee Reconciliation & Assurance. Strictly a detection
+// layer: nothing here ever writes to Invoice/FeeStructure/FeeStructureStudent,
+// it only records what a nightly (or manually-triggered) sweep found so a
+// human can review and act on it separately. One row per sweep, mirroring
+// InvoiceGenerationRun/PayrollGenerationRun's own "one row per batch
+// operation" convention.
+model FeeReconciliationRun {
+  id                       String                        @id @default(cuid())
+  run_at                   DateTime                      @default(now())
+  // Nullable for a SCHEDULED run, same convention as
+  // InvoiceGenerationRun.run_by_id.
+  run_by_id                String?
+  trigger                  FeeReconciliationTrigger
+  academic_year_id         String
+  coverage_gap_count       Int
+  unexpected_invoice_count Int
+  assignment_gap_count     Int
+  amount_variance_count    Int
+  findings                 FeeReconciliationFinding[]
+  structure_summaries      FeeStructureCoverageSummary[]
+
+  @@index([run_at])
+}
+
+// One row per active FeeStructure per run -- "which class/group is this fee
+// actually assigned to, and how many of those students have actually been
+// invoiced" (owner's direct ask: seeing this alongside individual findings
+// makes it immediately clear that a Missing Invoice finding always means
+// the assignment already exists -- generation is what's missing, never the
+// assignment itself). Persisted alongside the run's findings (not computed
+// live on every page view) so the two can never show different numbers for
+// the same run, and so viewing this doesn't re-run the expensive per-
+// structure roster resolution on every page load.
+model FeeStructureCoverageSummary {
+  id                 String               @id @default(cuid())
+  run_id             String
+  run                FeeReconciliationRun @relation(fields: [run_id], references: [id])
+  fee_structure_id   String
+  fee_structure      FeeStructure         @relation("StructureCoverageSummaries", fields: [fee_structure_id], references: [id])
+  // Denormalized -- survives the structure later being renamed/deactivated,
+  // same reasoning as Invoice.description already being denormalized from
+  // FeeStructure.name at creation time.
+  structure_name     String
+  category           FeeCategory
+  frequency          FeeFrequency
+  assignment_summary String
+  expected_count     Int
+  invoiced_count     Int
+  created_at         DateTime             @default(now())
+
+  @@index([run_id])
+  @@index([fee_structure_id])
+}
+
+enum FeeReconciliationTrigger {
+  SCHEDULED
+  MANUAL
+}
+
+// One row per anomaly a sweep found. Persisted (not just logged) so staff
+// can triage over time -- dismiss a confirmed-intentional case, or mark one
+// resolved once the underlying gap/mismatch has actually been fixed through
+// the normal Fee Structures/Invoices UI (this table itself never fixes
+// anything).
+model FeeReconciliationFinding {
+  id               String                         @id @default(cuid())
+  run_id           String
+  run              FeeReconciliationRun           @relation(fields: [run_id], references: [id])
+  type             FeeReconciliationFindingType
+  student_id       String?
+  student          Student?                       @relation(fields: [student_id], references: [id])
+  fee_structure_id String?
+  fee_structure    FeeStructure?                  @relation(fields: [fee_structure_id], references: [id])
+  invoice_id       String?
+  invoice          Invoice?                       @relation(fields: [invoice_id], references: [id])
+  class_id         String?
+  class            Class?                         @relation(fields: [class_id], references: [id])
+  section_id       String?
+  section          Section?                       @relation(fields: [section_id], references: [id])
+  group_id         String?
+  group            Group?                         @relation(fields: [group_id], references: [id])
+  expected_amount  Float?
+  actual_amount    Float?
+  description      String
+  status           FeeReconciliationFindingStatus @default(OPEN)
+  reviewed_by_id   String?
+  reviewed_at      DateTime?
+  review_note      String?
+  created_at       DateTime                       @default(now())
+
+  @@index([run_id])
+  @@index([status])
+  @@index([student_id])
+}
+
+enum FeeReconciliationFindingType {
+  COVERAGE_GAP
+  UNEXPECTED_INVOICE
+  ASSIGNMENT_GAP
+  AMOUNT_VARIANCE
+}
+
+enum FeeReconciliationFindingStatus {
+  OPEN
+  DISMISSED
+  RESOLVED
 }
 
 // One row per invoice a waiver actually discounted -- traced per-invoice
@@ -1843,38 +1958,38 @@ model InvoiceWaiverApplication {
 }
 
 model Payment {
-  id              String         @id @default(cuid())
+  id                   String         @id @default(cuid())
   // Null until the payment actually completes (COMPLETED) — an INITIATED/
   // FAILED gateway attempt never gets a receipt number, since a receipt
   // implies money was actually received. See generateReceiptNo().
-  receipt_no      String?        @unique
-  invoice_id      String
-  invoice         Invoice        @relation(fields: [invoice_id], references: [id])
-  gateway         PaymentGateway
-  transaction_id  String?        @unique
-  amount          Float
-  status          PaymentStatus
-  paid_at         DateTime?
-  receipt_url     String?
+  receipt_no           String?        @unique
+  invoice_id           String
+  invoice              Invoice        @relation(fields: [invoice_id], references: [id])
+  gateway              PaymentGateway
+  transaction_id       String?        @unique
+  amount               Float
+  status               PaymentStatus
+  paid_at              DateTime?
+  receipt_url          String?
   // Bank-transfer slip storage — a blob_key, not a public URL (financial
   // document with account numbers/names); a signed URL is minted on read
   // for FEE_COLLECTION_ROLES only, same pattern as teaching-resource files.
-  slip_blob_key   String?
-  notes           String?
-  collected_by_id String?
-  created_at      DateTime       @default(now())
+  slip_blob_key        String?
+  notes                String?
+  collected_by_id      String?
+  created_at           DateTime       @default(now())
   // Plan Fourteen, Phase N4 -- a batch "Receive Fee" submission groups N
   // Payment rows under one shared key for display/reporting, but each row
   // still gets its own unique receipt_no (a single shared receipt *number*
   // across a batch would need a bigger change to receipt_no's uniqueness
   // semantics -- out of scope here, flagged not silently decided).
-  receipt_batch_id      String?
+  receipt_batch_id     String?
   // Line-level discount applied at collection time (ad-hoc, staff-entered)
   // -- distinct from a WaiverType/StudentWaiver discount, which is applied
   // at invoice-creation time via InvoiceWaiverApplication instead. Stays
   // un-journaled, matching the waiver system's own existing precedent.
-  discount_amount        Float?
-  secondary_receipt_no   String?
+  discount_amount      Float?
+  secondary_receipt_no String?
 
   @@index([invoice_id])
   @@index([receipt_batch_id])
@@ -1897,75 +2012,75 @@ model AccountGroup {
 }
 
 model Account {
-  id                   String        @id @default(cuid())
-  account_group_id     String
-  account_group        AccountGroup  @relation(fields: [account_group_id], references: [id])
-  code                 String        @unique // "1001", "2001", "4001"
-  name                 String // "Cash in Hand", "Tuition Fee Income"
-  name_bn              String?
-  account_nature       AccountNature // DEBIT_NORMAL or CREDIT_NORMAL
-  is_bank_account      Boolean       @default(false)
-  is_cash_account      Boolean       @default(false)
-  is_system            Boolean       @default(false) // auto-created, cannot delete/recode
-  opening_balance      Float         @default(0)
-  opening_balance_type BalanceType   @default(DEBIT)
-  is_active            Boolean       @default(true)
-  created_at           DateTime      @default(now())
-  updated_at           DateTime      @updatedAt
-  debit_entries        JournalEntry[] @relation("DebitAccount")
-  credit_entries       JournalEntry[] @relation("CreditAccount")
-  bank_account         BankAccount?
-  budget_lines         BudgetLine[]
-  asset_categories_as_asset    AssetCategory[] @relation("AssetAccount")
-  asset_categories_as_dep      AssetCategory[] @relation("AccumulatedDepAccount")
-  asset_categories_as_expense  AssetCategory[] @relation("DepExpenseAccount")
-  items_expense_account        Item[]
+  id                          String          @id @default(cuid())
+  account_group_id            String
+  account_group               AccountGroup    @relation(fields: [account_group_id], references: [id])
+  code                        String          @unique // "1001", "2001", "4001"
+  name                        String // "Cash in Hand", "Tuition Fee Income"
+  name_bn                     String?
+  account_nature              AccountNature // DEBIT_NORMAL or CREDIT_NORMAL
+  is_bank_account             Boolean         @default(false)
+  is_cash_account             Boolean         @default(false)
+  is_system                   Boolean         @default(false) // auto-created, cannot delete/recode
+  opening_balance             Float           @default(0)
+  opening_balance_type        BalanceType     @default(DEBIT)
+  is_active                   Boolean         @default(true)
+  created_at                  DateTime        @default(now())
+  updated_at                  DateTime        @updatedAt
+  debit_entries               JournalEntry[]  @relation("DebitAccount")
+  credit_entries              JournalEntry[]  @relation("CreditAccount")
+  bank_account                BankAccount?
+  budget_lines                BudgetLine[]
+  asset_categories_as_asset   AssetCategory[] @relation("AssetAccount")
+  asset_categories_as_dep     AssetCategory[] @relation("AccumulatedDepAccount")
+  asset_categories_as_expense AssetCategory[] @relation("DepExpenseAccount")
+  items_expense_account       Item[]
 
   @@index([account_group_id])
 }
 
 model BankAccount {
-  id              String    @id @default(cuid())
-  account_id      String    @unique
-  account         Account   @relation(fields: [account_id], references: [id])
+  id              String               @id @default(cuid())
+  account_id      String               @unique
+  account         Account              @relation(fields: [account_id], references: [id])
   bank_name       String
   branch_name     String?
   account_number  String
   account_title   String
-  current_balance Float     @default(0)
-  created_at      DateTime  @default(now())
+  current_balance Float                @default(0)
+  created_at      DateTime             @default(now())
   reconciliations BankReconciliation[]
   cheques         ChequeEntry[]
 }
 
 model Voucher {
-  id                String        @id @default(cuid())
-  voucher_no        String        @unique // RV-2026-0001, PV-..., JV-..., CV-...
-  voucher_type      VoucherType
-  financial_year_id String
-  financial_year    FinancialYear @relation(fields: [financial_year_id], references: [id])
-  date              DateTime      @db.Date
-  narration         String        @db.Text
-  narration_bn      String?       @db.Text
-  reference_no      String?
-  reference_type    String? // "FEE_PAYMENT", "PAYROLL", "INVENTORY_PURCHASE", "DEPRECIATION", "ASSET_DISPOSAL"
-  reference_id      String?
-  total_amount      Float
-  status            VoucherStatus @default(DRAFT)
-  created_by_id     String? // nullable — auto-journals from unauthenticated payment-gateway webhooks have no human actor
-  approved_by_id    String?
-  approved_at       DateTime?
-  is_auto           Boolean       @default(false)
-  attachment_url    String?
+  id                     String         @id @default(cuid())
+  voucher_no             String         @unique // RV-2026-0001, PV-..., JV-..., CV-...
+  voucher_type           VoucherType
+  financial_year_id      String
+  financial_year         FinancialYear  @relation(fields: [financial_year_id], references: [id])
+  date                   DateTime       @db.Date
+  narration              String         @db.Text
+  narration_bn           String?        @db.Text
+  reference_no           String?
+  reference_type         String? // "FEE_PAYMENT", "PAYROLL", "INVENTORY_PURCHASE", "DEPRECIATION", "ASSET_DISPOSAL"
+  reference_id           String?
+  total_amount           Float
+  status                 VoucherStatus  @default(DRAFT)
+  created_by_id          String? // nullable — auto-journals from unauthenticated payment-gateway webhooks have no human actor
+  approved_by_id         String?
+  approved_at            DateTime?
+  is_auto                Boolean        @default(false)
+  attachment_url         String?
   // Set once this POSTED voucher has been corrected via a reversing entry
   // (POST /:id/reverse) — the original entry is never edited or deleted
   // (real double-entry discipline), this just marks it as superseded and
   // points at the offsetting voucher that corrected it.
-  reversed_by_voucher_id String? @unique
-  deleted_at        DateTime?
-  created_at        DateTime      @default(now())
-  updated_at        DateTime      @updatedAt
-  journal_entries   JournalEntry[]
+  reversed_by_voucher_id String?        @unique
+  deleted_at             DateTime?
+  created_at             DateTime       @default(now())
+  updated_at             DateTime       @updatedAt
+  journal_entries        JournalEntry[]
 
   @@index([date])
   @@index([voucher_type])
@@ -2039,27 +2154,27 @@ model Budget {
 }
 
 model BudgetLine {
-  id        String  @id @default(cuid())
-  budget_id String
-  budget    Budget  @relation(fields: [budget_id], references: [id])
+  id         String  @id @default(cuid())
+  budget_id  String
+  budget     Budget  @relation(fields: [budget_id], references: [id])
   account_id String
-  account   Account @relation(fields: [account_id], references: [id])
-  amount    Float
-  notes     String?
+  account    Account @relation(fields: [account_id], references: [id])
+  amount     Float
+  notes      String?
 
   @@unique([budget_id, account_id])
 }
 
 model BankReconciliation {
-  id                String              @id @default(cuid())
+  id                String               @id @default(cuid())
   bank_account_id   String
-  bank_account      BankAccount         @relation(fields: [bank_account_id], references: [id])
+  bank_account      BankAccount          @relation(fields: [bank_account_id], references: [id])
   month             Int
   year              Int
   statement_balance Float
   book_balance      Float
   difference        Float
-  status            ReconcileStatus     @default(PENDING)
+  status            ReconcileStatus      @default(PENDING)
   reconciled_at     DateTime?
   notes             String?
   items             ReconciliationItem[]
@@ -2128,19 +2243,19 @@ model FeeAccountMapping {
 // ─────────────────────────────────────────────
 
 model AssetCategory {
-  id                         String              @id @default(cuid())
+  id                         String             @id @default(cuid())
   name                       String
   name_bn                    String?
-  depreciation_method        DepreciationMethod  @default(STRAIGHT_LINE)
-  depreciation_rate          Float               @default(10)
-  useful_life_years          Int                 @default(10)
+  depreciation_method        DepreciationMethod @default(STRAIGHT_LINE)
+  depreciation_rate          Float              @default(10)
+  useful_life_years          Int                @default(10)
   asset_account_id           String?
-  asset_account              Account?            @relation("AssetAccount", fields: [asset_account_id], references: [id])
+  asset_account              Account?           @relation("AssetAccount", fields: [asset_account_id], references: [id])
   accumulated_dep_account_id String?
-  accumulated_dep_account    Account?            @relation("AccumulatedDepAccount", fields: [accumulated_dep_account_id], references: [id])
+  accumulated_dep_account    Account?           @relation("AccumulatedDepAccount", fields: [accumulated_dep_account_id], references: [id])
   dep_expense_account_id     String?
-  dep_expense_account        Account?            @relation("DepExpenseAccount", fields: [dep_expense_account_id], references: [id])
-  created_at                 DateTime            @default(now())
+  dep_expense_account        Account?           @relation("DepExpenseAccount", fields: [dep_expense_account_id], references: [id])
+  created_at                 DateTime           @default(now())
   assets                     Asset[]
 }
 
@@ -2186,17 +2301,17 @@ model Asset {
 }
 
 model DepreciationEntry {
-  id              String   @id @default(cuid())
-  asset_id        String
-  asset           Asset    @relation(fields: [asset_id], references: [id])
-  financial_year  String
-  period          String // "July 2026" or "Annual 2026-2027"
-  opening_value   Float
-  dep_rate        Float
-  dep_amount      Float
-  closing_value   Float
-  voucher_id      String?
-  created_at      DateTime @default(now())
+  id             String   @id @default(cuid())
+  asset_id       String
+  asset          Asset    @relation(fields: [asset_id], references: [id])
+  financial_year String
+  period         String // "July 2026" or "Annual 2026-2027"
+  opening_value  Float
+  dep_rate       Float
+  dep_amount     Float
+  closing_value  Float
+  voucher_id     String?
+  created_at     DateTime @default(now())
 
   @@unique([asset_id, period])
 }
@@ -2280,7 +2395,7 @@ model StockTransaction {
 }
 
 model Supplier {
-  id              String           @id @default(cuid())
+  id              String          @id @default(cuid())
   name            String
   name_bn         String?
   contact_person  String?
@@ -2290,27 +2405,27 @@ model Supplier {
   nid             String?
   tin             String?
   account_id      String?
-  is_active       Boolean          @default(true)
-  created_at      DateTime         @default(now())
+  is_active       Boolean         @default(true)
+  created_at      DateTime        @default(now())
   purchase_orders PurchaseOrder[]
   assets          Asset[]
 }
 
 model PurchaseRequisition {
-  id                String            @id @default(cuid())
-  req_no            String            @unique // REQ-2026-0001
-  requested_by_id   String
-  department_id     String?
-  reason            String
-  req_date          DateTime          @db.Date @default(now())
-  required_by       DateTime?         @db.Date
-  status            ReqStatus         @default(PENDING)
-  approved_by_id    String?
-  approved_at       DateTime?
-  rejected_reason   String?
-  created_at        DateTime          @default(now())
-  items             RequisitionItem[]
-  purchase_order    PurchaseOrder?
+  id              String            @id @default(cuid())
+  req_no          String            @unique // REQ-2026-0001
+  requested_by_id String
+  department_id   String?
+  reason          String
+  req_date        DateTime          @default(now()) @db.Date
+  required_by     DateTime?         @db.Date
+  status          ReqStatus         @default(PENDING)
+  approved_by_id  String?
+  approved_at     DateTime?
+  rejected_reason String?
+  created_at      DateTime          @default(now())
+  items           RequisitionItem[]
+  purchase_order  PurchaseOrder?
 }
 
 model RequisitionItem {
@@ -2326,23 +2441,23 @@ model RequisitionItem {
 }
 
 model PurchaseOrder {
-  id              String               @id @default(cuid())
-  po_no           String               @unique // PO-2026-0001
-  requisition_id  String?              @unique
-  requisition     PurchaseRequisition? @relation(fields: [requisition_id], references: [id])
-  supplier_id     String
-  supplier        Supplier             @relation(fields: [supplier_id], references: [id])
-  order_date      DateTime             @db.Date
-  delivery_date   DateTime?            @db.Date
+  id               String               @id @default(cuid())
+  po_no            String               @unique // PO-2026-0001
+  requisition_id   String?              @unique
+  requisition      PurchaseRequisition? @relation(fields: [requisition_id], references: [id])
+  supplier_id      String
+  supplier         Supplier             @relation(fields: [supplier_id], references: [id])
+  order_date       DateTime             @db.Date
+  delivery_date    DateTime?            @db.Date
   delivery_address String?
-  terms           String?
-  total_amount    Float
-  status          POStatus             @default(DRAFT)
-  approved_by_id  String?
-  approved_at     DateTime?
-  created_at      DateTime             @default(now())
-  items           PurchaseItem[]
-  grns            GoodsReceivedNote[]
+  terms            String?
+  total_amount     Float
+  status           POStatus             @default(DRAFT)
+  approved_by_id   String?
+  approved_at      DateTime?
+  created_at       DateTime             @default(now())
+  items            PurchaseItem[]
+  grns             GoodsReceivedNote[]
 }
 
 model PurchaseItem {
@@ -2379,16 +2494,16 @@ model GoodsReceivedNote {
 }
 
 model GRNItem {
-  id          String            @id @default(cuid())
-  grn_id      String
-  grn         GoodsReceivedNote @relation(fields: [grn_id], references: [id])
-  po_item_id  String
-  description String
-  ordered_qty Float
+  id           String            @id @default(cuid())
+  grn_id       String
+  grn          GoodsReceivedNote @relation(fields: [grn_id], references: [id])
+  po_item_id   String
+  description  String
+  ordered_qty  Float
   received_qty Float
-  unit_price  Float
-  total_price Float
-  asset_id    String?
+  unit_price   Float
+  total_price  Float
+  asset_id     String?
 
   @@index([grn_id])
 }
@@ -2407,19 +2522,19 @@ model LeaveType {
 }
 
 model LeaveRequest {
-  id             String      @id @default(cuid())
-  staff_id       String
-  staff          Staff       @relation(fields: [staff_id], references: [id])
-  leave_type_id  String
-  leave_type     LeaveType   @relation(fields: [leave_type_id], references: [id])
-  from_date      DateTime
-  to_date        DateTime
-  reason         String
-  status         LeaveStatus @default(PENDING)
-  approved_by_id String?
-  approved_at    DateTime?
+  id               String      @id @default(cuid())
+  staff_id         String
+  staff            Staff       @relation(fields: [staff_id], references: [id])
+  leave_type_id    String
+  leave_type       LeaveType   @relation(fields: [leave_type_id], references: [id])
+  from_date        DateTime
+  to_date          DateTime
+  reason           String
+  status           LeaveStatus @default(PENDING)
+  approved_by_id   String?
+  approved_at      DateTime?
   rejection_reason String?
-  created_at     DateTime    @default(now())
+  created_at       DateTime    @default(now())
 
   @@index([staff_id])
 }
@@ -2433,18 +2548,18 @@ model LeaveRequest {
 // a balance/paid-status concept the way staff leave does, so a plain
 // free-text reason is enough; a category taxonomy would be unused scope.
 model StudentLeaveRequest {
-  id                    String                 @id @default(cuid())
-  student_id            String
-  student               Student                @relation(fields: [student_id], references: [id])
-  requested_by_user_id  String
-  from_date             DateTime               @db.Date
-  to_date               DateTime               @db.Date
-  reason                String
-  status                StudentLeaveStatus     @default(PENDING)
-  decided_at            DateTime?
-  rejection_reason      String?
-  created_at            DateTime               @default(now())
-  approvals             StudentLeaveApproval[]
+  id                   String                 @id @default(cuid())
+  student_id           String
+  student              Student                @relation(fields: [student_id], references: [id])
+  requested_by_user_id String
+  from_date            DateTime               @db.Date
+  to_date              DateTime               @db.Date
+  reason               String
+  status               StudentLeaveStatus     @default(PENDING)
+  decided_at           DateTime?
+  rejection_reason     String?
+  created_at           DateTime               @default(now())
+  approvals            StudentLeaveApproval[]
 
   @@index([student_id])
 }
@@ -2464,14 +2579,14 @@ enum StudentLeaveStatus {
 // per subject they teach (so no subject_id here -- a teacher covering 2
 // subjects for this student still only approves once).
 model StudentLeaveApproval {
-  id                String                     @id @default(cuid())
-  leave_request_id  String
-  leave_request     StudentLeaveRequest        @relation(fields: [leave_request_id], references: [id])
-  teacher_id        String
-  teacher           Staff                      @relation(fields: [teacher_id], references: [id])
-  status            StudentLeaveApprovalStatus @default(PENDING)
-  decided_at        DateTime?
-  rejection_reason  String?
+  id               String                     @id @default(cuid())
+  leave_request_id String
+  leave_request    StudentLeaveRequest        @relation(fields: [leave_request_id], references: [id])
+  teacher_id       String
+  teacher          Staff                      @relation(fields: [teacher_id], references: [id])
+  status           StudentLeaveApprovalStatus @default(PENDING)
+  decided_at       DateTime?
+  rejection_reason String?
 
   @@unique([leave_request_id, teacher_id])
 }
@@ -2483,17 +2598,17 @@ enum StudentLeaveApprovalStatus {
 }
 
 model StaffDocument {
-  id              String       @id @default(cuid())
-  staff_id        String
-  staff           Staff        @relation(fields: [staff_id], references: [id])
-  doc_type        StaffDocType
-  title           String
-  blob_key        String
+  id                String       @id @default(cuid())
+  staff_id          String
+  staff             Staff        @relation(fields: [staff_id], references: [id])
+  doc_type          StaffDocType
+  title             String
+  blob_key          String
   original_filename String
-  mime_type       String
-  uploaded_at     DateTime     @default(now())
-  verified_by_id  String?
-  verified_at     DateTime?
+  mime_type         String
+  uploaded_at       DateTime     @default(now())
+  verified_by_id    String?
+  verified_at       DateTime?
 
   @@index([staff_id])
 }
@@ -2581,65 +2696,65 @@ enum StudentDocType {
 }
 
 model SalaryStructure {
-  id             String   @id @default(cuid())
-  name           String
-  basic          Float
-  house_rent     Float    @default(0)
-  medical        Float    @default(0)
-  transport      Float    @default(0)
-  pf_percentage  Float    @default(0)
-  tds_percentage Float    @default(0)
+  id                            String   @id @default(cuid())
+  name                          String
+  basic                         Float
+  house_rent                    Float    @default(0)
+  medical                       Float    @default(0)
+  transport                     Float    @default(0)
+  pf_percentage                 Float    @default(0)
+  tds_percentage                Float    @default(0)
   // New payroll-depth fields (Plan Fourteen, Phase J) -- all default 0,
   // purely additive: a structure that never sets these produces byte-
   // identical payroll output to before this phase existed.
-  overtime_rate_per_hour        Float @default(0)
-  late_deduction_per_day        Float @default(0)
-  substitution_bonus_per_period Float @default(0)
+  overtime_rate_per_hour        Float    @default(0)
+  late_deduction_per_day        Float    @default(0)
+  substitution_bonus_per_period Float    @default(0)
   // Pre-selected on the Add Staff form and used as the CSV bulk-import
   // fallback when a row's salary_structure_name is blank/unmatched — "only
   // one default" is enforced in application logic (salary.routes.ts), not a
   // DB constraint, matching this codebase's existing convention for similar
   // single-active-row flags (e.g. AcademicYear.is_active).
-  is_default     Boolean  @default(false)
-  created_at     DateTime @default(now())
-  staff          Staff[]
+  is_default                    Boolean  @default(false)
+  created_at                    DateTime @default(now())
+  staff                         Staff[]
 }
 
 model PayrollRecord {
-  id               String        @id @default(cuid())
-  staff_id         String
-  staff            Staff         @relation(fields: [staff_id], references: [id])
-  month            Int
-  year             Int
-  working_days     Int
-  present_days     Int
+  id                    String        @id @default(cuid())
+  staff_id              String
+  staff                 Staff         @relation(fields: [staff_id], references: [id])
+  month                 Int
+  year                  Int
+  working_days          Int
+  present_days          Int
   // True when fewer AttendanceRecord rows were found for the month than
   // working_days — i.e. some days have no attendance data at all. Those
   // days contribute zero absence deduction (never inferred as absent), so
   // this flag exists to surface "review before finalizing" rather than let
   // missing data silently under- or over-deduct.
-  attendance_incomplete Boolean  @default(false)
-  gross_salary     Float
-  deductions       Float
-  net_salary       Float
-  advance_deducted Float         @default(0)
+  attendance_incomplete Boolean       @default(false)
+  gross_salary          Float
+  deductions            Float
+  net_salary            Float
+  advance_deducted      Float         @default(0)
   // Itemized breakdown (Plan Fourteen, Phase J) -- stored so the itemized
   // payslip can render each component without recomputing after the fact;
   // all default 0, purely additive.
-  overtime_pay       Float @default(0)
-  late_deduction     Float @default(0)
-  substitution_bonus Float @default(0)
-  pf_amount          Float @default(0)
-  tds_amount         Float @default(0)
-  absent_deduction   Float @default(0)
-  status           PayrollStatus @default(DRAFT)
-  payslip_url      String?
-  processed_by_id  String?
-  created_at       DateTime      @default(now())
+  overtime_pay          Float         @default(0)
+  late_deduction        Float         @default(0)
+  substitution_bonus    Float         @default(0)
+  pf_amount             Float         @default(0)
+  tds_amount            Float         @default(0)
+  absent_deduction      Float         @default(0)
+  status                PayrollStatus @default(DRAFT)
+  payslip_url           String?
+  processed_by_id       String?
+  created_at            DateTime      @default(now())
   // Set only when status flips to PAID via POST /mark-paid (Plan Thirteen,
   // Phase I) -- distinct from created_at, which reflects when the record
   // was first calculated/finalized, not when salary was actually disbursed.
-  paid_at          DateTime?
+  paid_at               DateTime?
 
   @@unique([staff_id, month, year])
 }
@@ -2661,15 +2776,15 @@ model PayrollGenerationRun {
 }
 
 model JobPosting {
-  id           String            @id @default(cuid())
+  id           String           @id @default(cuid())
   title        String
   department   String?
-  description  String            @db.Text
-  requirements String?           @db.Text
+  description  String           @db.Text
+  requirements String?          @db.Text
   deadline     DateTime?
-  is_published Boolean           @default(false)
-  created_at   DateTime          @default(now())
-  updated_at   DateTime          @updatedAt
+  is_published Boolean          @default(false)
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
   applications JobApplication[]
 }
 
@@ -2686,17 +2801,17 @@ enum JobApplicationStatus {
 // — a signed download URL is only generated on an already-authorized
 // staff request.
 model JobApplication {
-  id              String               @id @default(cuid())
-  job_posting_id  String
-  job_posting     JobPosting           @relation(fields: [job_posting_id], references: [id])
-  applicant_name  String
-  phone           String
-  email           String?
-  cv_blob_key     String
-  cover_note      String?              @db.Text
-  status          JobApplicationStatus @default(SUBMITTED)
-  created_at      DateTime             @default(now())
-  updated_at      DateTime             @updatedAt
+  id             String               @id @default(cuid())
+  job_posting_id String
+  job_posting    JobPosting           @relation(fields: [job_posting_id], references: [id])
+  applicant_name String
+  phone          String
+  email          String?
+  cv_blob_key    String
+  cover_note     String?              @db.Text
+  status         JobApplicationStatus @default(SUBMITTED)
+  created_at     DateTime             @default(now())
+  updated_at     DateTime             @updatedAt
 
   @@index([job_posting_id])
 }
@@ -2843,26 +2958,26 @@ model ContactSubmission {
 // ─────────────────────────────────────────────
 
 model AdmissionCycle {
-  id               String                 @id @default(cuid())
-  class_id         String
-  class            Class                  @relation(fields: [class_id], references: [id])
-  academic_year_id String
-  academic_year    AcademicYear           @relation(fields: [academic_year_id], references: [id])
-  name             String
-  open_date        DateTime
-  close_date       DateTime
-  seat_count       Int
-  app_fee          Float                  @default(0)
-  form_fee         Float                  @default(0)
-  is_open          Boolean                @default(false)
-  is_published     Boolean                @default(false)
-  form_config      Json?
+  id                            String                      @id @default(cuid())
+  class_id                      String
+  class                         Class                       @relation(fields: [class_id], references: [id])
+  academic_year_id              String
+  academic_year                 AcademicYear                @relation(fields: [academic_year_id], references: [id])
+  name                          String
+  open_date                     DateTime
+  close_date                    DateTime
+  seat_count                    Int
+  app_fee                       Float                       @default(0)
+  form_fee                      Float                       @default(0)
+  is_open                       Boolean                     @default(false)
+  is_published                  Boolean                     @default(false)
+  form_config                   Json?
   // Null until "Publish & Notify" runs — gates merit_rank visibility in the
   // public status lookup, since Generate Merit List itself already assigns
   // ranks to every application (needed so the admin can review before
   // committing) but that must not be visible to applicants until the admin
   // deliberately publishes.
-  merit_list_published_at DateTime?
+  merit_list_published_at       DateTime?
   // Plan Twenty-Three Phase 5 -- Written Test and Interview are two
   // independent, separately-schedulable stages, each with its own
   // per-applicant date/venue/room and its own pass/fail-equivalent outcome
@@ -2870,46 +2985,46 @@ model AdmissionCycle {
   // used as the bulk-assign form's default pre-fill -- the actual
   // authoritative schedule lives per-applicant, since staff can always
   // individually override one candidate's slot.
-  requires_written_test         Boolean   @default(false)
+  requires_written_test         Boolean                     @default(false)
   written_test_date             DateTime?
   written_test_venue            String?
   written_test_duration_minutes Int?
-  written_test_instructions     String?   @db.Text
-  requires_interview             Boolean   @default(false)
-  interview_date                 DateTime?
-  interview_venue                String?
-  interview_duration_minutes     Int?
-  interview_instructions         String?   @db.Text
-  created_at       DateTime               @default(now())
-  applications     AdmissionApplication[]
-  stages           AdmissionApplicationStage[]
+  written_test_instructions     String?                     @db.Text
+  requires_interview            Boolean                     @default(false)
+  interview_date                DateTime?
+  interview_venue               String?
+  interview_duration_minutes    Int?
+  interview_instructions        String?                     @db.Text
+  created_at                    DateTime                    @default(now())
+  applications                  AdmissionApplication[]
+  stages                        AdmissionApplicationStage[]
 }
 
 model AdmissionApplication {
-  id                   String          @id @default(cuid())
-  cycle_id             String
-  cycle                AdmissionCycle  @relation(fields: [cycle_id], references: [id])
-  admission_roll       String?         @unique
-  applicant_name       String
-  guardian_info        Json
-  personal_info        Json
-  previous_result      Json?
-  selected_subjects    Json?
-  documents            Json?
-  status               AdmissionStatus @default(PENDING)
-  merit_rank           Int?
-  payment_id           String?
-  enrolled_student_id  String?
-  notes                String?         @db.Text
+  id                  String                      @id @default(cuid())
+  cycle_id            String
+  cycle               AdmissionCycle              @relation(fields: [cycle_id], references: [id])
+  admission_roll      String?                     @unique
+  applicant_name      String
+  guardian_info       Json
+  personal_info       Json
+  previous_result     Json?
+  selected_subjects   Json?
+  documents           Json?
+  status              AdmissionStatus             @default(PENDING)
+  merit_rank          Int?
+  payment_id          String?
+  enrolled_student_id String?
+  notes               String?                     @db.Text
   // NEW, Plan Twenty-Three Phase 2 -- mirrors Student.photo_url's own
   // dedicated-column shape exactly (never a StudentDocument row, matching
   // this schema's existing "photos are their own column" convention).
-  photo_url            String?
-  documents_uploaded   StudentDocument[]
-  invoices             Invoice[]
-  created_at           DateTime        @default(now())
-  updated_at           DateTime        @updatedAt
-  stages               AdmissionApplicationStage[]
+  photo_url           String?
+  documents_uploaded  StudentDocument[]
+  invoices            Invoice[]
+  created_at          DateTime                    @default(now())
+  updated_at          DateTime                    @updatedAt
+  stages              AdmissionApplicationStage[]
 
   @@index([cycle_id])
 }
@@ -2937,24 +3052,24 @@ enum AdmissionStageStatus {
 // (folded onto this same row rather than a second overlapping seat-plan
 // table, since only one stage type needs seating at all).
 model AdmissionApplicationStage {
-  id               String                @id @default(cuid())
+  id               String               @id @default(cuid())
   application_id   String
-  application      AdmissionApplication  @relation(fields: [application_id], references: [id])
+  application      AdmissionApplication @relation(fields: [application_id], references: [id])
   // Denormalized for bulk query/delete-by-cycle, mirroring
   // AdmissionTestSeatPlan's own already-proven cycle_id convention.
   cycle_id         String
-  cycle            AdmissionCycle        @relation(fields: [cycle_id], references: [id])
+  cycle            AdmissionCycle       @relation(fields: [cycle_id], references: [id])
   stage_type       AdmissionStageType
   scheduled_date   DateTime?
   venue            String?
   duration_minutes Int?
-  instructions     String?               @db.Text
+  instructions     String?              @db.Text
   hall_name        String?
   seat_number      String?
-  status           AdmissionStageStatus  @default(SCHEDULED)
+  status           AdmissionStageStatus @default(SCHEDULED)
   // The applicant-facing personalized note shown once notified (e.g. "You
   // have been called for interview based on your written test score").
-  notice_message   String?               @db.Text
+  notice_message   String?              @db.Text
   // Null until a deliberate "Notify" action -- the per-row visibility gate
   // (not cycle-wide) that lets staff bulk-assign/notify in separate
   // batches over time without a later batch disturbing an earlier one, and
@@ -2962,8 +3077,8 @@ model AdmissionApplicationStage {
   // their status page at all.
   notified_at      DateTime?
   scheduled_by_id  String?
-  created_at       DateTime              @default(now())
-  updated_at       DateTime              @updatedAt
+  created_at       DateTime             @default(now())
+  updated_at       DateTime             @updatedAt
 
   @@unique([application_id, stage_type])
   @@index([cycle_id])
@@ -3057,22 +3172,22 @@ model RouteStop {
 }
 
 model Vehicle {
-  id             String              @id @default(cuid())
+  id             String                @id @default(cuid())
   route_id       String?
-  route          TransportRoute?     @relation(fields: [route_id], references: [id])
+  route          TransportRoute?       @relation(fields: [route_id], references: [id])
   vehicle_no     String
   type           String
   capacity       Int
   driver_name    String?
   driver_phone   String?
   insurance_exp  DateTime?
-  is_active      Boolean             @default(true)
-  created_at     DateTime            @default(now())
+  is_active      Boolean               @default(true)
+  created_at     DateTime              @default(now())
   // Phase 37 — per-vehicle secret for the GPS-ping ingestion endpoint. A
   // tracker unit can't hold a staff JWT, so this is a separate machine-to-
   // machine auth mechanism, not a user credential. Null until an admin
   // issues one for that vehicle.
-  device_api_key String?             @unique
+  device_api_key String?               @unique
   location_pings VehicleLocationPing[]
 
   @@index([route_id])
@@ -3169,23 +3284,23 @@ model HostelVisitor {
 // tied to any single module. student_id/class_id/section_id are all
 // optional since a vendor/official visit isn't tied to a specific student.
 model Visitor {
-  id            String      @id @default(cuid())
-  visitor_name  String
-  phone         String
-  visitor_type  VisitorType
-  relation_type String?
-  relation      String?
-  student_id    String?
-  student       Student?    @relation(fields: [student_id], references: [id])
-  class_id      String?
-  class         Class?      @relation(fields: [class_id], references: [id])
-  section_id    String?
-  section       Section?    @relation(fields: [section_id], references: [id])
-  reason        String
-  in_time       DateTime    @default(now())
-  out_time      DateTime?
+  id             String      @id @default(cuid())
+  visitor_name   String
+  phone          String
+  visitor_type   VisitorType
+  relation_type  String?
+  relation       String?
+  student_id     String?
+  student        Student?    @relation(fields: [student_id], references: [id])
+  class_id       String?
+  class          Class?      @relation(fields: [class_id], references: [id])
+  section_id     String?
+  section        Section?    @relation(fields: [section_id], references: [id])
+  reason         String
+  in_time        DateTime    @default(now())
+  out_time       DateTime?
   approved_by_id String?
-  created_at    DateTime    @default(now())
+  created_at     DateTime    @default(now())
 
   @@index([student_id])
   @@index([in_time])
@@ -3234,30 +3349,30 @@ enum TeachingResourceType {
 // read the file is a short-lived signed URL issued after the eligibility
 // re-check in the resources/portal routes, not a permanent link.
 model TeachingResource {
-  id                String               @id @default(cuid())
+  id                String                 @id @default(cuid())
   class_id          String
-  class             Class                @relation(fields: [class_id], references: [id])
+  class             Class                  @relation(fields: [class_id], references: [id])
   section_id        String?
-  section           Section?             @relation(fields: [section_id], references: [id])
+  section           Section?               @relation(fields: [section_id], references: [id])
   subject_id        String?
-  subject           Subject?             @relation(fields: [subject_id], references: [id])
+  subject           Subject?               @relation(fields: [subject_id], references: [id])
   teacher_id        String?
-  teacher           Staff?               @relation(fields: [teacher_id], references: [id])
+  teacher           Staff?                 @relation(fields: [teacher_id], references: [id])
   title             String
-  description       String?              @db.Text
-  resource_type     TeachingResourceType @default(OTHER)
+  description       String?                @db.Text
+  resource_type     TeachingResourceType   @default(OTHER)
   blob_key          String
   original_filename String
   mime_type         String
-  is_published      Boolean              @default(true)
+  is_published      Boolean                @default(true)
   publish_at        DateTime?
   expire_at         DateTime?
   // Phase 34 — only meaningful for resource_type: ASSIGNMENT; null for
   // everything else. Shared with Phase 36 as the one answer to "how do we
   // timestamp/deadline a gradeable thing" rather than inventing a second one.
   due_date          DateTime?
-  created_at        DateTime             @default(now())
-  updated_at        DateTime             @updatedAt
+  created_at        DateTime               @default(now())
+  updated_at        DateTime               @updatedAt
   submissions       AssignmentSubmission[]
 
   @@index([class_id])
@@ -3272,18 +3387,18 @@ enum AssignmentSubmissionStatus {
 }
 
 model AssignmentSubmission {
-  id                String                      @id @default(cuid())
+  id                String                     @id @default(cuid())
   resource_id       String
-  resource          TeachingResource            @relation(fields: [resource_id], references: [id])
+  resource          TeachingResource           @relation(fields: [resource_id], references: [id])
   student_id        String
-  student           Student                     @relation(fields: [student_id], references: [id])
+  student           Student                    @relation(fields: [student_id], references: [id])
   blob_key          String
   original_filename String
-  submitted_at      DateTime                    @default(now())
+  submitted_at      DateTime                   @default(now())
   grade             Float?
   feedback          String?
   graded_by_id      String?
-  status            AssignmentSubmissionStatus  @default(SUBMITTED)
+  status            AssignmentSubmissionStatus @default(SUBMITTED)
 
   @@unique([resource_id, student_id])
   @@index([resource_id])
@@ -3297,12 +3412,12 @@ model AssignmentSubmission {
 // template.criteria[].max_score — never trusted from the client, same
 // discipline as MarkEntry.marks_total.
 model AppraisalTemplate {
-  id         String             @id @default(cuid())
+  id         String              @id @default(cuid())
   name       String
   criteria   Json
-  is_active  Boolean            @default(true)
-  created_at DateTime           @default(now())
-  updated_at DateTime           @updatedAt
+  is_active  Boolean             @default(true)
+  created_at DateTime            @default(now())
+  updated_at DateTime            @updatedAt
   reviews    PerformanceReview[]
 }
 
@@ -3340,16 +3455,16 @@ model PerformanceReview {
 // enforced server-side on submit AND auto-checked on read (legacy stored it
 // but never enforced it at all).
 model Question {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   subject_id     String
-  subject        Subject  @relation(fields: [subject_id], references: [id])
+  subject        Subject        @relation(fields: [subject_id], references: [id])
   question_text  String
   options        Json
   correct_option String
-  marks          Float    @default(1)
+  marks          Float          @default(1)
   created_by_id  String?
-  is_active      Boolean  @default(true)
-  created_at     DateTime @default(now())
+  is_active      Boolean        @default(true)
+  created_at     DateTime       @default(now())
   quiz_questions QuizQuestion[]
 
   @@index([subject_id])
@@ -3413,14 +3528,14 @@ model QuizAttempt {
 // new, separate functions in grading.engine.ts.
 
 model Program {
-  id                 String         @id @default(cuid())
-  name_en            String
-  name_bn            String?
-  code               String         @unique
-  department_id      String?
-  department         Department?    @relation(fields: [department_id], references: [id])
-  duration_semesters Int
-  total_credit_hours Float
+  id                            String         @id @default(cuid())
+  name_en                       String
+  name_bn                       String?
+  code                          String         @unique
+  department_id                 String?
+  department                    Department?    @relation(fields: [department_id], references: [id])
+  duration_semesters            Int
+  total_credit_hours            Float
   // Nullable = no cap enforced (opt-in constraint, same convention as every
   // other Settings-driven soft limit in this codebase). Enforced as a soft
   // warning-with-override at enroll time, mirroring Section.capacity's
@@ -3429,14 +3544,14 @@ model Program {
   // Groups the public Departments/Programs page into Undergraduate/
   // Graduate/PhD sections — purely a display/classification field, doesn't
   // affect enrollment or grading logic anywhere.
-  degree_level       DegreeLevel    @default(UNDERGRADUATE)
-  is_active          Boolean        @default(true)
-  created_at         DateTime       @default(now())
-  updated_at         DateTime       @updatedAt
-  courses            Course[]
-  classes            Class[]
-  fee_structures     FeeStructure[]
-  staff              Staff[]        @relation("StaffProgram")
+  degree_level                  DegreeLevel    @default(UNDERGRADUATE)
+  is_active                     Boolean        @default(true)
+  created_at                    DateTime       @default(now())
+  updated_at                    DateTime       @updatedAt
+  courses                       Course[]
+  classes                       Class[]
+  fee_structures                FeeStructure[]
+  staff                         Staff[]        @relation("StaffProgram")
 
   @@index([department_id])
 }
@@ -3448,7 +3563,7 @@ model Course {
   id                String             @id @default(cuid())
   program_id        String
   program           Program            @relation(fields: [program_id], references: [id])
-  semester_number    Int
+  semester_number   Int
   code              String
   name_en           String
   name_bn           String?
@@ -3467,11 +3582,11 @@ model Course {
 }
 
 model Prerequisite {
-  id                      String @id @default(cuid())
-  course_id               String
-  course                  Course @relation("CourseRequires", fields: [course_id], references: [id])
-  prerequisite_course_id  String
-  prerequisite_course     Course @relation("PrerequisiteFor", fields: [prerequisite_course_id], references: [id])
+  id                     String @id @default(cuid())
+  course_id              String
+  course                 Course @relation("CourseRequires", fields: [course_id], references: [id])
+  prerequisite_course_id String
+  prerequisite_course    Course @relation("PrerequisiteFor", fields: [prerequisite_course_id], references: [id])
 
   @@unique([course_id, prerequisite_course_id])
 }
@@ -3511,30 +3626,30 @@ model CourseEnrollment {
 }
 
 model RoutineSlot {
-  id          String   @id @default(cuid())
-  class_id    String
-  class       Class    @relation(fields: [class_id], references: [id])
-  section_id  String?
-  section     Section? @relation(fields: [section_id], references: [id])
-  day_of_week Int
-  period_no   Int
-  subject_id  String?
-  subject     Subject? @relation(fields: [subject_id], references: [id])
-  teacher_id  String?
-  teacher     Staff?   @relation(fields: [teacher_id], references: [id])
+  id                         String                @id @default(cuid())
+  class_id                   String
+  class                      Class                 @relation(fields: [class_id], references: [id])
+  section_id                 String?
+  section                    Section?              @relation(fields: [section_id], references: [id])
+  day_of_week                Int
+  period_no                  Int
+  subject_id                 String?
+  subject                    Subject?              @relation(fields: [subject_id], references: [id])
+  teacher_id                 String?
+  teacher                    Staff?                @relation(fields: [teacher_id], references: [id])
   // null = applies to every group in this class (unchanged behavior for
   // every existing row). Set only when this slot is a Group-restricted
   // subject's period — mirrors Subject.group_id's exact convention.
-  group_id    String?
-  group       Group?   @relation(fields: [group_id], references: [id])
-  start_time  String
-  end_time    String
+  group_id                   String?
+  group                      Group?                @relation(fields: [group_id], references: [id])
+  start_time                 String
+  end_time                   String
   // Distinguishes auto-generated rows (Phase 45 routine generator) from
   // manually entered/edited ones, so a "regenerate" can safely wipe+replace
   // only what it created and never clobber a human's hand-fix.
-  generated   Boolean  @default(false)
+  generated                  Boolean               @default(false)
   subject_attendance_records SubjectAttendance[]
-  substitutions RoutineSubstitution[]
+  substitutions              RoutineSubstitution[]
 
   // NOTE: this constraint alone does not stop two rows from colliding when
   // section_id is NULL (Postgres treats each NULL as distinct in a unique
@@ -3570,18 +3685,18 @@ model RoutineSlot {
 // table shape exactly: RoutineSlot itself is never mutated, this table only
 // records "on this one date, this other teacher covers this slot instead."
 model RoutineSubstitution {
-  id                    String    @id @default(cuid())
+  id                    String      @id @default(cuid())
   routine_slot_id       String
   routine_slot          RoutineSlot @relation(fields: [routine_slot_id], references: [id])
-  date                  DateTime  @db.Date
+  date                  DateTime    @db.Date
   original_teacher_id   String
-  original_teacher      Staff     @relation("OriginalTeacherSubstitutions", fields: [original_teacher_id], references: [id])
+  original_teacher      Staff       @relation("OriginalTeacherSubstitutions", fields: [original_teacher_id], references: [id])
   substitute_teacher_id String
-  substitute_teacher    Staff     @relation("SubstituteTeacherSubstitutions", fields: [substitute_teacher_id], references: [id])
+  substitute_teacher    Staff       @relation("SubstituteTeacherSubstitutions", fields: [substitute_teacher_id], references: [id])
   reason                String?
   assigned_by_id        String
-  assigned_at           DateTime  @default(now())
-  created_at            DateTime  @default(now())
+  assigned_at           DateTime    @default(now())
+  created_at            DateTime    @default(now())
 
   @@unique([routine_slot_id, date])
   @@index([date])
@@ -3589,13 +3704,13 @@ model RoutineSubstitution {
 }
 
 model PushSubscription {
-  id         String   @id @default(cuid())
-  user_id    String
-  user       User     @relation(fields: [user_id], references: [id])
-  endpoint   String   @unique
+  id          String   @id @default(cuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id])
+  endpoint    String   @unique
   keys_p256dh String
-  keys_auth  String
-  created_at DateTime @default(now())
+  keys_auth   String
+  created_at  DateTime @default(now())
 
   @@index([user_id])
 }
@@ -4023,6 +4138,8 @@ enum InAppNotificationType {
   // Plan Twenty-Three, Phase 3
   ADMISSION_PAYMENT_RECEIVED
   ADMISSION_PAYMENT_PENDING_VERIFICATION
+  // Plan Twenty-Four -- nightly Fee Reconciliation & Assurance sweep digest.
+  FEE_RECONCILIATION_DIGEST
 }
 
 // In-app notification-center feed item — distinct from NotificationLog
@@ -4030,14 +4147,14 @@ enum InAppNotificationType {
 // same role-agnostic convention already used by Complaint.raised_by_user_id,
 // so one model/one set of routes serves staff, teacher, and portal callers.
 model InAppNotification {
-  id         String                 @id @default(cuid())
+  id         String                @id @default(cuid())
   user_id    String
   type       InAppNotificationType
   title      String
   body       String?
   link       String?
-  is_read    Boolean                @default(false)
-  created_at DateTime               @default(now())
+  is_read    Boolean               @default(false)
+  created_at DateTime              @default(now())
 
   @@index([user_id, is_read])
   @@index([user_id, created_at])

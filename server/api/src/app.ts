@@ -25,6 +25,7 @@ import { marksRouter } from "./modules/examination/marks.routes";
 import { markCorrectionRouter } from "./modules/examination/mark-correction.routes";
 import { resultsRouter } from "./modules/results/results.routes";
 import { feesRouter } from "./modules/fees/fees.routes";
+import { reconciliationRouter } from "./modules/fees/reconciliation.routes";
 import { financeRouter } from "./modules/finance/finance.routes";
 import { paymentsRouter } from "./modules/fees/payments.routes";
 import { admissionRouter } from "./modules/admission/admission.routes";
@@ -113,6 +114,9 @@ export function createApp(): Express {
   app.use("/api/marks", marksRouter);
   app.use("/api/mark-corrections", markCorrectionRouter);
   app.use("/api/results", resultsRouter);
+  // Mounted before feesRouter (more specific prefix first) so a route
+  // inside feesRouter can never shadow /api/fees/reconciliation/*.
+  app.use("/api/fees/reconciliation", reconciliationRouter);
   app.use("/api/fees", feesRouter);
   app.use("/api/finance", financeRouter);
   app.use("/api/payments", paymentsRouter);

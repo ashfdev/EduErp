@@ -10,13 +10,19 @@ import {
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
   Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
-  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, type LucideIcon,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, type LucideIcon,
 } from "lucide-react";
+import { usePendingCounts, type PendingCounts } from "@/hooks/use-pending-counts";
 
 interface NavItem {
   href: string;
   key: string;
   icon: LucideIcon;
+  // Wires this item up to usePendingCounts() -- rendered as a small "(N)"
+  // badge next to the label whenever the count is > 0, so a review-queue
+  // destination (Document Requests, Payment Review, ...) stays visible at a
+  // glance from the sidebar itself, not only via the notification bell.
+  countKey?: keyof PendingCounts;
 }
 
 interface NavGroup {
@@ -50,16 +56,16 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/students", key: "students", icon: Users },
       { href: "/alumni", key: "alumni", icon: GraduationCap },
-      { href: "/complaints", key: "complaints", icon: AlertCircle },
-      { href: "/document-requests", key: "documentRequests", icon: FileText },
-      { href: "/student-leave", key: "studentLeaveRequests", icon: CalendarClock },
+      { href: "/complaints", key: "complaints", icon: AlertCircle, countKey: "complaints" },
+      { href: "/document-requests", key: "documentRequests", icon: FileText, countKey: "documentRequests" },
+      { href: "/student-leave", key: "studentLeaveRequests", icon: CalendarClock, countKey: "studentLeaveRequests" },
     ],
   },
   {
     key: "admission",
     items: [
       { href: "/admission", key: "admission", icon: UserPlus },
-      { href: "/admission/payments", key: "admissionPayments", icon: Receipt },
+      { href: "/admission/payments", key: "admissionPayments", icon: Receipt, countKey: "admissionPayments" },
     ],
   },
   {
@@ -67,11 +73,13 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/fees", key: "fees", icon: Wallet },
       { href: "/finance/all-invoices", key: "allInvoices", icon: FileText },
+      { href: "/fees/bank-transfers", key: "paymentReview", icon: CreditCard, countKey: "paymentReview" },
       { href: "/accounts", key: "accounts", icon: Calculator },
       { href: "/fees/waivers", key: "waiverSetup", icon: Wallet },
       { href: "/fees/sub-categories", key: "feeSubCategories", icon: Tags },
       { href: "/fees/fine-rules", key: "feeFineRules", icon: Percent },
       { href: "/fees/bulk-fine", key: "bulkFeeOrFine", icon: Percent },
+      { href: "/fee-assurance", key: "feeAssurance", icon: ShieldCheck, countKey: "feeAssurance" },
     ],
   },
   {
@@ -80,7 +88,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/hr", key: "hr", icon: Briefcase },
       { href: "/hr/staff/new", key: "addStaff", icon: UserRoundPlus },
       { href: "/hr/attendance", key: "employeeAttendance", icon: ClipboardCheck },
-      { href: "/hr/leave", key: "staffLeaveRequests", icon: CalendarOff },
+      { href: "/hr/leave", key: "staffLeaveRequests", icon: CalendarOff, countKey: "staffLeaveRequests" },
       { href: "/hr/payroll", key: "managePayroll", icon: DollarSign },
       { href: "/hr/faculty", key: "facultyList", icon: Contact },
       { href: "/hr/staff", key: "staffList", icon: IdCard },
@@ -138,7 +146,7 @@ function isItemActive(activeHref: string | null, href: string) {
   return activeHref === href;
 }
 
-function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
+function NavLink({ item, isActive, count }: { item: NavItem; isActive: boolean; count?: number }) {
   const t = useTranslations("nav");
   const Icon = item.icon;
   return (
@@ -149,7 +157,16 @@ function NavLink({ item, isActive }: { item: NavItem; isActive: boolean }) {
       }`}
     >
       <Icon className="h-4 w-4 shrink-0" />
-      {t(item.key)}
+      <span className="flex-1">{t(item.key)}</span>
+      {!!count && count > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums ${
+            isActive ? "bg-white/25 text-white" : "bg-amber-500/20 text-amber-400"
+          }`}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
     </Link>
   );
 }
@@ -158,6 +175,7 @@ export function SidebarNav() {
   const pathname = usePathname();
   const tGroups = useTranslations("navGroups");
   const activeHref = bestMatchingHref(pathname);
+  const pendingCounts = usePendingCounts();
 
   // Whichever group contains the current route is expanded; every other
   // group starts collapsed and can be manually toggled. Re-evaluated on
@@ -194,6 +212,12 @@ export function SidebarNav() {
       {NAV_GROUPS.map((group) => {
         const isOpen = openGroups.has(group.key);
         const groupHasActive = group.items.some((item) => isItemActive(activeHref, item.href));
+        // Sum of every item's pending count in this group -- shown on the
+        // group header itself so a collapsed group (e.g. "Finance" closed)
+        // still surfaces that something inside it needs attention, not only
+        // once expanded. This is the whole point of a sidebar badge over a
+        // notification alone: a glance at the collapsed nav is enough.
+        const groupPendingTotal = group.items.reduce((sum, item) => sum + (item.countKey ? pendingCounts[item.countKey] : 0), 0);
         return (
           <div key={group.key} className="mt-1">
             <button
@@ -203,13 +227,25 @@ export function SidebarNav() {
                 groupHasActive ? "text-white" : "text-slate-500 hover:text-slate-300"
               }`}
             >
-              {tGroups(group.key)}
+              <span className="flex items-center gap-1.5">
+                {tGroups(group.key)}
+                {!isOpen && groupPendingTotal > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-400 tabular-nums normal-case tracking-normal">
+                    {groupPendingTotal > 99 ? "99+" : groupPendingTotal}
+                  </span>
+                )}
+              </span>
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
             </button>
             {isOpen && (
               <div className="flex flex-col gap-1 pl-1">
                 {group.items.map((item) => (
-                  <NavLink key={item.href} item={item} isActive={isItemActive(activeHref, item.href)} />
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    isActive={isItemActive(activeHref, item.href)}
+                    count={item.countKey ? pendingCounts[item.countKey] : undefined}
+                  />
                 ))}
               </div>
             )}
