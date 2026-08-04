@@ -1346,6 +1346,13 @@ feesRouter.get(
       data: {
         academic_year: academicYear ? { id: academicYear.id, label: academicYear.label } : null,
         period_label: periodLabel,
+        // Exposed so the frontend can pull the per-account expense/income
+        // breakdown from GET /api/accounts/reports/income-expenditure for
+        // this EXACT same range, rather than re-deriving an equivalent
+        // date pair client-side and risking subtle drift from what this
+        // route actually computed.
+        period_start: periodStart.toISOString(),
+        period_end: periodEnd.toISOString(),
         summary: {
           total_students: studentTotals.size,
           total_invoiced: Math.round(totalInvoiced * 100) / 100,

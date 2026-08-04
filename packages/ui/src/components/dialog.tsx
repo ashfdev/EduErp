@@ -22,11 +22,27 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 // Radix's Select/DropdownMenu/Popover/Command all render their open content
 // into a separate document.body portal, tagged with data-radix-popper-
 // content-wrapper -- outside the Dialog's own DOM subtree. Without this
-// guard, clicking an option in a <Select> nested inside a <Dialog> registers
-// as a pointer-down "outside" the dialog and closes it before the click even
-// reaches the option (a well-known Radix Dialog+Select interaction, not
-// specific to any one form on this site). Every DialogContent gets this for
-// free rather than each page working around it individually.
+// guard, interacting with a <Select> nested inside a <Dialog> registers as
+// happening "outside" the dialog and closes it before the click/selection
+// even lands (a well-known Radix Dialog+Select interaction, not specific to
+// any one form on this site). Every DialogContent gets this for free rather
+// than each page working around it individually.
+//
+// This must guard BOTH onPointerDownOutside AND onInteractOutside, not just
+// the former. Radix's DismissableLayer (which Dialog.Content is built on)
+// dismisses on two independent triggers: a pointer-down outside the layer,
+// AND a focus change to an element outside the layer (its own separate
+// useFocusOutside hook, firing onFocusOutside then onInteractOutside) --
+// confirmed directly in @radix-ui/react-dismissable-layer's source. A
+// Select's listbox manages keyboard focus within its own portal content the
+// moment it opens, which Dialog's focus-outside detection treats as "focus
+// left the dialog" and dismisses on -- completely independent of the
+// pointer-down path, so guarding only onPointerDownOutside (as this used to)
+// leaves the dialog closing via keyboard navigation or any focus-driven
+// selection, only masking the bug for a plain unmodified mouse click.
+// onInteractOutside fires for both paths (Radix calls it right after the
+// more specific onPointerDownOutside/onFocusOutside, sharing the same
+// event), so guarding it here closes both gaps in one place.
 function ignorePointerDownInsidePopper(event: Event) {
   const target = event.target as HTMLElement | null;
   if (target?.closest("[data-radix-popper-content-wrapper]")) {
@@ -37,7 +53,7 @@ function ignorePointerDownInsidePopper(event: Event) {
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onPointerDownOutside, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -49,6 +65,10 @@ export const DialogContent = React.forwardRef<
       onPointerDownOutside={(e) => {
         ignorePointerDownInsidePopper(e);
         onPointerDownOutside?.(e);
+      }}
+      onInteractOutside={(e) => {
+        ignorePointerDownInsidePopper(e);
+        onInteractOutside?.(e);
       }}
       {...props}
     >

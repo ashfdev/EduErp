@@ -78,10 +78,14 @@ interface FinancialContext {
 interface DashboardResponse {
   academic_year: { id: string; label: string } | null;
   period_label: string;
+  period_start: string;
+  period_end: string;
   summary: DashboardSummary;
   by_structure: StructureRow[];
   financial_context: FinancialContext;
 }
+interface LedgerRow { code: string; name: string; amount: number }
+interface IncomeExpenditureResponse { income: LedgerRow[]; income_total: number; expenditure: LedgerRow[]; expenditure_total: number; surplus_or_deficit: number }
 interface DrillDownRow {
   id: string;
   student: { id: string; name_en: string; student_uid: string; class_name: string | null; section_name: string | null } | null;
@@ -135,6 +139,16 @@ export default function CollectFeePage() {
   const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError, error: dashboardErrorObj, refetch: refetchDashboard } = useQuery<DashboardResponse>({
     queryKey: ["fees", "collection-dashboard", dashboardParams],
     queryFn: async () => (await api.get("/api/fees/collection-dashboard", { params: dashboardParams })).data.data,
+  });
+
+  // Per-account expense/income breakdown for the exact same period the
+  // dashboard above resolved -- reuses the existing Accounts report as-is
+  // rather than duplicating its per-account ledger arithmetic here.
+  const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
+  const { data: ledgerBreakdown } = useQuery<IncomeExpenditureResponse>({
+    queryKey: ["accounts", "income-expenditure", dashboard?.period_start, dashboard?.period_end],
+    queryFn: async () => (await api.get("/api/accounts/reports/income-expenditure", { params: { from_date: dashboard!.period_start, to_date: dashboard!.period_end } })).data.data,
+    enabled: showExpenseBreakdown && !!dashboard,
   });
 
   const { data: drillData, isFetching: drillLoading } = useQuery<{ data: DrillDownRow[]; meta: { total: number; totalPages: number } }>({
@@ -291,11 +305,43 @@ export default function CollectFeePage() {
                 <p className="mb-3 text-sm font-medium">Financial Context — {dashboard.period_label}</p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                   <div><p className="text-xs text-muted-foreground">Total Revenue</p><p className="font-semibold text-emerald-600">{money(fc.total_revenue)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Total Expense</p><p className="font-semibold text-red-600">{money(fc.total_expense)}</p></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Expense</p>
+                    <p className="font-semibold text-red-600">{money(fc.total_expense)}</p>
+                    <button type="button" className="text-xs text-primary hover:underline" onClick={() => setShowExpenseBreakdown((v) => !v)}>
+                      {showExpenseBreakdown ? "Hide breakdown" : "Breakdown ▾"}
+                    </button>
+                  </div>
                   <div><p className="text-xs text-muted-foreground">Net Position</p><p className={`font-semibold ${fc.net_position >= 0 ? "text-emerald-600" : "text-red-600"}`}>{money(fc.net_position)}</p></div>
                   <div><p className="text-xs text-muted-foreground">Staff Salary Paid</p><p className="font-semibold">{money(fc.salary_paid)}</p></div>
                   <div><p className="text-xs text-muted-foreground">Current Fund Balance</p><p className="font-semibold">{money(fc.current_fund_balance)}</p></div>
                 </div>
+
+                {showExpenseBreakdown && (
+                  <div className="mt-4 border-t pt-3">
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      Expense by account — this is only as granular as how expenses were recorded (e.g. every voucher posted to one general &quot;Miscellaneous Expense&quot; account shows as one line here; post future asset purchases, event/program costs, etc. to their own named accounts in Accounts → Chart of Accounts to see them broken out separately).
+                    </p>
+                    {!ledgerBreakdown ? (
+                      <p className="text-sm text-muted-foreground">Loading...</p>
+                    ) : ledgerBreakdown.expenditure.length ? (
+                      <Table>
+                        <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Account</TableHead><TableHead>Amount</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {ledgerBreakdown.expenditure.map((row) => (
+                            <TableRow key={row.code}>
+                              <TableCell className="font-mono text-xs">{row.code}</TableCell>
+                              <TableCell>{row.name}</TableCell>
+                              <TableCell>{money(row.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No expense vouchers posted in this period.</p>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

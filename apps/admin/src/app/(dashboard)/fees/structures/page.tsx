@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, Badge, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState,
+  PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, Badge, Checkbox, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, EmptyState,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem, MultiSelectChecklist, ConfirmDialog, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -24,7 +24,7 @@ const CATEGORY_HELP: Record<string, string> = {
   OTHER: "Shown as a selectable fee at enrollment. For a genuinely one-off, not-worth-cataloging charge, use \"+ Add One-Time Fee\" on the Fee Collection page instead.",
 };
 
-interface ClassOption { id: string; name_en: string; groups: { id: string; name_en: string }[] }
+interface ClassOption { id: string; name_en: string; groups: { id: string; name_en: string }[]; sections?: { id: string; name: string }[] }
 interface SubCategoryOption { id: string; category: string; name: string }
 interface StudentOption { id: string; name_en: string; student_uid: string }
 interface FeeStructure {
@@ -241,17 +241,42 @@ export default function FeeStructuresPage() {
   const [studentsTarget, setStudentsTarget] = useState<FeeStructure | null>(null);
   const [assignedStudents, setAssignedStudents] = useState<StudentOption[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
+  // Same cascading Class -> Section -> Group narrowing used everywhere else
+  // a student needs to be found (Add Student wizard, Collect Fee) -- typing
+  // a name/ID alone doesn't scale once there's more than a handful of
+  // matches, and gives no way to just browse "everyone in Class 9 Science."
+  const [studentFilterClassId, setStudentFilterClassId] = useState("");
+  const [studentFilterSectionId, setStudentFilterSectionId] = useState("");
+  const [studentFilterGroupId, setStudentFilterGroupId] = useState("");
+  const studentFilterClass = classes?.find((c) => c.id === studentFilterClassId);
 
   const openAssignStudents = (s: FeeStructure) => {
     setStudentsTarget(s);
     setAssignedStudents(s.students.map((row) => row.student));
     setStudentSearch("");
+    setStudentFilterClassId("");
+    setStudentFilterSectionId("");
+    setStudentFilterGroupId("");
   };
 
   const { data: studentSearchResults } = useQuery<StudentOption[]>({
-    queryKey: ["students", "search-for-fee-assign", studentSearch],
-    queryFn: async () => (await api.get("/api/students", { params: { search: studentSearch, limit: 10 } })).data.data,
-    enabled: !!studentsTarget && studentSearch.trim().length >= 2,
+    queryKey: ["students", "search-for-fee-assign", studentSearch, studentFilterClassId, studentFilterSectionId, studentFilterGroupId],
+    queryFn: async () =>
+      (
+        await api.get("/api/students", {
+          params: {
+            search: studentSearch || undefined,
+            class_id: studentFilterClassId || undefined,
+            section_id: studentFilterSectionId || undefined,
+            group_id: studentFilterGroupId || undefined,
+            limit: 20,
+          },
+        })
+      ).data.data,
+    // Fires once EITHER a real search term is typed OR a Class filter is
+    // picked (browse mode) -- narrowing by class alone, with no name typed,
+    // is a legitimate way to find someone too.
+    enabled: !!studentsTarget && (studentSearch.trim().length >= 2 || !!studentFilterClassId),
   });
 
   const assignStudentsMutation = useMutation({
@@ -262,6 +287,100 @@ export default function FeeStructuresPage() {
       setStudentsTarget(null);
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to assign students"),
+  });
+
+  // Bulk assignment -- pick several fee structures at once (Tuition +
+  // Library + Development, say) and assign the same classes/groups or
+  // students to all of them in one action, instead of repeating "Assign to
+  // Classes/Groups" once per structure. Deliberately ADDITIVE per
+  // structure (merges into whatever it's already assigned to, never
+  // replaces) -- a naive per-structure full-replace loop using the exact
+  // same target list for every selected structure would silently wipe out
+  // any of THEIR OWN pre-existing, individually-different assignments the
+  // moment they're included in a bulk action alongside others.
+  const [selectedStructureIds, setSelectedStructureIds] = useState<string[]>([]);
+  const selectedStructures = (structures ?? []).filter((s) => selectedStructureIds.includes(s.id));
+  const toggleStructureSelected = (id: string) =>
+    setSelectedStructureIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const [bulkClassesOpen, setBulkClassesOpen] = useState(false);
+  const [bulkEntryIds, setBulkEntryIds] = useState<string[]>([]);
+  const bulkAssignClassesMutation = useMutation({
+    mutationFn: async () => {
+      const newEntries: { class_id: string; group_id: string | null }[] = bulkEntryIds.map((id) => {
+        const [class_id, group_id] = id.split("::");
+        return { class_id: class_id!, group_id: group_id || null };
+      });
+      const failed: { name: string; reason: string }[] = [];
+      for (const structure of selectedStructures) {
+        try {
+          const existing = structure.classes.map((c) => ({ class_id: c.class.id, group_id: c.group?.id ?? null }));
+          const merged = [...existing];
+          for (const ne of newEntries) {
+            if (!merged.some((e) => e.class_id === ne.class_id && e.group_id === ne.group_id)) merged.push(ne);
+          }
+          // override_overlap is unconditional here (no interactive confirm,
+          // unlike the single-structure flow) -- a bulk action across N
+          // structures can't cleanly show one shared overlap-confirmation
+          // dialog, and this is already a deliberate, explicit admin action
+          // (picking multiple structures on purpose), not an accidental one.
+          await api.put(`/api/fees/structures/${structure.id}/classes`, { entries: merged, override_overlap: true });
+        } catch (err) {
+          failed.push({ name: structure.name, reason: extractErrorMessage(err) ?? "Unknown error" });
+        }
+      }
+      return { total: selectedStructures.length, failed };
+    },
+    onSuccess: ({ total, failed }) => {
+      if (failed.length) toast.error(`${total - failed.length} of ${total} succeeded. Failed: ${failed.map((f) => f.name).join(", ")}`);
+      else toast.success(`Classes/Groups added to ${total} fee structure(s)`);
+      queryClient.invalidateQueries({ queryKey: ["fees", "structures"] });
+      setBulkClassesOpen(false);
+      setBulkEntryIds([]);
+      setSelectedStructureIds([]);
+    },
+  });
+
+  const [bulkStudentsOpen, setBulkStudentsOpen] = useState(false);
+  const [bulkStudents, setBulkStudents] = useState<StudentOption[]>([]);
+  const [bulkStudentSearch, setBulkStudentSearch] = useState("");
+  const [bulkFilterClassId, setBulkFilterClassId] = useState("");
+  const [bulkFilterSectionId, setBulkFilterSectionId] = useState("");
+  const [bulkFilterGroupId, setBulkFilterGroupId] = useState("");
+  const bulkFilterClass = classes?.find((c) => c.id === bulkFilterClassId);
+  const { data: bulkStudentResults } = useQuery<StudentOption[]>({
+    queryKey: ["students", "search-for-bulk-fee-assign", bulkStudentSearch, bulkFilterClassId, bulkFilterSectionId, bulkFilterGroupId],
+    queryFn: async () =>
+      (
+        await api.get("/api/students", {
+          params: { search: bulkStudentSearch || undefined, class_id: bulkFilterClassId || undefined, section_id: bulkFilterSectionId || undefined, group_id: bulkFilterGroupId || undefined, limit: 20 },
+        })
+      ).data.data,
+    enabled: bulkStudentsOpen && (bulkStudentSearch.trim().length >= 2 || !!bulkFilterClassId),
+  });
+  const bulkAssignStudentsMutation = useMutation({
+    mutationFn: async () => {
+      const newIds = bulkStudents.map((s) => s.id);
+      const failed: { name: string; reason: string }[] = [];
+      for (const structure of selectedStructures) {
+        try {
+          const existingIds = structure.students.map((row) => row.student.id);
+          const merged = [...new Set([...existingIds, ...newIds])];
+          await api.put(`/api/fees/structures/${structure.id}/students`, { student_ids: merged });
+        } catch (err) {
+          failed.push({ name: structure.name, reason: extractErrorMessage(err) ?? "Unknown error" });
+        }
+      }
+      return { total: selectedStructures.length, failed };
+    },
+    onSuccess: ({ total, failed }) => {
+      if (failed.length) toast.error(`${total - failed.length} of ${total} succeeded. Failed: ${failed.map((f) => f.name).join(", ")}`);
+      else toast.success(`Students added to ${total} fee structure(s)`);
+      queryClient.invalidateQueries({ queryKey: ["fees", "structures"] });
+      setBulkStudentsOpen(false);
+      setBulkStudents([]);
+      setSelectedStructureIds([]);
+    },
   });
 
   return (
@@ -275,11 +394,29 @@ export default function FeeStructuresPage() {
       ) : (
       <>
       {!structures?.length && <EmptyState title="No fee structures yet" />}
+
+      {selectedStructureIds.length > 0 && (
+        <Card className="border-primary">
+          <CardContent className="flex flex-wrap items-center gap-3 py-3">
+            <p className="text-sm font-medium">{selectedStructureIds.length} fee structure{selectedStructureIds.length === 1 ? "" : "s"} selected</p>
+            <Button size="sm" onClick={() => { setBulkEntryIds([]); setBulkClassesOpen(true); }}>Bulk Assign to Classes/Groups</Button>
+            <Button size="sm" onClick={() => { setBulkStudents([]); setBulkStudentSearch(""); setBulkFilterClassId(""); setBulkFilterSectionId(""); setBulkFilterGroupId(""); setBulkStudentsOpen(true); }}>Bulk Assign to Students</Button>
+            <Button size="sm" variant="outline" onClick={() => setSelectedStructureIds([])}>Clear selection</Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="pt-6">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
+                <th className="p-2 w-8">
+                  <Checkbox
+                    checked={!!structures?.length && selectedStructureIds.length === structures.length}
+                    onCheckedChange={() => setSelectedStructureIds((prev) => (prev.length === structures?.length ? [] : (structures ?? []).map((s) => s.id)))}
+                  />
+                </th>
                 <th className="p-2">Name</th><th className="p-2">Category</th><th className="p-2">Sub-Category</th><th className="p-2">Amount</th>
                 <th className="p-2">Frequency</th><th className="p-2">Applies To</th><th className="p-2"></th>
               </tr>
@@ -287,6 +424,7 @@ export default function FeeStructuresPage() {
             <tbody>
               {structures?.map((s) => (
                 <tr key={s.id} className="border-b">
+                  <td className="p-2"><Checkbox checked={selectedStructureIds.includes(s.id)} onCheckedChange={() => toggleStructureSelected(s.id)} /></td>
                   <td className="p-2">{s.name}</td>
                   <td className="p-2"><Badge variant="outline">{s.category}</Badge></td>
                   <td className="p-2 text-muted-foreground">{s.fee_sub_category?.name ?? "—"}</td>
@@ -397,29 +535,66 @@ export default function FeeStructuresPage() {
       />
 
       <Dialog open={!!studentsTarget} onOpenChange={(v) => !v && setStudentsTarget(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Assign to Specific Students — {studentsTarget?.name}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Attaches this fee directly to the students below, on top of (not instead of) whatever classes/groups it&apos;s also assigned to — useful for a student taking an extra elective, or a one-off charge for just this one person.
           </p>
-          <div className="space-y-1.5">
-            <Label>Search by name or ID</Label>
-            <Input value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Type at least 2 characters..." />
+          <div className="flex flex-wrap gap-2">
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              value={studentFilterClassId}
+              onChange={(e) => { setStudentFilterClassId(e.target.value); setStudentFilterSectionId(""); setStudentFilterGroupId(""); }}
+            >
+              <option value="">All classes</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              value={studentFilterSectionId}
+              onChange={(e) => setStudentFilterSectionId(e.target.value)}
+              disabled={!studentFilterClassId}
+            >
+              <option value="">All sections</option>
+              {studentFilterClass?.sections?.map((sec) => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+            </select>
+            {!!studentFilterClass?.groups?.length && (
+              <select className="rounded-md border px-2 py-1.5 text-sm" value={studentFilterGroupId} onChange={(e) => setStudentFilterGroupId(e.target.value)}>
+                <option value="">All groups</option>
+                {studentFilterClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            )}
+            <Input className="max-w-[200px]" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Search by name or ID..." />
           </div>
-          {studentSearch.trim().length >= 2 && (
-            <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border p-2">
-              {studentSearchResults?.length ? studentSearchResults.map((st) => (
-                <div key={st.id} className="flex items-center justify-between text-sm">
-                  <span>{st.name_en} <span className="font-mono text-xs text-muted-foreground">{st.student_uid}</span></span>
-                  <Button
-                    size="sm" variant="outline"
-                    disabled={assignedStudents.some((a) => a.id === st.id)}
-                    onClick={() => setAssignedStudents((prev) => (prev.some((a) => a.id === st.id) ? prev : [...prev, st]))}
-                  >
-                    {assignedStudents.some((a) => a.id === st.id) ? "Added" : "+ Add"}
-                  </Button>
-                </div>
-              )) : <p className="text-sm text-muted-foreground">No matches.</p>}
+          {(studentSearch.trim().length >= 2 || !!studentFilterClassId) && (
+            <div className="space-y-1">
+              {(studentSearchResults?.length ?? 0) > 1 && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setAssignedStudents((prev) => {
+                    const existingIds = new Set(prev.map((s) => s.id));
+                    const toAdd = (studentSearchResults ?? []).filter((s) => !existingIds.has(s.id));
+                    return [...prev, ...toAdd];
+                  })}
+                >
+                  + Add all {studentSearchResults?.length} shown
+                </button>
+              )}
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                {studentSearchResults?.length ? studentSearchResults.map((st) => (
+                  <div key={st.id} className="flex items-center justify-between text-sm">
+                    <span>{st.name_en} <span className="font-mono text-xs text-muted-foreground">{st.student_uid}</span></span>
+                    <Button
+                      size="sm" variant="outline"
+                      disabled={assignedStudents.some((a) => a.id === st.id)}
+                      onClick={() => setAssignedStudents((prev) => (prev.some((a) => a.id === st.id) ? prev : [...prev, st]))}
+                    >
+                      {assignedStudents.some((a) => a.id === st.id) ? "Added" : "+ Add"}
+                    </Button>
+                  </div>
+                )) : <p className="text-sm text-muted-foreground">No matches.</p>}
+              </div>
             </div>
           )}
           <div className="space-y-1.5">
@@ -478,6 +653,103 @@ export default function FeeStructuresPage() {
               disabled={generateInvoicesMutation.isPending || generatePreviewTotal === undefined || !generateDueDate}
             >
               {generateInvoicesMutation.isPending ? "Generating..." : "Generate Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkClassesOpen} onOpenChange={setBulkClassesOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Bulk Assign to Classes/Groups — {selectedStructureIds.length} fee structure{selectedStructureIds.length === 1 ? "" : "s"}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Applies to: {selectedStructures.map((s) => s.name).join(", ")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Adds the classes/groups picked below to each selected structure, on top of whatever it&apos;s already assigned to — nothing existing is removed.
+          </p>
+          <MultiSelectChecklist options={classGroupOptions} selected={bulkEntryIds} onChange={setBulkEntryIds} />
+          <DialogFooter>
+            <Button disabled={!bulkEntryIds.length || bulkAssignClassesMutation.isPending} onClick={() => bulkAssignClassesMutation.mutate()}>
+              {bulkAssignClassesMutation.isPending ? "Saving..." : `Add to ${selectedStructureIds.length} Structure${selectedStructureIds.length === 1 ? "" : "s"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkStudentsOpen} onOpenChange={setBulkStudentsOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader><DialogTitle>Bulk Assign to Students — {selectedStructureIds.length} fee structure{selectedStructureIds.length === 1 ? "" : "s"}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Applies to: {selectedStructures.map((s) => s.name).join(", ")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Adds the students picked below to each selected structure&apos;s individual assignment, on top of any classes/groups or other students already assigned.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              className="rounded-md border px-2 py-1.5 text-sm"
+              value={bulkFilterClassId}
+              onChange={(e) => { setBulkFilterClassId(e.target.value); setBulkFilterSectionId(""); setBulkFilterGroupId(""); }}
+            >
+              <option value="">All classes</option>
+              {classes?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
+            </select>
+            <select className="rounded-md border px-2 py-1.5 text-sm" value={bulkFilterSectionId} onChange={(e) => setBulkFilterSectionId(e.target.value)} disabled={!bulkFilterClassId}>
+              <option value="">All sections</option>
+              {bulkFilterClass?.sections?.map((sec) => <option key={sec.id} value={sec.id}>{sec.name}</option>)}
+            </select>
+            {!!bulkFilterClass?.groups?.length && (
+              <select className="rounded-md border px-2 py-1.5 text-sm" value={bulkFilterGroupId} onChange={(e) => setBulkFilterGroupId(e.target.value)}>
+                <option value="">All groups</option>
+                {bulkFilterClass.groups.map((g) => <option key={g.id} value={g.id}>{g.name_en}</option>)}
+              </select>
+            )}
+            <Input className="max-w-[200px]" value={bulkStudentSearch} onChange={(e) => setBulkStudentSearch(e.target.value)} placeholder="Search by name or ID..." />
+          </div>
+          {(bulkStudentSearch.trim().length >= 2 || !!bulkFilterClassId) && (
+            <div className="space-y-1">
+              {(bulkStudentResults?.length ?? 0) > 1 && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setBulkStudents((prev) => {
+                    const existingIds = new Set(prev.map((s) => s.id));
+                    return [...prev, ...(bulkStudentResults ?? []).filter((s) => !existingIds.has(s.id))];
+                  })}
+                >
+                  + Add all {bulkStudentResults?.length} shown
+                </button>
+              )}
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+                {bulkStudentResults?.length ? bulkStudentResults.map((st) => (
+                  <div key={st.id} className="flex items-center justify-between text-sm">
+                    <span>{st.name_en} <span className="font-mono text-xs text-muted-foreground">{st.student_uid}</span></span>
+                    <Button
+                      size="sm" variant="outline"
+                      disabled={bulkStudents.some((a) => a.id === st.id)}
+                      onClick={() => setBulkStudents((prev) => (prev.some((a) => a.id === st.id) ? prev : [...prev, st]))}
+                    >
+                      {bulkStudents.some((a) => a.id === st.id) ? "Added" : "+ Add"}
+                    </Button>
+                  </div>
+                )) : <p className="text-sm text-muted-foreground">No matches.</p>}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>Students to add ({bulkStudents.length})</Label>
+            <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border p-2">
+              {bulkStudents.length ? bulkStudents.map((st) => (
+                <div key={st.id} className="flex items-center justify-between text-sm">
+                  <span>{st.name_en} <span className="font-mono text-xs text-muted-foreground">{st.student_uid}</span></span>
+                  <Button size="sm" variant="outline" onClick={() => setBulkStudents((prev) => prev.filter((a) => a.id !== st.id))}>Remove</Button>
+                </div>
+              )) : <p className="text-sm text-muted-foreground">None picked yet.</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!bulkStudents.length || bulkAssignStudentsMutation.isPending} onClick={() => bulkAssignStudentsMutation.mutate()}>
+              {bulkAssignStudentsMutation.isPending ? "Saving..." : `Add to ${selectedStructureIds.length} Structure${selectedStructureIds.length === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
