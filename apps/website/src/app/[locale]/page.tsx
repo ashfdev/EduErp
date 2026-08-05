@@ -165,7 +165,7 @@ export default function HomePage() {
               {/* Background Image on Left */}
               <div className="relative w-full aspect-video sm:absolute sm:left-0 sm:top-1/2 sm:-translate-y-1/2 sm:w-[55%] sm:aspect-[5/6] rounded-2xl overflow-hidden shadow-sm">
                 <Image
-                  src={(institution as { student_login_bg_url?: string })?.student_login_bg_url || institution?.logo_url || "https://picsum.photos/seed/institution/800/800"}
+                  src={(institution as { student_login_bg_url?: string })?.student_login_bg_url || "https://picsum.photos/seed/institution-building/800/800"}
                   alt="Institution Building"
                   fill
                   className="object-cover"
@@ -205,7 +205,7 @@ export default function HomePage() {
                 <div className="w-[85%] sm:w-[85%] px-6 sm:px-12 flex flex-col items-center">
                   <div className="mb-6">
                     <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full overflow-hidden border-4 border-slate-800 shadow-sm mx-auto">
-                       <Image src={institution?.logo_url || "https://picsum.photos/seed/chairman/200/200"} alt="Chairman" width={128} height={128} className="h-full w-full object-cover" />
+                       <Image src="https://picsum.photos/seed/chairman-leader/300/300" alt="Chairman" width={128} height={128} className="h-full w-full object-cover" />
                     </div>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">{locale === "bn" ? "সভাপতির বাণী" : "Chairman's Message"}</h3>

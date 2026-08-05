@@ -18,6 +18,7 @@ const nextConfig = {
       // body) — real institutions never point live content at this host.
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "i.pravatar.cc" },
+      { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
 };
