@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import { reqParam } from "../../lib/req-param";
 import { z } from "zod";
 import { Prisma } from "@education-erp/db";
@@ -11,11 +12,13 @@ import {
   academicYearSchema,
   shiftSchema,
   shiftPeriodSchema,
+  roomSchema,
   departmentSchema,
   classSchema,
   sectionSchema,
   groupSchema,
   routineSlotSchema,
+  routineDoubleSlotSchema,
   routineSubstitutionSchema,
   generateRoutineSchema,
 } from "@education-erp/validators";
@@ -25,13 +28,14 @@ import { createInAppNotification } from "../../services/in-app-notification.serv
 
 export const academicYearsRouter = Router();
 export const shiftsRouter = Router();
+export const roomsRouter = Router();
 export const departmentsRouter = Router();
 export const classesRouter = Router();
 export const sectionsRouter = Router();
 export const groupsRouter = Router();
 export const routineRouter = Router();
 
-for (const r of [academicYearsRouter, shiftsRouter, departmentsRouter, classesRouter, sectionsRouter, groupsRouter, routineRouter]) {
+for (const r of [academicYearsRouter, shiftsRouter, roomsRouter, departmentsRouter, classesRouter, sectionsRouter, groupsRouter, routineRouter]) {
   r.use(authenticate);
 }
 
@@ -173,6 +177,51 @@ shiftsRouter.delete(
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     await prisma.shiftPeriod.delete({ where: { id: reqParam(req, "period_id") } });
+    res.status(204).send();
+  }),
+);
+
+// ── Rooms (Plan Twenty-Five, Phase C3) ──────────────────────────
+// Genuinely new — no room/lab concept existed before. is_lab drives the
+// routine auto-generator's room selection for a Subject flagged
+// requires_lab; a plain (non-lab) room is still assignable manually to any
+// slot. Delete is a hard delete (mirrors Shift's own delete above) — a
+// deleted room simply nulls out room_id on any RoutineSlot referencing it
+// (onDelete: SetNull), never blocks the delete.
+
+roomsRouter.get(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const rooms = await prisma.room.findMany({ orderBy: { name: "asc" } });
+    res.json({ success: true, data: rooms });
+  }),
+);
+
+roomsRouter.post(
+  "/",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = roomSchema.parse(req.body);
+    const room = await prisma.room.create({ data: body });
+    res.status(201).json({ success: true, data: room });
+  }),
+);
+
+roomsRouter.put(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = roomSchema.partial().parse(req.body);
+    const room = await prisma.room.update({ where: { id: reqParam(req, "id") }, data: body });
+    res.json({ success: true, data: room });
+  }),
+);
+
+roomsRouter.delete(
+  "/:id",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    await prisma.room.delete({ where: { id: reqParam(req, "id") } });
     res.status(204).send();
   }),
 );
@@ -406,6 +455,27 @@ export async function assertNoTeacherClash(input: { teacher_id?: string | null; 
   }
 }
 
+// A room can't host two different classes at the same day/period either
+// (Plan Twenty-Five, Phase C3) — same shape as assertNoTeacherClash above,
+// backstopped by the same DB-level partial unique index for the race case.
+export async function assertNoRoomClash(input: { room_id?: string | null; day_of_week: number; period_no: number }, excludeId?: string) {
+  if (!input.room_id) return;
+  const clash = await prisma.routineSlot.findFirst({
+    where: {
+      id: excludeId ? { not: excludeId } : undefined,
+      room_id: input.room_id,
+      day_of_week: input.day_of_week,
+      period_no: input.period_no,
+    },
+    include: { class: { select: { name_en: true } }, section: { select: { name: true } }, room: { select: { name: true } } },
+  });
+  if (clash) {
+    throw badRequest(
+      `${clash.room?.name ?? "This room"} is already booked for period ${input.period_no} on this day, by ${clash.class.name_en}${clash.section ? ` (${clash.section.name})` : ""}`,
+    );
+  }
+}
+
 routineRouter.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -435,6 +505,7 @@ routineRouter.get(
         subject: { select: { id: true, name_en: true } },
         teacher: { select: { id: true, name_en: true } },
         group: { select: { name_en: true } },
+        room: { select: { id: true, name: true, is_lab: true } },
       },
       orderBy: [{ day_of_week: "asc" }, { period_no: "asc" }],
     });
@@ -465,6 +536,7 @@ routineRouter.post(
   asyncHandler(async (req, res) => {
     const body = routineSlotSchema.parse(req.body);
     await assertNoTeacherClash(body);
+    await assertNoRoomClash(body);
     try {
       const slot = await prisma.routineSlot.create({ data: body });
       res.status(201).json({ success: true, data: slot });
@@ -490,6 +562,10 @@ routineRouter.put(
     // bug: re-validating the merged-but-unchanged combo on every edit).
     const touchesClashFields = body.teacher_id !== undefined || body.day_of_week !== undefined || body.period_no !== undefined;
     if (touchesClashFields) await assertNoTeacherClash(merged, id);
+    // Same "only re-validate when relevant fields actually changed" guard,
+    // for the room constraint.
+    const touchesRoomFields = body.room_id !== undefined || body.day_of_week !== undefined || body.period_no !== undefined;
+    if (touchesRoomFields) await assertNoRoomClash(merged, id);
     try {
       const slot = await prisma.routineSlot.update({ where: { id }, data: body });
       res.json({ success: true, data: slot });
@@ -505,6 +581,65 @@ routineRouter.delete(
   asyncHandler(async (req, res) => {
     await prisma.routineSlot.delete({ where: { id: reqParam(req, "id") } });
     res.status(204).send();
+  }),
+);
+
+// Manual double-period creation (Plan Twenty-Five, Phase C4) — creates both
+// consecutive-period rows in one request, linked via pair_id, checking
+// teacher/room clashes for BOTH periods before creating either (a single
+// transaction, so a clash on the second period never leaves the first one
+// half-created).
+routineRouter.post(
+  "/double",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = routineDoubleSlotSchema.parse(req.body);
+    if (body.second_period_no !== body.period_no + 1) {
+      throw badRequest("The second period must be the very next period on the same day");
+    }
+    const firstInput = { teacher_id: body.teacher_id, room_id: body.room_id, day_of_week: body.day_of_week, period_no: body.period_no };
+    const secondInput = { teacher_id: body.teacher_id, room_id: body.room_id, day_of_week: body.day_of_week, period_no: body.second_period_no };
+    await assertNoTeacherClash(firstInput);
+    await assertNoTeacherClash(secondInput);
+    await assertNoRoomClash(firstInput);
+    await assertNoRoomClash(secondInput);
+
+    try {
+      const [first, second] = await prisma.$transaction([
+        prisma.routineSlot.create({
+          data: {
+            class_id: body.class_id,
+            section_id: body.section_id,
+            day_of_week: body.day_of_week,
+            period_no: body.period_no,
+            subject_id: body.subject_id,
+            teacher_id: body.teacher_id,
+            group_id: body.group_id,
+            room_id: body.room_id,
+            start_time: body.start_time,
+            end_time: body.end_time,
+          },
+        }),
+        prisma.routineSlot.create({
+          data: {
+            class_id: body.class_id,
+            section_id: body.section_id,
+            day_of_week: body.day_of_week,
+            period_no: body.second_period_no,
+            subject_id: body.subject_id,
+            teacher_id: body.teacher_id,
+            group_id: body.group_id,
+            room_id: body.room_id,
+            start_time: body.second_start_time,
+            end_time: body.second_end_time,
+          },
+        }),
+      ]);
+      await prisma.routineSlot.update({ where: { id: second.id }, data: { pair_id: first.id } });
+      res.status(201).json({ success: true, data: [first, { ...second, pair_id: first.id }] });
+    } catch (err) {
+      mapRoutineSlotConflict(err, body.day_of_week, body.period_no);
+    }
   }),
 );
 
@@ -683,6 +818,14 @@ export interface GeneratedPlacement {
   subject_id: string;
   teacher_id: string;
   group_id: string | null;
+  room_id?: string | null;
+  // Client-generated (randomUUID) only for the FIRST row of a double-period
+  // pair, so the SECOND row's pair_id can reference it before either row
+  // exists in the DB (createMany doesn't return generated ids) — undefined
+  // for every ordinary single-period placement, which keeps Prisma's own
+  // default cuid() generator.
+  id?: string;
+  pair_id?: string | null;
 }
 export interface UnplacedItem {
   section_id: string;
@@ -712,6 +855,26 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
   const placements: GeneratedPlacement[] = [];
   const unplaced: UnplacedItem[] = [];
   const days = orderedWorkingDays(workingDays);
+
+  // Rooms (Plan Twenty-Five, Phase C3) — shared campus-wide, not scoped to
+  // this class/section, so fetched once. A requires_lab subject with zero
+  // active lab rooms configured always fails to place — reported clearly
+  // per-subject below rather than a generic placement failure.
+  const labRooms = await tx.room.findMany({ where: { is_lab: true, is_active: true } });
+  const anyLabSubjects = klass.subjects.some((s) => s.requires_lab);
+  if (anyLabSubjects && labRooms.length === 0) {
+    for (const subject of klass.subjects.filter((s) => s.requires_lab)) {
+      for (const section of klass.sections) {
+        unplaced.push({
+          section_id: section.id,
+          section_name: section.name,
+          subject_id: subject.id,
+          subject_name: subject.name_en,
+          reason: "This subject needs a lab room, but no active lab rooms are configured (Settings → Rooms)",
+        });
+      }
+    }
+  }
 
   for (const section of klass.sections) {
     const periods = section.shift?.periods ?? [];
@@ -822,6 +985,34 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
       dayMap.set(p.day_of_week, (dayMap.get(p.day_of_week) ?? 0) + 1);
     }
 
+    // Room occupancy (Plan Twenty-Five, Phase C3) — a lab room is a shared
+    // physical resource across the whole campus, so seeded from every
+    // existing DB slot referencing one of these rooms (not scoped to this
+    // class), plus this-run placements already made for OTHER sections.
+    const roomOccupied = new Map<string, Set<string>>();
+    for (const r of labRooms) roomOccupied.set(r.id, new Set());
+    if (labRooms.length > 0) {
+      const existingRoomSlots = await tx.routineSlot.findMany({
+        where: { room_id: { in: labRooms.map((r) => r.id) } },
+        select: { room_id: true, day_of_week: true, period_no: true },
+      });
+      for (const s of existingRoomSlots) roomOccupied.get(s.room_id!)?.add(`${s.day_of_week}-${s.period_no}`);
+    }
+    for (const p of placements) {
+      if (p.room_id) roomOccupied.get(p.room_id)?.add(`${p.day_of_week}-${p.period_no}`);
+    }
+    // First free lab room at one (single-period) or two (double-period)
+    // day/period keys — null if requires_lab but nothing's free for every
+    // key requested, which the caller treats as "this combo doesn't work,
+    // try the next one" rather than a hard failure.
+    const findFreeLabRoom = (keys: string[]): string | null => {
+      for (const room of labRooms) {
+        const occ = roomOccupied.get(room.id)!;
+        if (keys.every((k) => !occ.has(k))) return room.id;
+      }
+      return null;
+    };
+
     const totalSlots = days.length * periods.length;
 
     // Places one subject list (either the shared/ungrouped queue, or one
@@ -888,15 +1079,79 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
           const dayCandidatesFresh = rotate(days, item.dayOffset).filter((d) => !item.usedDays.has(d));
           const dayCandidatesAll = rotate(days, item.dayOffset);
           let placedHere = false;
+          const isDouble = item.subject.requires_double_period;
           for (const dayList of [dayCandidatesFresh, dayCandidatesAll]) {
             for (const day of dayList) {
               if (cap?.maxPerDay && (dayCounts.get(day) ?? 0) >= cap.maxPerDay) continue;
               if (cap?.maxPerWeek && teacherSet.size >= cap.maxPerWeek) continue;
-              for (const period of periods) {
+              // A double-period placement needs room for 2, not 1, against
+              // the same daily cap.
+              if (isDouble && cap?.maxPerDay && (dayCounts.get(day) ?? 0) + 1 >= cap.maxPerDay) continue;
+
+              for (let pi = 0; pi < periods.length; pi++) {
+                const period = periods[pi]!;
                 const slotKey = `${day}-${period.period_no}`;
                 if (occupied.has(slotKey) || teacherSet.has(slotKey)) continue;
+
+                if (isDouble) {
+                  // Genuinely consecutive period NUMBERS on the same day, not
+                  // just adjacent entries in the (break-filtered) periods
+                  // array — e.g. period 2 then period 4 with period 3 being
+                  // a break is NOT a valid double-period pair.
+                  const nextPeriod = periods[pi + 1];
+                  if (!nextPeriod || nextPeriod.period_no !== period.period_no + 1) continue;
+                  const nextKey = `${day}-${nextPeriod.period_no}`;
+                  if (occupied.has(nextKey) || teacherSet.has(nextKey)) continue;
+
+                  const roomId = item.subject.requires_lab ? findFreeLabRoom([slotKey, nextKey]) : null;
+                  if (item.subject.requires_lab && !roomId) continue;
+
+                  occupied.add(slotKey);
+                  occupied.add(nextKey);
+                  teacherSet.add(slotKey);
+                  teacherSet.add(nextKey);
+                  if (roomId) {
+                    roomOccupied.get(roomId)!.add(slotKey);
+                    roomOccupied.get(roomId)!.add(nextKey);
+                  }
+                  dayCounts.set(day, (dayCounts.get(day) ?? 0) + 2);
+                  item.usedDays.add(day);
+                  const firstId = randomUUID();
+                  placements.push({
+                    id: firstId,
+                    section_id: section.id,
+                    day_of_week: day,
+                    period_no: period.period_no,
+                    start_time: period.start_time,
+                    end_time: period.end_time,
+                    subject_id: item.subject.id,
+                    teacher_id: item.teacherId,
+                    group_id: groupId,
+                    room_id: roomId,
+                  });
+                  placements.push({
+                    section_id: section.id,
+                    day_of_week: day,
+                    period_no: nextPeriod.period_no,
+                    start_time: nextPeriod.start_time,
+                    end_time: nextPeriod.end_time,
+                    subject_id: item.subject.id,
+                    teacher_id: item.teacherId,
+                    group_id: groupId,
+                    room_id: roomId,
+                    pair_id: firstId,
+                  });
+                  item.remaining -= 2;
+                  placedHere = true;
+                  break;
+                }
+
+                const roomId = item.subject.requires_lab ? findFreeLabRoom([slotKey]) : null;
+                if (item.subject.requires_lab && !roomId) continue;
+
                 occupied.add(slotKey);
                 teacherSet.add(slotKey);
+                if (roomId) roomOccupied.get(roomId)!.add(slotKey);
                 dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1);
                 item.usedDays.add(day);
                 placements.push({
@@ -908,6 +1163,7 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
                   subject_id: item.subject.id,
                   teacher_id: item.teacherId,
                   group_id: groupId,
+                  room_id: roomId,
                 });
                 item.remaining--;
                 placedHere = true;
@@ -954,6 +1210,10 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
   if (placements.length > 0) {
     await tx.routineSlot.createMany({
       data: placements.map((p) => ({
+        // Only the first row of a double-period pair carries an explicit id
+        // (see GeneratedPlacement.id's own comment) — undefined for every
+        // other row, which keeps Prisma's default cuid() generator.
+        ...(p.id ? { id: p.id } : {}),
         class_id: classId,
         section_id: p.section_id,
         day_of_week: p.day_of_week,
@@ -961,6 +1221,8 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
         subject_id: p.subject_id,
         teacher_id: p.teacher_id,
         group_id: p.group_id,
+        room_id: p.room_id ?? null,
+        pair_id: p.pair_id ?? null,
         start_time: p.start_time,
         end_time: p.end_time,
         generated: true,

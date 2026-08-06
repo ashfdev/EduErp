@@ -37,9 +37,16 @@ interface RoutineSlotRow {
   subject: { name_en: string } | null;
   teacher: { name_en: string } | null;
   group: { name_en: string } | null;
+  room: { id: string; name: string; is_lab: boolean } | null;
+}
+interface RoomOption {
+  id: string;
+  name: string;
+  is_lab: boolean;
+  is_active: boolean;
 }
 
-const emptyForm = { section_id: "", group_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "" };
+const emptyForm = { section_id: "", group_id: "", day_of_week: 1, period_no: 1, start_time: "", end_time: "", subject_id: "", teacher_id: "", room_id: "" };
 
 interface UnplacedItem {
   section_id: string;
@@ -85,6 +92,11 @@ export default function RoutineSettingsPage() {
     queryKey: ["staff", "teachers"],
     queryFn: async () => (await api.get("/api/staff/teachers")).data.data,
   });
+  const { data: rooms } = useQuery<RoomOption[]>({
+    queryKey: ["settings", "rooms"],
+    queryFn: async () => (await api.get("/api/settings/rooms")).data.data,
+  });
+  const activeRooms = rooms?.filter((r) => r.is_active) ?? [];
 
   const { data: slots, isLoading: slotsLoading, isError: slotsError, error: slotsErrorObj, refetch: refetchSlots } = useQuery<RoutineSlotRow[]>({
     queryKey: ["settings", "routine", classId, sectionFilter, groupFilter],
@@ -135,6 +147,7 @@ export default function RoutineSettingsPage() {
       end_time: s.end_time,
       subject_id: "",
       teacher_id: "",
+      room_id: s.room?.id ?? "",
     });
     setDialogOpen(true);
   }
@@ -151,6 +164,7 @@ export default function RoutineSettingsPage() {
         end_time: form.end_time,
         subject_id: form.subject_id || null,
         teacher_id: form.teacher_id || null,
+        room_id: form.room_id || null,
       };
       return editingId ? api.put(`/api/settings/routine/${editingId}`, payload) : api.post("/api/settings/routine", payload);
     },
@@ -282,6 +296,7 @@ export default function RoutineSettingsPage() {
                         {!!groups.length && <TableHead>Group</TableHead>}
                         <TableHead>Subject</TableHead>
                         <TableHead>Teacher</TableHead>
+                        <TableHead>Room</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -295,6 +310,7 @@ export default function RoutineSettingsPage() {
                           {!!groups.length && <TableCell>{s.group?.name_en ?? "All Groups"}</TableCell>}
                           <TableCell>{s.subject?.name_en ?? "-"}</TableCell>
                           <TableCell>{s.teacher?.name_en ?? "-"}</TableCell>
+                          <TableCell>{s.room?.name ?? "-"}</TableCell>
                           <TableCell className="text-right">
                             <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Edit</Button>{" "}
                             <Button size="sm" variant="destructive" onClick={() => deleteMutation.mutate(s.id)}>Delete</Button>
@@ -360,6 +376,13 @@ export default function RoutineSettingsPage() {
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.teacher_id} onChange={(e) => setForm({ ...form, teacher_id: e.target.value })}>
                 <option value="">None</option>
                 {teachers?.map((t) => <option key={t.id} value={t.id}>{t.name_en} ({t.designation})</option>)}
+              </select>
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Room (optional)</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}>
+                <option value="">None</option>
+                {activeRooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.is_lab ? " (Lab)" : ""}</option>)}
               </select>
             </div>
           </div>

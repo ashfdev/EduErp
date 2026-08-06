@@ -369,6 +369,23 @@ model ShiftPeriod {
   @@unique([shift_id, period_no])
 }
 
+// Genuinely new data (Plan Twenty-Five, Phase C3) — no room/lab concept
+// existed anywhere in this schema before. is_lab drives the auto-generator's
+// room selection for any Subject flagged requires_lab: only is_lab rooms are
+// considered for that subject; a Subject with requires_lab: false (every
+// existing row) never needs a room at all, matching this feature's "opt-in,
+// inert until configured" convention.
+model Room {
+  id          String        @id @default(cuid())
+  name        String
+  capacity    Int?
+  is_lab      Boolean       @default(false)
+  is_active   Boolean       @default(true)
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+  routine_slots RoutineSlot[]
+}
+
 model Department {
   id         String    @id @default(cuid())
   name_en    String
@@ -460,6 +477,14 @@ model Subject {
   is_compulsory              Boolean                    @default(true)
   is_optional                Boolean                    @default(false)
   weekly_periods             Int?
+  // Routine auto-generator flags (Plan Twenty-Five, Phase C3/C4) — both
+  // default false/inert for every existing row. requires_lab restricts the
+  // generator to is_lab:true Rooms for this subject's placements.
+  // requires_double_period makes each placement consume 2 real consecutive
+  // periods (same day, back-to-back) instead of 1, independent of
+  // requires_lab — a subject can need either, both, or neither.
+  requires_lab               Boolean                    @default(false)
+  requires_double_period     Boolean                    @default(false)
   // null = applies to every group in this class (the unchanged existing
   // behavior for every current row). Set only to restrict a subject to one
   // Group/Stream (Science/Commerce/Arts) within the same class.
@@ -706,10 +731,12 @@ model Student {
   visitors                    Visitor[]
   documents                   StudentDocument[]
   waivers                     StudentWaiver[]
-  waiver_requests             WaiverRequest[]
+  waiver_requests              WaiverRequest[]
   leave_requests              StudentLeaveRequest[]
   fee_structure_assignments   FeeStructureStudent[]
   fee_reconciliation_findings FeeReconciliationFinding[]
+  transport_requests          TransportRequest[]
+  hostel_requests             HostelRequest[]
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1556,6 +1583,8 @@ model FeeStructure {
   students                FeeStructureStudent[]
   reconciliation_findings FeeReconciliationFinding[]
   coverage_summaries      FeeStructureCoverageSummary[] @relation("StructureCoverageSummaries")
+  transport_requests      TransportRequest[]
+  hostel_requests         HostelRequest[]
 
   @@index([program_id])
   @@index([fee_sub_category_id])
@@ -3179,14 +3208,21 @@ model BookIssue {
 // ─────────────────────────────────────────────
 
 model TransportRoute {
-  id         String             @id @default(cuid())
-  name       String
-  fare       Float              @default(0)
-  is_active  Boolean            @default(true)
-  created_at DateTime           @default(now())
-  stops      RouteStop[]
-  vehicles   Vehicle[]
-  students   StudentTransport[]
+  id            String             @id @default(cuid())
+  name          String
+  fare          Float              @default(0)
+  // Opt-in seat cap (Plan Twenty-Five, Phase F) — null means unlimited,
+  // matching this codebase's existing "opt-in constraint" convention for
+  // optional caps elsewhere (e.g. Program.max_credit_hours_per_semester).
+  // Available seats = seat_capacity - (active StudentTransport assignments
+  // + PENDING/APPROVED TransportRequest rows) for this route.
+  seat_capacity Int?
+  is_active     Boolean            @default(true)
+  created_at    DateTime           @default(now())
+  stops         RouteStop[]
+  vehicles      Vehicle[]
+  students      StudentTransport[]
+  requests      TransportRequest[]
 }
 
 model RouteStop {
@@ -3249,6 +3285,47 @@ model StudentTransport {
   @@index([route_id])
 }
 
+// Shared by TransportRequest and HostelRequest (Plan Twenty-Five, Phase F) —
+// deliberately one enum for both, unlike WaiverRequestStatus, since these
+// two really are the same domain ("Facilities"), not two unrelated ones.
+enum FacilityRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Student/guardian-initiated transport request (Plan Twenty-Five, Phase F)
+// — mirrors WaiverRequest's exact submit->review shape. Approving is a real
+// assignment action: creates the StudentTransport row AND (via
+// fee_structure_id, chosen by the approver from a TRANSPORT-category Fee
+// Structure dropdown) a FeeStructureStudent row, so the recurring invoice
+// engine (runMonthlyFeeGeneration) picks the student up automatically going
+// forward per that structure's own frequency — replacing the old direct-
+// assign route's flat one-off invoice with a real, correctly-recurring fee.
+model TransportRequest {
+  id                    String                @id @default(cuid())
+  student_id            String
+  student               Student               @relation(fields: [student_id], references: [id])
+  route_id              String
+  route                 TransportRoute        @relation(fields: [route_id], references: [id])
+  pickup_stop           String?
+  reason                String?
+  requested_by_user_id  String
+  status                FacilityRequestStatus @default(PENDING)
+  reviewed_by_id        String?
+  reviewed_at           DateTime?
+  rejection_reason      String?
+  // Set only at approval time — the specific TRANSPORT-category Fee
+  // Structure the approver picked (see the model comment above).
+  fee_structure_id      String?
+  fee_structure         FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
+  created_at            DateTime              @default(now())
+
+  @@index([student_id])
+  @@index([route_id])
+  @@index([status])
+}
+
 // ─────────────────────────────────────────────
 // HOSTEL MODELS
 // ─────────────────────────────────────────────
@@ -3271,6 +3348,7 @@ model HostelRoom {
   type        String?
   is_active   Boolean            @default(true)
   allocations HostelAllocation[]
+  requests    HostelRequest[]
 
   @@index([block_id])
 }
@@ -3289,6 +3367,33 @@ model HostelAllocation {
 
   @@index([room_id])
   @@index([student_id])
+}
+
+// Student/guardian-initiated hostel request (Plan Twenty-Five, Phase F) —
+// same shape and lifecycle as TransportRequest above. Approving creates the
+// real HostelAllocation row AND (via fee_structure_id) a FeeStructureStudent
+// row, so the recurring invoice engine picks the student up automatically
+// going forward, matching how directly-assigned Transport/Hostel students
+// are also being migrated onto this same fee-attachment mechanism.
+model HostelRequest {
+  id                    String                @id @default(cuid())
+  student_id            String
+  student               Student               @relation(fields: [student_id], references: [id])
+  room_id               String
+  room                  HostelRoom            @relation(fields: [room_id], references: [id])
+  reason                String?
+  requested_by_user_id  String
+  status                FacilityRequestStatus @default(PENDING)
+  reviewed_by_id        String?
+  reviewed_at           DateTime?
+  rejection_reason      String?
+  fee_structure_id      String?
+  fee_structure         FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
+  created_at            DateTime              @default(now())
+
+  @@index([student_id])
+  @@index([room_id])
+  @@index([status])
 }
 
 model HostelVisitor {
@@ -3671,6 +3776,20 @@ model RoutineSlot {
   // subject's period — mirrors Subject.group_id's exact convention.
   group_id                   String?
   group                      Group?                @relation(fields: [group_id], references: [id])
+  // Room/Lab assignment (Plan Twenty-Five, Phase C3) — nullable, every
+  // existing row stays room-less and unaffected. Only ever populated by the
+  // generator for a Subject flagged requires_lab, or set manually.
+  room_id                    String?
+  room                       Room?                 @relation(fields: [room_id], references: [id])
+  // Double-period linkage (Plan Twenty-Five, Phase C4) — the SECOND of a
+  // pair of consecutive-period rows created together for a
+  // requires_double_period Subject points its pair_id at the FIRST row's own
+  // id; the first row's pair_id is null. Purely informational (lets the UI
+  // visually merge/label the pair) -- placement/collision logic treats the
+  // two rows as two ordinary slots, nothing reads this field to decide
+  // scheduling. Null for every single-period slot (the overwhelming
+  // majority, unaffected).
+  pair_id                    String?
   start_time                 String
   end_time                   String
   // Distinguishes auto-generated rows (Phase 45 routine generator) from
@@ -3708,11 +3827,20 @@ model RoutineSlot {
   // 20260806130000_routine_slot_group_null_constraint (see that file for
   // the exact SQL) — Prisma's schema language can't express it here either,
   // same limitation as the two indexes already documented below.
+  //
+  // A Room can't host two different classes at the same day/period either —
+  // a fourth partial unique index, (room_id, day_of_week, period_no) WHERE
+  // room_id IS NOT NULL, added in migration
+  // 20260806140000_routine_room_double_period (Phase C3), mirrors the
+  // teacher-clash index's exact "WHERE ... IS NOT NULL" shape (room_id is
+  // null for the overwhelming majority of rows, which must never collide
+  // with each other under this constraint).
   @@unique([class_id, section_id, group_id, day_of_week, period_no])
   @@index([class_id])
   @@index([teacher_id])
   @@index([section_id])
   @@index([group_id])
+  @@index([room_id])
 }
 
 // A date-specific exception recorded against a recurring RoutineSlot (Plan
@@ -4209,6 +4337,14 @@ enum InAppNotificationType {
   ADMISSION_PAYMENT_PENDING_VERIFICATION
   // Plan Twenty-Four -- nightly Fee Reconciliation & Assurance sweep digest.
   FEE_RECONCILIATION_DIGEST
+  // Plan Twenty-Five, Phase F -- Facilities (Transport/Hostel) self-service
+  // requests, mirroring WAIVER_REQUESTED/APPROVED/REJECTED's exact shape.
+  TRANSPORT_REQUESTED
+  TRANSPORT_REQUEST_APPROVED
+  TRANSPORT_REQUEST_REJECTED
+  HOSTEL_REQUESTED
+  HOSTEL_REQUEST_APPROVED
+  HOSTEL_REQUEST_REJECTED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

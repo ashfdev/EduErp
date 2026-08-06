@@ -50,6 +50,7 @@
     "library": "Library",
     "transport": "Transport",
     "hostel": "Hostel",
+    "facilityRequests": "Facility Requests",
     "gatePass": "Gate Pass",
     "reports": "Reports",
     "bulkSms": "Bulk SMS",

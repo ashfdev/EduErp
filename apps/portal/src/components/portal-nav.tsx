@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Home, ClipboardList, CalendarDays, CalendarClock, CreditCard, Bell, ChevronDown, type LucideIcon } from "lucide-react";
+import { Home, ClipboardList, CalendarDays, CalendarClock, CreditCard, Bell, ChevronDown, Building2, type LucideIcon } from "lucide-react";
 
 type NavLeaf = { href: string; icon: LucideIcon; key: string };
 type NavGroup = { key: string; icon: LucideIcon; children: { href: string; key: string }[] };
@@ -14,10 +14,13 @@ function isGroup(item: NavEntry): item is NavGroup {
   return "children" in item;
 }
 
-// "Fees" alone became "Financial Service" once Payment Ledger and
-// Scholarship & Waiver needed a home too — a flat list, no grouping
-// support at all, was the whole reason those two were only ever backend
-// routes with nowhere in the nav to reach them from.
+// "Fees" alone became "Financial Service" once Payment Ledger needed a
+// home too — a flat list, no grouping support at all, was the whole reason
+// it was only ever a backend route with nowhere in the nav to reach it
+// from. Scholarship & Waiver moved out into "Facilities" below (Plan
+// Twenty-Five, Phase F) alongside the new Transport/Hostel self-service
+// flows — all three are "apply for an entitlement, staff reviews" in
+// shape, which Fees/Payment Ledger aren't.
 const ITEMS: NavEntry[] = [
   { href: "/", icon: Home, key: "home" },
   { href: "/routine", icon: CalendarClock, key: "routine" },
@@ -29,7 +32,15 @@ const ITEMS: NavEntry[] = [
     children: [
       { href: "/fees", key: "fees" },
       { href: "/fees/payment-ledger", key: "paymentLedger" },
+    ],
+  },
+  {
+    key: "facilities",
+    icon: Building2,
+    children: [
       { href: "/fees/waivers", key: "scholarshipWaiver" },
+      { href: "/facilities/transport", key: "facilitiesTransport" },
+      { href: "/facilities/hostel", key: "facilitiesHostel" },
     ],
   },
   { href: "/notices", icon: Bell, key: "notices" },

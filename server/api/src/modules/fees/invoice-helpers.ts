@@ -341,3 +341,24 @@ export async function syncOverdueInvoices(tx: Tx, studentId?: string): Promise<v
     data: { status: "OVERDUE" },
   });
 }
+
+// Shared by Facility Request approval (transport/hostel, Plan Twenty-Five,
+// Phase F) and the direct-assign routes (POST /transport/assign, POST
+// /hostel/allocate) — links a student to a recurring FeeStructure so
+// runMonthlyFeeGeneration picks them up automatically going forward,
+// exactly the mechanism already proven for every other individually-
+// assigned recurring fee. Idempotent via the model's own
+// @@unique([fee_structure_id, student_id]) — calling this a second time for
+// the same pair is a safe no-op, not a duplicate/error.
+export async function attachFeeStructureToStudent(
+  tx: Tx,
+  feeStructureId: string,
+  studentId: string,
+  assignedById?: string | null,
+): Promise<void> {
+  await tx.feeStructureStudent.upsert({
+    where: { fee_structure_id_student_id: { fee_structure_id: feeStructureId, student_id: studentId } },
+    create: { fee_structure_id: feeStructureId, student_id: studentId, assigned_by_id: assignedById ?? null },
+    update: {},
+  });
+}

@@ -246,8 +246,26 @@ export const routineSlotSchema = z.object({
   teacher_id: z.string().optional().nullable(),
   // null = applies to every group in this class — see RoutineSlot.group_id.
   group_id: z.string().optional().nullable(),
+  room_id: z.string().optional().nullable(),
   start_time: z.string().regex(/^\d{2}:\d{2}$/),
   end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+// Manual double-period creation (Plan Twenty-Five, Phase C4) — the first
+// period's fields come from routineSlotSchema itself; these three describe
+// the second (consecutive) period, resolved client-side from the section's
+// own ShiftPeriod list exactly like the first period already is.
+export const routineDoubleSlotSchema = routineSlotSchema.extend({
+  second_period_no: z.number().int().min(1),
+  second_start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  second_end_time: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+export const roomSchema = z.object({
+  name: z.string().min(1),
+  capacity: z.number().int().min(1).optional().nullable(),
+  is_lab: z.boolean().optional(),
+  is_active: z.boolean().optional(),
 });
 
 export const routineSubstitutionSchema = z.object({

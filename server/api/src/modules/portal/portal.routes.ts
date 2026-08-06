@@ -6,8 +6,8 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { PORTAL_ROLES, COMPLAINT_MANAGE_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, WAIVER_REQUEST_REVIEW_ROLES } from "../../lib/roles";
-import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema, applyStudentLeaveSchema, createWaiverRequestSchema } from "@education-erp/validators";
+import { PORTAL_ROLES, COMPLAINT_MANAGE_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, WAIVER_REQUEST_REVIEW_ROLES, TRANSPORT_MANAGE_ROLES, HOSTEL_MANAGE_ROLES } from "../../lib/roles";
+import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComplaintSchema, createComplaintMessageSchema, ptmBookSchema, submitQuizAttemptSchema, flagQuizAttemptSchema, createDocumentRequestSchema, applyStudentLeaveSchema, createWaiverRequestSchema, createTransportRequestSchema, createHostelRequestSchema } from "@education-erp/validators";
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
@@ -954,6 +954,171 @@ portalRouter.get(
         hostel: hostel ? { block_name: hostel.room.block.name, room_no: hostel.room.room_no, bed_no: hostel.bed_no, from_date: hostel.from_date } : null,
       },
     });
+  }),
+);
+
+// ── Facilities self-service (Plan Twenty-Five, Phase F) ─────────────────
+// Browse + request Transport/Hostel, mirroring the Waiver Request flow's
+// exact submit → staff-review → real-entitlement-created shape. Review/
+// approve/reject lives on the staff-facing transport.routes.ts/
+// hostel.routes.ts (TRANSPORT_MANAGE_ROLES/HOSTEL_MANAGE_ROLES), never here
+// — this router is hard-gated to PORTAL_ROLES only.
+
+portalRouter.get(
+  "/student/:id/transport/available-routes",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const routes = await prisma.transportRoute.findMany({
+      where: { is_active: true },
+      include: {
+        stops: { orderBy: { stop_order: "asc" } },
+        _count: {
+          select: {
+            students: true,
+            requests: { where: { status: "PENDING" } },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+    res.json({
+      success: true,
+      data: routes.map((r) => ({
+        id: r.id,
+        name: r.name,
+        fare: r.fare,
+        stops: r.stops,
+        seat_capacity: r.seat_capacity,
+        seats_available: r.seat_capacity == null ? null : Math.max(0, r.seat_capacity - r._count.students - r._count.requests),
+      })),
+    });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/hostel/available-rooms",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+
+    const rooms = await prisma.hostelRoom.findMany({
+      where: { is_active: true },
+      include: {
+        block: { select: { name: true } },
+        allocations: { where: { is_active: true } },
+        _count: { select: { requests: { where: { status: "PENDING" } } } },
+      },
+      orderBy: [{ block_id: "asc" }, { room_no: "asc" }],
+    });
+    res.json({
+      success: true,
+      data: rooms
+        .map((r) => ({
+          id: r.id,
+          room_no: r.room_no,
+          floor: r.floor,
+          capacity: r.capacity,
+          type: r.type,
+          block_name: r.block.name,
+          beds_free: Math.max(0, r.capacity - r.allocations.length - r._count.requests),
+        }))
+        .filter((r) => r.beds_free > 0),
+    });
+  }),
+);
+
+portalRouter.post(
+  "/student/:id/transport-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const body = createTransportRequestSchema.parse(req.body);
+
+    const existingAssignment = await prisma.studentTransport.findUnique({ where: { student_id: id } });
+    if (existingAssignment) throw badRequest("This student already has an active transport assignment");
+    const existingRequest = await prisma.transportRequest.findFirst({ where: { student_id: id, status: "PENDING" } });
+    if (existingRequest) throw badRequest("This student already has a pending transport request");
+
+    const route = await prisma.transportRoute.findFirst({ where: { id: body.route_id, is_active: true } });
+    if (!route) throw notFound("Route not found");
+    if (route.seat_capacity != null) {
+      const [assignedCount, pendingCount] = await Promise.all([
+        prisma.studentTransport.count({ where: { route_id: route.id } }),
+        prisma.transportRequest.count({ where: { route_id: route.id, status: "PENDING" } }),
+      ]);
+      if (assignedCount + pendingCount >= route.seat_capacity) throw badRequest("This route has no seats available");
+    }
+
+    const request = await prisma.transportRequest.create({
+      data: { student_id: id, route_id: body.route_id, pickup_stop: body.pickup_stop, reason: body.reason, requested_by_user_id: req.user!.sub },
+    });
+    await notifyRoles(TRANSPORT_MANAGE_ROLES, {
+      type: "TRANSPORT_REQUESTED",
+      title: "New transport request",
+      body: `A student has requested to join ${route.name}`,
+      link: "/transport/requests",
+    });
+    res.status(201).json({ success: true, data: request });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/transport-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const requests = await prisma.transportRequest.findMany({
+      where: { student_id: id },
+      include: { route: { select: { name: true, fare: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: requests });
+  }),
+);
+
+portalRouter.post(
+  "/student/:id/hostel-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const body = createHostelRequestSchema.parse(req.body);
+
+    const existingAllocation = await prisma.hostelAllocation.findFirst({ where: { student_id: id, is_active: true } });
+    if (existingAllocation) throw badRequest("This student already has an active hostel allocation");
+    const existingRequest = await prisma.hostelRequest.findFirst({ where: { student_id: id, status: "PENDING" } });
+    if (existingRequest) throw badRequest("This student already has a pending hostel request");
+
+    const room = await prisma.hostelRoom.findFirst({ where: { id: body.room_id, is_active: true }, include: { allocations: { where: { is_active: true } } } });
+    if (!room) throw notFound("Room not found");
+    const pendingCount = await prisma.hostelRequest.count({ where: { room_id: room.id, status: "PENDING" } });
+    if (room.allocations.length + pendingCount >= room.capacity) throw badRequest("This room has no beds available");
+
+    const request = await prisma.hostelRequest.create({
+      data: { student_id: id, room_id: body.room_id, reason: body.reason, requested_by_user_id: req.user!.sub },
+    });
+    await notifyRoles(HOSTEL_MANAGE_ROLES, {
+      type: "HOSTEL_REQUESTED",
+      title: "New hostel request",
+      body: `A student has requested room ${room.room_no}`,
+      link: "/hostel/requests",
+    });
+    res.status(201).json({ success: true, data: request });
+  }),
+);
+
+portalRouter.get(
+  "/student/:id/hostel-requests",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    await assertAccess(req.user!.sub, req.user!.role, id);
+    const requests = await prisma.hostelRequest.findMany({
+      where: { student_id: id },
+      include: { room: { select: { room_no: true, block: { select: { name: true } } } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ success: true, data: requests });
   }),
 );
 

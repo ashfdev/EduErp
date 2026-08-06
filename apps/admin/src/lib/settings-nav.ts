@@ -11,6 +11,7 @@ export const SETTINGS_GROUPS = [
       { href: "/settings/programs", label: "Programs & Courses" },
       { href: "/settings/subjects", label: "Subjects" },
       { href: "/settings/routine", label: "Routine / Timetable" },
+      { href: "/settings/rooms", label: "Rooms" },
     ],
   },
   {

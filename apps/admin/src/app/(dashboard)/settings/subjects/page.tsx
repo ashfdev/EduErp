@@ -49,6 +49,8 @@ interface Subject {
   display_order: number;
   weekly_periods: number | null;
   group_id: string | null;
+  requires_lab: boolean;
+  requires_double_period: boolean;
 }
 
 interface Assignment {
@@ -95,7 +97,7 @@ export default function SubjectsSettingsPage() {
   });
 
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "" });
+  const [form, setForm] = useState({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "", requires_lab: false, requires_double_period: false });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -110,7 +112,7 @@ export default function SubjectsSettingsPage() {
       toast.success("Subject added");
       queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] });
       setAddOpen(false);
-      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "" });
+      setForm({ name_en: "", code: "", subject_type: "THEORY", is_compulsory: true, is_optional: false, full_marks: 100, pass_marks: 33, weekly_periods: "", group_id: "", requires_lab: false, requires_double_period: false });
     },
     onError: () => toast.error("Failed to add subject — code may already exist in this class"),
   });
@@ -119,6 +121,12 @@ export default function SubjectsSettingsPage() {
     mutationFn: ({ id, weekly_periods }: { id: string; weekly_periods: number | null }) => api.put(`/api/subjects/${id}`, { weekly_periods }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
     onError: () => toast.error("Failed to update weekly periods"),
+  });
+
+  const updateRoutineFlagsMutation = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; requires_lab?: boolean; requires_double_period?: boolean }) => api.put(`/api/subjects/${id}`, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subjects", selectedClassId] }),
+    onError: () => toast.error("Failed to update routine settings"),
   });
 
   const updateGroupMutation = useMutation({
@@ -290,6 +298,22 @@ export default function SubjectsSettingsPage() {
                                   </select>
                                 </label>
                               )}
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Routine auto-generator only places this subject in a lab room">
+                                <input
+                                  type="checkbox"
+                                  checked={s.requires_lab}
+                                  onChange={(e) => updateRoutineFlagsMutation.mutate({ id: s.id, requires_lab: e.target.checked })}
+                                />
+                                Needs lab
+                              </label>
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground" title="Routine auto-generator places 2 consecutive periods per session">
+                                <input
+                                  type="checkbox"
+                                  checked={s.requires_double_period}
+                                  onChange={(e) => updateRoutineFlagsMutation.mutate({ id: s.id, requires_double_period: e.target.checked })}
+                                />
+                                Double period
+                              </label>
                             </div>
                           </div>
                         </div>
@@ -363,6 +387,8 @@ export default function SubjectsSettingsPage() {
             )}
             <div className="flex items-center justify-between"><Label>Compulsory</Label><Switch checked={form.is_compulsory} onCheckedChange={(v) => setForm({ ...form, is_compulsory: v, is_optional: v ? false : form.is_optional })} /></div>
             <div className="flex items-center justify-between"><Label>Optional</Label><Switch checked={form.is_optional} onCheckedChange={(v) => setForm({ ...form, is_optional: v, is_compulsory: v ? false : form.is_compulsory })} /></div>
+            <div className="flex items-center justify-between"><Label>Needs a lab room (routine auto-generator)</Label><Switch checked={form.requires_lab} onCheckedChange={(v) => setForm({ ...form, requires_lab: v })} /></div>
+            <div className="flex items-center justify-between"><Label>Double period (2 consecutive periods per session)</Label><Switch checked={form.requires_double_period} onCheckedChange={(v) => setForm({ ...form, requires_double_period: v })} /></div>
           </div>
           <DialogFooter><Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name_en || !form.code}>Add</Button></DialogFooter>
         </DialogContent>

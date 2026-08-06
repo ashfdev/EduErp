@@ -107,6 +107,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/library", key: "library", icon: Library },
       { href: "/transport", key: "transport", icon: Bus },
       { href: "/hostel", key: "hostel", icon: Home },
+      { href: "/facility-requests", key: "facilityRequests", icon: ClipboardCheck },
       { href: "/gatepass", key: "gatePass", icon: DoorOpen },
     ],
   },

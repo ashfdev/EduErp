@@ -9,10 +9,12 @@ import { deviceKeyAuth } from "../../middleware/device-key-auth";
 import { vehiclePingLimiter } from "../../middleware/rate-limit";
 import { reqParam } from "../../lib/req-param";
 import { TRANSPORT_MANAGE_ROLES } from "../../lib/roles";
-import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema, locationPingSchema } from "@education-erp/validators";
+import { transportRouteSchema, updateStopsSchema, vehicleSchema, assignTransportSchema, locationPingSchema, approveTransportRequestSchema, rejectTransportRequestSchema } from "@education-erp/validators";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
-import { applyWaiversToInvoice } from "../fees/invoice-helpers";
+import { applyWaiversToInvoice, attachFeeStructureToStudent } from "../fees/invoice-helpers";
 import { notFound } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
+import { createInAppNotification } from "../../services/in-app-notification.service";
 
 export const transportRouter = Router();
 
@@ -235,11 +237,16 @@ transportRouter.post(
 
     const assignment = await prisma.studentTransport.upsert({
       where: { student_id: body.student_id },
-      create: body,
+      create: { student_id: body.student_id, route_id: body.route_id, pickup_stop: body.pickup_stop },
       update: { route_id: body.route_id, pickup_stop: body.pickup_stop },
     });
 
-    if (route.fare > 0) {
+    if (body.fee_structure_id) {
+      // Opt-in recurring fee (Plan Twenty-Five, Phase F) -- same mechanism
+      // request-approval uses, so a directly-assigned student ends up in
+      // the same correctly-recurring state, not the old flat one-off.
+      await attachFeeStructureToStudent(prisma, body.fee_structure_id, body.student_id, req.user!.sub);
+    } else if (route.fare > 0) {
       const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
       if (activeYear) {
         const invoice = await prisma.invoice.create({
@@ -263,6 +270,85 @@ transportRouter.post(
     }
 
     res.status(201).json({ success: true, data: assignment });
+  }),
+);
+
+// ── Facility request review (Plan Twenty-Five, Phase F) ─────────────────
+transportRouter.get(
+  "/requests",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const status = typeof req.query.status === "string" ? req.query.status : "PENDING";
+    const requests = await prisma.transportRequest.findMany({
+      where: { status: status as "PENDING" | "APPROVED" | "REJECTED" },
+      include: {
+        student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } },
+        route: { select: { name: true, fare: true } },
+      },
+      orderBy: { created_at: "asc" },
+    });
+    res.json({ success: true, data: requests });
+  }),
+);
+
+transportRouter.put(
+  "/requests/:id/approve",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = approveTransportRequestSchema.parse(req.body);
+    const request = await prisma.transportRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.studentTransport.upsert({
+        where: { student_id: request.student_id },
+        create: { student_id: request.student_id, route_id: request.route_id, pickup_stop: request.pickup_stop },
+        update: { route_id: request.route_id, pickup_stop: request.pickup_stop },
+      });
+      if (body.fee_structure_id) {
+        await attachFeeStructureToStudent(tx, body.fee_structure_id, request.student_id, req.user!.sub);
+      }
+      return tx.transportRequest.update({
+        where: { id },
+        data: { status: "APPROVED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), fee_structure_id: body.fee_structure_id ?? null },
+      });
+    });
+
+    await logAudit("FACILITY_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "TransportRequest", targetId: id, metadata: { decision: "APPROVED", fee_structure_id: body.fee_structure_id }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "TRANSPORT_REQUEST_APPROVED",
+      title: "Transport request approved",
+      body: "Your transport request has been approved.",
+      link: "/facilities/transport",
+    });
+    res.json({ success: true, data: updated });
+  }),
+);
+
+transportRouter.put(
+  "/requests/:id/reject",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = rejectTransportRequestSchema.parse(req.body);
+    const request = await prisma.transportRequest.findFirst({ where: { id, status: "PENDING" } });
+    if (!request) throw notFound("Request not found or already reviewed");
+
+    const updated = await prisma.transportRequest.update({
+      where: { id },
+      data: { status: "REJECTED", reviewed_by_id: req.user!.sub, reviewed_at: new Date(), rejection_reason: body.rejection_reason },
+    });
+    await logAudit("FACILITY_REQUEST_REVIEWED", { userId: req.user!.sub, targetType: "TransportRequest", targetId: id, metadata: { decision: "REJECTED" }, req });
+    await createInAppNotification({
+      userId: request.requested_by_user_id,
+      type: "TRANSPORT_REQUEST_REJECTED",
+      title: "Transport request rejected",
+      body: body.rejection_reason,
+      link: "/facilities/transport",
+    });
+    res.json({ success: true, data: updated });
   }),
 );
 

@@ -4,16 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-// Rendered atop /fees, /fees/payment-ledger so the two Financial Service
-// sub-pages stay reachable from within each other on mobile too, not just
-// via the desktop sidebar's expandable group. Scholarship & Waiver moved
-// out to the Facilities group/sub-nav (Plan Twenty-Five, Phase F).
+// Rendered atop /fees/waivers, /facilities/transport, /facilities/hostel so
+// the three Facilities sub-pages stay reachable from within each other on
+// mobile too, not just via the desktop sidebar's expandable group. Mirrors
+// FinancialSubNav's exact pattern.
 const TABS = [
-  { href: "/fees", key: "fees" },
-  { href: "/fees/payment-ledger", key: "paymentLedger" },
+  { href: "/fees/waivers", key: "scholarshipWaiver" },
+  { href: "/facilities/transport", key: "facilitiesTransport" },
+  { href: "/facilities/hostel", key: "facilitiesHostel" },
 ] as const;
 
-export function FinancialSubNav() {
+export function FacilitiesSubNav() {
   const pathname = usePathname();
   const t = useTranslations("nav");
 

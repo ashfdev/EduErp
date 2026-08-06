@@ -15,6 +15,10 @@ export const subjectSchema = z.object({
   // null = applies to every group in this class (unchanged existing
   // behavior). Set only to restrict this subject to one Group/Stream.
   group_id: z.string().optional().nullable(),
+  // Routine auto-generator flags (Plan Twenty-Five, Phase C3/C4) — both
+  // default false, independent of each other.
+  requires_lab: z.boolean().optional(),
+  requires_double_period: z.boolean().optional(),
 });
 export type SubjectInput = z.infer<typeof subjectSchema>;
 
