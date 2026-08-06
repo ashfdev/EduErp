@@ -336,7 +336,7 @@ export default function AboutSlugPage() {
                   </div>
                   <h3 className="text-base font-extrabold text-slate-900 mb-2">Inclusivity</h3>
                   <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
-                    Creating a welcoming environment where every student's unique potential is celebrated.
+                    Creating a welcoming environment where every student&apos;s unique potential is celebrated.
                   </p>
                 </div>
               </div>
