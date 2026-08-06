@@ -25,6 +25,15 @@ export const createStaffSchema = z.object({
   employment_type: z.enum(["PERMANENT", "CONTRACT", "PART_TIME"]).default("PERMANENT"),
   joining_date: z.coerce.date().optional(),
   biometric_id: z.string().optional(),
+  // Staff shift assignment (Plan Twenty-Five, Phase D) — shift_id reuses an
+  // existing Shift (Morning/Day); custom_shift_start_time/end_time is a
+  // per-staff override for hours that don't match any shift. Both nullable
+  // and unrelated to salary_structure_id's dedicated-route restriction
+  // below — no comparable sensitivity/workflow-separation reason to keep
+  // shift editing out of the general update path.
+  shift_id: z.string().optional().nullable(),
+  custom_shift_start_time: z.string().regex(/^\d{2}:\d{2}$/, "must be HH:MM").optional().nullable(),
+  custom_shift_end_time: z.string().regex(/^\d{2}:\d{2}$/, "must be HH:MM").optional().nullable(),
   max_periods_per_day: z.number().int().min(1).optional().nullable(),
   max_periods_per_week: z.number().int().min(1).optional().nullable(),
   role: z.string().min(1).default("SUBJECT_TEACHER"),
@@ -121,6 +130,16 @@ export const assignSalaryStructureSchema = z.object({
 export const bulkAssignSalaryStructureSchema = z.object({
   staff_ids: z.array(z.string().min(1)).min(1),
   salary_structure_id: z.string().min(1),
+});
+
+// Bulk-assign a Shift to several staff at once (Plan Twenty-Five, Phase D)
+// — clears any per-staff custom hours on the selected rows, since a bulk
+// shift assignment's whole intent is "these people should now be on this
+// shift," and a stale custom override would otherwise silently keep taking
+// precedence over the newly-assigned shift.
+export const bulkAssignShiftSchema = z.object({
+  staff_ids: z.array(z.string().min(1)).min(1),
+  shift_id: z.string().min(1),
 });
 
 export const calculatePayrollSchema = z.object({

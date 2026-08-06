@@ -92,8 +92,12 @@ function ResourcesContent() {
     : (mySections ?? []).filter((s) => s.class_id === classId).map((s) => ({ id: s.section_id, name: s.section_name }));
 
   const { data: subjects } = useQuery<Subject[]>({
-    queryKey: ["subjects", classId],
-    queryFn: async () => (await api.get("/api/subjects", { params: { class_id: classId } })).data.data,
+    queryKey: ["subjects", classId, isAdmin],
+    // Non-admin teachers only get offered subjects they're actually
+    // assigned to (assigned_only=true) — admin keeps seeing every subject
+    // in the class, unfiltered, exactly as before.
+    queryFn: async () =>
+      (await api.get("/api/subjects", { params: { class_id: classId, ...(isAdmin ? {} : { assigned_only: true }) } })).data.data,
     enabled: !!classId,
   });
 

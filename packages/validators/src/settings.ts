@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AuthorityRole, DocumentType, PromotionAttendanceMode, StudentLeaveApprovalMode, UserRole } from "@education-erp/types";
+import { AuthorityRole, DocumentType, ExamAttendanceSource, PromotionAttendanceMode, StudentLeaveApprovalMode, UserRole } from "@education-erp/types";
 import { passwordSchema } from "./auth";
 
 export const institutionTypeSchema = z.enum(["SCHOOL", "COLLEGE", "UNIVERSITY", "MADRASAH"]);
@@ -152,6 +152,10 @@ export const attendanceRulesSchema = z.object({
   // Subject-wise pass-rate (%) at/above which the exam results page shows a
   // "good" badge instead of "needs attention". Was a hardcoded `>= 80`.
   pass_rate_alert_threshold: z.number().min(0).max(100).optional(),
+  // Which attendance system feeds the Marksheet/Report Card's shown
+  // attendance % and the ATTENDANCE_PERCENTAGE mark-component auto-fetch.
+  // Default SUBJECT_WISE preserves today's exact existing behavior.
+  exam_attendance_source: z.nativeEnum(ExamAttendanceSource).optional(),
 });
 export type AttendanceRulesInput = z.infer<typeof attendanceRulesSchema>;
 

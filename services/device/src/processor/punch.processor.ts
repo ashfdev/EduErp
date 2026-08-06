@@ -44,7 +44,12 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
 
   // 2. Map person
   const student = await prisma.student.findFirst({ where: { biometric_id: raw.device_user_id, deleted_at: null } });
-  const staff = student ? null : await prisma.staff.findFirst({ where: { biometric_id: raw.device_user_id, deleted_at: null } });
+  const staff = student
+    ? null
+    : await prisma.staff.findFirst({
+        where: { biometric_id: raw.device_user_id, deleted_at: null },
+        include: { shift: { select: { id: true, start_time: true, end_time: true } } },
+      });
 
   const log = existing
     ? existing
@@ -60,8 +65,14 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
   const personId = student?.id ?? staff!.id;
   const personType = student ? "STUDENT" : "STAFF";
 
-  // 3. Determine shift (students only — no Staff→Shift assignment model
-  // exists yet, so staff attendance doesn't do late-window matching).
+  // 3. Determine shift — students resolve via their section's shift
+  // (findMatchingShift, with a fallback scan across every active shift);
+  // staff resolve directly from their own Staff.shift_id / custom hours
+  // (Plan Twenty-Five, Phase D — previously no Staff→Shift assignment
+  // model existed at all, so staff attendance never did late-window
+  // matching and was always recorded PRESENT regardless of actual punch
+  // time). A staff member with neither a shift nor custom hours configured
+  // still gets no shift match here, preserving that exact prior behavior.
   const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
   const lateWindow = rules?.late_arrival_window_minutes ?? 15;
 
@@ -74,6 +85,23 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
       shiftId = shift.id;
       const punchMinutes = minutesOfDay(raw.punch_at);
       status = punchMinutes > timeToMinutes(shift.start_time) + lateWindow ? "LATE" : "PRESENT";
+    }
+  } else if (staff) {
+    // Custom hours win over the assigned Shift when both are somehow set
+    // (mirrors resolveStaffShiftTimes() in server/api — duplicated here
+    // rather than shared, since this is a separate deployable service, same
+    // convention as this codebase's other cross-service small helpers).
+    const effectiveShift =
+      staff.custom_shift_start_time && staff.custom_shift_end_time
+        ? { start_time: staff.custom_shift_start_time, end_time: staff.custom_shift_end_time }
+        : staff.shift;
+    if (effectiveShift) {
+      // Only a real Shift row has an id to record on AttendanceRecord —
+      // custom-hours-only staff (no linked Shift) still get correct
+      // PRESENT/LATE status below, just with shift_id left null.
+      shiftId = staff.shift?.id ?? null;
+      const punchMinutes = minutesOfDay(raw.punch_at);
+      status = punchMinutes > timeToMinutes(effectiveShift.start_time) + lateWindow ? "LATE" : "PRESENT";
     }
   }
 

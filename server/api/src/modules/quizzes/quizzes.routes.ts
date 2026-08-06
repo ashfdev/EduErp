@@ -6,6 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { resolveOwnStaffId } from "../../lib/own-staff";
+import { resolveAssignedSubjectIds } from "../../lib/subject-teacher-assignment";
 import { QUIZ_MANAGE_ROLES } from "../../lib/roles";
 import { createQuestionSchema, createQuizSchema } from "@education-erp/validators";
 import { forbidden, notFound } from "../../lib/errors";
@@ -25,13 +26,12 @@ async function assertSubjectOwnership(userId: string, role: string, subjectId: s
 
 // Drives the two list endpoints below — null means no restriction
 // (oversight roles see everything); otherwise the caller's real assigned
-// subject ids, so a SUBJECT_TEACHER can never browse another teacher's
-// question bank/quizzes just by knowing they exist.
+// subject ids (shared with the /api/subjects?assigned_only picker filter, so
+// the two can never quietly drift apart), so a SUBJECT_TEACHER can never
+// browse another teacher's question bank/quizzes just by knowing they exist.
 async function getVisibleSubjectIds(userId: string, role: string): Promise<string[] | null> {
   if (QUIZ_OVERSIGHT_ROLES.includes(role)) return null;
-  const staffId = await resolveOwnStaffId(userId);
-  const assignments = await prisma.subjectTeacherAssignment.findMany({ where: { staff_id: staffId } });
-  return [...new Set(assignments.map((a) => a.subject_id))];
+  return resolveAssignedSubjectIds(userId);
 }
 
 export const quizzesRouter = Router();

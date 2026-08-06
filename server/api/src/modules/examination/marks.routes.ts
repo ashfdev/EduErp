@@ -17,6 +17,7 @@ import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { invalidateCacheNamespace } from "../../lib/cache";
 import { isTeacherAssignedToSubjects, syncExpiredMarkCorrections } from "../../utils/mark-correction";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { computeDailyAttendancePercentage } from "../../utils/daily-attendance";
 import { computeAverageOfExamsFetch } from "../../utils/grade-component-average-source";
 
 export const marksRouter = Router();
@@ -265,16 +266,34 @@ marksRouter.get(
         gte: exam.start_date ?? academicYear?.start_date,
         lte: exam.end_date ?? academicYear?.end_date,
       };
-      const attendanceByStudent = await computeSubjectWiseAttendance(prisma, studentIds, dateRange);
+      const attendanceRules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+      const useDailyCampus = attendanceRules?.exam_attendance_source === "DAILY_CAMPUS";
+      // DAILY_CAMPUS has no subject dimension at all (AttendanceRecord is one
+      // blanket row per day) — every subject's ATTENDANCE_PERCENTAGE
+      // component uses the SAME student-wide daily percentage in that mode,
+      // rather than a per-subject breakdown. Default SUBJECT_WISE keeps the
+      // existing per-subject lookup byte-for-byte unchanged.
+      const dailyByStudent = useDailyCampus ? await computeDailyAttendancePercentage(prisma, studentIds, dateRange) : null;
+      const subjectWiseByStudent = useDailyCampus ? null : await computeSubjectWiseAttendance(prisma, studentIds, dateRange);
       for (const c of attendanceComponents) {
         for (const studentId of studentIds) {
-          const summary = attendanceByStudent.get(studentId);
-          const subjectSummary = summary?.subjects.find((s) => s.subject_id === c.subject_id);
-          const pct = subjectSummary?.percentage ?? 100;
+          let pct: number;
+          let annotation: string;
+          if (dailyByStudent) {
+            const daily = dailyByStudent.get(studentId);
+            pct = daily?.total ? daily.percentage : 100;
+            annotation = daily?.total
+              ? `Attendance: ${daily.percentage}% present (${daily.present}/${daily.total} days, daily/campus)`
+              : "Attendance: no records yet";
+          } else {
+            const summary = subjectWiseByStudent!.get(studentId);
+            const subjectSummary = summary?.subjects.find((s) => s.subject_id === c.subject_id);
+            pct = subjectSummary?.percentage ?? 100;
+            annotation = subjectSummary
+              ? `Attendance: ${subjectSummary.percentage}% present (${subjectSummary.present}/${subjectSummary.total} days)`
+              : "Attendance: no records yet";
+          }
           const value = Math.min(c.max_marks, Math.round(((pct / 100) * c.max_marks) * 100) / 100);
-          const annotation = subjectSummary
-            ? `Attendance: ${subjectSummary.percentage}% present (${subjectSummary.present}/${subjectSummary.total} days)`
-            : "Attendance: no records yet";
           componentFetch.set(`${c.subject_id}:${c.key}:${studentId}`, { value, annotation });
         }
       }

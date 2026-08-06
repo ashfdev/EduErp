@@ -12,7 +12,7 @@ import { parse } from "csv-parse/sync";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
-import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema, staffResignSchema, staffRejoinSchema } from "@education-erp/validators";
+import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, bulkAssignShiftSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema, staffResignSchema, staffRejoinSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { generateStaffUid } from "../../utils/staff-id.generator";
 import { triggerRevalidation } from "../../services/revalidate.service";
@@ -88,6 +88,7 @@ hrStaffRouter.get(
         where,
         include: {
           department: { select: { id: true, name_en: true } },
+          shift: { select: { id: true, name: true } },
           user: { select: { role: true, is_active: true } },
           _count: { select: { documents: true } },
         },
@@ -184,6 +185,7 @@ hrStaffRouter.get(
       include: {
         department: true,
         program: { select: { id: true, name_en: true } },
+        shift: { select: { id: true, name: true, start_time: true, end_time: true } },
         user: { select: { role: true, phone: true, email: true, is_active: true, last_login_at: true } },
         salary_structure: canViewPayroll,
         subject_assignments: { include: { subject: true } },
@@ -278,6 +280,9 @@ hrStaffRouter.post(
           employment_type: body.employment_type,
           joining_date: body.joining_date ?? new Date(),
           biometric_id: body.biometric_id,
+          shift_id: body.shift_id,
+          custom_shift_start_time: body.custom_shift_start_time,
+          custom_shift_end_time: body.custom_shift_end_time,
           max_periods_per_day: body.max_periods_per_day,
           max_periods_per_week: body.max_periods_per_week,
           show_on_website: body.show_on_website,
@@ -626,6 +631,24 @@ hrStaffRouter.put(
     const result = await prisma.staff.updateMany({
       where: { id: { in: body.staff_ids }, deleted_at: null },
       data: { salary_structure_id: body.salary_structure_id },
+    });
+    res.json({ success: true, data: { updated: result.count } });
+  }),
+);
+
+// Bulk-assign a Shift to several staff at once (Plan Twenty-Five, Phase D)
+// — same shape as the salary-structure bulk-assign above, for fast
+// onboarding of a batch of teachers all on the same Morning/Day shift.
+// Clears any custom-hours override on the selected rows (see
+// bulkAssignShiftSchema's own comment for why).
+hrStaffRouter.put(
+  "/shift/bulk",
+  authorize(HR_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const body = bulkAssignShiftSchema.parse(req.body);
+    const result = await prisma.staff.updateMany({
+      where: { id: { in: body.staff_ids }, deleted_at: null },
+      data: { shift_id: body.shift_id, custom_shift_start_time: null, custom_shift_end_time: null },
     });
     res.json({ success: true, data: { updated: result.count } });
   }),

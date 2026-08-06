@@ -1,0 +1,13 @@
+-- RoutineSlot's base unique index on (class_id, section_id, group_id,
+-- day_of_week, period_no) does not prevent duplicate slots when group_id is
+-- NULL, for the identical reason the section_id-IS-NULL partial index
+-- already exists: Postgres treats every NULL as distinct from every other
+-- NULL in a unique index. The existing section_id-IS-NULL partial index
+-- only covers a whole-class (no section split) slot with no group either --
+-- it does NOT cover the single most common real shape, an ordinary
+-- non-grouped section (section_id SET, group_id NULL). Confirmed via a real
+-- create-a-colliding-slot test (Plan Twenty-Five, Phase C) that this
+-- combination could silently double-book with zero error before this fix.
+-- This partial index closes that gap without touching either existing
+-- index, which still correctly cover their own cases.
+CREATE UNIQUE INDEX "RoutineSlot_class_section_day_period_null_group_key" ON "RoutineSlot"("class_id", "section_id", "day_of_week", "period_no") WHERE "group_id" IS NULL;

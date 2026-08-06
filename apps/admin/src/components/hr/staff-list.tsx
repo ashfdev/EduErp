@@ -38,6 +38,13 @@ interface SalaryStructureOption {
   name: string;
 }
 
+interface ShiftOption {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+}
+
 interface StaffListProps {
   category: "FACULTY" | "STAFF";
   title: string;
@@ -53,6 +60,8 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkSalaryStructureId, setBulkSalaryStructureId] = useState("");
+  const [bulkShiftOpen, setBulkShiftOpen] = useState(false);
+  const [bulkShiftId, setBulkShiftId] = useState("");
 
   const { data: departments } = useQuery<Department[]>({
     queryKey: ["settings", "departments"],
@@ -78,6 +87,24 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
       const message = extractErrorMessage(err) ?? "Failed to assign salary structure";
       toast.error(message);
     },
+  });
+
+  const { data: shifts } = useQuery<ShiftOption[]>({
+    queryKey: ["settings", "shifts"],
+    queryFn: async () => (await api.get("/api/settings/shifts")).data.data,
+    enabled: bulkShiftOpen,
+  });
+
+  const bulkShiftMutation = useMutation({
+    mutationFn: () => api.put("/api/hr/staff/shift/bulk", { staff_ids: [...selected], shift_id: bulkShiftId }),
+    onSuccess: (res) => {
+      toast.success(`Shift assigned to ${res.data.data.updated} staff`);
+      queryClient.invalidateQueries({ queryKey: ["hr", "staff"] });
+      setBulkShiftOpen(false);
+      setSelected(new Set());
+      setBulkShiftId("");
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to assign shift"),
   });
 
   function toggleSelected(id: string) {
@@ -123,6 +150,11 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
             {selected.size > 0 && (
               <Button variant="outline" onClick={() => setBulkAssignOpen(true)}>
                 Assign Salary Structure ({selected.size})
+              </Button>
+            )}
+            {selected.size > 0 && (
+              <Button variant="outline" onClick={() => setBulkShiftOpen(true)}>
+                Assign Shift ({selected.size})
               </Button>
             )}
             <Button variant="outline" onClick={downloadExcel}>Export Excel</Button>
@@ -229,6 +261,28 @@ export function StaffList({ category, title, subtitle, addLabel }: StaffListProp
           <DialogFooter>
             <Button onClick={() => bulkAssignMutation.mutate()} disabled={!bulkSalaryStructureId || bulkAssignMutation.isPending}>
               {bulkAssignMutation.isPending ? "Assigning..." : "Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkShiftOpen} onOpenChange={setBulkShiftOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Assign Shift — {selected.size} staff</DialogTitle></DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Shift</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={bulkShiftId} onChange={(e) => setBulkShiftId(e.target.value)}>
+              <option value="">Select...</option>
+              {shifts?.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Clears any per-staff custom hours on the selected rows — everyone selected will use this shift&apos;s
+              hours going forward.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => bulkShiftMutation.mutate()} disabled={!bulkShiftId || bulkShiftMutation.isPending}>
+              {bulkShiftMutation.isPending ? "Assigning..." : "Assign"}
             </Button>
           </DialogFooter>
         </DialogContent>

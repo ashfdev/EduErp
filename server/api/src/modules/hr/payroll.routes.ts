@@ -10,6 +10,7 @@ import { PAYROLL_MANAGE_ROLES } from "../../lib/roles";
 import { calculatePayrollSchema, updatePayrollSchema, finalizePayrollSchema, markPaidSchema } from "@education-erp/validators";
 import { workingDaysInMonth } from "../../utils/working-days";
 import { computeOvertime } from "../../utils/overtime";
+import { resolveStaffShiftTimes } from "../../lib/staff-shift";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { STAFF_ONLY_ROLES } from "../../lib/roles";
 import type { UserRole } from "@education-erp/types";
@@ -90,7 +91,7 @@ payrollRouter.post(
         salary_structure_id: { not: null },
         ...(body.department_id && { department_id: body.department_id }),
       },
-      include: { salary_structure: true },
+      include: { salary_structure: true, shift: { select: { start_time: true, end_time: true } } },
     });
 
     const monthStart = new Date(body.year, body.month - 1, 1);
@@ -117,10 +118,15 @@ payrollRouter.post(
       const attendanceIncomplete = records.length < workingDays;
 
       // Overtime hours summed across the month's own punch-derived
-      // check_out_at/shift data — same computeOvertime() definition the
-      // staff daily-attendance summary already uses, so the two surfaces
-      // can never silently disagree (Plan Fourteen, Phase J2).
-      const overtimeHours = records.reduce((sum, r) => sum + computeOvertime(r.check_out_at, r.shift?.start_time, r.shift?.end_time), 0);
+      // check_out_at, against the staff's own configured shift (custom
+      // hours, else assigned Shift — see resolveStaffShiftTimes) rather
+      // than whatever AttendanceRecord.shift_id happened to be set that
+      // day, so a manually-marked record still gets a real overtime
+      // calculation once a shift exists. Same computeOvertime() definition
+      // the staff daily-attendance summary already uses, so the two
+      // surfaces can never silently disagree (Plan Fourteen, Phase J2).
+      const effectiveShift = resolveStaffShiftTimes(staff);
+      const overtimeHours = records.reduce((sum, r) => sum + computeOvertime(r.check_out_at, effectiveShift?.start_time, effectiveShift?.end_time), 0);
 
       // Periods this staff member covered as a substitute this month
       // (Plan Fourteen, Phase J2) — the exact data Phase C's "Substitutions

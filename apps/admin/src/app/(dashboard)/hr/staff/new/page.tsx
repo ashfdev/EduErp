@@ -24,6 +24,12 @@ interface SalaryStructureOption {
   name: string;
   is_default: boolean;
 }
+interface ShiftOption {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+}
 
 // Must mirror server/api/src/lib/roles.ts's TEACHING_ROLES exactly — kept
 // as a small frontend-only mirror rather than fetched, since it only drives
@@ -88,6 +94,10 @@ export default function NewStaffPage() {
   // is marked default once loaded. An empty string is a deliberate user
   // choice to clear it (some employment types have no fixed structure yet).
   const [salaryStructureId, setSalaryStructureId] = useState<string | null>(null);
+  const [shiftId, setShiftId] = useState("");
+  const [useCustomHours, setUseCustomHours] = useState(false);
+  const [customShiftStart, setCustomShiftStart] = useState("");
+  const [customShiftEnd, setCustomShiftEnd] = useState("");
   const [showOnWebsite, setShowOnWebsite] = useState(false);
   const [createLogin, setCreateLogin] = useState(true);
   const [loginPassword, setLoginPassword] = useState("");
@@ -109,6 +119,7 @@ export default function NewStaffPage() {
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
   const { data: programs } = useQuery<Program[]>({ queryKey: ["settings", "programs"], queryFn: async () => (await api.get("/api/settings/programs")).data.data });
   const { data: salaryStructures } = useQuery<SalaryStructureOption[]>({ queryKey: ["hr", "salary-structures"], queryFn: async () => (await api.get("/api/hr/salary-structures")).data.data });
+  const { data: shifts } = useQuery<ShiftOption[]>({ queryKey: ["settings", "shifts"], queryFn: async () => (await api.get("/api/settings/shifts")).data.data });
   const defaultSalaryStructureId = salaryStructures?.find((s) => s.is_default)?.id ?? "";
   const effectiveSalaryStructureId = salaryStructureId ?? defaultSalaryStructureId;
 
@@ -171,6 +182,9 @@ export default function NewStaffPage() {
         address_division: addressDivision || undefined,
         employment_type: employmentType,
         salary_structure_id: effectiveSalaryStructureId || undefined,
+        shift_id: useCustomHours ? undefined : shiftId || undefined,
+        custom_shift_start_time: useCustomHours ? customShiftStart || undefined : undefined,
+        custom_shift_end_time: useCustomHours ? customShiftEnd || undefined : undefined,
         show_on_website: showOnWebsite,
         create_login: createLogin,
         login_password: createLogin ? loginPassword || undefined : undefined,
@@ -358,6 +372,29 @@ export default function NewStaffPage() {
                 </select>
                 <p className="text-xs text-muted-foreground">Needed for this staff member to show up in Payroll. Can be set or changed later too.</p>
               </div>
+              <div className="space-y-1.5">
+                <Label>Shift</Label>
+                {!useCustomHours && (
+                  <select className="w-full rounded-md border px-3 py-2 text-sm" value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+                    <option value="">None — no shift-based late/overtime tracking</option>
+                    {shifts?.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>)}
+                  </select>
+                )}
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={useCustomHours}
+                    onCheckedChange={(v) => { setUseCustomHours(!!v); if (v) setShiftId(""); }}
+                  />
+                  Use custom hours instead (for staff whose real hours don&apos;t match any shift)
+                </label>
+                {useCustomHours && (
+                  <div className="grid grid-cols-2 gap-4 pt-1">
+                    <div className="space-y-1.5"><Label>Start Time</Label><Input type="time" value={customShiftStart} onChange={(e) => setCustomShiftStart(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>End Time</Label><Input type="time" value={customShiftEnd} onChange={(e) => setCustomShiftEnd(e.target.value)} /></div>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Enables late-arrival detection on biometric punches and real overtime calculation. Leave both unset for no shift-based tracking at all.</p>
+              </div>
               <label className="flex items-center gap-2 text-sm"><Checkbox checked={createLogin} onCheckedChange={(v) => setCreateLogin(!!v)} /> Create login account (requires phone) — sends temp password via SMS</label>
               {createLogin && (
                 <div className="space-y-1.5 pl-6">
@@ -457,6 +494,9 @@ export default function NewStaffPage() {
               </p>
               <p className="text-sm text-muted-foreground">
                 Department: {departments?.find((d) => d.id === departmentId)?.name_en ?? "—"} · Employment: {employmentType}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Shift: {useCustomHours ? (customShiftStart && customShiftEnd ? `Custom (${customShiftStart}–${customShiftEnd})` : "Custom (not set)") : (shifts?.find((s) => s.id === shiftId)?.name ?? "None")}
               </p>
               <p className="text-sm text-muted-foreground">Documents staged: {stagedDocs.length}</p>
               <p className="text-sm text-muted-foreground">Experience entries: {stagedExperience.length} · Reference entries: {stagedReference.length}</p>

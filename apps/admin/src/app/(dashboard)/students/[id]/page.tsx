@@ -51,7 +51,7 @@ interface StudentProfile {
   };
   academic: {
     current: {
-      class?: { name_en: string } | null;
+      class?: { id: string; name_en: string } | null;
       section?: { name: string } | null;
       group?: { id: string; name_en: string } | null;
       roll_no?: string | null;
@@ -72,7 +72,7 @@ interface StudentProfile {
       status: string;
     }[];
   };
-  subjects: { subject_id: string; subject_name_en: string; subject_code: string; is_compulsory: boolean; is_inherited: boolean; assigned_teacher: { name_en: string } | null }[];
+  subjects: { subject_id: string; subject_name_en: string; subject_code: string; is_compulsory: boolean; is_inherited: boolean; is_fourth_subject: boolean; assigned_teacher: { name_en: string } | null }[];
   attendance: {
     current_year_summary: { total_days: number; present: number; absent: number; late: number; percentage: number | null };
     most_recent: { date: string; check_in_at: string | null; check_out_at: string | null } | null;
@@ -318,6 +318,40 @@ export default function StudentProfilePage() {
       setRefundTarget(null);
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Refund failed"),
+  });
+
+  // Edit Subjects — lets an admin correct a student's optional/4th-subject
+  // pick directly, without needing to route them through Promote just to
+  // fix a mistaken selection (previously the only way to change this).
+  const [subjectsEditOpen, setSubjectsEditOpen] = useState(false);
+  const [editSelectedOptional, setEditSelectedOptional] = useState<string[]>([]);
+  const [editFourthSubjectId, setEditFourthSubjectId] = useState<string>("");
+  const currentClassId = profile?.academic.current.class?.id;
+  const { data: classSubjects } = useQuery<{ id: string; name_en: string; is_compulsory: boolean; is_optional: boolean }[]>({
+    queryKey: ["subjects", "for-student-edit", currentClassId],
+    queryFn: async () => (await api.get("/api/subjects", { params: { class_id: currentClassId } })).data.data,
+    enabled: subjectsEditOpen && !!currentClassId,
+  });
+  const editCompulsory = classSubjects?.filter((s) => s.is_compulsory) ?? [];
+  const editOptional = classSubjects?.filter((s) => s.is_optional) ?? [];
+  function openSubjectsEdit() {
+    const currentSubjects = profile?.subjects ?? [];
+    setEditSelectedOptional(currentSubjects.filter((s) => !s.is_inherited).map((s) => s.subject_id));
+    setEditFourthSubjectId(currentSubjects.find((s) => s.is_fourth_subject)?.subject_id ?? "");
+    setSubjectsEditOpen(true);
+  }
+  const editSubjectsMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/api/students/${id}`, {
+        selected_optional_subject_ids: editSelectedOptional,
+        fourth_subject_id: editFourthSubjectId || null,
+      }),
+    onSuccess: () => {
+      toast.success("Subjects updated");
+      queryClient.invalidateQueries({ queryKey: ["students", id] });
+      setSubjectsEditOpen(false);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update subjects"),
   });
 
   if (isLoading) {
@@ -657,6 +691,9 @@ export default function StudentProfilePage() {
         </TabsContent>
 
         <TabsContent value="subjects">
+          <div className="mb-3 flex justify-end">
+            <Button variant="outline" size="sm" onClick={openSubjectsEdit}>Edit Subjects</Button>
+          </div>
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -982,6 +1019,66 @@ export default function StudentProfilePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={subjectsEditOpen} onOpenChange={setSubjectsEditOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Subjects — {personal.name_en}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium">Compulsory subjects (auto-assigned)</p>
+              <div className="flex flex-wrap gap-2">
+                {editCompulsory.length
+                  ? editCompulsory.map((s) => <Badge key={s.id} variant="success">{s.name_en}</Badge>)
+                  : <p className="text-sm text-muted-foreground">No compulsory subjects configured for this class.</p>}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium">Optional subjects — select which to assign</p>
+              <div className="flex flex-wrap gap-2">
+                {editOptional.length
+                  ? editOptional.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() =>
+                          setEditSelectedOptional((prev) => {
+                            const next = prev.includes(s.id) ? prev.filter((sid) => sid !== s.id) : [...prev, s.id];
+                            if (!next.includes(s.id) && editFourthSubjectId === s.id) setEditFourthSubjectId("");
+                            return next;
+                          })
+                        }
+                        className={`rounded-full border px-3 py-1 text-sm ${editSelectedOptional.includes(s.id) ? "border-primary bg-primary/10" : ""}`}
+                      >
+                        {s.name_en}
+                      </button>
+                    ))
+                  : <p className="text-sm text-muted-foreground">No optional subjects configured for this class.</p>}
+              </div>
+            </div>
+            {editSelectedOptional.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>4th Subject (BD GPA bonus rule — optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  If enabled in Institution Settings, this one subject&apos;s grade point above 2.00 adds a bonus
+                  to GPA and a weak score in it never fails the overall result. Every other selected optional
+                  subject is graded normally.
+                </p>
+                <select className="w-full rounded-md border px-3 py-2 text-sm" value={editFourthSubjectId} onChange={(e) => setEditFourthSubjectId(e.target.value)}>
+                  <option value="">None</option>
+                  {editOptional.filter((s) => editSelectedOptional.includes(s.id)).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name_en}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => editSubjectsMutation.mutate()} disabled={editSubjectsMutation.isPending}>
+              {editSubjectsMutation.isPending ? "Saving..." : "Save Subjects"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={docUploadOpen} onOpenChange={setDocUploadOpen}>
         <DialogContent>

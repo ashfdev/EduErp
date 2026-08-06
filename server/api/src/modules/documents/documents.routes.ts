@@ -9,6 +9,7 @@ import { STAFF_ONLY_ROLES, DOCUMENT_REQUEST_REVIEW_ROLES, EXAM_MANAGE_ROLES, PAY
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { buildPayslipData } from "../hr/payroll.routes";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
+import { computeDailyAttendancePercentage } from "../../utils/daily-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
@@ -653,7 +654,7 @@ documentsRouter.get(
 // ───────────────────────── Result Documents ─────────────────────────
 
 export async function buildMarksheetData(examId: string, studentId: string) {
-  const [exam, student, entries, display, subjectConfigs, markComponentConfigs, studentSubjectRowsAllYears, institutionConfig] = await Promise.all([
+  const [exam, student, entries, display, subjectConfigs, markComponentConfigs, studentSubjectRowsAllYears, institutionConfig, attendanceRules] = await Promise.all([
     prisma.exam.findUnique({ where: { id: examId }, include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: true } }),
     prisma.student.findUnique({ where: { id: studentId }, include: { current_class: true, current_section: true } }),
     prisma.markEntry.findMany({ where: { exam_id: examId, student_id: studentId }, include: { subject: true } }),
@@ -666,6 +667,7 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     prisma.examMarkComponent.findMany({ where: { exam_id: examId }, orderBy: { display_order: "asc" } }),
     prisma.studentSubject.findMany({ where: { student_id: studentId }, select: { subject_id: true, is_fourth_subject: true, academic_year_id: true } }),
     prisma.institutionConfig.findUnique({ where: { id: "singleton" } }),
+    prisma.attendanceRules.findUnique({ where: { id: "singleton" } }),
   ]);
   if (!exam) throw notFound("Exam not found");
   if (!student) throw notFound("Student not found");
@@ -854,22 +856,35 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     };
   }
 
-  // Real subject-wise attendance (Plan Twelve), scoped to the exam's own
-  // academic year -- gated the same way `needsPosition` is above, so a
-  // school with attendance display off doesn't pay the extra query.
-  // Previously only computed for REPORT_CARD even though
+  // Subject-wise (default) or blanket daily/campus attendance -- scoped to
+  // the exam's own academic year, gated the same way `needsPosition` is
+  // above, so a school with attendance display off doesn't pay the extra
+  // query. Previously only computed for REPORT_CARD even though
   // MarksheetDisplaySettings.show_attendance_info already existed and
   // defaults to true for MARKSHEET too -- a real, latent gap this closes.
+  // Which source feeds this is AttendanceRules.exam_attendance_source
+  // (default SUBJECT_WISE, preserving today's exact behavior byte-for-byte
+  // for any school that never touches the new Settings toggle).
   let attendance: { total_days: number; present: number; absent: number; percentage: number } | null = null;
   if (display.show_attendance_info) {
     const dateRange = { gte: exam.academic_year.start_date, lte: exam.academic_year.end_date };
-    const summary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
-    attendance = {
-      total_days: summary.overall.total,
-      present: summary.overall.present,
-      absent: summary.overall.total - summary.overall.present,
-      percentage: summary.overall.total ? summary.overall.percentage : 0,
-    };
+    if (attendanceRules?.exam_attendance_source === "DAILY_CAMPUS") {
+      const summary = (await computeDailyAttendancePercentage(prisma, [studentId], dateRange)).get(studentId)!;
+      attendance = {
+        total_days: summary.total,
+        present: summary.present,
+        absent: summary.total - summary.present,
+        percentage: summary.total ? summary.percentage : 0,
+      };
+    } else {
+      const summary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
+      attendance = {
+        total_days: summary.overall.total,
+        present: summary.overall.present,
+        absent: summary.overall.total - summary.overall.present,
+        percentage: summary.overall.total ? summary.overall.percentage : 0,
+      };
+    }
   }
 
   return {
@@ -963,12 +978,17 @@ documentsRouter.get(
     const studentId = reqParam(req, "student_id");
     const base = await buildMarksheetData(examId, studentId);
 
-    // Real subject-wise attendance (Plan Twelve), scoped to the exam's own
+    // Subject-wise (default) or blanket daily/campus attendance (see
+    // AttendanceRules.exam_attendance_source), scoped to the exam's own
     // academic year — the old blanket AttendanceRecord count was neither
     // subject-wise nor scoped to any year at all.
     const exam = await prisma.exam.findUnique({ where: { id: examId }, include: { academic_year: true } });
     const dateRange = exam ? { gte: exam.academic_year.start_date, lte: exam.academic_year.end_date } : undefined;
-    const attendanceSummary = (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!;
+    const attendanceRules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    const attendanceSummary =
+      attendanceRules?.exam_attendance_source === "DAILY_CAMPUS"
+        ? (await computeDailyAttendancePercentage(prisma, [studentId], dateRange)).get(studentId)!
+        : (await computeSubjectWiseAttendance(prisma, [studentId], dateRange)).get(studentId)!.overall;
     const qrCode = base.display.show_qr_code ? await generateQrDataUrl(`report-card:${examId}:${studentId}`) : undefined;
 
     const pdf = await renderDocument("REPORT_CARD", {
@@ -978,10 +998,10 @@ documentsRouter.get(
       subjects: base.subjects.map((s) => ({ ...s, remark: "" })),
       conduct_grade: "A",
       attendance: {
-        total_days: attendanceSummary.overall.total,
-        present: attendanceSummary.overall.present,
-        absent: attendanceSummary.overall.total - attendanceSummary.overall.present,
-        percentage: attendanceSummary.overall.total ? attendanceSummary.overall.percentage : 0,
+        total_days: attendanceSummary.total,
+        present: attendanceSummary.present,
+        absent: attendanceSummary.total - attendanceSummary.present,
+        percentage: attendanceSummary.total ? attendanceSummary.percentage : 0,
       },
       overall_remarks: base.overall_remarks,
       display: base.display,

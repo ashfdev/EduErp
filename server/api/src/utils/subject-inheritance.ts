@@ -41,20 +41,41 @@ export async function inheritSubjectsForClass(
   // a compulsory one.
   fourthSubjectId?: string | null,
 ) {
-  // A stale same-year enrollment in a DIFFERENT class's subjects — e.g. a
-  // student moved from Class 9 to Class 10 mid-year, leaving their old
-  // Class 9 StudentSubject rows in place under the very same
-  // academic_year_id. This is not the "historical assignment" this
-  // codebase deliberately preserves (that means a genuinely different,
-  // earlier academic_year_id, e.g. last year's real Class 9 record) — a
-  // student cannot coherently be enrolled in two different classes' worth
-  // of subjects within one and the same year, so any leftover same-year
-  // row for a class other than the destination is corrected here rather
-  // than left to silently accumulate on every class change. No-op for a
-  // brand-new student (create/admission-enroll callers), who has no prior
-  // rows to clean up.
+  // Two stale-row cases cleaned up before re-assigning, both no-ops for a
+  // brand-new student (create/admission-enroll callers) who has no prior
+  // rows to clean up:
+  //
+  // 1. A DIFFERENT class's subjects under the same academic year — e.g. a
+  //    student moved from Class 9 to Class 10 mid-year, leaving their old
+  //    Class 9 StudentSubject rows in place. Not the "historical
+  //    assignment" this codebase deliberately preserves (that means a
+  //    genuinely different, earlier academic_year_id) — a student cannot
+  //    coherently be enrolled in two different classes' worth of subjects
+  //    within one and the same year.
+  // 2. A previously-selected, now-deselected OPTIONAL subject in the SAME
+  //    class/year — e.g. a student's 4th subject is corrected from Biology
+  //    to Higher Math via a second Promote run with no class change. Every
+  //    caller passes selectedOptionalSubjectIds as the complete desired
+  //    optional-subject set for this class/year, not a delta, so anything
+  //    is_inherited:false (a prior student pick, never an auto-added
+  //    compulsory row) whose subject_id has dropped out of that set is
+  //    genuinely stale and must go — otherwise it silently accumulates
+  //    forever and the "deselected" subject keeps behaving as if it were
+  //    still assigned. Compulsory rows (is_inherited:true) are never
+  //    touched by this clause.
   await tx.studentSubject.deleteMany({
-    where: { student_id: studentId, academic_year_id: academicYearId, subject: { class_id: { not: classId } } },
+    where: {
+      student_id: studentId,
+      academic_year_id: academicYearId,
+      OR: [
+        { subject: { class_id: { not: classId } } },
+        {
+          subject: { class_id: classId },
+          is_inherited: false,
+          subject_id: { notIn: selectedOptionalSubjectIds.length > 0 ? selectedOptionalSubjectIds : ["__none__"] },
+        },
+      ],
+    },
   });
 
   const allSubjects = await tx.subject.findMany({ where: { class_id: classId, is_active: true } });
@@ -83,6 +104,26 @@ export async function inheritSubjectsForClass(
         academic_year_id: academicYearId,
       })),
       skipDuplicates: true,
+    });
+  }
+
+  // Explicitly (re)apply the 4th-subject flag rather than relying on it
+  // having been set at INSERT time above — every call site until the "Edit
+  // Subjects" profile action only ever targets a class the student has no
+  // prior same-year rows in (a genuinely fresh set, so the insert-time value
+  // was already correct), but a same-class re-run (e.g. correcting a
+  // mistaken 4th-subject pick with no class change) hits createMany's
+  // skipDuplicates path for anything still selected, which never updates an
+  // existing row's fields. Reset-then-reapply is correct either way and a
+  // no-op for the fresh-class case.
+  await tx.studentSubject.updateMany({
+    where: { student_id: studentId, academic_year_id: academicYearId, is_fourth_subject: true },
+    data: { is_fourth_subject: false },
+  });
+  if (fourthSubjectId) {
+    await tx.studentSubject.updateMany({
+      where: { student_id: studentId, subject_id: fourthSubjectId, academic_year_id: academicYearId, is_inherited: false },
+      data: { is_fourth_subject: true },
     });
   }
 

@@ -8,6 +8,7 @@ import { reqParam } from "../../lib/req-param";
 import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { subjectSchema, subjectAssignmentSchema } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
+import { resolveAssignedSubjectIds } from "../../lib/subject-teacher-assignment";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(authenticate);
@@ -30,9 +31,20 @@ function dedupeByName<T extends { name_en: string }>(rows: T[]): T[] {
 subjectsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().optional() }).parse(req.query);
+    const query = z.object({ class_id: z.string().optional(), assigned_only: z.coerce.boolean().optional() }).parse(req.query);
+    // assigned_only narrows the result to subjects the caller actually has a
+    // SubjectTeacherAssignment for -- opt-in, since every other consumer of
+    // this endpoint (admin panels, other pickers) still wants the full,
+    // unfiltered class subject list exactly as before. Shares its resolution
+    // logic with quizzes.routes.ts's ownership check, so a teacher can never
+    // be offered a subject here that create-side would then reject.
+    const assignedSubjectIds = query.assigned_only ? await resolveAssignedSubjectIds(req.user!.sub) : undefined;
     const subjects = await prisma.subject.findMany({
-      where: { is_active: true, ...(query.class_id && { class_id: query.class_id }) },
+      where: {
+        is_active: true,
+        ...(query.class_id && { class_id: query.class_id }),
+        ...(assignedSubjectIds && { id: { in: assignedSubjectIds } }),
+      },
       orderBy: [{ created_at: "asc" }, { display_order: "asc" }],
     });
     res.json({ success: true, data: dedupeByName(subjects) });
@@ -79,12 +91,25 @@ async function assertNoDuplicateName(classId: string, nameEn: string, excludeId?
   if (clash) throw conflict("A subject with this name already exists in this class");
 }
 
+// Previously only enforced client-side (the Settings form's own Switch pair)
+// — bypassable via a direct API call or any future bulk-edit path. A subject
+// flagged both ways would make inheritSubjectsForClass() unconditionally add
+// it as compulsory regardless of any student's optional-subject selection,
+// producing the exact "deselected subject still shows up" symptom this
+// codebase has already seen once from a different root cause.
+function assertNotBothCompulsoryAndOptional(isCompulsory: boolean, isOptional: boolean) {
+  if (isCompulsory && isOptional) {
+    throw badRequest("A subject cannot be both compulsory and optional at the same time");
+  }
+}
+
 subjectsRouter.post(
   "/",
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     const body = subjectSchema.parse(req.body);
     body.name_en = body.name_en.trim();
+    assertNotBothCompulsoryAndOptional(body.is_compulsory, body.is_optional);
     const existing = await prisma.subject.findUnique({ where: { class_id_code: { class_id: body.class_id, code: body.code } } });
     if (existing) throw conflict("A subject with this code already exists in this class");
     await assertNoDuplicateName(body.class_id, body.name_en);
@@ -116,6 +141,10 @@ subjectsRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = subjectSchema.partial().parse(req.body);
+    if (body.is_compulsory !== undefined || body.is_optional !== undefined) {
+      const existing = await prisma.subject.findUniqueOrThrow({ where: { id } });
+      assertNotBothCompulsoryAndOptional(body.is_compulsory ?? existing.is_compulsory, body.is_optional ?? existing.is_optional);
+    }
     if (body.name_en) {
       body.name_en = body.name_en.trim();
       const existing = await prisma.subject.findUniqueOrThrow({ where: { id } });

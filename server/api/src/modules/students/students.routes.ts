@@ -591,6 +591,7 @@ studentsRouter.get(
           subject_type: ss.subject.subject_type,
           is_compulsory: ss.subject.is_compulsory,
           is_inherited: ss.is_inherited,
+          is_fourth_subject: ss.is_fourth_subject,
           assigned_teacher: assignment?.staff ?? null,
         };
       }),
@@ -926,6 +927,9 @@ studentsRouter.put(
     // fourth_subject_id is a StudentSubject-only field (like
     // selected_optional_subject_ids), never a real Student column.
     const { selected_optional_subject_ids, fourth_subject_id, send_portal_login_sms: _send_portal_login_sms, ...fields } = body;
+    if (fourth_subject_id && selected_optional_subject_ids && !selected_optional_subject_ids.includes(fourth_subject_id)) {
+      throw badRequest("The 4th subject must be one of the selected optional subjects");
+    }
 
     const existing = await prisma.student.findFirst({ where: { id, deleted_at: null } });
     if (!existing) throw notFound("Student not found");
@@ -969,9 +973,25 @@ studentsRouter.put(
       if (classChanged && fields.current_class_id) {
         const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
         await inheritSubjectsForClass(tx, id, fields.current_class_id, activeYear?.id ?? "", selected_optional_subject_ids, fields.group_id, fourth_subject_id);
+      } else if (selected_optional_subject_ids !== undefined) {
+        // Optional/4th-subject selection changed with NO class change (the
+        // "Edit Subjects" action on the student profile) — re-run real
+        // inheritance against the student's current class/group so a
+        // deselected optional subject is actually removed, not just left in
+        // place with setFourthSubject's narrower flag-only update. This is
+        // the fix for the previously-reported "the subject I didn't choose
+        // still shows up" bug — see subject-inheritance.ts's stale-row
+        // cleanup for the actual mechanism.
+        const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
+        const targetClassId = fields.current_class_id ?? existing.current_class_id;
+        const targetGroupId = fields.group_id !== undefined ? fields.group_id : existing.group_id;
+        if (activeYear && targetClassId) {
+          await inheritSubjectsForClass(tx, id, targetClassId, activeYear.id, selected_optional_subject_ids, targetGroupId, fourth_subject_id);
+        }
       } else if (fourth_subject_id !== undefined) {
-        // No class change this time — inheritSubjectsForClass never ran, so
-        // a changed 4th-subject pick needs its own narrower update.
+        // No class change and no optional-selection change this time —
+        // inheritSubjectsForClass never ran, so a changed 4th-subject pick
+        // needs its own narrower update.
         const activeYear = await tx.academicYear.findFirst({ where: { is_active: true } });
         if (activeYear) await setFourthSubject(tx, id, activeYear.id, fourth_subject_id);
       }

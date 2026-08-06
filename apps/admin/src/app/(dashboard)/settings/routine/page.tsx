@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, RoutineGrid, PdfPreviewModal, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
@@ -411,6 +412,15 @@ export default function RoutineSettingsPage() {
             )}
             {generateResult && (
               <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+                {generateResult.results.some((r) => r.unplaced.some((u) => u.reason.includes("has no periods configured"))) && (
+                  <div className="rounded-md border border-amber-400/50 bg-amber-50 p-3 text-sm">
+                    <p className="font-medium text-amber-800">Nothing could be generated for one or more sections because their Shift has no periods set up yet.</p>
+                    <p className="mt-1 text-amber-700">
+                      Go to <Link href="/settings/academic" className="underline">Settings → Academic Structure</Link>, open the affected
+                      Shift, and add its periods (start/end time per period) before generating again.
+                    </p>
+                  </div>
+                )}
                 {generateResult.failures.length > 0 && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
                     <p className="mb-1 font-medium text-destructive">Failed to generate for {generateResult.failures.length} class(es)</p>

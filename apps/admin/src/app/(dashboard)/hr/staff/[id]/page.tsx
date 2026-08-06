@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageWrapper, StatusBadge, Switch, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StaffDetail {
@@ -39,6 +39,10 @@ interface StaffDetail {
   public_office_location: string | null;
   department: { id: string; name_en: string } | null;
   program: { id: string; name_en: string } | null;
+  shift_id: string | null;
+  shift: { id: string; name: string; start_time: string; end_time: string } | null;
+  custom_shift_start_time: string | null;
+  custom_shift_end_time: string | null;
   user: { role: string; phone: string; email: string | null };
   // Raw FK, present for every viewer regardless of role (include always
   // returns base-model scalars) — used for the completeness badge below so
@@ -120,6 +124,7 @@ export default function StaffDetailPage() {
   const { data: balance } = useQuery<LeaveBalance[]>({ queryKey: ["hr", "leaves", "balance", id], queryFn: async () => (await api.get(`/api/hr/leaves/balance/${id}`)).data.data });
   const { data: departments } = useQuery<Department[]>({ queryKey: ["settings", "departments"], queryFn: async () => (await api.get("/api/settings/departments")).data.data });
   const { data: programs } = useQuery<Program[]>({ queryKey: ["settings", "programs"], queryFn: async () => (await api.get("/api/settings/programs")).data.data });
+  const { data: shiftOptions } = useQuery<{ id: string; name: string; start_time: string; end_time: string }[]>({ queryKey: ["settings", "shifts"], queryFn: async () => (await api.get("/api/settings/shifts")).data.data });
 
   const applyLeaveMutation = useMutation({
     mutationFn: () => api.post("/api/hr/leaves/apply", { staff_id: id, leave_type_id: leaveTypeId, from_date: fromDate, to_date: toDate, reason }),
@@ -161,6 +166,10 @@ export default function StaffDetailPage() {
     nid: string;
     tin: string;
     address: string;
+    shift_id: string;
+    use_custom_hours: boolean;
+    custom_shift_start_time: string;
+    custom_shift_end_time: string;
   } | null>(null);
   const [corePhotoUrl, setCorePhotoUrl] = useState<string | null>(null);
   const [corePhotoUploading, setCorePhotoUploading] = useState(false);
@@ -182,6 +191,10 @@ export default function StaffDetailPage() {
       nid: s.nid ?? "",
       tin: s.tin ?? "",
       address: s.address ?? "",
+      shift_id: s.shift_id ?? "",
+      use_custom_hours: !!(s.custom_shift_start_time && s.custom_shift_end_time),
+      custom_shift_start_time: s.custom_shift_start_time ?? "",
+      custom_shift_end_time: s.custom_shift_end_time ?? "",
     });
     setCorePhotoUrl(s.photo_url);
   }
@@ -220,6 +233,13 @@ export default function StaffDetailPage() {
         tin: coreDraft!.tin || undefined,
         address: coreDraft!.address || undefined,
         photo_url: corePhotoUrl || undefined,
+        // Custom hours take precedence server-side when both are set, but
+        // the edit UI only ever shows one at a time — explicitly null the
+        // one not currently in use so switching modes actually clears the
+        // stale value instead of leaving it silently in place.
+        shift_id: coreDraft!.use_custom_hours ? null : coreDraft!.shift_id || null,
+        custom_shift_start_time: coreDraft!.use_custom_hours ? coreDraft!.custom_shift_start_time || null : null,
+        custom_shift_end_time: coreDraft!.use_custom_hours ? coreDraft!.custom_shift_end_time || null : null,
       }),
     onSuccess: () => {
       toast.success("Staff details updated");
@@ -610,6 +630,14 @@ export default function StaffDetailPage() {
                   <div><span className="text-muted-foreground">TIN:</span> {staff.tin ?? "—"}</div>
                   <div><span className="text-muted-foreground">Joining Date:</span> {staff.joining_date ? new Date(staff.joining_date).toLocaleDateString() : "—"}</div>
                   <div><span className="text-muted-foreground">Salary Structure:</span> {staff.salary_structure?.name ?? "Not assigned"}</div>
+                  <div>
+                    <span className="text-muted-foreground">Shift:</span>{" "}
+                    {staff.custom_shift_start_time && staff.custom_shift_end_time
+                      ? `Custom (${staff.custom_shift_start_time}–${staff.custom_shift_end_time})`
+                      : staff.shift
+                        ? `${staff.shift.name} (${staff.shift.start_time}–${staff.shift.end_time})`
+                        : "None"}
+                  </div>
                   <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {staff.address ?? "—"}</div>
                 </div>
               )}
@@ -666,6 +694,28 @@ export default function StaffDetailPage() {
                       <option value="CONTRACT">Contract</option>
                       <option value="PART_TIME">Part Time</option>
                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Shift</Label>
+                    {!coreDraft.use_custom_hours && (
+                      <select className="w-full rounded-md border px-3 py-2 text-sm" value={coreDraft.shift_id} onChange={(e) => setCoreDraft({ ...coreDraft, shift_id: e.target.value })}>
+                        <option value="">None — no shift-based late/overtime tracking</option>
+                        {shiftOptions?.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.start_time}–{s.end_time})</option>)}
+                      </select>
+                    )}
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={coreDraft.use_custom_hours}
+                        onCheckedChange={(v) => setCoreDraft({ ...coreDraft, use_custom_hours: !!v, shift_id: v ? "" : coreDraft.shift_id })}
+                      />
+                      Use custom hours instead (for staff whose real hours don&apos;t match any shift)
+                    </label>
+                    {coreDraft.use_custom_hours && (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1.5"><Label>Start Time</Label><Input type="time" value={coreDraft.custom_shift_start_time} onChange={(e) => setCoreDraft({ ...coreDraft, custom_shift_start_time: e.target.value })} /></div>
+                        <div className="space-y-1.5"><Label>End Time</Label><Input type="time" value={coreDraft.custom_shift_end_time} onChange={(e) => setCoreDraft({ ...coreDraft, custom_shift_end_time: e.target.value })} /></div>
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={coreDraft.date_of_birth} onChange={(e) => setCoreDraft({ ...coreDraft, date_of_birth: e.target.value })} /></div>

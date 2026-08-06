@@ -19,3 +19,18 @@ export async function hasSubjectTeacherAssignment(userId: string, subjectId: str
   });
   return !!assignment;
 }
+
+// Every subject id a user (by their own login id) has ANY SubjectTeacherAssignment
+// for, across every class/section/year. Used to filter subject pickers down to
+// what a teacher is actually assigned to teach, rather than every subject in a
+// class -- previously duplicated inline as quizzes.routes.ts's own
+// getVisibleSubjectIds(); centralized here so a picker and an ownership check
+// can never quietly drift apart. Returns [] (not a thrown error) when the caller
+// has no linked Staff row, since an empty "nothing assigned" result is the
+// correct answer for a subject-picker filter, not a hard failure.
+export async function resolveAssignedSubjectIds(userId: string): Promise<string[]> {
+  const staff = await prisma.staff.findFirst({ where: { user_id: userId } });
+  if (!staff) return [];
+  const assignments = await prisma.subjectTeacherAssignment.findMany({ where: { staff_id: staff.id } });
+  return [...new Set(assignments.map((a) => a.subject_id))];
+}

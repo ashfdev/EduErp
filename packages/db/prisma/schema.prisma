@@ -221,8 +221,22 @@ model AttendanceRules {
   // shape as min_attendance_percentage above, reused by the same
   // reports/analytics surfaces. Default 80 preserves today's exact behavior.
   pass_rate_alert_threshold          Float                    @default(80)
+  // Which attendance system feeds the Marksheet/Report Card's shown
+  // attendance % and the ATTENDANCE_PERCENTAGE mark-component auto-fetch.
+  // Default SUBJECT_WISE deliberately preserves today's exact existing
+  // behavior (both are already hardcoded to computeSubjectWiseAttendance)
+  // so this migration doesn't silently change any generated document's
+  // numbers on deploy day — an admin opts into the blanket daily/campus
+  // alternative explicitly. Mirrors promotion_attendance_mode's exact
+  // "default = today's real behavior" discipline above.
+  exam_attendance_source             ExamAttendanceSource     @default(SUBJECT_WISE)
   created_at                         DateTime                 @default(now())
   updated_at                         DateTime                 @updatedAt
+}
+
+enum ExamAttendanceSource {
+  SUBJECT_WISE
+  DAILY_CAMPUS
 }
 
 enum StudentLeaveApprovalMode {
@@ -334,6 +348,7 @@ model Shift {
   sections   Section[]
   attendance AttendanceRecord[]
   periods    ShiftPeriod[]
+  staff      Staff[]
 }
 
 // Genuinely new data, not a repurposing of anything existing — Shift itself
@@ -978,6 +993,19 @@ model Staff {
   public_office_location           String?
   employment_type                  EmploymentType             @default(PERMANENT)
   joining_date                     DateTime?
+  // Staff shift assignment (Plan Twenty-Five, Phase D) — most staff
+  // (teachers) reuse one of the existing Shifts already used for sections
+  // (Morning/Day); the nullable custom-hours pair covers staff whose real
+  // hours don't match any shift (accountant, guard, admin staff), taking
+  // precedence over shift_id when both are somehow set. All three null
+  // (every existing row, on migration day) means this staff member behaves
+  // exactly as before — biometric punches always record PRESENT with no
+  // late-window comparison, overtime always computes to 0, matching the
+  // confirmed pre-existing behavior byte-for-byte.
+  shift_id                         String?
+  shift                             Shift?                    @relation(fields: [shift_id], references: [id])
+  custom_shift_start_time          String?
+  custom_shift_end_time            String?
   max_periods_per_day              Int?
   max_periods_per_week             Int?
   salary_structure_id              String?
@@ -1017,6 +1045,7 @@ model Staff {
   @@index([department_id])
   @@index([program_id])
   @@index([salary_structure_id])
+  @@index([shift_id])
 }
 
 // ─────────────────────────────────────────────
@@ -3666,13 +3695,19 @@ model RoutineSlot {
   // share the same class/section/day/period (e.g. Science sits Physics while
   // Commerce sits Accounting in the same slot) without colliding with each
   // other. Same NULL-collapses-differently-in-Postgres caveat as section_id
-  // above applies to group_id too — the existing partial index (section_id
-  // IS NULL) is untouched and still correct for every non-grouped class,
-  // since group_id is NULL there as well; a dedicated partial index for a
-  // whole-class (no section split) Group-specific slot isn't added here, as
-  // that combination isn't a real scheduling shape this phase needs to
-  // support — the app-level clash check is the primary guard in practice,
-  // same as it already is for the section_id/teacher_id cases.
+  // above applies to group_id too — CONFIRMED (Plan Twenty-Five, Phase C) to
+  // be a real, previously-undetected gap for the single most common
+  // scheduling shape: section_id SET + group_id NULL (an ordinary,
+  // non-grouped class). The base @@unique below silently does not protect
+  // this combination (group_id NULL never equals group_id NULL to Postgres),
+  // and the existing section_id-IS-NULL partial index only covers the
+  // *whole-class* (no section split) case, not this one — proven by a real
+  // create-a-colliding-slot test that succeeded with zero error before this
+  // fix. Closed by a third partial unique index, (class_id, section_id,
+  // day_of_week, period_no) WHERE group_id IS NULL, added in migration
+  // 20260806130000_routine_slot_group_null_constraint (see that file for
+  // the exact SQL) — Prisma's schema language can't express it here either,
+  // same limitation as the two indexes already documented below.
   @@unique([class_id, section_id, group_id, day_of_week, period_no])
   @@index([class_id])
   @@index([teacher_id])

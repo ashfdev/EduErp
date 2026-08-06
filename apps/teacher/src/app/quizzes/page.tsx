@@ -42,9 +42,14 @@ export default function TeacherQuizzesPage() {
     : [...new Set((mySections ?? []).map((s) => s.class_id))];
 
   const { data: subjects } = useQuery<Subject[]>({
-    queryKey: ["subjects", "for-quiz", classIds.join(",")],
+    queryKey: ["subjects", "for-quiz", classIds.join(","), isAdmin],
     queryFn: async () => {
-      const results = await Promise.all(classIds.map((cid) => api.get("/api/subjects", { params: { class_id: cid } })));
+      // Non-admin teachers only get offered subjects they're actually
+      // assigned to (assigned_only=true) — admin/oversight roles keep
+      // seeing every subject in the class, unfiltered, as before.
+      const results = await Promise.all(
+        classIds.map((cid) => api.get("/api/subjects", { params: { class_id: cid, ...(isAdmin ? {} : { assigned_only: true }) } })),
+      );
       return results.flatMap((r) => r.data.data);
     },
     enabled: classIds.length > 0,

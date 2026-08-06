@@ -135,6 +135,21 @@ export default function AttendanceRulesPage() {
         </Card>
         <Card>
           <CardContent className="space-y-1.5 pt-6">
+            <Label>Marksheet / Report Card — which attendance shows?</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" {...register("exam_attendance_source")}>
+              <option value="SUBJECT_WISE">Subject-wise attendance (today&apos;s existing default)</option>
+              <option value="DAILY_CAMPUS">Daily/campus attendance only</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Controls what attendance percentage is printed on Marksheets/Report Cards and used by any
+              &quot;Attendance&quot; mark component in an exam&apos;s mark composition. &quot;Subject-wise&quot; uses real
+              per-subject attendance (once teachers are marking it per period); &quot;Daily/campus&quot; uses the same
+              whole-day attendance class teachers mark once a day — the same figure for every subject.
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-1.5 pt-6">
             <Label>Student leave — who must approve?</Label>
             <select className="w-full rounded-md border px-3 py-2 text-sm" {...register("leave_approval_mode")}>
               <option value="CLASS_TEACHER_ONLY">Class (homeroom) Teacher only — one decision per request</option>

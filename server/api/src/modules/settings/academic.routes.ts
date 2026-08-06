@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { reqParam } from "../../lib/req-param";
 import { z } from "zod";
-import type { Prisma } from "@education-erp/db";
+import { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -442,14 +442,35 @@ routineRouter.get(
   }),
 );
 
+const ROUTINE_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// Translates the raw Prisma P2002 unique-constraint violation on RoutineSlot
+// (class_id+section_id+group_id+day_of_week+period_no, or the teacher/day/
+// period constraint) into a real sentence, matching assertNoTeacherClash's
+// message quality — previously this bubbled up as the generic error
+// handler's "A record with this class_id, section_id... already exists",
+// which is almost certainly the literal "not possible" confusion this phase
+// exists to fix. Re-throws anything else unchanged.
+function mapRoutineSlotConflict(err: unknown, day_of_week: number, period_no: number): never {
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    const dayName = ROUTINE_DAY_NAMES[day_of_week] ?? `day ${day_of_week}`;
+    throw conflict(`This section already has a class scheduled for period ${period_no} on ${dayName}. Edit or remove the existing slot first.`);
+  }
+  throw err;
+}
+
 routineRouter.post(
   "/",
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
     const body = routineSlotSchema.parse(req.body);
     await assertNoTeacherClash(body);
-    const slot = await prisma.routineSlot.create({ data: body });
-    res.status(201).json({ success: true, data: slot });
+    try {
+      const slot = await prisma.routineSlot.create({ data: body });
+      res.status(201).json({ success: true, data: slot });
+    } catch (err) {
+      mapRoutineSlotConflict(err, body.day_of_week, body.period_no);
+    }
   }),
 );
 
@@ -462,9 +483,19 @@ routineRouter.put(
     const existing = await prisma.routineSlot.findUnique({ where: { id } });
     if (!existing) throw badRequest("Routine slot not found");
     const merged = { ...existing, ...body };
-    await assertNoTeacherClash(merged, id);
-    const slot = await prisma.routineSlot.update({ where: { id }, data: body });
-    res.json({ success: true, data: slot });
+    // Only re-validate the teacher/day/period combo when the edit actually
+    // touches one of those three fields — an edit that only changes, say,
+    // subject_id must never fail because of an unrelated collision that
+    // developed since this slot was originally created (a real, confirmed
+    // bug: re-validating the merged-but-unchanged combo on every edit).
+    const touchesClashFields = body.teacher_id !== undefined || body.day_of_week !== undefined || body.period_no !== undefined;
+    if (touchesClashFields) await assertNoTeacherClash(merged, id);
+    try {
+      const slot = await prisma.routineSlot.update({ where: { id }, data: body });
+      res.json({ success: true, data: slot });
+    } catch (err) {
+      mapRoutineSlotConflict(err, merged.day_of_week, merged.period_no);
+    }
   }),
 );
 
@@ -822,7 +853,7 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
       const remainder = unsetSubjects.length > 0 ? remainingSlots % unsetSubjects.length : 0;
 
       let unsetIndex = 0;
-      const queue = subjectList.map((subject, i) => {
+      const unorderedQueue = subjectList.map((subject) => {
         let count: number;
         if (subject.weekly_periods) {
           count = subject.weekly_periods;
@@ -830,14 +861,20 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
           count = baseCount + (unsetIndex < remainder ? 1 : 0);
           unsetIndex++;
         }
-        return {
-          subject,
-          teacherId: assignmentBySubject.get(subject.id)!,
-          remaining: count,
-          usedDays: new Set<number>(),
-          dayOffset: i % days.length,
-        };
+        return { subject, teacherId: assignmentBySubject.get(subject.id)!, remaining: count };
       });
+      // Most-constrained-first: a subject needing more periods/week has
+      // strictly less scheduling flexibility as the week fills up (fewer
+      // remaining day/period combinations can still fit all of its
+      // sessions), so it's placed before looser subjects that could have
+      // used a different slot instead. Ties keep their original
+      // display_order (JS sort is stable) — a real, bounded improvement
+      // over pure insertion-order placement, without needing full
+      // backtracking/constraint-solving. dayOffset is assigned AFTER
+      // sorting so the day-rotation still spreads evenly across the
+      // reordered queue, not the original insertion order.
+      const sortedQueue = [...unorderedQueue].sort((a, b) => b.remaining - a.remaining);
+      const queue = sortedQueue.map((entry, i) => ({ ...entry, usedDays: new Set<number>(), dayOffset: i % days.length }));
 
       let progressed = true;
       while (progressed) {

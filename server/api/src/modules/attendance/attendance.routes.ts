@@ -12,6 +12,7 @@ import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeOvertime } from "../../utils/overtime";
+import { resolveStaffShiftTimes } from "../../lib/staff-shift";
 import { dateOnlyFrom } from "../../lib/date-only";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
@@ -246,7 +247,14 @@ attendanceRouter.get(
 
     const staff = await prisma.staff.findMany({
       where: { deleted_at: null, is_active: true, ...(query.position && { designation: query.position }) },
-      select: { id: true, name_en: true, designation: true },
+      select: {
+        id: true,
+        name_en: true,
+        designation: true,
+        custom_shift_start_time: true,
+        custom_shift_end_time: true,
+        shift: { select: { start_time: true, end_time: true } },
+      },
       orderBy: { name_en: "asc" },
     });
     const staffIds = staff.map((s) => s.id);
@@ -273,16 +281,24 @@ attendanceRouter.get(
     const rows = staff.map((s) => {
       const record = recordByStaff.get(s.id) ?? null;
       const rowStatus = !isWorkingDay ? "WEEKEND" : record ? record.status : "UNMARKED";
+      // The staff's own configured shift (custom hours, else assigned
+      // Shift) — not just whatever AttendanceRecord.shift_id happened to
+      // get set by biometric matching that day, so a manually-marked
+      // record (shift_id left null) still shows/uses the staff's real
+      // shift for display and overtime. Falls back to the record's own
+      // shift only if the staff has neither configured (a pre-Phase-D
+      // record from before this staff member had a shift at all).
+      const effectiveShift = resolveStaffShiftTimes(s) ?? (record?.shift ? { start_time: record.shift.start_time, end_time: record.shift.end_time } : null);
       return {
         staff_id: s.id,
         name: s.name_en,
         designation: s.designation,
-        shift_start_time: record?.shift?.start_time ?? null,
-        shift_end_time: record?.shift?.end_time ?? null,
+        shift_start_time: effectiveShift?.start_time ?? null,
+        shift_end_time: effectiveShift?.end_time ?? null,
         check_in_at: record?.check_in_at ?? null,
         check_out_at: record?.check_out_at ?? null,
         working_hours: computeWorkingHours(record?.check_in_at ?? null, record?.check_out_at ?? null),
-        overtime_hours: computeOvertime(record?.check_out_at ?? null, record?.shift?.start_time, record?.shift?.end_time),
+        overtime_hours: computeOvertime(record?.check_out_at ?? null, effectiveShift?.start_time, effectiveShift?.end_time),
         status: rowStatus,
         punch_count: punchCountByStaff.get(s.id) ?? 0,
       };
