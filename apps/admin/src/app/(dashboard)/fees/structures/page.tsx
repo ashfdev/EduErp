@@ -134,6 +134,14 @@ export default function FeeStructuresPage() {
   // click Generate in," which is meaningless for a ONE_TIME fee. Defaults
   // to 14 days out, editable before generating.
   const [generateDueDate, setGenerateDueDate] = useState("");
+  // YEARLY-only: which calendar year this generation run is for. Passed as
+  // `year` in the request body so the backend's own idempotency check
+  // (student+structure+month+year) correctly treats next year's generation
+  // as a fresh run instead of silently skipping forever after the first
+  // year (the exact bug this whole fix exists to close -- confirmed live,
+  // a real YEARLY fee had zero invoices ever generated for anyone since
+  // this button never offered YEARLY at all before now).
+  const [generateYear, setGenerateYear] = useState(String(new Date().getFullYear()));
   function openGenerateDialog(s: FeeStructure) {
     if (s.target_due_date) {
       setGenerateDueDate(s.target_due_date.slice(0, 10));
@@ -142,6 +150,7 @@ export default function FeeStructuresPage() {
       d.setDate(d.getDate() + 14);
       setGenerateDueDate(d.toISOString().slice(0, 10));
     }
+    setGenerateYear(String(new Date().getFullYear()));
     setGenerateTarget(s);
   }
   const generateClassIds = generateTarget
@@ -168,7 +177,12 @@ export default function FeeStructuresPage() {
   });
 
   const generateInvoicesMutation = useMutation({
-    mutationFn: () => api.post("/api/fees/invoices/generate", { fee_structure_id: generateTarget!.id, due_date: generateDueDate }),
+    mutationFn: () =>
+      api.post("/api/fees/invoices/generate", {
+        fee_structure_id: generateTarget!.id,
+        due_date: generateDueDate,
+        ...(generateTarget?.frequency === "YEARLY" ? { year: Number(generateYear) } : {}),
+      }),
     onSuccess: (res) => {
       const { created, skipped_duplicates } = res.data.data as { created: number; skipped_duplicates: number };
       toast.success(`Generated ${created} invoice${created === 1 ? "" : "s"}${skipped_duplicates ? ` (${skipped_duplicates} already existed)` : ""}`);
@@ -433,7 +447,7 @@ export default function FeeStructuresPage() {
                   <td className="p-2 text-muted-foreground">{describeScope(s)}</td>
                   <td className="p-2">
                     <div className="flex flex-wrap justify-end gap-2">
-                      {s.frequency === "ONE_TIME" && (
+                      {(s.frequency === "ONE_TIME" || s.frequency === "YEARLY") && (
                         <Button size="sm" variant="outline" onClick={() => openGenerateDialog(s)}>Generate Invoices</Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => openAssignClasses(s)}>Assign to Classes/Groups</Button>
@@ -628,6 +642,15 @@ export default function FeeStructuresPage() {
               Applies to: {generateTarget ? describeScope(generateTarget) : ""}
             </p>
           )}
+          {generateTarget?.frequency === "YEARLY" && (
+            <div className="space-y-1.5">
+              <Label>Year</Label>
+              <Input type="number" value={generateYear} onChange={(e) => setGenerateYear(e.target.value)} placeholder={String(new Date().getFullYear())} />
+              <p className="text-xs text-muted-foreground">
+                Which year this charge is for — generating again for the same year skips students who already have it; a new year always generates fresh.
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Due Date</Label>
             <Input type="date" value={generateDueDate} onChange={(e) => setGenerateDueDate(e.target.value)} />
@@ -650,7 +673,12 @@ export default function FeeStructuresPage() {
             <Button variant="outline" onClick={() => setGenerateTarget(null)}>Cancel</Button>
             <Button
               onClick={() => generateInvoicesMutation.mutate()}
-              disabled={generateInvoicesMutation.isPending || generatePreviewTotal === undefined || !generateDueDate}
+              disabled={
+                generateInvoicesMutation.isPending ||
+                generatePreviewTotal === undefined ||
+                !generateDueDate ||
+                (generateTarget?.frequency === "YEARLY" && !generateYear)
+              }
             >
               {generateInvoicesMutation.isPending ? "Generating..." : "Generate Now"}
             </Button>

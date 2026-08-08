@@ -1,6 +1,16 @@
-import type { Prisma, PrismaClient, FeeStructure } from "@education-erp/db";
+import type { Prisma, PrismaClient, FeeStructure, FeeCategory } from "@education-erp/db";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
+
+// Categories that represent an opt-in SERVICE (a student is either on a bus
+// route or not; either in the hostel or not) rather than a baseline fee
+// every student in a class/institution owes by default. For these
+// categories, a structure with no class scoping is NEVER institution-wide,
+// even before its first individual assignment exists -- mirrors
+// fee-reconciliation-engine.ts's own precedent of hardcoding a small,
+// deliberately-curated category list (NON_RECURRING_CATEGORIES) rather than
+// inferring intent from row counts.
+const INDIVIDUAL_ONLY_CATEGORIES: FeeCategory[] = ["TRANSPORT", "HOSTEL"];
 
 // Does this FeeStructure apply to a given student?
 //
@@ -22,9 +32,29 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 //  3. The legacy class_id/section_id scalar, exactly as before any of this
 //     existed -- a structure that's never been touched by "Assign to
 //     Classes/Groups" behaves byte-for-byte as it always has.
+//
+// Real bug found and fixed (Plan Twenty-Five, Phase F live-verification,
+// 2026-08-06): a structure with NO class scoping at all (no FeeStructureClass
+// rows, class_id/section_id both null) used to fall through to "applies to
+// everyone" unconditionally. That's correct and intended for a genuinely
+// institution-wide fee (Library Fee, Development Fee, Community Fee -- all
+// real seed rows, all still institution-wide after this fix, since their
+// category isn't in INDIVIDUAL_ONLY_CATEGORIES). It is WRONG for a
+// Transport/Hostel-style fee meant to apply only to the specific students
+// individually attached to it via Facility Request approval or direct
+// assign. An earlier version of this fix inferred intent from "does this
+// structure already have at least one individual assignment" -- that was
+// live-tested and found INSUFFICIENT: a brand-new Transport route's own
+// FeeStructure legitimately has zero assignments for a while (nobody's
+// requested that specific route yet), and during that window it was still
+// silently invoicing every active student in the institution for it (caught
+// live: a real test student got billed for a route they never requested).
+// The category-based rule below has no such window -- TRANSPORT/HOSTEL are
+// never institution-wide by default, full stop, regardless of assignment
+// count. Byte-identical for every non-TRANSPORT/HOSTEL structure.
 export async function feeStructureAppliesToStudent(
   tx: Tx,
-  structure: Pick<FeeStructure, "id" | "class_id" | "section_id">,
+  structure: Pick<FeeStructure, "id" | "class_id" | "section_id" | "category">,
   studentClassId: string | null,
   studentSectionId: string | null,
   studentId?: string | null,
@@ -43,6 +73,10 @@ export async function feeStructureAppliesToStudent(
     return classRows.some((r) => r.class_id === studentClassId && (r.group_id === null || r.group_id === studentGroupId));
   }
 
+  if (!structure.class_id && !structure.section_id && INDIVIDUAL_ONLY_CATEGORIES.includes(structure.category)) {
+    return false; // this student already failed the individual check above
+  }
+
   if (structure.class_id && (!studentClassId || structure.class_id !== studentClassId)) return false;
   if (structure.section_id && structure.section_id !== studentSectionId) return false;
   return true;
@@ -58,7 +92,7 @@ export async function feeStructureAppliesToStudent(
 // OR'd together since any one of the three is sufficient.
 export async function buildFeeStructureStudentWhere(
   tx: Tx,
-  structure: Pick<FeeStructure, "id" | "class_id" | "section_id">,
+  structure: Pick<FeeStructure, "id" | "class_id" | "section_id" | "category">,
 ): Promise<Prisma.StudentWhereInput> {
   const individualIds = (await tx.feeStructureStudent.findMany({ where: { fee_structure_id: structure.id }, select: { student_id: true } })).map((r) => r.student_id);
   const classRows = await tx.feeStructureClass.findMany({ where: { fee_structure_id: structure.id }, select: { class_id: true, group_id: true } });
@@ -72,14 +106,16 @@ export async function buildFeeStructureStudentWhere(
     };
   }
 
+  // Mirrors feeStructureAppliesToStudent's own category rule above -- see
+  // its comment for the full reasoning and the real bug this closes.
+  if (!structure.class_id && !structure.section_id && INDIVIDUAL_ONLY_CATEGORIES.includes(structure.category)) {
+    return individualIds.length ? { id: { in: individualIds } } : { id: "__none__" };
+  }
+
   const legacyWhere: Prisma.StudentWhereInput = {
     ...(structure.class_id ? { current_class_id: structure.class_id } : {}),
     ...(structure.section_id ? { current_section_id: structure.section_id } : {}),
   };
   if (!individualIds.length) return legacyWhere;
-  // Legacy scalar unset (applies institution-wide) -- individually assigned
-  // students are already covered by the empty legacyWhere matching everyone,
-  // so no OR is needed in that specific case.
-  if (!structure.class_id && !structure.section_id) return legacyWhere;
   return { OR: [{ id: { in: individualIds } }, legacyWhere] };
 }
