@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
+import { SETTINGS_ACADEMIC_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import {
   academicYearSchema,
   shiftSchema,
@@ -478,6 +478,17 @@ export async function assertNoRoomClash(input: { room_id?: string | null; day_of
 
 routineRouter.get(
   "/",
+  // Real gap found in audit (2026-08-08): no authorize() at all, so any
+  // portal (STUDENT/GUARDIAN) token could pull the campus-wide teacher/
+  // room/subject timetable directly -- unlike most other read-only
+  // Settings-reference routes in this file (grading scales, etc.), which
+  // are deliberately open to any authenticated staff-or-portal account
+  // since they're low-sensitivity reference data. Routine data is
+  // different: it reveals which teacher is where, when, campus-wide, and
+  // the portal already has its own properly section-scoped routine
+  // endpoint (portal.routes.ts) -- this raw admin route has no legitimate
+  // portal use case. Gated to staff-only.
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({ class_id: z.string().optional(), section_id: z.string().optional(), group_id: z.string().optional(), day_of_week: z.coerce.number().int().min(0).max(6).optional() })
@@ -689,6 +700,8 @@ routineSubstitutionsRouter.use(authenticate);
 
 routineSubstitutionsRouter.get(
   "/",
+  // Same real gap and same fix as routineRouter's own GET / above.
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.coerce.date() }).parse(req.query);
     const date = new Date(Date.UTC(query.date.getFullYear(), query.date.getMonth(), query.date.getDate()));

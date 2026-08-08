@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface StudentRow {
@@ -48,7 +48,7 @@ export default function AssignTransportPage() {
     enabled: search.length > 1 && !selectedStudent,
   });
 
-  const { data: routes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
+  const { data: routes, isLoading: routesLoading, isError: routesError, error: routesErrorObj, refetch: refetchRoutes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
   const selectedRoute = routes?.find((r) => r.id === routeId);
 
   const assignMutation = useMutation({
@@ -69,6 +69,11 @@ export default function AssignTransportPage() {
     <PageWrapper>
       <PageHeader title="Assign Student to Route" breadcrumbs={[{ label: "Transport", href: "/transport" }, { label: "Assign" }]} />
 
+      {routesLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : routesError ? (
+        <ErrorState title="Failed to load transport routes" description={extractErrorMessage(routesErrorObj)} retryLabel="Retry" onRetry={() => refetchRoutes()} />
+      ) : (
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
@@ -128,6 +133,7 @@ export default function AssignTransportPage() {
           </Button>
         </CardContent>
       </Card>
+      )}
     </PageWrapper>
   );
 }

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -14,11 +15,12 @@ import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
 import { computeClassResults } from "../results/results.routes";
 import { calculatePositions, calculateStudentResult } from "../../utils/grading.engine";
-import { uploadBuffer } from "../../services/storage.service";
+import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { rejectDocumentRequestSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { allowIframeEmbed } from "../../middleware/allow-iframe";
 import { createInAppNotification } from "../../services/in-app-notification.service";
+import { documentQueue, DEFAULT_JOB_OPTS } from "../../lib/queues";
 import { syncOverdueInvoices, formatFeePeriod } from "../fees/invoice-helpers";
 import { checkAdmitCardClearance } from "../../lib/admit-card-clearance";
 import type { UserRole } from "@education-erp/types";
@@ -1014,21 +1016,146 @@ documentsRouter.get(
   }),
 );
 
-documentsRouter.get(
-  "/result/:exam_id/marksheets/class/:class_id",
-  asyncHandler(async (req, res) => {
-    const examId = reqParam(req, "exam_id");
-    const classId = reqParam(req, "class_id");
-    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
-    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    // Each student's own marksheet is already correctly self-scoped by
-    // buildMarksheetData (its position/average stats key off the student's
-    // own group_id) -- this filter is purely about which students end up in
-    // the batch at all, e.g. printing only one section's (and/or one
-    // group's) marksheets instead of the whole (possibly multi-section,
-    // multi-group) class every time. Section and Group are independent
-    // axes and both narrow together -- a section can have mixed groups.
-    const students = await prisma.student.findMany({
+// ───────────────────────── Large-batch background jobs (Plan Twenty) ─────
+// Every "batch PDF for a whole class" route below can genuinely exceed
+// Puppeteer's own protocol timeout for a large class -- confirmed via a
+// real class-9 ID-card batch (628 students) that timed out synchronously.
+// Below BATCH_JOB_THRESHOLD, each route still generates and returns the PDF
+// synchronously exactly as it did before this system existed -- this only
+// changes behavior for genuinely large batches. Each job kind's builder
+// function below is the ONE place that knows how to turn its params into a
+// PDF buffer -- both the synchronous route handler and the async worker
+// (jobs/document-batch.job.ts, which imports runBatchJobBuilder) call the
+// exact same function, so the two paths can never produce different output
+// for the same input.
+const BATCH_JOB_THRESHOLD = 100;
+
+export type BatchJobKind =
+  | "ID_CARDS_CLASS"
+  | "MARKSHEETS_CLASS"
+  | "TABULATION_SHEET"
+  | "BLANK_MARKSHEET"
+  | "MERIT_LIST"
+  | "ATTENDANCE_MONTHLY_SHEET"
+  | "ATTENDANCE_BLANK_SHEET";
+
+interface BatchJobResult {
+  buffer: Buffer;
+  filename: string;
+}
+
+export async function buildIdCardsClassJob(params: { class_id: string }): Promise<BatchJobResult> {
+  const classId = params.class_id;
+  const students = await prisma.student.findMany({
+    where: { current_class_id: classId, deleted_at: null, status: "ACTIVE" },
+    include: { current_class: true, current_section: true },
+    orderBy: { current_roll_no: "asc" },
+  });
+  if (!students.length) throw badRequest("No students found in this class");
+  const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
+  const dataList = students.map((student) => ({ student, academic_year_label: activeYear?.label ?? "" }));
+  const buffer = await renderDocumentBatch("STUDENT_ID_CARD", dataList, { pageSize: "ID_CARD" });
+  return { buffer, filename: `id-cards-class-${classId}.pdf` };
+}
+
+export async function buildMarksheetsClassJob(params: {
+  exam_id: string;
+  class_id: string;
+  group_id?: string;
+  section_id?: string;
+}): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  // Each student's own marksheet is already correctly self-scoped by
+  // buildMarksheetData (its position/average stats key off the student's
+  // own group_id) -- this filter is purely about which students end up in
+  // the batch at all, e.g. printing only one section's (and/or one
+  // group's) marksheets instead of the whole (possibly multi-section,
+  // multi-group) class every time. Section and Group are independent
+  // axes and both narrow together -- a section can have mixed groups.
+  const students = await prisma.student.findMany({
+    where: {
+      current_class_id: classId,
+      deleted_at: null,
+      status: "ACTIVE",
+      ...(groupId && { group_id: groupId }),
+      ...(sectionId && { current_section_id: sectionId }),
+    },
+    orderBy: { current_roll_no: "asc" },
+  });
+  if (!students.length) throw badRequest("No students found in this class");
+
+  const dataList = await Promise.all(
+    students.map(async (s) => {
+      const data = await buildMarksheetData(examId, s.id);
+      const qrCode = data.display.show_qr_code ? await generateQrDataUrl(`marksheet:${examId}:${s.id}`) : undefined;
+      return { ...data, qr_code: qrCode };
+    }),
+  );
+  const buffer = await renderDocumentBatch("MARKSHEET", dataList as unknown as Record<string, unknown>[]);
+  return { buffer, filename: `marksheets-class-${classId}.pdf` };
+}
+
+export async function buildTabulationSheetJob(params: {
+  exam_id: string;
+  class_id: string;
+  group_id?: string;
+  section_id?: string;
+}): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  const [exam, classInfo, subjects, allResults] = await Promise.all([
+    prisma.exam.findUnique({ where: { id: examId } }),
+    prisma.class.findUnique({ where: { id: classId } }),
+    prisma.subject.findMany({ where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
+    computeClassResults(examId, classId, groupId),
+  ]);
+  if (!exam) throw notFound("Exam not found");
+  const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
+
+  const rows = results
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((r, i) => ({
+      sl: i + 1,
+      roll_no: r.student.current_roll_no,
+      name_en: r.student.name_en,
+      marks: subjects.map((s) => r.result.subjects.find((rs) => rs.subject_id === s.id)?.marks_total ?? null),
+      total_gpa: r.result.total_gpa,
+      overall_grade: r.result.overall_grade_letter,
+      position: r.position,
+    }));
+
+  const passed = results.filter((r) => !r.result.has_failed).length;
+  const buffer = await renderDocument(
+    "TABULATION_SHEET",
+    {
+      exam_name: exam.name,
+      class_name: classInfo?.name_en ?? "",
+      academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
+      subject_names: subjects.map((s) => s.name_en),
+      rows,
+      total_appeared: results.length,
+      total_passed: passed,
+      pass_rate: results.length ? Math.round((passed / results.length) * 1000) / 10 : 0,
+    },
+    { pageSize: "A3", orientation: "landscape" },
+  );
+  return { buffer, filename: `tabulation-${classId}.pdf` };
+}
+
+export async function buildBlankMarksheetJob(params: {
+  exam_id: string;
+  class_id: string;
+  group_id?: string;
+  section_id?: string;
+}): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  const [exam, classInfo, subjectConfigs, students] = await Promise.all([
+    prisma.exam.findUnique({ where: { id: examId } }),
+    prisma.class.findUnique({ where: { id: classId } }),
+    prisma.examSubjectConfig.findMany({
+      where: { exam_id: examId, subject: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } },
+      include: { subject: true },
+    }),
+    prisma.student.findMany({
       where: {
         current_class_id: classId,
         deleted_at: null,
@@ -1037,18 +1164,242 @@ documentsRouter.get(
         ...(sectionId && { current_section_id: sectionId }),
       },
       orderBy: { current_roll_no: "asc" },
-    });
-    if (!students.length) throw badRequest("No students found in this class");
+    }),
+  ]);
+  if (!exam) throw notFound("Exam not found");
+  if (!subjectConfigs.length) throw badRequest("No subjects configured for this exam/class");
 
-    const dataList = await Promise.all(
-      students.map(async (s) => {
-        const data = await buildMarksheetData(examId, s.id);
-        const qrCode = data.display.show_qr_code ? await generateQrDataUrl(`marksheet:${examId}:${s.id}`) : undefined;
-        return { ...data, qr_code: qrCode };
-      }),
-    );
-    const pdf = await renderDocumentBatch("MARKSHEET", dataList as unknown as Record<string, unknown>[]);
-    sendPdf(res, pdf, `marksheets-class-${classId}.pdf`, req.query.download === "true");
+  const buffer = await renderDocument(
+    "BLANK_MARKSHEET",
+    {
+      exam_name: exam.name,
+      class_name: classInfo?.name_en ?? "",
+      academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
+      subjects: subjectConfigs.map((c) => ({ name_en: c.subject.name_en, full_marks: c.full_marks_theory + c.full_marks_practical })),
+      students: students.map((s, i) => ({ sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en })),
+    },
+    { pageSize: "A3", orientation: "landscape" },
+  );
+  return { buffer, filename: `blank-marksheet-${classId}.pdf` };
+}
+
+export async function buildMeritListJob(params: {
+  exam_id: string;
+  class_id: string;
+  group_id?: string;
+  section_id?: string;
+}): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  const [exam, classInfo, allResults] = await Promise.all([
+    prisma.exam.findUnique({ where: { id: examId } }),
+    prisma.class.findUnique({ where: { id: classId } }),
+    computeClassResults(examId, classId, groupId),
+  ]);
+  if (!exam) throw notFound("Exam not found");
+  const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
+
+  const rows = results
+    .filter((r) => !r.result.has_failed)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((r) => ({
+      rank: r.position,
+      roll_no: r.student.current_roll_no,
+      student_uid: r.student.student_uid,
+      name_en: r.student.name_en,
+      total_gpa: r.result.total_gpa,
+    }));
+
+  const buffer = await renderDocument("MERIT_LIST", {
+    exam_name: exam.name,
+    class_name: classInfo?.name_en ?? "",
+    academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
+    rows,
+  });
+  return { buffer, filename: `merit-list-${classId}.pdf` };
+}
+
+export async function buildAttendanceMonthlySheetJob(params: {
+  class_id: string;
+  section_id?: string;
+  month: number;
+  year: number;
+}): Promise<BatchJobResult> {
+  const { class_id: classId, section_id: sectionId, month, year } = params;
+  const students = await prisma.student.findMany({
+    where: { current_class_id: classId, current_section_id: sectionId, deleted_at: null, status: "ACTIVE" },
+    orderBy: { current_roll_no: "asc" },
+  });
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: { person_type: "STUDENT", person_id: { in: students.map((s) => s.id) }, date: { gte: monthStart, lt: monthEnd } },
+  });
+
+  const rows = students.map((s, i) => {
+    const studentRecords = records.filter((r) => r.person_id === s.id);
+    const marks = dates.map((d) => {
+      const rec = studentRecords.find((r) => new Date(r.date).getDate() === d);
+      return rec ? rec.status[0] : "";
+    });
+    const present = studentRecords.filter((r) => r.status === "PRESENT").length;
+    return {
+      sl: i + 1,
+      roll_no: s.current_roll_no,
+      name_en: s.name_en,
+      marks,
+      present,
+      absent: studentRecords.length - present,
+      percentage: studentRecords.length ? Math.round((present / studentRecords.length) * 1000) / 10 : 0,
+    };
+  });
+
+  const classInfo = await prisma.class.findUnique({ where: { id: classId } });
+  const sectionInfo = sectionId ? await prisma.section.findUnique({ where: { id: sectionId } }) : null;
+  const buffer = await renderDocument("ATTENDANCE_SHEET", {
+    class_name: classInfo?.name_en ?? "",
+    section_name: sectionInfo?.name ?? "",
+    month,
+    year,
+    dates,
+    rows,
+  });
+  return { buffer, filename: `attendance-monthly-${month}-${year}.pdf` };
+}
+
+export async function buildAttendanceBlankSheetJob(params: {
+  class_id: string;
+  section_id?: string;
+  from_date: string;
+  to_date: string;
+}): Promise<BatchJobResult> {
+  const { class_id: classId, section_id: sectionId, from_date, to_date } = params;
+  const students = await prisma.student.findMany({
+    where: { current_class_id: classId, current_section_id: sectionId, deleted_at: null, status: "ACTIVE" },
+    orderBy: { current_roll_no: "asc" },
+  });
+  const from = new Date(from_date);
+  const to = new Date(to_date);
+  const dateColumns: number[] = [];
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dateColumns.push(d.getDate());
+
+  const classInfo = await prisma.class.findUnique({ where: { id: classId } });
+  const sectionInfo = sectionId ? await prisma.section.findUnique({ where: { id: sectionId } }) : null;
+
+  const buffer = await renderDocument("ATTENDANCE_BLANK", {
+    class_name: classInfo?.name_en ?? "",
+    section_name: sectionInfo?.name ?? "",
+    shift_name: "",
+    from_date,
+    to_date,
+    date_columns: dateColumns,
+    students: students.map((s, i) => ({ sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en })),
+  });
+  return { buffer, filename: "attendance-blank.pdf" };
+}
+
+// Cheap, count-only proxy for "how big will this batch be" -- used purely to
+// decide sync-vs-async routing BEFORE doing the real (expensive) build.
+// Every kind here counts the same underlying student roster the matching
+// builder above renders one entry per, since that's what actually drives
+// render cost (Puppeteer page count, or buildMarksheetData's own per-student
+// DB round-trips) for all 7 of these job kinds.
+async function resolveBatchJobCount(params: { class_id: string; group_id?: string; section_id?: string }): Promise<number> {
+  return prisma.student.count({
+    where: {
+      current_class_id: params.class_id,
+      deleted_at: null,
+      status: "ACTIVE",
+      ...(params.group_id && { group_id: params.group_id }),
+      ...(params.section_id && { current_section_id: params.section_id }),
+    },
+  });
+}
+
+// The shared dispatch both the synchronous route handlers below AND the
+// background worker (jobs/document-batch.job.ts, a different file) call --
+// exported so the worker can reach every builder without duplicating this
+// table.
+export async function runBatchJobBuilder(kind: BatchJobKind, params: Record<string, unknown>): Promise<BatchJobResult> {
+  switch (kind) {
+    case "ID_CARDS_CLASS":
+      return buildIdCardsClassJob(params as { class_id: string });
+    case "MARKSHEETS_CLASS":
+      return buildMarksheetsClassJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string });
+    case "TABULATION_SHEET":
+      return buildTabulationSheetJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string });
+    case "BLANK_MARKSHEET":
+      return buildBlankMarksheetJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string });
+    case "MERIT_LIST":
+      return buildMeritListJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string });
+    case "ATTENDANCE_MONTHLY_SHEET":
+      return buildAttendanceMonthlySheetJob(params as { class_id: string; section_id?: string; month: number; year: number });
+    case "ATTENDANCE_BLANK_SHEET":
+      return buildAttendanceBlankSheetJob(params as { class_id: string; section_id?: string; from_date: string; to_date: string });
+  }
+}
+
+const JOB_KIND_DOC_TYPE: Record<BatchJobKind, string> = {
+  ID_CARDS_CLASS: "STUDENT_ID_CARD",
+  MARKSHEETS_CLASS: "MARKSHEET",
+  TABULATION_SHEET: "TABULATION_SHEET",
+  BLANK_MARKSHEET: "BLANK_MARKSHEET",
+  MERIT_LIST: "MERIT_LIST",
+  ATTENDANCE_MONTHLY_SHEET: "ATTENDANCE_SHEET",
+  ATTENDANCE_BLANK_SHEET: "ATTENDANCE_BLANK",
+};
+
+async function enqueueDocumentBatchJob(kind: BatchJobKind, params: Record<string, unknown>, requestedById: string) {
+  const job = await prisma.documentBatchJob.create({
+    // Cast, not a real risk -- `undefined` values (e.g. an omitted
+    // group_id/section_id) are simply dropped by JSON serialization, same
+    // as every other Json-column write in this codebase that starts from a
+    // plain params object (e.g. staff.routes.ts's `publications` field).
+    data: { job_kind: kind, doc_type: JOB_KIND_DOC_TYPE[kind], params: params as Prisma.InputJsonValue, requested_by_id: requestedById },
+  });
+  await documentQueue.add("render", { job_id: job.id }, DEFAULT_JOB_OPTS);
+  return job;
+}
+
+documentsRouter.get(
+  "/batch-jobs/:id/download",
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const job = await prisma.documentBatchJob.findUnique({ where: { id } });
+    // 404 (not 403) for a non-owner or a nonexistent id alike -- same
+    // "don't confirm existence to an ineligible caller" discipline already
+    // used elsewhere in this codebase (e.g. the Document Requests/Resource
+    // Library ownership checks).
+    if (!job || job.requested_by_id !== req.user!.sub) throw notFound("Document batch job not found");
+    if (job.status === "FAILED") throw badRequest(job.error_message ?? "This document batch failed to generate. Please try again.");
+    if (job.status !== "COMPLETED" || !job.file_blob_key) {
+      res.status(409).json({ success: false, error: { code: "STILL_PROCESSING", message: "This document is still being generated. Try again shortly." } });
+      return;
+    }
+    const url = await getSignedDownloadUrl(job.file_blob_key);
+    res.json({ success: true, data: { url, filename: job.filename } });
+  }),
+);
+
+documentsRouter.get(
+  "/result/:exam_id/marksheets/class/:class_id",
+  asyncHandler(async (req, res) => {
+    const examId = reqParam(req, "exam_id");
+    const classId = reqParam(req, "class_id");
+    const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
+    const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
+    const count = await resolveBatchJobCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    if (!count) throw badRequest("No students found in this class");
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildMarksheetsClassJob(params);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("MARKSHEETS_CLASS", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1059,44 +1410,16 @@ documentsRouter.get(
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    const [exam, classInfo, subjects, allResults] = await Promise.all([
-      prisma.exam.findUnique({ where: { id: examId } }),
-      prisma.class.findUnique({ where: { id: classId } }),
-      // is_active: true -- a deactivated subject must never appear as a
-      // column (or, worse, silently count as a required-but-untaken
-      // subject for computeClassResults' own averaging below).
-      prisma.subject.findMany({ where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
-      computeClassResults(examId, classId, groupId),
-    ]);
-    if (!exam) throw notFound("Exam not found");
-    // Section and Group are independent axes -- a section can have mixed
-    // groups, so both narrow together rather than one replacing the other.
-    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
-
-    const rows = results
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-      .map((r, i) => ({
-        sl: i + 1,
-        roll_no: r.student.current_roll_no,
-        name_en: r.student.name_en,
-        marks: subjects.map((s) => r.result.subjects.find((rs) => rs.subject_id === s.id)?.marks_total ?? null),
-        total_gpa: r.result.total_gpa,
-        overall_grade: r.result.overall_grade_letter,
-        position: r.position,
-      }));
-
-    const passed = results.filter((r) => !r.result.has_failed).length;
-    const pdf = await renderDocument("TABULATION_SHEET", {
-      exam_name: exam.name,
-      class_name: classInfo?.name_en ?? "",
-      academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
-      subject_names: subjects.map((s) => s.name_en),
-      rows,
-      total_appeared: results.length,
-      total_passed: passed,
-      pass_rate: results.length ? Math.round((passed / results.length) * 1000) / 10 : 0,
-    }, { pageSize: "A3", orientation: "landscape" });
-    sendPdf(res, pdf, `tabulation-${classId}.pdf`, req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    if (!count) throw badRequest("No students found in this class");
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildTabulationSheetJob(params);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("TABULATION_SHEET", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1107,39 +1430,16 @@ documentsRouter.get(
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    const [exam, classInfo, subjectConfigs, students] = await Promise.all([
-      prisma.exam.findUnique({ where: { id: examId } }),
-      prisma.class.findUnique({ where: { id: classId } }),
-      prisma.examSubjectConfig.findMany({
-        where: { exam_id: examId, subject: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } },
-        include: { subject: true },
-      }),
-      prisma.student.findMany({
-        where: {
-          current_class_id: classId,
-          deleted_at: null,
-          status: "ACTIVE",
-          ...(groupId && { group_id: groupId }),
-          ...(sectionId && { current_section_id: sectionId }),
-        },
-        orderBy: { current_roll_no: "asc" },
-      }),
-    ]);
-    if (!exam) throw notFound("Exam not found");
-    if (!subjectConfigs.length) throw badRequest("No subjects configured for this exam/class");
-
-    const pdf = await renderDocument(
-      "BLANK_MARKSHEET",
-      {
-        exam_name: exam.name,
-        class_name: classInfo?.name_en ?? "",
-        academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
-        subjects: subjectConfigs.map((c) => ({ name_en: c.subject.name_en, full_marks: c.full_marks_theory + c.full_marks_practical })),
-        students: students.map((s, i) => ({ sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en })),
-      },
-      { pageSize: "A3", orientation: "landscape" },
-    );
-    sendPdf(res, pdf, `blank-marksheet-${classId}.pdf`, req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    if (!count) throw badRequest("No students found in this class");
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildBlankMarksheetJob(params);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("BLANK_MARKSHEET", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1150,26 +1450,16 @@ documentsRouter.get(
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    const [exam, classInfo, allResults] = await Promise.all([
-      prisma.exam.findUnique({ where: { id: examId } }),
-      prisma.class.findUnique({ where: { id: classId } }),
-      computeClassResults(examId, classId, groupId),
-    ]);
-    if (!exam) throw notFound("Exam not found");
-    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
-
-    const rows = results
-      .filter((r) => !r.result.has_failed)
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-      .map((r) => ({ rank: r.position, roll_no: r.student.current_roll_no, student_uid: r.student.student_uid, name_en: r.student.name_en, total_gpa: r.result.total_gpa }));
-
-    const pdf = await renderDocument("MERIT_LIST", {
-      exam_name: exam.name,
-      class_name: classInfo?.name_en ?? "",
-      academic_year_label: await getAcademicYearLabel(exam.academic_year_id),
-      rows,
-    });
-    sendPdf(res, pdf, `merit-list-${classId}.pdf`, req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    if (!count) throw badRequest("No students found in this class");
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildMeritListJob(params);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("MERIT_LIST", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1208,41 +1498,14 @@ documentsRouter.get(
     const query = z
       .object({ class_id: z.string().min(1), section_id: z.string().optional(), month: z.coerce.number().int().min(1).max(12), year: z.coerce.number().int() })
       .parse(req.query);
-
-    const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
-      orderBy: { current_roll_no: "asc" },
-    });
-    const monthStart = new Date(query.year, query.month - 1, 1);
-    const monthEnd = new Date(query.year, query.month, 1);
-    const daysInMonth = new Date(query.year, query.month, 0).getDate();
-    const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
-    const records = await prisma.attendanceRecord.findMany({
-      where: { person_type: "STUDENT", person_id: { in: students.map((s) => s.id) }, date: { gte: monthStart, lt: monthEnd } },
-    });
-
-    const rows = students.map((s, i) => {
-      const studentRecords = records.filter((r) => r.person_id === s.id);
-      const marks = dates.map((d) => {
-        const rec = studentRecords.find((r) => new Date(r.date).getDate() === d);
-        return rec ? rec.status[0] : "";
-      });
-      const present = studentRecords.filter((r) => r.status === "PRESENT").length;
-      return { sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en, marks, present, absent: studentRecords.length - present, percentage: studentRecords.length ? Math.round((present / studentRecords.length) * 1000) / 10 : 0 };
-    });
-
-    const classInfo = await prisma.class.findUnique({ where: { id: query.class_id } });
-    const sectionInfo = query.section_id ? await prisma.section.findUnique({ where: { id: query.section_id } }) : null;
-    const pdf = await renderDocument("ATTENDANCE_SHEET", {
-      class_name: classInfo?.name_en ?? "",
-      section_name: sectionInfo?.name ?? "",
-      month: query.month,
-      year: query.year,
-      dates,
-      rows,
-    });
-    sendPdf(res, pdf, `attendance-monthly-${query.month}-${query.year}.pdf`, req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: query.class_id, section_id: query.section_id });
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildAttendanceMonthlySheetJob(query);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("ATTENDANCE_MONTHLY_SHEET", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1252,29 +1515,14 @@ documentsRouter.get(
     const query = z
       .object({ class_id: z.string().min(1), section_id: z.string().optional(), from_date: z.string().min(1), to_date: z.string().min(1) })
       .parse(req.query);
-
-    const students = await prisma.student.findMany({
-      where: { current_class_id: query.class_id, current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" },
-      orderBy: { current_roll_no: "asc" },
-    });
-    const from = new Date(query.from_date);
-    const to = new Date(query.to_date);
-    const dateColumns: number[] = [];
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dateColumns.push(d.getDate());
-
-    const classInfo = await prisma.class.findUnique({ where: { id: query.class_id } });
-    const sectionInfo = query.section_id ? await prisma.section.findUnique({ where: { id: query.section_id } }) : null;
-
-    const pdf = await renderDocument("ATTENDANCE_BLANK", {
-      class_name: classInfo?.name_en ?? "",
-      section_name: sectionInfo?.name ?? "",
-      shift_name: "",
-      from_date: query.from_date,
-      to_date: query.to_date,
-      date_columns: dateColumns,
-      students: students.map((s, i) => ({ sl: i + 1, roll_no: s.current_roll_no, name_en: s.name_en })),
-    });
-    sendPdf(res, pdf, "attendance-blank.pdf", req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: query.class_id, section_id: query.section_id });
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildAttendanceBlankSheetJob(query);
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("ATTENDANCE_BLANK_SHEET", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -1515,17 +1763,15 @@ documentsRouter.get(
   "/id-cards/class/:class_id",
   asyncHandler(async (req, res) => {
     const classId = reqParam(req, "class_id");
-    const students = await prisma.student.findMany({
-      where: { current_class_id: classId, deleted_at: null, status: "ACTIVE" },
-      include: { current_class: true, current_section: true },
-      orderBy: { current_roll_no: "asc" },
-    });
-    if (!students.length) throw badRequest("No students found in this class");
-
-    const activeYear = await prisma.academicYear.findFirst({ where: { is_active: true } });
-    const dataList = students.map((student) => ({ student, academic_year_label: activeYear?.label ?? "" }));
-    const pdf = await renderDocumentBatch("STUDENT_ID_CARD", dataList, { pageSize: "ID_CARD" });
-    sendPdf(res, pdf, `id-cards-class-${classId}.pdf`, req.query.download === "true");
+    const count = await resolveBatchJobCount({ class_id: classId });
+    if (!count) throw badRequest("No students found in this class");
+    if (count <= BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildIdCardsClassJob({ class_id: classId });
+      sendPdf(res, buffer, filename, req.query.download === "true");
+      return;
+    }
+    const job = await enqueueDocumentBatchJob("ID_CARDS_CLASS", { class_id: classId }, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

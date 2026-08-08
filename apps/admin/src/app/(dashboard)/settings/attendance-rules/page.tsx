@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Switch, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Switch, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { attendanceRulesSchema, type AttendanceRulesInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
@@ -15,7 +15,7 @@ const DEFAULT_WORKING_DAYS = [0, 1, 2, 3, 4, 6];
 
 export default function AttendanceRulesPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "attendance-rules"],
     queryFn: async () => (await api.get("/api/settings/attendance-rules")).data.data,
   });
@@ -40,6 +40,11 @@ export default function AttendanceRulesPage() {
   return (
     <PageWrapper>
       <PageHeader title="Attendance Rules" subtitle="Working days, late windows, and notification triggers" breadcrumbs={[{ label: "Settings" }, { label: "Attendance Rules" }]} />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load attendance rules" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="max-w-2xl space-y-6">
         <Card>
           <CardContent className="grid grid-cols-2 gap-4 pt-6">
@@ -165,6 +170,7 @@ export default function AttendanceRulesPage() {
         </Card>
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
+      )}
     </PageWrapper>
   );
 }

@@ -57,7 +57,9 @@ export default function ResultLookupPage() {
     setError(null);
     setResult(null);
 
-    const params = new URLSearchParams(mode === "uid" ? { student_uid: studentUid } : { roll_no: rollNo, registration_no: registrationNo });
+    const params = new URLSearchParams(
+      mode === "uid" ? { student_uid: studentUid, registration_no: registrationNo } : { roll_no: rollNo, registration_no: registrationNo },
+    );
     if (showExamFilters && academicYearId) params.set("academic_year_id", academicYearId);
 
     try {
@@ -125,9 +127,15 @@ export default function ResultLookupPage() {
 
         <form onSubmit={search} className="space-y-4">
           {mode === "uid" ? (
-            <div>
-              <label className={labelCls}>Student ID</label>
-              <input required placeholder={t("studentIdPlaceholder")} value={studentUid} onChange={(e) => setStudentUid(e.target.value)} className={inputCls} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Student ID</label>
+                <input required placeholder={t("studentIdPlaceholder")} value={studentUid} onChange={(e) => setStudentUid(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Registration Number</label>
+                <input required placeholder={t("registrationPlaceholder")} value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} className={inputCls} />
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

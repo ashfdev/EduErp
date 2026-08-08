@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, CardHeader, CardTitle, Label, Switch, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, CardHeader, CardTitle, Label, Switch, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { marksheetDisplaySettingsSchema, type MarksheetDisplaySettingsInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
@@ -52,7 +52,7 @@ const GROUPS: { title: string; fields: { key: keyof MarksheetDisplaySettingsInpu
 
 export default function MarksheetDisplaySettingsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "marksheet-display"],
     queryFn: async () => (await api.get("/api/settings/marksheet-display")).data.data,
   });
@@ -74,8 +74,6 @@ export default function MarksheetDisplaySettingsPage() {
     onError: () => toast.error("Failed to update settings"),
   });
 
-  if (!data) return null;
-
   return (
     <PageWrapper>
       <PageHeader
@@ -83,6 +81,11 @@ export default function MarksheetDisplaySettingsPage() {
         subtitle="Control which blocks appear on generated Marksheets and Report Cards"
         breadcrumbs={[{ label: "Settings" }, { label: "Marksheet Display" }]}
       />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load marksheet display settings" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="max-w-2xl space-y-6">
         {GROUPS.map((group) => (
           <Card key={group.title}>
@@ -99,6 +102,7 @@ export default function MarksheetDisplaySettingsPage() {
         ))}
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
+      )}
     </PageWrapper>
   );
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Account {
@@ -36,7 +36,7 @@ export default function ChartOfAccountsPage() {
   const [deactivateTarget, setDeactivateTarget] = useState<Account | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: groups } = useQuery<AccountGroup[]>({
+  const { data: groups, isLoading, isError, error, refetch } = useQuery<AccountGroup[]>({
     queryKey: ["accounts", "chart"],
     queryFn: async () => (await api.get("/api/accounts/chart")).data.data,
   });
@@ -103,6 +103,11 @@ export default function ChartOfAccountsPage() {
         }
       />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load chart of accounts" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <div className="space-y-4">
         {groups?.map((group) => (
           <Card key={group.id}>
@@ -132,6 +137,7 @@ export default function ChartOfAccountsPage() {
           </Card>
         ))}
       </div>
+      )}
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent>

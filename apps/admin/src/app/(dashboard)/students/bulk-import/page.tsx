@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, EmptyState, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PreviewRow {
@@ -49,7 +49,7 @@ export default function BulkImportStudentsPage() {
     login_conflicts: { row: number; message: string }[];
   } | null>(null);
 
-  const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
     queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
@@ -123,6 +123,11 @@ export default function BulkImportStudentsPage() {
       <Card>
         <CardContent className="space-y-3 pt-6">
           <p className="font-medium">2. Upload &amp; preview</p>
+          {yearsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : yearsError ? (
+            <ErrorState title="Failed to load academic years" description={extractErrorMessage(yearsErrorObj)} retryLabel="Retry" onRetry={() => refetchYears()} />
+          ) : (
           <div className="flex items-center gap-3">
             <Select value={academicYearId} onValueChange={setAcademicYearId}>
               <SelectTrigger className="w-56"><SelectValue placeholder="Academic Year (applies to all rows)" /></SelectTrigger>
@@ -135,6 +140,7 @@ export default function BulkImportStudentsPage() {
               {previewMutation.isPending ? "Reading..." : "Preview"}
             </Button>
           </div>
+          )}
         </CardContent>
       </Card>
 

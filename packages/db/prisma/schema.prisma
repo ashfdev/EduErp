@@ -1891,6 +1891,43 @@ enum InvoiceGenerationTrigger {
   SCHEDULED
 }
 
+enum DocumentBatchJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Plan Twenty (built via Plan Twenty-Six, Phase C) -- background job +
+// notify-when-ready for batch PDF generation that would otherwise block an
+// HTTP request past Puppeteer's own protocol timeout. Confirmed via a real
+// class-9 ID-card batch (628 students) genuinely timing out synchronously.
+// Below BATCH_JOB_THRESHOLD (documents.routes.ts), a batch PDF request is
+// still generated and returned synchronously exactly as before this model
+// existed -- this only changes behavior for genuinely large batches.
+// job_kind keys BATCH_JOB_BUILDERS in documents.routes.ts, the shared
+// dispatch both the synchronous route handler and the async worker call --
+// one source of truth for "how do I build this doc type's data," so the
+// two paths can never silently drift into different output for the same
+// input. params is deliberately a replay of the route's own path/query
+// params (never the built dataList itself), so the worker always rebuilds
+// from live data at process time, not a stale snapshot from request time.
+model DocumentBatchJob {
+  id              String                 @id @default(cuid())
+  job_kind        String
+  doc_type        String
+  requested_by_id String
+  params          Json
+  status          DocumentBatchJobStatus @default(QUEUED)
+  file_blob_key   String?
+  filename        String?
+  error_message   String?
+  created_at      DateTime               @default(now())
+  completed_at    DateTime?
+
+  @@index([requested_by_id])
+}
+
 // Plan Twenty-Four -- Fee Reconciliation & Assurance. Strictly a detection
 // layer: nothing here ever writes to Invoice/FeeStructure/FeeStructureStudent,
 // it only records what a nightly (or manually-triggered) sweep found so a
@@ -4300,6 +4337,9 @@ enum NotificationTrigger {
   // Plan Twenty-Three, Phase 5 -- replaces the raw sendSms() previously
   // used on the old cycle-wide admit-card-publish route.
   ADMISSION_STAGE_SCHEDULED
+  // Plan Twenty-Six, Phase B2 -- replaces the raw sendSms() previously
+  // used on POST /cycles/:id/merit-list/publish.
+  ADMISSION_MERIT_LIST_PUBLISHED
 }
 
 enum InAppNotificationType {
@@ -4345,6 +4385,11 @@ enum InAppNotificationType {
   HOSTEL_REQUESTED
   HOSTEL_REQUEST_APPROVED
   HOSTEL_REQUEST_REJECTED
+  // Plan Twenty (via Plan Twenty-Six, Phase C) -- a large batch-PDF request
+  // that was routed to the background job queue instead of blocking the
+  // request.
+  DOCUMENT_BATCH_READY
+  DOCUMENT_BATCH_FAILED
 }
 
 // In-app notification-center feed item — distinct from NotificationLog

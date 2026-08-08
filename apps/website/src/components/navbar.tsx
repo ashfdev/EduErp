@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import type { Institution, Notice } from "@/lib/types";
-import { Menu, X, ChevronDown, UserCircle2, Megaphone } from "lucide-react";
+import { Menu, X, ChevronDown, UserCircle2, Megaphone, Search } from "lucide-react";
 import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@education-erp/ui";
 import { fetchContent } from "@/lib/content-api";
 import { NOTICES_LAST_VISIT_KEY, markNoticesVisited } from "@/lib/notices-visit";
@@ -73,6 +73,8 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
   const [scrolled, setScrolled] = useState(false);
   const [mobileGroupOpen, setMobileGroupOpen] = useState<string | null>(null);
   const [hasNewNotice, setHasNewNotice] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL ?? "http://localhost:3001";
   const locale = useLocale();
   const pathname = usePathname();
@@ -83,6 +85,21 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
   const tAcademic = useTranslations("academic");
   const tGoverningBody = useTranslations("governingBody");
   const tFaculty = useTranslations("faculty");
+  const tSearch = useTranslations("search");
+
+  // Real gap found in audit (2026-08-08): /search (content.routes.ts's
+  // /api/content/search-backed page) was fully built and working but had
+  // zero UI entry point anywhere in the site -- reachable only by typing
+  // the URL directly. This is the one place that submits into it; the page
+  // itself is driven entirely by the ?q= param, no input of its own.
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+    setSearchOpen(false);
+    setOpen(false);
+  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -156,6 +173,29 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
 
           {/* Top Right: Actions & Language */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {searchOpen ? (
+              <form onSubmit={submitSearch} className="flex items-center">
+                <input
+                  autoFocus
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onBlur={() => { if (!searchQuery.trim()) setSearchOpen(false); }}
+                  placeholder={tSearch("placeholder")}
+                  aria-label={tSearch("title")}
+                  className="w-40 sm:w-56 rounded-full bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-slate-400 outline-none ring-1 ring-white/20 focus:ring-white/50"
+                />
+              </form>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                aria-label={tSearch("title")}
+                className="flex items-center justify-center p-1.5 rounded-full bg-transparent text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            )}
             <Link href="/result" className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-transparent text-slate-200 hover:text-white hover:bg-white/10 transition-colors font-semibold">
               {t("resultLookup")}
             </Link>
@@ -308,6 +348,17 @@ export function Navbar({ institution, notices = [] }: { institution: Institution
       {open && (
         <div className="lg:hidden border-t bg-white h-[calc(100vh-80px)] overflow-y-auto">
           <nav className="flex flex-col p-4 pb-20 space-y-1">
+            <form onSubmit={submitSearch} className="relative mb-2">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={tSearch("placeholder")}
+                aria-label={tSearch("title")}
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary/50 focus:bg-white"
+              />
+            </form>
             <Link href="/" className="rounded-lg px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={() => setOpen(false)}>
               {t("home")}
             </Link>

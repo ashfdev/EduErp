@@ -28,6 +28,13 @@ const INVENTORY_READ_ROLES = [...INVENTORY_MANAGE_ROLES, ...REQUISITION_APPROVE_
 
 purchaseRouter.post(
   "/requisitions",
+  // Real gap found in audit (2026-08-08): this route had no authorize() at
+  // all, unlike every other route in this file -- any authenticated
+  // account, including STUDENT/GUARDIAN, could create a purchase
+  // requisition. Gated to the same INVENTORY_READ_ROLES union already used
+  // for this file's read routes, since a requisition is naturally created
+  // from the same admin screen those roles already have access to.
+  authorize(INVENTORY_READ_ROLES),
   asyncHandler(async (req, res) => {
     const body = requisitionSchema.parse(req.body);
     const year = new Date().getFullYear();
@@ -210,7 +217,17 @@ purchaseRouter.post(
     const poId = reqParam(req, "id");
     const po = await prisma.purchaseOrder.findUnique({ where: { id: poId }, include: { items: true } });
     if (!po) throw notFound("Purchase order not found");
-    if (po.status === "CANCELLED" || po.status === "RECEIVED") throw badRequest(`Purchase order is already ${po.status}`);
+    // Real gap found in audit (2026-08-08): this only excluded the two
+    // terminal statuses (CANCELLED/RECEIVED) -- a PO still sitting in DRAFT
+    // (never approved) could be received via direct API, creating real
+    // assets/stock/an accounting journal entry for an order that skipped
+    // approval entirely. Switched to an explicit allow-list matching
+    // CLAUDE.md's own documented PO flow (DRAFT -> APPROVED -> [SENT_TO_
+    // SUPPLIER] -> PARTIALLY_RECEIVED -> RECEIVED) -- only a PO that's
+    // actually been approved can be received.
+    if (po.status !== "APPROVED" && po.status !== "SENT_TO_SUPPLIER" && po.status !== "PARTIALLY_RECEIVED") {
+      throw badRequest(`Purchase order must be approved before it can be received (current status: ${po.status})`);
+    }
 
     const body = grnSchema.parse(req.body);
     const year = new Date().getFullYear();

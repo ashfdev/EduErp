@@ -1058,7 +1058,10 @@ portalRouter.post(
       type: "TRANSPORT_REQUESTED",
       title: "New transport request",
       body: `A student has requested to join ${route.name}`,
-      link: "/transport/requests",
+      // Real gap found and fixed 2026-08-08: /transport/requests isn't a
+      // real admin route -- the review UI is the combined Facility Requests
+      // page's Transport tab.
+      link: "/facility-requests?tab=transport",
     });
     res.status(201).json({ success: true, data: request });
   }),
@@ -1102,7 +1105,10 @@ portalRouter.post(
       type: "HOSTEL_REQUESTED",
       title: "New hostel request",
       body: `A student has requested room ${room.room_no}`,
-      link: "/hostel/requests",
+      // Real gap found and fixed 2026-08-08: /hostel/requests isn't a real
+      // admin route -- the review UI is the combined Facility Requests
+      // page's Hostel tab.
+      link: "/facility-requests?tab=hostel",
     });
     res.status(201).json({ success: true, data: request });
   }),

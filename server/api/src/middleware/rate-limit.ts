@@ -115,6 +115,30 @@ export const quizFlagLimiter = rateLimit({
   message: RATE_LIMITED_ERROR,
 });
 
+// Real gap found live-verifying Plan Twenty (2026-08-08): a large batch PDF
+// (e.g. 638 ID cards, one class-9 render) has Puppeteer's page.setContent()
+// fetch every embedded image (student photos, the institution logo) back
+// through this same API's /api/uploads/local-file[/direct] routes -- which,
+// with no route-specific limiter, fell under defaultApiLimiter's global 60/
+// min. Puppeteer's own fetches carry no Authorization header, so they're
+// keyed by IP (loopback, since the render happens on this same machine),
+// exhausting the bucket within the first ~60 images and causing the
+// remaining ~578 to 429 mid-render -- which is what was actually behind the
+// "Protocol error (Page.printToPDF): Printing failed" failure, not a true
+// timeout. These routes serve binary file content (already gated by a
+// signed token, or explicitly documented as unsigned public assets like
+// logos), not a sensitive mutating action, so a much higher, dedicated
+// limit here is safe -- generous enough for even the largest realistic
+// single-class batch in real use, while still bounding genuine abuse.
+export const fileServingLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:file-serving:"),
+  message: RATE_LIMITED_ERROR,
+});
+
 // Vehicle location-ping ingestion (Phase 37) — runs before deviceKeyAuth, so
 // this is keyed by the raw x-device-key header rather than req.vehicle.id
 // (bucketing per claimed device, same spirit as forgotPasswordLimiter keying

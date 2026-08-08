@@ -5,13 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Switch, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Switch, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { feeRulesSchema, type FeeRulesInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
 export default function FeeRulesPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "fee-rules"],
     queryFn: async () => (await api.get("/api/settings/fee-rules")).data.data,
   });
@@ -38,6 +38,11 @@ export default function FeeRulesPage() {
   return (
     <PageWrapper>
       <PageHeader title="Fee Rules" subtitle="Late fees, restrictions, and payment options" breadcrumbs={[{ label: "Settings" }, { label: "Fee Rules" }]} />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load fee rules" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="max-w-2xl space-y-6">
         <Card>
           <CardContent className="space-y-4 pt-6">
@@ -105,6 +110,7 @@ export default function FeeRulesPage() {
 
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
+      )}
     </PageWrapper>
   );
 }

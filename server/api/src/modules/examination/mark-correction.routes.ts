@@ -6,7 +6,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { EXAM_MANAGE_ROLES, MARK_ENTRY_ROLES } from "../../lib/roles";
 import { createMarkCorrectionRequestSchema, approveMarkCorrectionSchema, rejectMarkCorrectionSchema } from "@education-erp/validators";
-import { isTeacherAssignedToSubjects, syncExpiredMarkCorrections } from "../../utils/mark-correction";
+import { isTeacherAssignedToSubjectSections, syncExpiredMarkCorrections } from "../../utils/mark-correction";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { createInAppNotification, notifyRoles } from "../../services/in-app-notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
@@ -60,7 +60,7 @@ markCorrectionRouter.post(
       if (!section) throw badRequest("The selected section does not belong to this subject's class");
     }
 
-    const { assigned, staffId } = await isTeacherAssignedToSubjects(req.user!.sub, [body.subject_id]);
+    const { assigned, staffId } = await isTeacherAssignedToSubjectSections(req.user!.sub, [{ subject_id: body.subject_id, section_id: body.section_id ?? null }]);
     if (!staffId) throw forbidden("No staff record linked to this account");
     if (!assigned) throw forbidden("You can only request a correction for a subject assigned to you");
 

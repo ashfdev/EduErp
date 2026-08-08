@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -53,6 +54,14 @@ function statusBadge(status: ReqStatus) {
 
 export default function FacilityRequestsPage() {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+  // Real gap found and fixed 2026-08-08: the "New transport/hostel request"
+  // notification's link pointed at /transport/requests and /hostel/requests,
+  // neither of which is a real route -- this page (a single combined view
+  // with a tab switcher) is the actual destination. Reading ?tab= here lets
+  // that link land directly on the right tab instead of always defaulting to
+  // Transport regardless of which request type triggered the notification.
+  const initialTab = searchParams.get("tab") === "hostel" ? "hostel" : "transport";
   const [statusFilter, setStatusFilter] = useState<ReqStatus | "">("PENDING");
 
   const { data: structures } = useQuery<FeeStructureOption[]>({
@@ -142,7 +151,7 @@ export default function FacilityRequestsPage() {
         }
       />
 
-      <Tabs defaultValue="transport">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="transport">Transport</TabsTrigger>
           <TabsTrigger value="hostel">Hostel</TabsTrigger>

@@ -35,7 +35,6 @@ import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
 import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired } from "../../utils/subject-inheritance";
-import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
 import { notifyRoles } from "../../services/in-app-notification.service";
 import { createOrLinkPortalLogin } from "../../lib/portal-login";
@@ -162,6 +161,7 @@ admissionRouter.post(
 admissionRouter.get(
   "/cycles",
   authenticate,
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const cycles = await prisma.admissionCycle.findMany({
       include: { class: { select: { id: true, name_en: true } }, academic_year: { select: { id: true, label: true } } },
@@ -180,6 +180,7 @@ admissionRouter.get(
 admissionRouter.get(
   "/cycles/:id",
   authenticate,
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const cycle = await prisma.admissionCycle.findUnique({
@@ -252,6 +253,7 @@ admissionRouter.put(
 admissionRouter.get(
   "/cycles/:id/form-config",
   authenticate,
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const cycle = await prisma.admissionCycle.findUnique({ where: { id }, select: { form_config: true } });
@@ -278,6 +280,7 @@ admissionRouter.put(
 admissionRouter.get(
   "/cycles/:id/subjects",
   authenticate,
+  authorize(ADMISSION_READ_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
@@ -967,8 +970,14 @@ admissionRouter.get(
       }),
     ]);
 
+    // Real gap found in audit (2026-08-08): the raw slip_blob_key was
+    // leaking into the response alongside the correct signed URL -- see the
+    // identical fix in fees/payments.routes.ts's own /bank-transfers/pending.
     const withSlipUrls = await Promise.all(
-      items.map(async (p) => ({ ...p, slip_url: p.slip_blob_key ? await getSignedDownloadUrl(p.slip_blob_key) : null })),
+      items.map(async (p) => {
+        const { slip_blob_key, ...rest } = p;
+        return { ...rest, slip_url: slip_blob_key ? await getSignedDownloadUrl(slip_blob_key) : null };
+      }),
     );
 
     res.json({
@@ -1216,11 +1225,25 @@ admissionRouter.post(
       where: { cycle_id: id, merit_rank: { not: null } },
     });
 
+    // Real gap found in audit (2026-08-08): this was still a raw, hardcoded
+    // English-only sendSms() call -- the only remaining admission touchpoint
+    // not routed through the templated, bilingual, config-driven
+    // sendNotification() system every other admission notification already
+    // uses (see ADMISSION_STATUS_UPDATE/ADMISSION_STAGE_SCHEDULED above).
     let notified = 0;
     for (const app of applications) {
       const guardianInfo = app.guardian_info as { phone?: string } | null;
       if (guardianInfo?.phone) {
-        await sendSms(guardianInfo.phone, `Merit list published. ${app.applicant_name} (Roll: ${app.admission_roll}) — Status: ${app.status}, Rank: ${app.merit_rank}.`);
+        await sendNotification({
+          trigger: "ADMISSION_MERIT_LIST_PUBLISHED",
+          recipients: [{ name: app.applicant_name, phone: guardianInfo.phone }],
+          template_data: {
+            applicant_name: app.applicant_name,
+            admission_roll: app.admission_roll ?? "",
+            status: app.status,
+            merit_rank: app.merit_rank !== null ? String(app.merit_rank) : "",
+          },
+        });
         notified++;
       }
     }
@@ -1944,6 +1967,18 @@ admissionRouter.get(
 admissionRouter.get(
   "/cycles/:id/merit-list/pdf",
   authenticate,
+  // Real gap found in audit (2026-08-08): this route had no authorize() at
+  // all, so any authenticated account -- including STUDENT/GUARDIAN portal
+  // logins -- could download the full ranked applicant list (names + GPA +
+  // rank) via direct API, published or not. Gated to ADMISSION_MANAGE_ROLES,
+  // matching the sibling /stages/:stage_type/cards route right above and
+  // the /merit-list generate/publish routes below. Deliberately NOT also
+  // gated on merit_list_published_at: admission staff already see this
+  // exact ranked data in the generate response before publishing (that's
+  // the whole point of generating it), so a publish gate here would only
+  // block their normal internal-review workflow without closing any real
+  // exposure -- the role gate alone is what was actually missing.
+  authorize(ADMISSION_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const cycle = await prisma.admissionCycle.findUnique({ where: { id }, include: { class: true, academic_year: true } });

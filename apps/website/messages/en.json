@@ -256,7 +256,7 @@
   },
   "result": {
     "title": "Result Lookup",
-    "subtitle": "Search for a published exam result using your Student ID, or your Roll and Registration numbers.",
+    "subtitle": "Search for a published exam result using your Student ID or Roll Number, plus your Registration Number.",
     "studentId": "Student ID",
     "recommended": "(Recommended)",
     "rollRegistration": "Roll + Registration No",
@@ -278,7 +278,7 @@
   },
   "seatPlanLookup": {
     "title": "Seat Plan Lookup",
-    "subtitle": "Check your exam hall, room, floor, and seat using your Student ID, or your Roll and Registration numbers.",
+    "subtitle": "Check your exam hall, room, floor, and seat using your Student ID or Roll Number, plus your Registration Number.",
     "studentId": "Student ID",
     "rollRegistration": "Roll + Registration No",
     "rollNumber": "Roll Number",

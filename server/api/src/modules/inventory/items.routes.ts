@@ -129,17 +129,28 @@ itemsRouter.post(
   authorize(INVENTORY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const body = stockIssueSchema.parse(req.body);
-    const item = await prisma.item.findUnique({ where: { id: body.item_id } });
-    if (!item) throw notFound("Item not found");
-    // Stock never goes negative — the single rule this whole module exists to enforce.
-    if (body.quantity > item.current_stock) {
-      throw badRequest(`Insufficient stock. Available: ${item.current_stock}, Requested: ${body.quantity}`);
-    }
 
-    const newStock = item.current_stock - body.quantity;
-    const [, transaction] = await prisma.$transaction([
-      prisma.item.update({ where: { id: item.id }, data: { current_stock: newStock } }),
-      prisma.stockTransaction.create({
+    // Row-locked read-then-write (real race found in audit, 2026-08-08): the
+    // previous version read current_stock, validated, then wrote a plain
+    // absolute value computed from that now-possibly-stale read -- two
+    // concurrent /stock/issue calls for the same item could both pass
+    // validation before either committed, letting stock go negative (or
+    // silently lose one issue's decrement) despite this module's one stated
+    // invariant. FOR UPDATE serializes any concurrent transaction touching
+    // this same item behind this one, matching the identical fix already
+    // used for Invoice.amount_paid in fees.routes.ts's /collect route.
+    const transaction = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Item" WHERE id = ${body.item_id} FOR UPDATE`;
+      const item = await tx.item.findUnique({ where: { id: body.item_id } });
+      if (!item) throw notFound("Item not found");
+      // Stock never goes negative — the single rule this whole module exists to enforce.
+      if (body.quantity > item.current_stock) {
+        throw badRequest(`Insufficient stock. Available: ${item.current_stock}, Requested: ${body.quantity}`);
+      }
+
+      const newStock = item.current_stock - body.quantity;
+      await tx.item.update({ where: { id: item.id }, data: { current_stock: newStock } });
+      return tx.stockTransaction.create({
         data: {
           item_id: item.id,
           transaction_type: "OUT",
@@ -151,8 +162,8 @@ itemsRouter.post(
           notes: body.notes,
           created_by_id: req.user!.sub,
         },
-      }),
-    ]);
+      });
+    });
 
     res.status(201).json({ success: true, data: transaction });
   }),

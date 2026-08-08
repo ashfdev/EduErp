@@ -239,8 +239,16 @@ paymentsRouter.get(
       },
       orderBy: { created_at: "desc" },
     });
+    // Real gap found in audit (2026-08-08): the raw slip_blob_key was
+    // leaking into the response alongside the correct signed URL --
+    // destructured out here so only the time-limited signed URL is ever
+    // sent to the client, matching this codebase's own documented
+    // discipline of never exposing a raw blob_key directly.
     const withSlipUrls = await Promise.all(
-      payments.map(async (p) => ({ ...p, slip_url: p.slip_blob_key ? await getSignedDownloadUrl(p.slip_blob_key) : null })),
+      payments.map(async (p) => {
+        const { slip_blob_key, ...rest } = p;
+        return { ...rest, slip_url: slip_blob_key ? await getSignedDownloadUrl(slip_blob_key) : null };
+      }),
     );
     res.json({ success: true, data: withSlipUrls });
   }),

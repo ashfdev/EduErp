@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Option {
@@ -24,8 +24,11 @@ export default function NewAdmissionCyclePage() {
   const [appFee, setAppFee] = useState(500);
   const [formFee, setFormFee] = useState(0);
 
-  const { data: classes } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
-  const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+  const { data: classes, isLoading: classesLoading, isError: classesError, error: classesErrorObj, refetch: refetchClasses } = useQuery<Option[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+
+  const isLoading = classesLoading || yearsLoading;
+  const isError = classesError || yearsError;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -51,6 +54,16 @@ export default function NewAdmissionCyclePage() {
   return (
     <PageWrapper>
       <PageHeader title="New Admission Cycle" breadcrumbs={[{ label: "Admission", href: "/admission" }, { label: "New Cycle" }]} />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState
+          title="Failed to load classes or academic years"
+          description={extractErrorMessage(classesErrorObj ?? yearsErrorObj)}
+          retryLabel="Retry"
+          onRetry={() => { refetchClasses(); refetchYears(); }}
+        />
+      ) : (
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-1.5">
@@ -85,6 +98,7 @@ export default function NewAdmissionCyclePage() {
           </Button>
         </CardContent>
       </Card>
+      )}
     </PageWrapper>
   );
 }

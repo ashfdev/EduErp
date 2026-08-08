@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Option {
@@ -29,8 +29,8 @@ function CloneExamForm() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const { data: exams } = useQuery<ExamSummary[]>({ queryKey: ["exams", "all"], queryFn: async () => (await api.get("/api/exams")).data.data });
-  const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+  const { data: exams, isLoading: examsLoading, isError: examsError, error: examsErrorObj, refetch: refetchExams } = useQuery<ExamSummary[]>({ queryKey: ["exams", "all"], queryFn: async () => (await api.get("/api/exams")).data.data });
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   // Scoped to the target year — Class rows are recreated every academic
   // year, so an unscoped list would let an admin pick a stale prior-year
   // Class row here while academicYearId points at the new year.
@@ -39,6 +39,9 @@ function CloneExamForm() {
     queryFn: async () => (await api.get("/api/settings/classes", { params: { academic_year_id: academicYearId } })).data.data,
     enabled: !!academicYearId,
   });
+
+  const isLoading = examsLoading || yearsLoading;
+  const isError = examsError || yearsError;
 
   const cloneMutation = useMutation({
     mutationFn: () =>
@@ -55,6 +58,20 @@ function CloneExamForm() {
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to clone exam"),
   });
+
+  if (isLoading) {
+    return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  }
+  if (isError) {
+    return (
+      <ErrorState
+        title="Failed to load exams or academic years"
+        description={extractErrorMessage(examsErrorObj ?? yearsErrorObj)}
+        retryLabel="Retry"
+        onRetry={() => { refetchExams(); refetchYears(); }}
+      />
+    );
+  }
 
   return (
     <Card>
@@ -123,7 +140,7 @@ function NewExamForm() {
   const [markOpen, setMarkOpen] = useState("");
   const [markClose, setMarkClose] = useState("");
 
-  const { data: years } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<Option[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
   const { data: scales } = useQuery<Option[]>({ queryKey: ["settings", "grading-scales"], queryFn: async () => (await api.get("/api/settings/grading-scales")).data.data });
   // Scoped to the selected year — Class rows are recreated every academic
   // year, so an unscoped list would let an admin pick a stale prior-year
@@ -152,6 +169,13 @@ function NewExamForm() {
     },
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create exam"),
   });
+
+  if (yearsLoading) {
+    return <div className="flex justify-center py-16"><LoadingSpinner /></div>;
+  }
+  if (yearsError) {
+    return <ErrorState title="Failed to load academic years" description={extractErrorMessage(yearsErrorObj)} retryLabel="Retry" onRetry={() => refetchYears()} />;
+  }
 
   return (
       <Card>

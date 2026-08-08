@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AssetCategory {
@@ -33,7 +33,7 @@ export default function NewAssetPage() {
     notes: "",
   });
 
-  const { data: categories } = useQuery<AssetCategory[]>({ queryKey: ["inventory", "asset-categories"], queryFn: async () => (await api.get("/api/inventory/asset-categories")).data.data });
+  const { data: categories, isLoading: categoriesLoading, isError: categoriesError, error: categoriesErrorObj, refetch: refetchCategories } = useQuery<AssetCategory[]>({ queryKey: ["inventory", "asset-categories"], queryFn: async () => (await api.get("/api/inventory/asset-categories")).data.data });
   const { data: suppliers } = useQuery<Supplier[]>({ queryKey: ["inventory", "suppliers"], queryFn: async () => (await api.get("/api/inventory/suppliers")).data.data });
 
   const selectedCategory = categories?.find((c) => c.id === form.category_id);
@@ -56,6 +56,11 @@ export default function NewAssetPage() {
     <PageWrapper>
       <PageHeader title="Add Asset" breadcrumbs={[{ label: "Inventory" }, { label: "Assets", href: "/inventory/assets" }, { label: "New" }]} />
 
+      {categoriesLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : categoriesError ? (
+        <ErrorState title="Failed to load asset categories" description={extractErrorMessage(categoriesErrorObj)} retryLabel="Retry" onRetry={() => refetchCategories()} />
+      ) : (
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -124,6 +129,7 @@ export default function NewAssetPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </PageWrapper>
   );
 }

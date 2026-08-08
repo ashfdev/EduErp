@@ -18,6 +18,9 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { institutionProfileSchema, type InstitutionProfileInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
@@ -42,7 +45,7 @@ const TERMINOLOGY_PREVIEW: Record<string, { class: string; section: string; teac
 
 export default function InstitutionSettingsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "institution"],
     queryFn: async () => (await api.get("/api/settings/institution")).data.data,
   });
@@ -101,6 +104,11 @@ export default function InstitutionSettingsPage() {
     <PageWrapper>
       <PageHeader title="Institution Profile" subtitle="Branding, contact info, and about content" breadcrumbs={[{ label: "Settings" }, { label: "Institution" }]} />
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load institution profile" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="space-y-6">
         <Tabs defaultValue="basic">
           <TabsList>
@@ -323,6 +331,7 @@ export default function InstitutionSettingsPage() {
           {isSubmitting ? "Saving..." : "Save Changes"}
         </Button>
       </form>
+      )}
     </PageWrapper>
   );
 }

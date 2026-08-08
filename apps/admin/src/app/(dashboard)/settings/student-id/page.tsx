@@ -22,13 +22,16 @@ import {
   Switch,
   Button,
   ConfirmDialog,
+  ErrorState,
+  LoadingSpinner,
+  extractErrorMessage,
 } from "@education-erp/ui";
 import { studentIdConfigSchema, type StudentIdConfigInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
 export default function StudentIdSettingsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "student-id"],
     queryFn: async () => (await api.get("/api/settings/student-id-config")).data.data,
   });
@@ -81,6 +84,11 @@ export default function StudentIdSettingsPage() {
   return (
     <PageWrapper>
       <PageHeader title="Student ID Format" subtitle="Configure how new Student IDs are generated" breadcrumbs={[{ label: "Settings" }, { label: "Student ID Format" }]} />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load student ID format settings" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="grid grid-cols-2 gap-6">
         <Card>
           <CardContent className="space-y-4 pt-6">
@@ -154,6 +162,7 @@ export default function StudentIdSettingsPage() {
           </CardContent>
         </Card>
       </form>
+      )}
 
       <ConfirmDialog
         open={confirmReset}

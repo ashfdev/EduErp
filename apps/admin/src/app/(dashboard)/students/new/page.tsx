@@ -22,6 +22,8 @@ import {
   ConfirmDialog,
   MultiSelectChecklist,
   extractErrorMessage,
+  ErrorState,
+  LoadingSpinner,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
@@ -123,7 +125,7 @@ export default function NewStudentPage() {
   const [newDocType, setNewDocType] = useState<(typeof DOC_TYPES)[number]>("BIRTH_CERTIFICATE");
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
-  const { data: years } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
+  const { data: years, isLoading: yearsLoading, isError: yearsError, error: yearsErrorObj, refetch: refetchYears } = useQuery<{ id: string; label: string; is_active: boolean }[]>({
     queryKey: ["settings", "academic-years"],
     queryFn: async () => (await api.get("/api/settings/academic-years")).data.data,
   });
@@ -301,6 +303,11 @@ export default function NewStudentPage() {
         ))}
       </div>
 
+      {yearsLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : yearsError ? (
+        <ErrorState title="Failed to load academic years" description={extractErrorMessage(yearsErrorObj)} retryLabel="Retry" onRetry={() => refetchYears()} />
+      ) : (
       <Card>
         <CardContent className="space-y-4 pt-6">
           {step === 0 && (
@@ -692,6 +699,7 @@ export default function NewStudentPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       <ConfirmDialog
         open={!!capacityMessage}

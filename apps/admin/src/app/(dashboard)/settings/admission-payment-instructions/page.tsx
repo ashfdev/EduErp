@@ -5,13 +5,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Textarea, Button } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Label, Input, Textarea, Button, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { admissionPaymentInstructionsSchema, type AdmissionPaymentInstructionsInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
 export default function AdmissionPaymentInstructionsPage() {
   const queryClient = useQueryClient();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["settings", "admission-payment-instructions"],
     queryFn: async () => (await api.get("/api/settings/admission-payment-instructions")).data.data,
   });
@@ -40,6 +40,11 @@ export default function AdmissionPaymentInstructionsPage() {
         subtitle="Shown to applicants on the public payment page — where to manually send bKash/Nagad/Rocket money or bank transfer"
         breadcrumbs={[{ label: "Settings" }, { label: "Admission Payment Instructions" }]}
       />
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load payment instructions" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <form onSubmit={handleSubmit((body) => saveMutation.mutate(body))} className="max-w-2xl space-y-6">
         <Card>
           <CardContent className="space-y-4 pt-6">
@@ -94,6 +99,7 @@ export default function AdmissionPaymentInstructionsPage() {
 
         <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Changes"}</Button>
       </form>
+      )}
     </PageWrapper>
   );
 }

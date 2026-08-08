@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "NotificationTrigger" ADD VALUE 'ADMISSION_MERIT_LIST_PUBLISHED';
+

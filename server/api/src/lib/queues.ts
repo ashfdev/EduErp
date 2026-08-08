@@ -20,3 +20,10 @@ export const DEFAULT_JOB_OPTS: JobsOptions = {
 export const smsQueue = new Queue("notification-sms", { connection: bullmqConnection });
 export const emailQueue = new Queue("notification-email", { connection: bullmqConnection });
 export const pushQueue = new Queue("notification-push", { connection: bullmqConnection });
+
+// Plan Twenty (via Plan Twenty-Six, Phase C) -- large batch-PDF generation
+// jobs (e.g. all ID cards for a class), consumed by an in-process Worker
+// registered from jobs/document-batch.job.ts. Its own queue rather than
+// reusing one of the notification queues above, since this is CPU/Puppeteer-
+// bound document rendering work, not a delivery-channel fan-out.
+export const documentQueue = new Queue("document-batch", { connection: bullmqConnection });

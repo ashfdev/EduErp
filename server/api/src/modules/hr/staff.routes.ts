@@ -11,7 +11,7 @@ import { imageUpload, verifyImageMagicBytes, documentUpload, verifyDocumentMagic
 import { parse } from "csv-parse/sync";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
-import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
+import { HR_MANAGE_ROLES, PAYROLL_MANAGE_ROLES, STAFF_ONLY_ROLES, STAFF_READ_ROLES, TEACHING_ROLES } from "../../lib/roles";
 import { createStaffSchema, updateStaffSchema, assignSalaryStructureSchema, bulkAssignSalaryStructureSchema, bulkAssignShiftSchema, staffDocumentSchema, staffExperienceSchema, staffReferenceSchema, staffResignSchema, staffRejoinSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { generateStaffUid } from "../../utils/staff-id.generator";
@@ -658,6 +658,13 @@ hrStaffRouter.put(
 
 hrStaffRouter.get(
   "/:id/documents",
+  // Real gap found in audit (2026-08-08): resolveDocumentStaffId() already
+  // enforces "own docs only unless HR_MANAGE_ROLES", but that's only
+  // functionally safe today because STUDENT/GUARDIAN accounts happen to
+  // have no linked Staff row (resolveOwnStaffId implicitly rejects them) --
+  // not because of any explicit role gate. This authorize() call is
+  // defense-in-depth so the route is safe by design, not by accident.
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
     const documents = await prisma.staffDocument.findMany({ where: { staff_id: id }, orderBy: { uploaded_at: "desc" } });
@@ -667,6 +674,7 @@ hrStaffRouter.get(
 
 hrStaffRouter.post(
   "/:id/documents",
+  authorize(STAFF_ONLY_ROLES),
   documentUpload.single("file"),
   verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
@@ -694,6 +702,7 @@ hrStaffRouter.post(
 // delete-then-recreate round-trip.
 hrStaffRouter.put(
   "/:id/documents/:doc_id",
+  authorize(STAFF_ONLY_ROLES),
   documentUpload.single("file"),
   verifyDocumentMagicBytes,
   asyncHandler(async (req, res) => {
@@ -720,6 +729,7 @@ hrStaffRouter.put(
 
 hrStaffRouter.get(
   "/:id/documents/:doc_id/download",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
     const document = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });
@@ -731,6 +741,7 @@ hrStaffRouter.get(
 
 hrStaffRouter.delete(
   "/:id/documents/:doc_id",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const id = await resolveDocumentStaffId(req, reqParam(req, "id"));
     const document = await prisma.staffDocument.findFirst({ where: { id: reqParam(req, "doc_id"), staff_id: id } });

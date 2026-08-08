@@ -15,7 +15,7 @@ import { createInAppNotification } from "../../services/in-app-notification.serv
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { invalidateCacheNamespace } from "../../lib/cache";
-import { isTeacherAssignedToSubjects, syncExpiredMarkCorrections } from "../../utils/mark-correction";
+import { isTeacherAssignedToSubjectSections, syncExpiredMarkCorrections } from "../../utils/mark-correction";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeDailyAttendancePercentage } from "../../utils/daily-attendance";
 import { computeAverageOfExamsFetch } from "../../utils/grade-component-average-source";
@@ -462,8 +462,15 @@ marksRouter.post(
     }
 
     if (req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "CLASS_TEACHER") {
-      const subjectIds = [...new Set(body.entries.map((e) => e.subject_id))];
-      const { assigned } = await isTeacherAssignedToSubjects(req.user!.sub, subjectIds);
+      // Section-aware (see isTeacherAssignedToSubjectSections's own comment
+      // for the bug this closes) -- each entry's student's real section is
+      // resolved fresh here rather than reusing the COMPLETED-exam gate's
+      // own student lookup above, since that block doesn't always run.
+      const studentIds = [...new Set(body.entries.map((e) => e.student_id))];
+      const studentsForOwnership = await prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, current_section_id: true } });
+      const sectionByStudentForOwnership = new Map(studentsForOwnership.map((s) => [s.id, s.current_section_id]));
+      const pairs = body.entries.map((e) => ({ subject_id: e.subject_id, section_id: sectionByStudentForOwnership.get(e.student_id) ?? null }));
+      const { assigned } = await isTeacherAssignedToSubjectSections(req.user!.sub, pairs);
       if (!assigned) throw forbidden("You can only submit marks for subjects assigned to you");
     }
 

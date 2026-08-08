@@ -574,8 +574,47 @@ feesRouter.put(
     if (!existing) throw notFound("Waiver assignment not found");
     if (existing.revoked_at) throw badRequest("This waiver has already been revoked");
 
-    const waiver = await prisma.studentWaiver.update({ where: { id }, data: { revoked_at: new Date(), revoked_by_id: req.user!.sub } });
-    res.json({ success: true, data: waiver });
+    // Real gap found in audit (2026-08-08): revoking a waiver only ever
+    // flipped this row's own revoked_at -- it never reversed the discount
+    // already applied to any invoice this waiver had previously reduced
+    // (applyWaiverToExistingInvoices/applyWaiversToInvoice), so a "revoked"
+    // waiver kept silently discounting a student's still-owed invoices
+    // forever. Reasoned default (deliberate, not silently decided): only
+    // reverse invoices still in PENDING/PARTIAL/OVERDUE -- the exact same
+    // status set applyWaiverToExistingInvoices itself only ever discounts
+    // in the first place -- so a PAID invoice (money already collected
+    // under the old discount) is never retroactively re-billed. The
+    // InvoiceWaiverApplication row is deleted on reversal (not kept
+    // stale/misleading) since revoking removes the waiver's effect
+    // entirely; the revoke action itself is what's permanently recorded,
+    // via the audit log below.
+    const { waiver, invoicesAffected, totalReversed } = await prisma.$transaction(async (tx) => {
+      const applications = await tx.invoiceWaiverApplication.findMany({
+        where: { student_waiver_id: id, invoice: { status: { in: ["PENDING", "PARTIAL", "OVERDUE"] } } },
+        include: { invoice: true },
+      });
+
+      let invoicesAffected = 0;
+      let totalReversed = 0;
+      for (const app of applications) {
+        await tx.invoice.update({ where: { id: app.invoice_id }, data: { amount_due: app.invoice.amount_due + app.discount_amount } });
+        await tx.invoiceWaiverApplication.delete({ where: { id: app.id } });
+        invoicesAffected++;
+        totalReversed += app.discount_amount;
+      }
+
+      const waiver = await tx.studentWaiver.update({ where: { id }, data: { revoked_at: new Date(), revoked_by_id: req.user!.sub } });
+      return { waiver, invoicesAffected, totalReversed: Math.round(totalReversed * 100) / 100 };
+    });
+
+    await logAudit("FEE_WAIVE", {
+      userId: req.user!.sub,
+      targetType: "StudentWaiver",
+      targetId: waiver.id,
+      metadata: { via: "revoke", invoicesAffected, totalReversed },
+      req,
+    });
+    res.json({ success: true, data: { ...waiver, invoices_affected: invoicesAffected, total_reversed: totalReversed } });
   }),
 );
 

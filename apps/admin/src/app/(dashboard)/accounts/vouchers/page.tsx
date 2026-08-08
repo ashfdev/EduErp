@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, StatusBadge, EmptyState, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Voucher {
@@ -28,7 +28,7 @@ export default function VouchersPage() {
   const [deleteTarget, setDeleteTarget] = useState<Voucher | null>(null);
   const queryClient = useQueryClient();
 
-  const { data } = useQuery<{ items: Voucher[]; meta: { total: number; totalPages: number } }>({
+  const { data, isLoading, isError, error, refetch } = useQuery<{ items: Voucher[]; meta: { total: number; totalPages: number } }>({
     queryKey: ["accounts", "vouchers", type, status, search, page],
     queryFn: async () => {
       const res = await api.get("/api/accounts/vouchers", { params: { type: type || undefined, status: status || undefined, search: search || undefined, page, limit: 20 } });
@@ -63,6 +63,11 @@ export default function VouchersPage() {
         </CardContent>
       </Card>
 
+      {isLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : isError ? (
+        <ErrorState title="Failed to load vouchers" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
+      ) : (
       <Card>
         <CardContent className="p-0">
           {!data?.items.length ? (
@@ -111,6 +116,7 @@ export default function VouchersPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}

@@ -4,6 +4,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { localFilePath, verifyLocalToken } from "../services/storage.service";
 import { forbidden, badRequest } from "../lib/errors";
 import { allowIframeEmbed } from "../middleware/allow-iframe";
+import { fileServingLimiter } from "../middleware/rate-limit";
 
 export const uploadsRouter = Router();
 
@@ -22,6 +23,7 @@ function suggestedFilename(blobKey: string): string {
 
 uploadsRouter.get(
   "/local-file",
+  fileServingLimiter,
   allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const query = z
@@ -41,6 +43,7 @@ uploadsRouter.get(
 // unsigned unless a SAS is requested. Used for public assets (logos, etc.).
 uploadsRouter.get(
   "/local-file/direct",
+  fileServingLimiter,
   allowIframeEmbed,
   asyncHandler(async (req, res) => {
     const query = z.object({ blobKey: z.string().min(1) }).safeParse(req.query);

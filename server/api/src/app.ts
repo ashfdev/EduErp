@@ -96,14 +96,38 @@ export function createApp(): Express {
     app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
   }
 
+  // Mounted BEFORE the global limiter below — real gap found live-verifying
+  // Plan Twenty (2026-08-08): defaultApiLimiter's 60/min is stricter than
+  // fileServingLimiter's own 2000/min, and since both counters increment
+  // independently, mounting this router AFTER the global limiter (as it
+  // used to be) meant the global one always rejected first regardless of
+  // fileServingLimiter's higher ceiling -- defeating its whole purpose. A
+  // batch PDF render (Puppeteer's own page.setContent() fetching every
+  // embedded image back through these same routes, e.g. 638 ID cards in one
+  // class-9 render) would exhaust the global 60/min within the first ~60
+  // images and start getting 429s for the rest, breaking the print. Mounted
+  // first, /api/uploads/* now never reaches defaultApiLimiter at all — only
+  // its own dedicated, correctly-binding limiter applies.
+  app.use("/api/uploads", uploadsRouter);
+
+  // Same fix, same reasoning, applied here 2026-08-08: contentLimiter
+  // (contentRouter.use(contentLimiter), 100/min -- "much more generous...
+  // this is read traffic from anonymous page loads") was being silently
+  // defeated by the stricter global 60/min running first, since contentRouter
+  // was mounted well after defaultApiLimiter below. Mounted first, /api/
+  // content/* now only ever hits its own, correctly-binding 100/min limiter.
+  app.use("/api/content", contentRouter);
+
   // Global default limiter for everything else — routes with their own
-  // stricter/looser limiter (login, forgot-password, /api/content) still get
-  // layered under this one, which is fine since theirs will bind first.
+  // STRICTER limiter (login, forgot-password) still get layered under this
+  // one correctly, since a lower ceiling always binds first regardless of
+  // ordering. A route needing a MORE GENEROUS limit than this must be
+  // mounted before this line instead (see /api/uploads above) — layering a
+  // looser limiter after this one has no effect.
   app.use("/api", defaultApiLimiter);
 
   app.use("/api/auth", authRouter);
   app.use("/api/settings", settingsRouter);
-  app.use("/api/uploads", uploadsRouter);
   app.use("/api/students", studentsRouter);
   app.use("/api/subjects", subjectsRouter);
   app.use("/api/staff", staffRouter);
@@ -123,7 +147,6 @@ export function createApp(): Express {
   app.use("/api/admission", admissionRouter);
   app.use("/api/documents", documentsRouter);
   app.use("/api/website", websiteRouter);
-  app.use("/api/content", contentRouter);
   app.use("/api/hr", hrRouter);
   app.use("/api/library", libraryRouter);
   app.use("/api/transport", transportRouter);

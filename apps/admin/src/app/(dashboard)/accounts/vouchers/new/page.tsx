@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Button, Card, CardContent, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -40,7 +40,7 @@ export default function NewVoucherPage() {
   const [narrationBn, setNarrationBn] = useState("");
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
-  const { data: accounts } = useQuery<AccountOption[]>({
+  const { data: accounts, isLoading: accountsLoading, isError: accountsError, error: accountsErrorObj, refetch: refetchAccounts } = useQuery<AccountOption[]>({
     queryKey: ["accounts", "search", ""],
     queryFn: async () => (await api.get("/api/accounts/search")).data.data,
   });
@@ -88,6 +88,11 @@ export default function NewVoucherPage() {
     <PageWrapper>
       <PageHeader title="New Voucher" breadcrumbs={[{ label: "Accounts" }, { label: "Vouchers" }, { label: "New" }]} />
 
+      {accountsLoading ? (
+        <div className="flex justify-center py-16"><LoadingSpinner /></div>
+      ) : accountsError ? (
+        <ErrorState title="Failed to load chart of accounts" description={extractErrorMessage(accountsErrorObj)} retryLabel="Retry" onRetry={() => refetchAccounts()} />
+      ) : (
       <Card className={`border-l-4 ${TYPE_META[voucherType]?.color}`}>
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -186,6 +191,7 @@ export default function NewVoucherPage() {
           </div>
         </CardContent>
       </Card>
+      )}
     </PageWrapper>
   );
 }

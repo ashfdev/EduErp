@@ -30,6 +30,14 @@ async function personName(personId: string, personType: "STUDENT" | "STAFF") {
 
 libraryRouter.get(
   "/books",
+  // Real gap found in audit (2026-08-08): every other route in this file
+  // is authorize(LIBRARY_MANAGE_ROLES)-gated -- these 3 catalog-read
+  // routes (list, categories, single-book detail) were the only ones
+  // missing it, leaving them reachable by any authenticated token
+  // (including STUDENT/GUARDIAN portal logins, which have no legitimate
+  // caller of this route today -- confirmed via a full grep of
+  // apps/portal and apps/teacher, neither calls /api/library/* at all).
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({ search: z.string().optional(), category: z.string().optional(), available_only: z.string().optional(), page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) })
@@ -66,6 +74,7 @@ libraryRouter.get(
 // shifting list once real pagination is in use.
 libraryRouter.get(
   "/books/categories",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (_req, res) => {
     const rows = await prisma.book.findMany({
       where: { is_active: true },
@@ -79,6 +88,7 @@ libraryRouter.get(
 
 libraryRouter.get(
   "/books/:id",
+  authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const book = await prisma.book.findUnique({ where: { id } });

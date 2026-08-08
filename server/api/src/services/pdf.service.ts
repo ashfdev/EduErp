@@ -423,10 +423,27 @@ export async function renderHtmlToPdf(html: string, options?: RenderOptions): Pr
   const browser = await puppeteer.launch({
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    // --disable-dev-shm-usage: the standard, safe fix for exactly the class
+    // of "Protocol error (Page.printToPDF): Printing failed" error found
+    // live-verifying Plan Twenty (2026-08-08) against a genuinely large
+    // single-document render (638 ID cards, one class-9 batch) -- Chromium's
+    // default /dev/shm allocation is small and this makes it spill to disk
+    // instead. A no-op where /dev/shm isn't the constraint, never a downside.
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
   });
   try {
     const page = await browser.newPage();
+    // Real gap found live-verifying Plan Twenty (2026-08-08): Puppeteer's
+    // own default navigation timeout is 30s, applying to setContent()
+    // regardless of whether the caller is an HTTP request or a background
+    // job -- a genuinely large single-page render (e.g. 638 ID cards in one
+    // HTML document, this institution's real class-9 size) can legitimately
+    // take longer than that to finish loading, and previously failed with
+    // "Timed out after waiting 30000ms" even from inside documentQueue's
+    // worker, which has no HTTP client waiting on it and no reason to cap
+    // at 30s. Raised, not removed -- a normal-sized render that already
+    // finishes in seconds is completely unaffected either way.
+    page.setDefaultTimeout(120_000);
     await page.setContent(html, { waitUntil: "load" });
     const pdf = await page.pdf({
       ...size,
