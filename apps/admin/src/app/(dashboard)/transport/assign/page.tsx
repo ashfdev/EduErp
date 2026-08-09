@@ -22,6 +22,13 @@ interface ClassOption {
   name_en: string;
   sections?: { id: string; name: string }[];
 }
+interface FeeStructureOption {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  is_active: boolean;
+}
 
 export default function AssignTransportPage() {
   const [search, setSearch] = useState("");
@@ -30,6 +37,14 @@ export default function AssignTransportPage() {
   const [sectionId, setSectionId] = useState("");
   const [routeId, setRouteId] = useState("");
   const [pickupStop, setPickupStop] = useState("");
+  // Real bug fixed (Plan Twenty-Seven, Bug 2a): this form never sent
+  // fee_structure_id even though the backend has always correctly supported
+  // it -- every real-world assignment made here fell into the legacy
+  // one-off-invoice branch, which hardcodes due_date to today instead of
+  // the fee structure's own "due by the Nth of the month" rule. Picking a
+  // structure here routes through attachFeeStructureToStudent(), the same
+  // correctly-recurring mechanism the Facility Request approval flow uses.
+  const [feeStructureId, setFeeStructureId] = useState("");
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
@@ -51,8 +66,20 @@ export default function AssignTransportPage() {
   const { data: routes, isLoading: routesLoading, isError: routesError, error: routesErrorObj, refetch: refetchRoutes } = useQuery<Route[]>({ queryKey: ["transport", "routes"], queryFn: async () => (await api.get("/api/transport/routes")).data.data });
   const selectedRoute = routes?.find((r) => r.id === routeId);
 
+  const { data: structures } = useQuery<FeeStructureOption[]>({
+    queryKey: ["fees", "structures"],
+    queryFn: async () => (await api.get("/api/fees/structures")).data.data,
+  });
+  const transportStructures = structures?.filter((s) => s.category === "TRANSPORT" && s.is_active) ?? [];
+
   const assignMutation = useMutation({
-    mutationFn: () => api.post("/api/transport/assign", { student_id: selectedStudent!.id, route_id: routeId, pickup_stop: pickupStop || undefined }),
+    mutationFn: () =>
+      api.post("/api/transport/assign", {
+        student_id: selectedStudent!.id,
+        route_id: routeId,
+        pickup_stop: pickupStop || undefined,
+        fee_structure_id: feeStructureId || undefined,
+      }),
     onSuccess: () => {
       toast.success("Student assigned to route");
       setSelectedStudent(null);
@@ -61,6 +88,7 @@ export default function AssignTransportPage() {
       setSectionId("");
       setRouteId("");
       setPickupStop("");
+      setFeeStructureId("");
     },
     onError: () => toast.error("Failed to assign student"),
   });
@@ -126,6 +154,21 @@ export default function AssignTransportPage() {
                 {selectedRoute?.stops.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Fee Structure (recurring, billed by its own due-date rule)</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={feeStructureId} onChange={(e) => setFeeStructureId(e.target.value)}>
+              <option value="">No recurring fee — one-off invoice for the route&apos;s flat fare only</option>
+              {transportStructures.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} — ৳{s.amount}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {transportStructures.length === 0
+                ? "No active Transport fee structures configured yet — set one up under Fees → Structures to bill this route monthly instead of a one-off flat fare."
+                : "Picking a structure here bills this student going forward per that structure's own recurring due-date rule, instead of a single flat invoice due today."}
+            </p>
           </div>
 
           <Button disabled={!selectedStudent || !routeId || assignMutation.isPending} onClick={() => assignMutation.mutate()}>

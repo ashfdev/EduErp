@@ -13,7 +13,7 @@ import { paymentGatewayConfigSchema } from "@education-erp/validators";
 export const paymentGatewaysRouter = Router();
 paymentGatewaysRouter.use(authenticate, authorize(SETTINGS_INSTITUTION_ROLES));
 
-const PROVIDERS = ["BKASH", "NAGAD", "SSLCOMMERZ", "ROCKET"] as const;
+const PROVIDERS = ["BKASH", "NAGAD", "SSLCOMMERZ", "ROCKET", "AAMARPAY"] as const;
 
 // Never returns the plaintext or ciphertext of any credential field -- only
 // a has-value indicator and the non-sensitive toggles, so this response is

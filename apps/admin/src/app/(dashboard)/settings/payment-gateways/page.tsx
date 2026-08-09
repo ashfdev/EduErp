@@ -11,7 +11,7 @@ import type { PaymentGatewayConfigInput } from "@education-erp/validators";
 import { api } from "@/lib/api";
 
 interface GatewayStatus {
-  provider: "BKASH" | "NAGAD" | "SSLCOMMERZ" | "ROCKET";
+  provider: "BKASH" | "NAGAD" | "SSLCOMMERZ" | "ROCKET" | "AAMARPAY";
   has_app_key: boolean;
   has_app_secret: boolean;
   has_username: boolean;
@@ -29,6 +29,7 @@ const PROVIDER_META: Record<GatewayStatus["provider"], { label: string; keyLabel
   NAGAD: { label: "Nagad", keyLabel: "Merchant ID", secretLabel: "Merchant Private Key", showUserPass: false },
   SSLCOMMERZ: { label: "SSLCommerz", keyLabel: "Store ID", secretLabel: "Store Password", showUserPass: false },
   ROCKET: { label: "Rocket (DBBL)", keyLabel: "Merchant ID", secretLabel: "Merchant Key", showUserPass: false },
+  AAMARPAY: { label: "AamarPay", keyLabel: "Store ID", secretLabel: "Signature Key", showUserPass: false },
 };
 
 function GatewayCard({ status }: { status: GatewayStatus }) {
@@ -143,7 +144,7 @@ export default function PaymentGatewaysPage() {
     <PageWrapper>
       <PageHeader
         title="Payment Gateways"
-        subtitle="Enter merchant credentials for each gateway. Real bKash/Nagad/SSLCommerz/Rocket integration is still pending — these credentials activate automatically once each gateway's live integration is wired up."
+        subtitle="Enter merchant credentials for each gateway. Real bKash/Nagad/SSLCommerz/Rocket/AamarPay integration is still pending — these credentials activate automatically once each gateway's live integration is wired up."
         breadcrumbs={[{ label: "Settings" }, { label: "Payment Gateways" }]}
       />
       {isLoading ? (

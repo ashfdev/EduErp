@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { UserRole } from "@education-erp/types";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -13,8 +14,11 @@ import { badRequest, notFound } from "../../lib/errors";
 export const permissionsRouter = Router();
 permissionsRouter.use(authenticate, authorize(SETTINGS_USERS_ROLES));
 
+// Validated as the real UserRole enum, not a free-form string (security
+// audit, 2026-08-09) — previously any string was accepted here and only
+// failed later, at the Prisma write, via a raw `as never` cast.
 const updatePermissionSchema = z.object({
-  roles: z.array(z.string().min(1)).min(1),
+  roles: z.array(z.nativeEnum(UserRole)).min(1),
 });
 
 permissionsRouter.get(
@@ -58,7 +62,7 @@ permissionsRouter.put(
     const uniqueRoles = [...new Set(body.roles)];
     await prisma.$transaction([
       prisma.rolePermission.deleteMany({ where: { permission_id: permission.id } }),
-      prisma.rolePermission.createMany({ data: uniqueRoles.map((role) => ({ role: role as never, permission_id: permission.id })) }),
+      prisma.rolePermission.createMany({ data: uniqueRoles.map((role) => ({ role, permission_id: permission.id })) }),
     ]);
 
     // Applies live to every authorize(SOME_ROLES) call site immediately —

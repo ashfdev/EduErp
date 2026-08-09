@@ -222,7 +222,12 @@ export default function RoutineSettingsPage() {
         title="Routine / Timetable"
         subtitle="Weekly class schedule — period, subject, and teacher"
         breadcrumbs={[{ label: "Settings" }, { label: "Routine" }]}
-        action={<Button variant="outline" onClick={() => { setGenerateResult(null); setGenerateOpen(true); }}>Auto-Generate</Button>}
+        action={
+          <div className="flex gap-2">
+            <Link href="/settings/routine/availability"><Button variant="outline">Check Availability</Button></Link>
+            <Button variant="outline" onClick={() => { setGenerateResult(null); setGenerateOpen(true); }}>Auto-Generate</Button>
+          </div>
+        }
       />
 
       <PdfPreviewModal

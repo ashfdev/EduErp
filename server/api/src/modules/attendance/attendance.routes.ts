@@ -320,6 +320,66 @@ attendanceRouter.get(
   }),
 );
 
+// Individual staff attendance history (2026-08-09) — real gap found during a
+// full-system audit: biometric punch data for staff is already correctly
+// recorded (see the comment on /staff/daily-summary above), but was only
+// ever visible on that one campus-wide daily-summary page — nothing showed
+// a single staff member's own attendance history on their own profile page.
+// Read-only; writes no data itself.
+attendanceRouter.get(
+  "/staff/:staff_id/history",
+  asyncHandler(async (req, res) => {
+    const staffId = reqParam(req, "staff_id");
+    const query = z
+      .object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      })
+      .parse(req.query);
+
+    const to = query.to ?? new Date();
+    const from = query.from ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fromDay = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()));
+    const toDay = new Date(Date.UTC(to.getFullYear(), to.getMonth(), to.getDate() + 1));
+
+    const staff = await prisma.staff.findUnique({ where: { id: staffId }, select: { id: true } });
+    if (!staff) throw notFound("Staff member not found");
+
+    const [records, punchGroups] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: { person_id: staffId, person_type: "STAFF", date: { gte: fromDay, lt: toDay } },
+        include: { shift: { select: { start_time: true, end_time: true } } },
+        orderBy: { date: "desc" },
+      }),
+      prisma.devicePunchLog.groupBy({
+        by: ["mapped_person_id"],
+        where: { mapped_person_id: staffId, mapped_person_type: "STAFF", punch_at: { gte: fromDay, lt: toDay } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const rows = records.map((r) => ({
+      date: r.date.toISOString().slice(0, 10),
+      status: r.status,
+      check_in_at: r.check_in_at,
+      check_out_at: r.check_out_at,
+      working_hours: r.check_in_at && r.check_out_at ? Math.round(((r.check_out_at.getTime() - r.check_in_at.getTime()) / 3_600_000) * 100) / 100 : null,
+      overtime_hours: computeOvertime(r.check_out_at, r.shift?.start_time, r.shift?.end_time),
+      source: r.source,
+    }));
+
+    const summary = {
+      present: rows.filter((r) => r.status === "PRESENT").length,
+      late: rows.filter((r) => r.status === "LATE").length,
+      absent: rows.filter((r) => r.status === "ABSENT").length,
+      on_leave: rows.filter((r) => r.status === "LEAVE").length,
+      total_punches: punchGroups[0]?._count._all ?? 0,
+    };
+
+    res.json({ success: true, data: { rows, summary } });
+  }),
+);
+
 attendanceRouter.get(
   "/",
   asyncHandler(async (req, res) => {

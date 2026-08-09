@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -10,7 +11,7 @@ import { sanitizeEmbedCode } from "../../lib/sanitize";
 import { triggerRevalidation } from "../../services/revalidate.service";
 import { redis } from "../../lib/redis";
 import { SETTINGS_INSTITUTION_ROLES } from "../../lib/roles";
-import { institutionProfileSchema, institutionConfigSchema } from "@education-erp/validators";
+import { institutionProfileSchema, institutionConfigSchema, institutionTypeSchema } from "@education-erp/validators";
 import { badRequest } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
 import type { InstitutionType } from "@education-erp/types";
@@ -129,8 +130,12 @@ institutionRouter.put(
   authenticate,
   authorize(SETTINGS_INSTITUTION_ROLES),
   asyncHandler(async (req, res) => {
-    const type = req.body.type as InstitutionType;
-    if (!TYPE_CASCADE[type]) throw badRequest("Invalid institution type");
+    // Real Zod validation instead of a raw `as InstitutionType` cast
+    // (security audit, 2026-08-09) — the old `!TYPE_CASCADE[type]` check
+    // already rejected an unrecognized value at runtime, but bypassed this
+    // route's own input-validation layer entirely, unlike every other
+    // mutating route in this codebase.
+    const { type } = z.object({ type: institutionTypeSchema }).parse(req.body);
 
     const [profile, config] = await prisma.$transaction([
       prisma.institutionProfile.update({ where: { id: PROFILE_ID }, data: { type } }),

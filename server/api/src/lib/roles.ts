@@ -39,8 +39,16 @@ export const EXAM_MANAGE_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL
 // submitted subject_id against real SubjectTeacherAssignment rows for
 // SUBJECT_TEACHER and CLASS_TEACHER alike, so a class teacher with no real
 // subject assignment still can't submit anything.
-export const MARK_ENTRY_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"];
-export const MARK_VIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER"];
+// HEAD_OF_DEPT added 2026-08-09 (full-system audit, BUG 2) — department heads
+// routinely teach/grade a subject directly in real BD institutions, and this
+// role can already be assigned as a subject's teacher via
+// SubjectTeacherAssignment with zero warning; without this, that assignment
+// was structurally impossible to ever act on, failing with a generic 403
+// that read like the unrelated "not assigned" ownership-check bug.
+export const MARK_ENTRY_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER", "HEAD_OF_DEPT"];
+// HEAD_OF_DEPT added alongside MARK_ENTRY_ROLES above — a role that can now
+// submit marks must also be able to view the grid it submits into.
+export const MARK_VIEW_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER", "SUBJECT_TEACHER", "CLASS_TEACHER", "HEAD_OF_DEPT"];
 export const MARK_APPROVAL_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const RESULT_PUBLISH_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "PRINCIPAL", "EXAM_CONTROLLER"];
 export const FEE_COLLECTION_ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "ACCOUNTANT"];

@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { HR_MANAGE_ROLES, LEAVE_APPROVE_ROLES } from "../../lib/roles";
+import { HR_MANAGE_ROLES, LEAVE_APPROVE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { leaveTypeSchema, applyLeaveSchema, rejectLeaveSchema } from "@education-erp/validators";
 import { resolveOwnStaffId } from "../../lib/own-staff";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
@@ -91,6 +91,7 @@ leaveTypesRouter.delete(
 
 leavesRouter.get(
   "/",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const query = z
       .object({
@@ -127,6 +128,7 @@ leavesRouter.get(
 
 leavesRouter.get(
   "/balance/:staff_id",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     // "me" lets a self-service caller (e.g. the teacher app) fetch their own
     // balance without needing to already know their own Staff.id client-side.
@@ -155,6 +157,7 @@ leavesRouter.get(
 
 leavesRouter.post(
   "/apply",
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
     const body = applyLeaveSchema.parse(req.body);
     if (!HR_MANAGE_ROLES.includes(req.user!.role as UserRole)) {

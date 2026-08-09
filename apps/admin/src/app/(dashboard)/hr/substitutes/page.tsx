@@ -50,6 +50,8 @@ function todayLocalDateString(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 export default function ProxySubstitutePage() {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(todayLocalDateString());
@@ -58,10 +60,16 @@ export default function ProxySubstitutePage() {
   const [reason, setReason] = useState("");
   const [filterDepartmentId, setFilterDepartmentId] = useState("");
   const [filterSubjectId, setFilterSubjectId] = useState("");
+  // null = auto (browse the selected date's own weekday). Set explicitly
+  // only when finding a slot for a makeup/rescheduled class held on a
+  // different day than usual.
+  const [routineDayOverride, setRoutineDayOverride] = useState<number | null>(null);
 
   // Local calendar weekday for the selected date — the same day_of_week
   // convention RoutineSlot already uses (0=Sunday).
-  const dayOfWeek = new Date(`${date}T00:00:00`).getDay();
+  const naturalDayOfWeek = new Date(`${date}T00:00:00`).getDay();
+  const dayOfWeek = routineDayOverride ?? naturalDayOfWeek;
+  const isMakeupClass = dayOfWeek !== naturalDayOfWeek;
 
   const { data: slots, isLoading, isError, error, refetch } = useQuery<RoutineSlotRow[]>({
     queryKey: ["settings", "routine", "day", dayOfWeek],
@@ -107,6 +115,7 @@ export default function ProxySubstitutePage() {
         date,
         substitute_teacher_id: substituteId,
         reason: reason || undefined,
+        is_makeup_class: isMakeupClass,
       }),
     onSuccess: () => {
       toast.success("Substitute assigned");
@@ -135,12 +144,35 @@ export default function ProxySubstitutePage() {
         breadcrumbs={[{ label: "HR", href: "/hr" }, { label: "Proxy / Substitute" }]}
       />
 
-      <div className="flex items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Date</label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-40" />
+          <Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setRoutineDayOverride(null); }} className="w-40" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            Routine day <span className="font-normal">(change only for a makeup/rescheduled class)</span>
+          </label>
+          <Select
+            value={String(dayOfWeek)}
+            onValueChange={(v) => { const n = Number(v); setRoutineDayOverride(n === naturalDayOfWeek ? null : n); }}
+          >
+            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DAY_NAMES.map((name, idx) => (
+                <SelectItem key={idx} value={String(idx)}>{name}{idx === naturalDayOfWeek ? " (this date's day)" : ""}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
+
+      {isMakeupClass && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          Showing {DAY_NAMES[dayOfWeek]}&apos;s routine for a makeup class on {date}. Assigning a substitute here will
+          be flagged as a makeup class.
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-16"><LoadingSpinner /></div>
@@ -148,7 +180,12 @@ export default function ProxySubstitutePage() {
         <ErrorState title="Failed to load routine" description={extractErrorMessage(error)} retryLabel="Retry" onRetry={() => refetch()} />
       ) : (
       <>
-      {!teachableSlots.length && <EmptyState title="No routine slots on this weekday" description="No classes are scheduled on this weekday, or no routine has been set up yet." />}
+      {!teachableSlots.length && (
+        <EmptyState
+          title={`No routine slots on ${DAY_NAMES[dayOfWeek]}`}
+          description="No classes are scheduled on this weekday, or no routine has been set up yet."
+        />
+      )}
 
       {!!teachableSlots.length && (
         <Card>
@@ -223,6 +260,11 @@ export default function ProxySubstitutePage() {
             <p className="text-sm text-muted-foreground">
               {assignTarget?.class.name_en}{assignTarget?.section ? ` — ${assignTarget.section.name}` : ""} · {assignTarget?.subject?.name_en} · Regular teacher: {assignTarget?.teacher?.name_en}
             </p>
+            {isMakeupClass && (
+              <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">
+                Makeup class — normally {DAY_NAMES[dayOfWeek]}, covering on {date}
+              </Badge>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Filter by Department</Label>

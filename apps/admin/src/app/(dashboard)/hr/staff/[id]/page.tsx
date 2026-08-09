@@ -73,6 +73,20 @@ interface StaffDocumentRow {
   uploaded_at: string;
 }
 
+interface AttendanceHistoryRow {
+  date: string;
+  status: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  working_hours: number | null;
+  overtime_hours: number;
+  source: string;
+}
+interface AttendanceHistoryResponse {
+  rows: AttendanceHistoryRow[];
+  summary: { present: number; late: number; absent: number; on_leave: number; total_punches: number };
+}
+
 interface StaffExperienceRow {
   id: string;
   institution_name: string;
@@ -424,6 +438,11 @@ export default function StaffDetailPage() {
     queryKey: ["hr", "staff", id, "documents"],
     queryFn: async () => (await api.get(`/api/hr/staff/${id}/documents`)).data.data,
   });
+
+  const { data: attendanceHistory, isLoading: attendanceLoading, isError: attendanceError, error: attendanceErrorObj, refetch: refetchAttendance } = useQuery<AttendanceHistoryResponse>({
+    queryKey: ["hr", "staff", id, "attendance"],
+    queryFn: async () => (await api.get(`/api/attendance/staff/${id}/history`)).data.data,
+  });
   const [docUploadOpen, setDocUploadOpen] = useState(false);
   const [docType, setDocType] = useState("CERTIFICATE");
   const [docTitle, setDocTitle] = useState("");
@@ -601,6 +620,7 @@ export default function StaffDetailPage() {
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
           <TabsTrigger value="payroll">Payroll</TabsTrigger>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
@@ -1067,6 +1087,49 @@ export default function StaffDetailPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="attendance">
+          <Card>
+            <CardContent className="pt-6">
+              {attendanceLoading ? (
+                <div className="flex justify-center py-8"><LoadingSpinner /></div>
+              ) : attendanceError ? (
+                <ErrorState title="Failed to load attendance history" description={extractErrorMessage(attendanceErrorObj)} retryLabel="Retry" onRetry={() => refetchAttendance()} />
+              ) : (
+                <>
+                  <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
+                    <div><div className="text-2xl font-bold">{attendanceHistory?.summary.present ?? 0}</div><div className="text-xs text-muted-foreground">Present</div></div>
+                    <div><div className="text-2xl font-bold">{attendanceHistory?.summary.late ?? 0}</div><div className="text-xs text-muted-foreground">Late</div></div>
+                    <div><div className="text-2xl font-bold">{attendanceHistory?.summary.absent ?? 0}</div><div className="text-xs text-muted-foreground">Absent</div></div>
+                    <div><div className="text-2xl font-bold">{attendanceHistory?.summary.on_leave ?? 0}</div><div className="text-xs text-muted-foreground">On Leave</div></div>
+                    <div><div className="text-2xl font-bold">{attendanceHistory?.summary.total_punches ?? 0}</div><div className="text-xs text-muted-foreground">Biometric Punches</div></div>
+                  </div>
+                  {!attendanceHistory?.rows.length && <EmptyState title="No attendance records in the last 30 days" description="Records appear here once manual attendance is marked or a biometric punch is recorded for this staff member." />}
+                  {!!attendanceHistory?.rows.length && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead>Check In</TableHead><TableHead>Check Out</TableHead><TableHead>Working Hours</TableHead><TableHead>Overtime</TableHead><TableHead>Source</TableHead></TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attendanceHistory.rows.map((r) => (
+                          <TableRow key={r.date}>
+                            <TableCell>{new Date(r.date).toLocaleDateString()}</TableCell>
+                            <TableCell><Badge variant={r.status === "PRESENT" ? "success" : r.status === "LATE" ? "warning" : r.status === "ABSENT" ? "destructive" : "secondary"}>{r.status}</Badge></TableCell>
+                            <TableCell>{r.check_in_at ? new Date(r.check_in_at).toLocaleTimeString() : "-"}</TableCell>
+                            <TableCell>{r.check_out_at ? new Date(r.check_out_at).toLocaleTimeString() : "-"}</TableCell>
+                            <TableCell>{r.working_hours ?? "-"}</TableCell>
+                            <TableCell>{r.overtime_hours || "-"}</TableCell>
+                            <TableCell className="text-muted-foreground">{r.source}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

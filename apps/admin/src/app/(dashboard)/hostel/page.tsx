@@ -44,6 +44,13 @@ interface Occupancy {
   fill_rate: number;
   rooms: { id: string; block_name: string; room_no: string; capacity: number; occupied: number; fill_rate: number }[];
 }
+interface FeeStructureOption {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  is_active: boolean;
+}
 
 function RoomsTab() {
   const queryClient = useQueryClient();
@@ -59,9 +66,20 @@ function RoomsTab() {
   const [allocateRoomId, setAllocateRoomId] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
+  // Real bug fixed (Plan Twenty-Seven, Bug 2a): allocate never sent
+  // fee_structure_id, so it fell into the backend's no-fee-record-at-all
+  // branch -- picking a structure here routes through
+  // attachFeeStructureToStudent(), the same mechanism Facility Request
+  // approval already correctly uses.
+  const [allocateFeeStructureId, setAllocateFeeStructureId] = useState("");
 
   const { data: blocks, isLoading, isError, error, refetch } = useQuery<Block[]>({ queryKey: ["hostel", "blocks"], queryFn: async () => (await api.get("/api/hostel/blocks")).data.data });
   const { data: rooms } = useQuery<Room[]>({ queryKey: ["hostel", "rooms"], queryFn: async () => (await api.get("/api/hostel/rooms")).data.data });
+  const { data: feeStructures } = useQuery<FeeStructureOption[]>({
+    queryKey: ["fees", "structures"],
+    queryFn: async () => (await api.get("/api/fees/structures")).data.data,
+  });
+  const hostelStructures = feeStructures?.filter((s) => s.category === "HOSTEL" && s.is_active) ?? [];
 
   const { data: students } = useQuery<StudentRow[]>({
     queryKey: ["students", "search", studentSearch],
@@ -93,12 +111,19 @@ function RoomsTab() {
   });
 
   const allocateMutation = useMutation({
-    mutationFn: () => api.post("/api/hostel/allocate", { room_id: allocateRoomId, student_id: selectedStudent!.id, from_date: new Date().toISOString().slice(0, 10) }),
+    mutationFn: () =>
+      api.post("/api/hostel/allocate", {
+        room_id: allocateRoomId,
+        student_id: selectedStudent!.id,
+        from_date: new Date().toISOString().slice(0, 10),
+        fee_structure_id: allocateFeeStructureId || undefined,
+      }),
     onSuccess: () => {
       toast.success("Student allocated");
       queryClient.invalidateQueries({ queryKey: ["hostel", "rooms"] });
       setAllocateOpen(false);
       setSelectedStudent(null); setStudentSearch("");
+      setAllocateFeeStructureId("");
     },
     onError: () => toast.error("Failed to allocate — room may be full or student already allocated"),
   });
@@ -186,6 +211,20 @@ function RoomsTab() {
                   </button>
                 ))}
               </>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Fee Structure (recurring — leave unset for no automatic hostel fee)</Label>
+            <select className="w-full rounded-md border px-3 py-2 text-sm" value={allocateFeeStructureId} onChange={(e) => setAllocateFeeStructureId(e.target.value)}>
+              <option value="">No recurring fee</option>
+              {hostelStructures.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} — ৳{s.amount}</option>
+              ))}
+            </select>
+            {hostelStructures.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No active Hostel fee structures configured yet — set one up under Fees → Structures to bill this allocation automatically.
+              </p>
             )}
           </div>
           <DialogFooter><Button disabled={!selectedStudent || allocateMutation.isPending} onClick={() => allocateMutation.mutate()}>Allocate</Button></DialogFooter>

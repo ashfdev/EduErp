@@ -68,6 +68,18 @@ if (env.NODE_ENV === "production" && ALLOWED_ORIGINS.length === 0) {
 export function createApp(): Express {
   const app = express();
 
+  // Security audit finding (2026-08-09): with no trust-proxy setting,
+  // Express derives req.ip from the raw TCP socket, which behind any
+  // reverse proxy (nginx, a cloud LB) is always the proxy's own address —
+  // every IP-keyed rate limiter/ban in this app (login, OTP, forgot-
+  // password) would then bucket every real client together under that one
+  // IP, letting one abusive user 1-hour-ban the login endpoint for
+  // everyone. In local dev (no proxy in front), leave this off entirely so
+  // req.ip stays the real loopback/LAN address.
+  if (env.NODE_ENV === "production") {
+    app.set("trust proxy", env.TRUST_PROXY_HOPS);
+  }
+
   app.use(requestId);
   app.use(helmet());
   app.use(compression());
@@ -83,7 +95,31 @@ export function createApp(): Express {
   );
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true }));
-  app.use(pinoHttp({ logger, genReqId: (req) => req.requestId }));
+  // redact: real security bug found during a full-system audit
+  // (2026-08-09) — pino-http's default request serializer logs the FULL
+  // raw headers object on every request, at info level, in production too.
+  // With no redaction, that meant every live Authorization bearer token
+  // plus the internal x-device-service-secret/x-device-key shared secrets
+  // were written to application logs in cleartext on every single API call
+  // — anyone with log access (aggregator, shipped logs, disk access) could
+  // extract live credentials straight from the logs. Also redacts cookies
+  // for the same reason, even though this API doesn't currently set any.
+  app.use(
+    pinoHttp({
+      logger,
+      genReqId: (req) => req.requestId,
+      redact: {
+        paths: [
+          "req.headers.authorization",
+          'req.headers["x-device-service-secret"]',
+          'req.headers["x-device-key"]',
+          "req.headers.cookie",
+          "res.headers['set-cookie']",
+        ],
+        censor: "[REDACTED]",
+      },
+    }),
+  );
 
   app.use("/health", healthRouter);
   app.use("/api/health", healthRouter);

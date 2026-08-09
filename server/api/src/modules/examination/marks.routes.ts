@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
-import { MARK_ENTRY_ROLES, MARK_VIEW_ROLES, MARK_APPROVAL_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
+import { MARK_ENTRY_ROLES, MARK_VIEW_ROLES, MARK_APPROVAL_ROLES, RESULT_PUBLISH_ROLES, EXAM_MANAGE_ROLES } from "../../lib/roles";
 import { submitMarksSchema } from "@education-erp/validators";
 import { calculateGrade } from "../../utils/grading.engine";
 import { computeClassResults } from "../results/results.routes";
@@ -137,17 +137,20 @@ marksRouter.get(
     const exam = await prisma.exam.findUnique({ where: { id: examId } });
     if (!exam) throw notFound("Exam not found");
 
-    // assignedSubjectIds is populated for SUBJECT_TEACHER and CLASS_TEACHER
-    // alike — null means "every subject is editable" (admin-tier roles).
-    // A CLASS_TEACHER may be the section's homeroom teacher (full view
-    // access, matching today's behavior) and/or separately hold a real
-    // SubjectTeacherAssignment for specific subjects in this class (e.g.
-    // teaching English here while being class teacher of a different
+    // assignedSubjectIds is populated for SUBJECT_TEACHER/CLASS_TEACHER/
+    // HEAD_OF_DEPT alike — null means "every subject is editable" (admin-
+    // tier roles). A CLASS_TEACHER may be the section's homeroom teacher
+    // (full view access, matching today's behavior) and/or separately hold
+    // a real SubjectTeacherAssignment for specific subjects in this class
+    // (e.g. teaching English here while being class teacher of a different
     // section) — either is enough to view the grid; assignedSubjectIds
     // drives which columns they can actually edit, not whether they can see it.
+    // HEAD_OF_DEPT (added 2026-08-09, full-system audit BUG 2) follows the
+    // exact same subject-assignment-scoped rule as SUBJECT_TEACHER — no
+    // section-teacher fallback, since that concept doesn't apply to them.
     let subjectIds: string[] | undefined;
     let assignedSubjectIds: Set<string> | null = null;
-    if (req.user!.role === "CLASS_TEACHER" || req.user!.role === "SUBJECT_TEACHER") {
+    if (req.user!.role === "CLASS_TEACHER" || req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "HEAD_OF_DEPT") {
       const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
       const assignments = await prisma.subjectTeacherAssignment.findMany({
         where: { staff_id: staff?.id, OR: [{ section_id: sectionId }, { section_id: null }] },
@@ -347,12 +350,34 @@ marksRouter.get(
       }
     }
 
+    // Real gap fixed (Plan Twenty-Seven, item 6/7): is_open alone can't tell
+    // the frontend WHY entry is closed, and a bare boolean previously left
+    // the teacher grid rendering fully-editable inputs for DRAFT/ACTIVE/
+    // PUBLISHED exams (only COMPLETED was special-cased client-side) that
+    // would then fail on submit with a generic error — a confusing
+    // "looked assigned, wasn't told why it failed" experience. This mirrors
+    // the exact set of block reasons /marks/submit itself already enforces
+    // (lines ~415-462 above), so the grid can now explain the real reason
+    // up front instead of only discovering it at submit time.
+    const deadlinePassed = !!exam.mark_entry_closes_at && exam.mark_entry_closes_at < new Date();
+    const isOpen = exam.status === "MARK_ENTRY" && !deadlinePassed;
+    const closedReason = isOpen
+      ? null
+      : exam.status === "MARK_ENTRY" && deadlinePassed
+        ? "DEADLINE_PASSED"
+        : exam.status === "COMPLETED"
+          ? "COMPLETED"
+          : exam.status === "PUBLISHED"
+            ? "PUBLISHED"
+            : "NOT_YET_OPENED";
+
     res.json({
       success: true,
       data: {
         entry_deadline_info: {
           closes_at: exam.mark_entry_closes_at,
-          is_open: exam.status === "MARK_ENTRY",
+          is_open: isOpen,
+          closed_reason: closedReason,
           time_remaining: exam.mark_entry_closes_at ? Math.max(0, exam.mark_entry_closes_at.getTime() - Date.now()) : null,
         },
         // Lets the frontend distinguish "this exam has zero subjects
@@ -419,49 +444,63 @@ marksRouter.post(
     if (exam.status === "MARK_ENTRY") {
       if (exam.mark_entry_closes_at && exam.mark_entry_closes_at < new Date()) throw badRequest("Mark entry window has closed");
     } else if (exam.status === "COMPLETED") {
-      const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
-      const genericBlockMessage = "Mark entry is not open for this exam";
-      if (!staff) throw badRequest(genericBlockMessage);
+      // Real bug fixed (Plan Twenty-Seven, item 6/7 audit): this gate had no
+      // exam-management bypass at all -- SUPER_ADMIN/ADMIN/PRINCIPAL/
+      // EXAM_CONTROLLER (the same EXAM_MANAGE_ROLES tier that already owns
+      // the exam-wide /reopen action and approves/rejects every correction
+      // request) were structurally forced through the SAME per-teacher
+      // correction-request gate as a subject teacher, including a hard
+      // block for any account with no linked Staff row (most admin logins)
+      // -- violating this project's standing "ADMIN/SUPER_ADMIN access
+      // never shrinks" rule. These roles already have full authority to
+      // reopen the whole exam or approve a correction directly, so gating
+      // their own submit behind a self-filed-and-self-approved correction
+      // request would be a pointless hoop, not a real safeguard.
+      if (!EXAM_MANAGE_ROLES.includes(req.user!.role as (typeof EXAM_MANAGE_ROLES)[number])) {
+        const staff = await prisma.staff.findFirst({ where: { user_id: req.user!.sub } });
+        const genericBlockMessage = "Mark entry is not open for this exam";
+        if (!staff) throw badRequest(genericBlockMessage);
 
-      const subjectIdsForGate = [...new Set(body.entries.map((e) => e.subject_id))];
-      const studentIdsForGate = [...new Set(body.entries.map((e) => e.student_id))];
-      const [gateSubjects, gateStudents] = await Promise.all([
-        prisma.subject.findMany({ where: { id: { in: subjectIdsForGate } }, select: { id: true } }),
-        prisma.student.findMany({ where: { id: { in: studentIdsForGate } }, select: { id: true, current_section_id: true } }),
-      ]);
-      if (gateSubjects.length !== subjectIdsForGate.length) throw badRequest(genericBlockMessage);
-      const sectionByStudent = new Map(gateStudents.map((s) => [s.id, s.current_section_id]));
+        const subjectIdsForGate = [...new Set(body.entries.map((e) => e.subject_id))];
+        const studentIdsForGate = [...new Set(body.entries.map((e) => e.student_id))];
+        const [gateSubjects, gateStudents] = await Promise.all([
+          prisma.subject.findMany({ where: { id: { in: subjectIdsForGate } }, select: { id: true } }),
+          prisma.student.findMany({ where: { id: { in: studentIdsForGate } }, select: { id: true, current_section_id: true } }),
+        ]);
+        if (gateSubjects.length !== subjectIdsForGate.length) throw badRequest(genericBlockMessage);
+        const sectionByStudent = new Map(gateStudents.map((s) => [s.id, s.current_section_id]));
 
-      await syncExpiredMarkCorrections();
-      const activeCorrections = await prisma.markCorrectionRequest.findMany({
-        where: {
-          exam_id: body.exam_id,
-          teacher_id: staff.id,
-          subject_id: { in: subjectIdsForGate },
-          status: "APPROVED",
-        },
-      });
-      const coverageBySubject = new Map<string, { wholeClass: boolean; sections: Set<string> }>();
-      for (const c of activeCorrections) {
-        const entry = coverageBySubject.get(c.subject_id) ?? { wholeClass: false, sections: new Set<string>() };
-        if (c.section_id === null) entry.wholeClass = true;
-        else entry.sections.add(c.section_id);
-        coverageBySubject.set(c.subject_id, entry);
+        await syncExpiredMarkCorrections();
+        const activeCorrections = await prisma.markCorrectionRequest.findMany({
+          where: {
+            exam_id: body.exam_id,
+            teacher_id: staff.id,
+            subject_id: { in: subjectIdsForGate },
+            status: "APPROVED",
+          },
+        });
+        const coverageBySubject = new Map<string, { wholeClass: boolean; sections: Set<string> }>();
+        for (const c of activeCorrections) {
+          const entry = coverageBySubject.get(c.subject_id) ?? { wholeClass: false, sections: new Set<string>() };
+          if (c.section_id === null) entry.wholeClass = true;
+          else entry.sections.add(c.section_id);
+          coverageBySubject.set(c.subject_id, entry);
+        }
+
+        const uncovered = body.entries.some((e) => {
+          const coverage = coverageBySubject.get(e.subject_id);
+          if (!coverage) return true;
+          if (coverage.wholeClass) return false;
+          const studentSection = sectionByStudent.get(e.student_id);
+          return !(studentSection && coverage.sections.has(studentSection));
+        });
+        if (uncovered) throw badRequest(genericBlockMessage);
       }
-
-      const uncovered = body.entries.some((e) => {
-        const coverage = coverageBySubject.get(e.subject_id);
-        if (!coverage) return true;
-        if (coverage.wholeClass) return false;
-        const studentSection = sectionByStudent.get(e.student_id);
-        return !(studentSection && coverage.sections.has(studentSection));
-      });
-      if (uncovered) throw badRequest(genericBlockMessage);
     } else {
       throw badRequest("Mark entry is not open for this exam");
     }
 
-    if (req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "CLASS_TEACHER") {
+    if (req.user!.role === "SUBJECT_TEACHER" || req.user!.role === "CLASS_TEACHER" || req.user!.role === "HEAD_OF_DEPT") {
       // Section-aware (see isTeacherAssignedToSubjectSections's own comment
       // for the bug this closes) -- each entry's student's real section is
       // resolved fresh here rather than reusing the COMPLETED-exam gate's

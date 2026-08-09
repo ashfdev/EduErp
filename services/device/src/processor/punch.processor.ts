@@ -164,13 +164,30 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
     data: { check_in_at: range._min.punch_at, check_out_at: range._max.punch_at },
   });
 
-  // 5. Notify the core API for any live UI (Socket.io) to pick up. Best
-  // effort — a missed event just means the live widget doesn't update
-  // instantly, the AttendanceRecord itself is already durably written.
+  // Guardian entry/exit SMS event classification (2026-08-09 audit finding)
+  // — derived from the same min/max range just computed above, not from
+  // punch_type (unreliable, per the comment above). "ENTRY" only when this
+  // punch is BOTH the day's current min and max (i.e. nothing else has been
+  // recorded yet today) — the very first punch. "EXIT" when this punch IS
+  // the current max but ISN'T also the min (i.e. at least one earlier punch
+  // already exists today) — every subsequent punch updates "how far they've
+  // gotten today," and the core API's own dedup (has a DEPARTURE already
+  // been sent today?) is what keeps this from spamming on a 3rd/4th punch,
+  // not this classification itself. null for a punch that's neither (e.g.
+  // a delayed/reconciled punch landing in the middle of an already-known
+  // range).
+  const isMin = range._min.punch_at?.getTime() === raw.punch_at.getTime();
+  const isMax = range._max.punch_at?.getTime() === raw.punch_at.getTime();
+  const eventType: "ENTRY" | "EXIT" | null = isMin && isMax ? "ENTRY" : isMax ? "EXIT" : null;
+
+  // 5. Notify the core API for any live UI (Socket.io) to pick up, and to
+  // fire any guardian entry/exit SMS. Best effort — a missed event just
+  // means the live widget doesn't update instantly / an SMS doesn't fire,
+  // the AttendanceRecord itself is already durably written.
   try {
     await axios.post(
       `${API_URL}/internal/attendance/biometric-event`,
-      { person_id: personId, person_type: personType, status, time: raw.punch_at, shift_id: shiftId },
+      { person_id: personId, person_type: personType, status, time: raw.punch_at, shift_id: shiftId, event_type: eventType },
       { headers: { "x-device-service-secret": DEVICE_SERVICE_SECRET }, timeout: 3000 },
     );
   } catch (err) {

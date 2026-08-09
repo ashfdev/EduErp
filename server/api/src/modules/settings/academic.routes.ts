@@ -7,7 +7,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { SETTINGS_ACADEMIC_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
+import { SETTINGS_ACADEMIC_ROLES, STAFF_ONLY_ROLES, TEACHING_ROLES } from "../../lib/roles";
 import {
   academicYearSchema,
   shiftSchema,
@@ -524,6 +524,76 @@ routineRouter.get(
   }),
 );
 
+// Room/teacher availability checker (2026-08-09) — real gap found during a
+// full-system audit: no function anywhere let staff answer "which rooms/
+// teachers are free for period N today" — the closest thing was the
+// substitute-assignment flow's own per-candidate clash check, which only
+// ever validates ONE candidate at a time, never lists everyone's status at
+// once. Given a day-of-week + shift, this returns every active room's and
+// every teaching-staff member's free/busy status for each real (non-break)
+// period in that shift, so an admin can see at a glance who/what is free —
+// for scheduling an extra class in a free room, or picking a substitute for
+// an absent teacher's period. Purely a recurring-schedule view (driven by
+// RoutineSlot, the weekly template) — a specific date's one-off
+// substitutions are a separate, already-built mechanism
+// (routineSubstitutionsRouter below) layered on top of this base schedule,
+// not read here.
+routineRouter.get(
+  "/availability",
+  authorize(STAFF_ONLY_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({ day_of_week: z.coerce.number().int().min(0).max(6), shift_id: z.string().min(1) })
+      .parse(req.query);
+
+    const [periods, rooms, teachers, slots] = await Promise.all([
+      prisma.shiftPeriod.findMany({
+        where: { shift_id: query.shift_id, is_break: false },
+        orderBy: { period_no: "asc" },
+      }),
+      prisma.room.findMany({ where: { is_active: true }, orderBy: { name: "asc" } }),
+      prisma.staff.findMany({
+        where: { is_active: true, deleted_at: null, user: { role: { in: TEACHING_ROLES } } },
+        select: { id: true, name_en: true, designation: true },
+        orderBy: { name_en: "asc" },
+      }),
+      prisma.routineSlot.findMany({
+        where: { day_of_week: query.day_of_week },
+        include: {
+          class: { select: { name_en: true } },
+          section: { select: { name: true } },
+          subject: { select: { name_en: true } },
+        },
+      }),
+    ]);
+
+    const byRoomAndPeriod = new Map(slots.filter((s) => s.room_id).map((s) => [`${s.room_id}:${s.period_no}`, s]));
+    const byTeacherAndPeriod = new Map(slots.filter((s) => s.teacher_id).map((s) => [`${s.teacher_id}:${s.period_no}`, s]));
+
+    const describeSlot = (s: (typeof slots)[number]) => ({
+      class_name: s.class.name_en,
+      section_name: s.section?.name ?? null,
+      subject_name: s.subject?.name_en ?? null,
+    });
+
+    const result = periods.map((period) => ({
+      period_no: period.period_no,
+      start_time: period.start_time,
+      end_time: period.end_time,
+      rooms: rooms.map((room) => {
+        const occupying = byRoomAndPeriod.get(`${room.id}:${period.period_no}`);
+        return { id: room.id, name: room.name, is_lab: room.is_lab, status: occupying ? "OCCUPIED" : "FREE", occupied_by: occupying ? describeSlot(occupying) : null };
+      }),
+      teachers: teachers.map((teacher) => {
+        const occupying = byTeacherAndPeriod.get(`${teacher.id}:${period.period_no}`);
+        return { id: teacher.id, name_en: teacher.name_en, designation: teacher.designation, status: occupying ? "OCCUPIED" : "FREE", occupied_by: occupying ? describeSlot(occupying) : null };
+      }),
+    }));
+
+    res.json({ success: true, data: result });
+  }),
+);
+
 const ROUTINE_DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Translates the raw Prisma P2002 unique-constraint violation on RoutineSlot
@@ -734,8 +804,13 @@ routineSubstitutionsRouter.post(
     if (!slot.teacher_id) throw badRequest("This routine slot has no regular teacher assigned yet");
 
     const date = new Date(Date.UTC(body.date.getFullYear(), body.date.getMonth(), body.date.getDate()));
-    if (date.getUTCDay() !== slot.day_of_week) {
-      throw badRequest("The given date's weekday doesn't match this routine slot's scheduled day");
+    // is_makeup_class (Plan Twenty-Seven) is the explicit, deliberate escape
+    // hatch for a genuine rescheduled/makeup class held on a day other than
+    // the slot's normal one -- never a silent bypass, the admin must say so.
+    if (!body.is_makeup_class && date.getUTCDay() !== slot.day_of_week) {
+      throw badRequest(
+        "The given date's weekday doesn't match this routine slot's scheduled day. If this is a genuine rescheduled/makeup class, mark it explicitly as a makeup class.",
+      );
     }
     if (body.substitute_teacher_id === slot.teacher_id) {
       throw badRequest("The substitute cannot be the same as the regular teacher");
@@ -743,7 +818,15 @@ routineSubstitutionsRouter.post(
 
     await assertSubstituteAvailable({
       substituteTeacherId: body.substitute_teacher_id,
-      dayOfWeek: slot.day_of_week,
+      // Real correctness fix (Plan Twenty-Seven): always derive from the
+      // REAL target date's actual weekday, not the slot's nominal day.
+      // Behaviorally identical for every non-makeup case (already validated
+      // above to match slot.day_of_week) -- only actually changes anything
+      // for a makeup class, where checking the substitute's own regular
+      // schedule against the slot's nominal day would check the WRONG day
+      // entirely (their normal Sunday routine, say, instead of the real
+      // Friday the makeup class is actually happening on).
+      dayOfWeek: date.getUTCDay(),
       periodNo: slot.period_no,
       date,
       excludeRoutineSlotId: slot.id,
@@ -761,6 +844,7 @@ routineSubstitutionsRouter.post(
         original_teacher_id: slot.teacher_id,
         substitute_teacher_id: body.substitute_teacher_id,
         reason: body.reason,
+        is_makeup_class: body.is_makeup_class,
         assigned_by_id: req.user!.sub,
       },
     });
@@ -1033,7 +1117,22 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
     // every resulting placement. Identical placement logic to before this
     // phase — only now parameterized so it can run once for the shared
     // queue and again per Group, instead of once for the whole section.
-    const runQueue = (subjectList: typeof subjectsWithTeacher, occupied: Set<string>, groupId: string | null) => {
+    //
+    // Real bug fixed (found during a full-system E2E audit, 2026-08-09): a
+    // class with Groups AND multiple compulsory (shared) subjects with no
+    // explicit weekly_periods would have the shared queue's own auto-split
+    // silently consume the ENTIRE week's slot budget before any Group queue
+    // ever got a turn — since totalSlots was passed to each queue's
+    // auto-split as if that queue owned the whole week outright, with no
+    // awareness that Group queues would also need real room afterward.
+    // reservedForOthers lets a caller carve out headroom before this
+    // queue's own unset-subject split is computed; the shared queue is the
+    // only caller that ever passes a nonzero value (see the call site
+    // below) — Group queues never reserve against each other, since two
+    // different Groups' periods can legitimately share the same day/period
+    // (only that Group's own students attend either one), so they aren't
+    // really competing for the same physical week-grid space.
+    const runQueue = (subjectList: typeof subjectsWithTeacher, occupied: Set<string>, groupId: string | null, reservedForOthers = 0) => {
       // Explicit per-subject weekly period counts (Subject.weekly_periods)
       // take priority; subjects with no explicit count fall back to an even
       // split of whatever's left, matching this generator's original
@@ -1052,7 +1151,7 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
         return;
       }
       const unsetSubjects = subjectList.filter((s) => !s.weekly_periods);
-      const remainingSlots = totalSlots - explicitTotal;
+      const remainingSlots = Math.max(0, totalSlots - explicitTotal - reservedForOthers);
       const baseCount = unsetSubjects.length > 0 ? Math.floor(remainingSlots / unsetSubjects.length) : 0;
       const remainder = unsetSubjects.length > 0 ? remainingSlots % unsetSubjects.length : 0;
 
@@ -1206,13 +1305,39 @@ export async function generateClassRoutine(tx: Prisma.TransactionClient, classId
     // subject with a resolved teacher, so this is the ONLY queue that runs —
     // byte-for-byte the same placement result as before this phase.
     const sharedSubjects = subjectsWithTeacher.filter((s) => !s.group_id);
-    runQueue(sharedSubjects, baseOccupied, null);
+    const groupIds = [...new Set(subjectsWithTeacher.filter((s) => s.group_id).map((s) => s.group_id!))];
+
+    // Reserve room for whatever the single BUSIEST Group will need, before
+    // computing the shared queue's own auto-split — see runQueue's own
+    // comment for why this is necessary and why only the busiest Group (not
+    // the sum across every Group) is what actually competes with the shared
+    // queue for week-grid space. Reserved proportionally against the same
+    // "even split of what's left" logic the shared queue's own unset
+    // subjects already use, so neither side is silently starved and neither
+    // silently grabs the other's fair share. Exactly 0 (and thus a
+    // completely unchanged call below) whenever the class has no Groups.
+    let maxGroupExplicitTotal = 0;
+    let maxGroupUnsetCount = 0;
+    for (const groupId of groupIds) {
+      const subjectsForGroup = subjectsWithTeacher.filter((s) => s.group_id === groupId);
+      const explicitTotal = subjectsForGroup.reduce((sum, s) => sum + (s.weekly_periods ?? 0), 0);
+      const unsetCount = subjectsForGroup.filter((s) => !s.weekly_periods).length;
+      maxGroupExplicitTotal = Math.max(maxGroupExplicitTotal, explicitTotal);
+      maxGroupUnsetCount = Math.max(maxGroupUnsetCount, unsetCount);
+    }
+    const sharedExplicitTotal = sharedSubjects.reduce((sum, s) => sum + (s.weekly_periods ?? 0), 0);
+    const sharedUnsetCount = sharedSubjects.filter((s) => !s.weekly_periods).length;
+    const unsetPoolTotal = Math.max(0, totalSlots - sharedExplicitTotal - maxGroupExplicitTotal);
+    const unsetDivisor = sharedUnsetCount + maxGroupUnsetCount;
+    const reservedUnsetShare = unsetDivisor > 0 ? Math.round(unsetPoolTotal * (maxGroupUnsetCount / unsetDivisor)) : 0;
+    const reservedForGroups = groupIds.length > 0 ? maxGroupExplicitTotal + reservedUnsetShare : 0;
+
+    runQueue(sharedSubjects, baseOccupied, null, reservedForGroups);
 
     // Each Group gets its own independent sub-loop, seeded from the
     // now-updated baseOccupied (shared placements just made above) plus that
     // Group's own pre-existing rows — but NOT from any other Group's
     // occupied set, so different Groups can share the same day/period.
-    const groupIds = [...new Set(subjectsWithTeacher.filter((s) => s.group_id).map((s) => s.group_id!))];
     for (const groupId of groupIds) {
       const groupOccupied = new Set([...baseOccupied, ...(existingGroupOccupied.get(groupId) ?? [])]);
       const subjectsForGroup = subjectsWithTeacher.filter((s) => s.group_id === groupId);

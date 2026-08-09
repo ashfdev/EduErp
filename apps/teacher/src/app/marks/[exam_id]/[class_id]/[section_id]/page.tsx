@@ -30,7 +30,13 @@ interface Subject {
   correction_status: string;
 }
 interface MarkEntryData {
-  entry_deadline_info: { is_open: boolean; closes_at: string | null };
+  entry_deadline_info: {
+    is_open: boolean;
+    closes_at: string | null;
+    // NOT_YET_OPENED (DRAFT/ACTIVE) | DEADLINE_PASSED (MARK_ENTRY, but past
+    // mark_entry_closes_at) | COMPLETED | PUBLISHED | null (is_open: true).
+    closed_reason: "NOT_YET_OPENED" | "DEADLINE_PASSED" | "COMPLETED" | "PUBLISHED" | null;
+  };
   exam_has_subjects_for_class: boolean;
   subjects: Subject[];
   students: {
@@ -186,10 +192,19 @@ export default function TeacherMarkEntryGridPage() {
   // specific teacher has an approved, still-active correction for it
   // (Plan Fourteen, Phase M) — mirrors the exact server-side gate in
   // POST /marks/submit, so the UI never offers an input that would fail.
+  //
+  // Real bug fixed (Plan Twenty-Seven, item 6/7): this previously only
+  // special-cased COMPLETED and otherwise always returned true — so a
+  // DRAFT/ACTIVE exam (not yet opened) or a PUBLISHED one (already
+  // published) rendered fully-editable inputs that then failed on submit
+  // with a generic "not open" error, an easy thing to misread as "not
+  // assigned." Now falls back to the server's own is_open computation
+  // (which already accounts for exam status AND a passed deadline) for
+  // every non-COMPLETED case.
   function effectiveEditable(s: Subject): boolean {
     if (!s.editable) return false;
     if (exam?.status === "COMPLETED") return s.correction_status === "APPROVED_ACTIVE";
-    return true;
+    return !!data?.entry_deadline_info.is_open;
   }
 
   const [correctionTarget, setCorrectionTarget] = useState<Subject | null>(null);
@@ -273,6 +288,19 @@ export default function TeacherMarkEntryGridPage() {
           <Card>
             <CardContent className="pt-6 text-sm text-destructive">{loadErrorMessage ?? t("loadErrorDetail")}</CardContent>
           </Card>
+        )}
+
+        {data && !data.entry_deadline_info.is_open && data.entry_deadline_info.closed_reason && data.entry_deadline_info.closed_reason !== "COMPLETED" && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            {data.entry_deadline_info.closed_reason === "NOT_YET_OPENED" && t("closedNotYetOpened")}
+            {data.entry_deadline_info.closed_reason === "DEADLINE_PASSED" && t("closedDeadlinePassed")}
+            {data.entry_deadline_info.closed_reason === "PUBLISHED" && t("closedPublished")}
+          </div>
+        )}
+        {data && data.entry_deadline_info.closed_reason === "COMPLETED" && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            {t("closedCompleted")}
+          </div>
         )}
 
         {data && !data.subjects.length && (

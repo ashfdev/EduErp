@@ -110,6 +110,13 @@ export default function AttendanceRulesPage() {
               <Label>SMS on late</Label>
               <Switch checked={watch("sms_on_late")} onCheckedChange={(v) => setValue("sms_on_late", v)} />
             </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>SMS on entry/exit</Label>
+                <p className="text-xs text-muted-foreground">Sends the guardian an SMS when a student&apos;s first (entry) and last (exit) biometric punch of the day is recorded.</p>
+              </div>
+              <Switch checked={watch("sms_on_entry_exit") ?? false} onCheckedChange={(v) => setValue("sms_on_entry_exit", v)} />
+            </div>
           </CardContent>
         </Card>
         <Card>

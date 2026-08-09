@@ -123,7 +123,7 @@ usersRouter.post(
     const body = adminResetPasswordSchema.parse(req.body ?? {});
     const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { name_en: true, phone: true } });
     const tempPassword = body.login_password ?? generateMemorablePassword(target.name_en, target.phone);
-    const password_hash = await bcrypt.hash(tempPassword, 10);
+    const password_hash = await bcrypt.hash(tempPassword, 12);
     const user = await prisma.user.update({
       where: { id: reqParam(req, "id") },
       data: { password_hash, must_change_password: true },

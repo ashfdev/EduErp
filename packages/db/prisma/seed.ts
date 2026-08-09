@@ -139,7 +139,7 @@ const FEE_CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
   READMISSION: "4013",
 };
 
-const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED", "ADMISSION_STATUS_UPDATE", "ADMISSION_APPLICATION_RECEIVED", "ADMISSION_PAYMENT_RECEIVED", "ADMISSION_PAYMENT_PENDING_VERIFICATION", "ADMISSION_STAGE_SCHEDULED", "ADMISSION_MERIT_LIST_PUBLISHED"] as const;
+const NOTIFICATION_TRIGGERS = ["ABSENCE", "LATE", "FEE_DUE", "RESULT_PUBLISHED", "NOTICE", "ADMISSION_CONFIRM", "PORTAL_LOGIN_CREATED", "EXAM_SCHEDULED", "ADMISSION_STATUS_UPDATE", "ADMISSION_APPLICATION_RECEIVED", "ADMISSION_PAYMENT_RECEIVED", "ADMISSION_PAYMENT_PENDING_VERIFICATION", "ADMISSION_STAGE_SCHEDULED", "ADMISSION_MERIT_LIST_PUBLISHED", "STUDENT_ARRIVAL", "STUDENT_DEPARTURE"] as const;
 const NOTIFICATION_CHANNELS = ["SMS", "EMAIL", "PUSH"] as const;
 
 const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { bn: string; en: string }> = {
@@ -198,6 +198,14 @@ const NOTIFICATION_TEMPLATES: Record<(typeof NOTIFICATION_TRIGGERS)[number], { b
   ADMISSION_MERIT_LIST_PUBLISHED: {
     bn: "মেধা তালিকা প্রকাশিত হয়েছে। {{applicant_name}} (রোল: {{admission_roll}}) — অবস্থা: {{status}}, ক্রম: {{merit_rank}}।",
     en: "Merit list published. {{applicant_name}} (Roll: {{admission_roll}}) — Status: {{status}}, Rank: {{merit_rank}}.",
+  },
+  STUDENT_ARRIVAL: {
+    bn: "প্রিয় অভিভাবক, {{student_name}} আজ {{time}} সময়ে বিদ্যালয়ে প্রবেশ করেছে।",
+    en: "Dear guardian, {{student_name}} entered school today at {{time}}.",
+  },
+  STUDENT_DEPARTURE: {
+    bn: "প্রিয় অভিভাবক, {{student_name}} আজ {{time}} সময়ে বিদ্যালয় থেকে বের হয়েছে।",
+    en: "Dear guardian, {{student_name}} left school today at {{time}}.",
   },
 };
 

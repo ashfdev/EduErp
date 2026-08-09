@@ -127,6 +127,10 @@ subjectAttendanceRouter.get(
           period_no: slot.period_no,
           start_time: slot.start_time,
           end_time: slot.end_time,
+          // Lets the caller compare against the target date's own weekday to
+          // detect a makeup-class scenario (Plan Twenty-Seven) without a
+          // second round-trip.
+          day_of_week: slot.day_of_week,
         },
         date: date.toISOString().slice(0, 10),
         students: students.map((s) => {
@@ -155,8 +159,24 @@ subjectAttendanceRouter.post(
     if (!slot.subject_id || !slot.section_id) throw badRequest("This routine slot has no subject/section configured yet");
 
     const date = startOfDay(body.date);
-    if (date.getDay() !== slot.day_of_week) {
-      throw badRequest("The given date's weekday doesn't match this routine slot's scheduled day");
+    // Real bug fixed (Plan Twenty-Seven): this compared a UTC-constructed
+    // Date (see startOfDay()'s own comment) using getDay(), which reads the
+    // LOCAL server timezone -- on a server not running in UTC+0, this could
+    // silently disagree with the UTC calendar day actually stored, wrongly
+    // blocking (or wrongly allowing) attendance depending on the server's
+    // offset. getUTCDay() matches startOfDay()'s own UTC construction, and
+    // the same comparison already correctly used in academic.routes.ts's
+    // substitution-creation route.
+    //
+    // is_makeup_class is the explicit, deliberate escape hatch for a
+    // genuine rescheduled/makeup class held on a day other than the slot's
+    // normal one -- never a silent bypass, the caller must say so, and only
+    // someone already ownership-checked for this exact subject+section
+    // (below) can mark it either way.
+    if (!body.is_makeup_class && date.getUTCDay() !== slot.day_of_week) {
+      throw badRequest(
+        "The given date's weekday doesn't match this routine slot's scheduled day. If this is a genuine rescheduled/makeup class, mark it explicitly as a makeup class.",
+      );
     }
 
     await assertSubjectSectionOwnership(req.user!.sub, req.user!.role, slot.subject_id, slot.section_id, slot.id, date);

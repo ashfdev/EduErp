@@ -57,7 +57,9 @@ export async function createOrLinkPortalLogin(
   }
 
   const tempPassword = params.password_override ?? generateMemorablePassword(params.name, params.phone);
-  const password_hash = await bcrypt.hash(tempPassword, 10);
+  // Cost factor 12 (security audit, 2026-08-09: bumped from 10, below
+  // current OWASP-recommended minimum).
+  const password_hash = await bcrypt.hash(tempPassword, 12);
   const user = await tx.user.create({
     data: { name_en: params.name, role: params.role, phone: params.phone, password_hash, must_change_password: true },
   });

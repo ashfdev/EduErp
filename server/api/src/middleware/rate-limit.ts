@@ -64,6 +64,36 @@ export const loginLimiter = rateLimit({
   },
 });
 
+// Real gap found during a full-system security audit (2026-08-09) — the IP
+// limiter above buckets by req.ip alone, so an attacker rotating source IPs
+// (a real botnet, or even just several devices) faces NO throttling at all
+// against one specific victim account. Confirmed this bucket really is
+// IP-wide during that same audit session, incidentally: normal testing
+// across several DIFFERENT accounts from one dev machine tripped the IP
+// ban for every account on that IP, proving one abusive IP can already
+// collaterally lock out everyone sharing it -- the flip side of the same
+// gap is that one determined attacker targeting a single account can just
+// switch IPs and keep guessing forever. Keyed by the same `identifier`
+// field the login route itself resolves (phone/email/student_uid), mirroring
+// forgotPasswordLimiter's own "key the resource being protected, not the
+// caller" pattern. Deliberately no separate long-ban key here (unlike
+// loginBanGuard/LOGIN_BAN_PREFIX above) -- a per-account ban that outlives
+// its own window is a self-inflicted denial-of-service tool once an
+// attacker knows a real account's identifier; a plain rolling window is
+// the safer choice for a per-account bucket specifically.
+export const loginAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:login-account:"),
+  keyGenerator: (req) => {
+    const identifier = req.body?.identifier;
+    return typeof identifier === "string" && identifier ? identifier : "unknown";
+  },
+  message: RATE_LIMITED_ERROR,
+});
+
 // Keyed by phone (the resource being protected), not IP — an attacker
 // rotating IPs shouldn't get unlimited OTP requests against one victim's number.
 export const forgotPasswordLimiter = rateLimit({
@@ -76,6 +106,29 @@ export const forgotPasswordLimiter = rateLimit({
     const phone = req.body?.phone;
     if (typeof phone !== "string" || !phone) throw badRequest("phone is required");
     return phone;
+  },
+  message: RATE_LIMITED_ERROR,
+});
+
+// Real gap found during a full-system security audit (2026-08-09) — the OTP
+// itself is only a 6-digit code (900,000 possible values) valid for 10
+// minutes (see auth.routes.ts's RESET_TOKEN_TTL / OTP flow), but /verify-otp
+// had no dedicated limiter of its own — only the generic 60/min-per-IP
+// default applied, leaving it realistically brute-forceable within its own
+// validity window by an attacker rotating IPs. Keyed by phone, same
+// resource-not-caller pattern as forgotPasswordLimiter just above (which
+// this route's OTP originates from) — a tight cap is safe since a real user
+// only ever needs a small handful of attempts to type in the code they
+// were just sent.
+export const otpVerifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 6,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:otp-verify:"),
+  keyGenerator: (req) => {
+    const phone = req.body?.phone;
+    return typeof phone === "string" && phone ? phone : (req.ip ?? "unknown");
   },
   message: RATE_LIMITED_ERROR,
 });
@@ -136,6 +189,22 @@ export const fileServingLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: redisStore("rl:file-serving:"),
+  message: RATE_LIMITED_ERROR,
+});
+
+// Real gap found during a full-system security audit (2026-08-09) — this
+// route is mounted at /internal (outside /api in app.ts), so it never
+// receives defaultApiLimiter's global rate limiting at all. It's already
+// shared-secret authenticated (not open), but a real biometric device
+// fleet can legitimately send frequent punches, so this is generous rather
+// than tight — the point is having a real ceiling at all, not throttling
+// normal use.
+export const internalServiceLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: redisStore("rl:internal-service:"),
   message: RATE_LIMITED_ERROR,
 });
 

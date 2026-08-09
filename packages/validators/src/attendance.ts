@@ -36,6 +36,9 @@ export type MarkStaffAttendanceInput = z.infer<typeof markStaffAttendanceSchema>
 export const markSubjectAttendanceSchema = z.object({
   routine_slot_id: z.string().min(1),
   date: z.coerce.date(),
+  // Explicit opt-in for a genuine rescheduled/makeup class held on a day
+  // other than the slot's normal scheduled day -- never a silent bypass.
+  is_makeup_class: z.boolean().optional().default(false),
   records: z
     .array(
       z.object({

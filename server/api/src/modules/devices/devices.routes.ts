@@ -9,12 +9,13 @@ import { reqParam } from "../../lib/req-param";
 import { DEVICE_MANAGE_ROLES } from "../../lib/roles";
 import { deviceSchema, enrollUserSchema } from "@education-erp/validators";
 import { badRequest, notFound } from "../../lib/errors";
+import { resolveDeviceServiceSecret } from "../../lib/env";
 
 export const devicesRouter = Router();
 devicesRouter.use(authenticate, authorize(DEVICE_MANAGE_ROLES));
 
 const DEVICE_SERVICE_URL = process.env.DEVICE_SERVICE_URL ?? "http://localhost:4500";
-const DEVICE_SERVICE_SECRET = process.env.DEVICE_SERVICE_SECRET ?? "dev-only-device-secret";
+const DEVICE_SERVICE_SECRET = resolveDeviceServiceSecret();
 
 async function callDeviceService(path: string, body: unknown): Promise<{ ok: boolean; data?: unknown }> {
   try {

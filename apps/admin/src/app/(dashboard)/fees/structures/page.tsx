@@ -497,11 +497,19 @@ export default function FeeStructuresPage() {
                 <option value="ONE_TIME">One Time</option>
               </select>
             </div>
-            {form.frequency === "ONE_TIME" ? (
+            {form.frequency === "ONE_TIME" || form.frequency === "YEARLY" ? (
               <div className="space-y-1.5">
                 <Label>Target Due Date</Label>
                 <Input type="date" value={form.target_due_date} onChange={(e) => setForm({ ...form, target_due_date: e.target.value })} />
-                <p className="text-xs text-muted-foreground">Shown to families as the upcoming deadline before this fee is even generated, and used as the default due date when generating it.</p>
+                <p className="text-xs text-muted-foreground">
+                  Shown to families as the upcoming deadline before this fee is even generated, and used as the default due date when generating it.
+                  {/* Real bug fixed (Plan Twenty-Seven, Bug 2b): a YEARLY structure has no
+                      real "day of month" concept (which month?) -- Due Day of Month was
+                      previously shown here but silently never read anywhere for YEARLY,
+                      leaving families with no due date shown at all until an admin actually
+                      generated the invoice. Target Due Date is the field both the portal's
+                      upcoming-dues projection and the Generate Invoices flow already read. */}
+                </p>
               </div>
             ) : (
               <div className="space-y-1.5"><Label>Due Day of Month</Label><Input type="number" value={form.due_day} onChange={(e) => setForm({ ...form, due_day: Number(e.target.value) })} /></div>

@@ -26,6 +26,7 @@ import {
   ErrorState,
   LoadingSpinner,
   extractErrorMessage,
+  ConfirmDialog,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -168,20 +169,35 @@ export default function SubjectsSettingsPage() {
 
   const [assignSectionId, setAssignSectionId] = useState<string>("");
   const [assignStaffId, setAssignStaffId] = useState<string>("");
+  // Overlap warning (Plan Twenty-Seven, item 5) — the create can come back
+  // with a distinct SUBJECT_ASSIGNMENT_OVERLAP error (a whole-class and a
+  // section-specific assignment would otherwise silently coexist for the
+  // same subject); shown as a real confirm-and-override, never a silent retry.
+  const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
   const assignMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (override?: boolean) =>
       api.post("/api/subjects/assign", {
         subject_id: expandedSubject,
         staff_id: assignStaffId,
         section_id: assignSectionId || undefined,
         academic_year_id: selectedClass?.academic_year_id,
+        override,
       }),
     onSuccess: () => {
       toast.success("Teacher assigned");
       queryClient.invalidateQueries({ queryKey: ["subjects", expandedSubject, "assignments"] });
       setAssignStaffId("");
+      setOverlapWarning(null);
     },
-    onError: () => toast.error("Failed to assign — this section may already have a teacher for this subject"),
+    onError: (err: unknown) => {
+      const code = (err as { response?: { data?: { error?: { code?: string; message?: string } } } })?.response?.data?.error?.code;
+      const message = extractErrorMessage(err);
+      if (code === "SUBJECT_ASSIGNMENT_OVERLAP" && message) {
+        setOverlapWarning(message);
+      } else {
+        toast.error(message ?? "Failed to assign teacher");
+      }
+    },
   });
 
   const unassignMutation = useMutation({
@@ -191,6 +207,43 @@ export default function SubjectsSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["subjects", expandedSubject, "assignments"] });
     },
     onError: () => toast.error("Failed to unassign teacher"),
+  });
+
+  // Replace Teacher + routine auto-sync prompt (Plan Twenty-Seven, item 4).
+  // The routine never auto-updates on its own by default -- this is the
+  // explicit, one-click opt-in the admin can take right after replacing a
+  // subject's regular teacher, not a silent side effect of the replace itself.
+  const [replaceTarget, setReplaceTarget] = useState<Assignment | null>(null);
+  const [replaceStaffId, setReplaceStaffId] = useState<string>("");
+  const [syncPrompt, setSyncPrompt] = useState<{ assignmentId: string; oldStaffId: string; count: number } | null>(null);
+  const replaceMutation = useMutation({
+    mutationFn: () => api.put(`/api/subjects/assign/${replaceTarget!.id}`, { staff_id: replaceStaffId }),
+    onSuccess: (res) => {
+      toast.success("Teacher replaced");
+      queryClient.invalidateQueries({ queryKey: ["subjects", expandedSubject, "assignments"] });
+      const { old_staff_id, routine_slots_affected } = res.data.data;
+      const assignmentId = replaceTarget!.id;
+      setReplaceTarget(null);
+      setReplaceStaffId("");
+      if (routine_slots_affected > 0) {
+        setSyncPrompt({ assignmentId, oldStaffId: old_staff_id, count: routine_slots_affected });
+      }
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to replace teacher"),
+  });
+
+  const syncRoutineMutation = useMutation({
+    mutationFn: () => api.post(`/api/subjects/assign/${syncPrompt!.assignmentId}/sync-routine`, { old_staff_id: syncPrompt!.oldStaffId }),
+    onSuccess: (res) => {
+      const { updated, skipped } = res.data.data;
+      if (skipped.length > 0) {
+        toast.warning(`Updated ${updated} routine period(s); ${skipped.length} skipped due to a schedule clash`);
+      } else {
+        toast.success(`Updated ${updated} routine period(s) with the new teacher`);
+      }
+      setSyncPrompt(null);
+    },
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to update the routine"),
   });
 
   return (
@@ -333,7 +386,16 @@ export default function SubjectsSettingsPage() {
                                 <TableRow key={a.id}>
                                   <TableCell>{selectedClass?.sections.find((sec) => sec.id === a.section_id)?.name ?? "All sections"}</TableCell>
                                   <TableCell>{a.staff.name_en}</TableCell>
-                                  <TableCell><Button size="sm" variant="ghost" onClick={() => unassignMutation.mutate(a.id)}>Remove</Button></TableCell>
+                                  <TableCell className="flex gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => { setReplaceTarget(a); setReplaceStaffId(""); }}
+                                    >
+                                      Replace
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => unassignMutation.mutate(a.id)}>Remove</Button>
+                                  </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -347,7 +409,7 @@ export default function SubjectsSettingsPage() {
                               <option value="">Select teacher...</option>
                               {teachers?.map((t) => <option key={t.id} value={t.id}>{t.name_en} — {t.designation}</option>)}
                             </select>
-                            <Button size="sm" disabled={!assignStaffId} onClick={() => assignMutation.mutate()}>Assign</Button>
+                            <Button size="sm" disabled={!assignStaffId} onClick={() => assignMutation.mutate(false)}>Assign</Button>
                           </div>
                         </div>
                       )}
@@ -393,6 +455,52 @@ export default function SubjectsSettingsPage() {
           <DialogFooter><Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !form.name_en || !form.code}>Add</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!overlapWarning}
+        onOpenChange={(o) => !o && setOverlapWarning(null)}
+        title="Two teachers would be assigned"
+        description={overlapWarning ?? undefined}
+        confirmLabel="Assign anyway"
+        loading={assignMutation.isPending}
+        onConfirm={() => assignMutation.mutate(true)}
+      />
+
+      <Dialog open={!!replaceTarget} onOpenChange={(o) => !o && setReplaceTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Replace Teacher</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Currently assigned: <span className="font-medium">{replaceTarget?.staff.name_en}</span>
+              {" — "}{selectedClass?.sections.find((sec) => sec.id === replaceTarget?.section_id)?.name ?? "All sections"}
+            </p>
+            <div className="space-y-1.5">
+              <Label>New Teacher</Label>
+              <select className="w-full rounded-md border px-3 py-2 text-sm" value={replaceStaffId} onChange={(e) => setReplaceStaffId(e.target.value)}>
+                <option value="">Select teacher...</option>
+                {teachers?.filter((t) => t.id !== replaceTarget?.staff.id).map((t) => (
+                  <option key={t.id} value={t.id}>{t.name_en} — {t.designation}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button disabled={!replaceStaffId || replaceMutation.isPending} onClick={() => replaceMutation.mutate()}>
+              {replaceMutation.isPending ? "Replacing..." : "Replace"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!syncPrompt}
+        onOpenChange={(o) => !o && setSyncPrompt(null)}
+        title="Update the current routine too?"
+        description={`This subject's regular teacher was just replaced. ${syncPrompt?.count ?? 0} routine period(s) still show the old teacher. Do you want to update the current routine with the new teacher too? Any period where the new teacher already has a schedule clash will be skipped and reported.`}
+        confirmLabel="Yes, update the routine"
+        loading={syncRoutineMutation.isPending}
+        onConfirm={() => syncRoutineMutation.mutate()}
+      />
     </PageWrapper>
   );
 }

@@ -146,6 +146,7 @@ export const attendanceRulesSchema = z.object({
   count_late_as_absent_after: z.number().int().min(1),
   sms_on_absent: z.boolean(),
   sms_on_late: z.boolean(),
+  sms_on_entry_exit: z.boolean().optional(),
   promotion_attendance_mode: z.nativeEnum(PromotionAttendanceMode).optional(),
   promotion_min_sessions_per_subject: z.number().int().min(1).optional(),
   leave_approval_mode: z.nativeEnum(StudentLeaveApprovalMode).optional(),
@@ -273,6 +274,9 @@ export const routineSubstitutionSchema = z.object({
   date: z.coerce.date(),
   substitute_teacher_id: z.string().min(1),
   reason: z.string().optional().nullable(),
+  // Explicit opt-in for a genuine rescheduled/makeup class held on a day
+  // other than the slot's normal scheduled day -- never a silent bypass.
+  is_makeup_class: z.boolean().optional().default(false),
 });
 
 export const generateRoutineSchema = z.object({

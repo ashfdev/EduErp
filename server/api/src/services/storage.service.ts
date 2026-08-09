@@ -2,7 +2,7 @@ import { BlobServiceClient, BlobSASPermissions } from "@azure/storage-blob";
 import { randomUUID, createHmac } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname, resolve, sep } from "node:path";
-import { resolveBaseUrl } from "../lib/env";
+import { resolveBaseUrl, resolveLocalStorageSecret } from "../lib/env";
 
 const containerName = process.env.AZURE_BLOB_CONTAINER_NAME ?? "education-erp";
 let cachedClient: BlobServiceClient | null = null;
@@ -28,7 +28,7 @@ export interface UploadResult {
 // Dev/local fallback so uploads work end-to-end without an Azure subscription.
 // Not for production use: no redundancy, no CDN, lives on local disk under server/api/.
 const LOCAL_UPLOADS_DIR = join(process.cwd(), "local-uploads");
-const LOCAL_URL_SECRET = process.env.LOCAL_STORAGE_SECRET ?? "dev-local-storage-secret";
+const LOCAL_URL_SECRET = resolveLocalStorageSecret();
 
 function signLocalToken(blobKey: string, expiresAt: number): string {
   return createHmac("sha256", LOCAL_URL_SECRET).update(`${blobKey}:${expiresAt}`).digest("hex");

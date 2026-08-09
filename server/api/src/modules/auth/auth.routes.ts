@@ -9,8 +9,9 @@ import { authenticate } from "../../middleware/authenticate";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../lib/jwt";
 import { unauthorized, badRequest, notFound } from "../../lib/errors";
 import { sendSms } from "../../services/sms.service";
-import { loginLimiter, loginBanGuard, forgotPasswordLimiter } from "../../middleware/rate-limit";
+import { loginLimiter, loginBanGuard, loginAccountLimiter, forgotPasswordLimiter, otpVerifyLimiter } from "../../middleware/rate-limit";
 import { logAudit } from "../../lib/audit-log";
+import { registerRefreshToken, unregisterRefreshToken, revokeAllRefreshTokensForUser } from "../../lib/refresh-session";
 import { PORTAL_ROLES } from "../../lib/roles";
 import {
   loginSchema,
@@ -50,6 +51,10 @@ authRouter.post(
   "/login",
   loginBanGuard,
   loginLimiter,
+  // Per-account throttle layered alongside the IP-based one above — closes
+  // the gap where an attacker rotating IPs faced zero throttling against
+  // one specific victim account (security audit, 2026-08-09).
+  loginAccountLimiter,
   asyncHandler(async (req, res) => {
     const body = loginSchema.parse(req.body);
 
@@ -86,6 +91,7 @@ authRouter.post(
     const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
     const refresh_token = signRefreshToken({ sub: user.id });
     await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
+    await registerRefreshToken(user.id, refresh_token);
 
     await prisma.user.update({ where: { id: user.id }, data: { last_login_at: new Date() } });
     await logAudit("LOGIN", { userId: user.id, req });
@@ -113,6 +119,7 @@ authRouter.post(
     if (!user || !user.is_active) throw unauthorized("Account no longer active");
 
     await redis.del(`refresh:${body.refresh_token}`);
+    await unregisterRefreshToken(user.id, body.refresh_token);
     // Same role-derived portal claim as /login — was previously hardcoded
     // to "admin" regardless of which portal the session actually belonged
     // to, so a STUDENT/GUARDIAN session got re-minted with an admin-portal
@@ -121,6 +128,7 @@ authRouter.post(
     const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
     const refresh_token = signRefreshToken({ sub: user.id });
     await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
+    await registerRefreshToken(user.id, refresh_token);
 
     res.json({ success: true, data: { access_token, refresh_token } });
   }),
@@ -132,7 +140,10 @@ authRouter.post(
     const body = z.object({ refresh_token: z.string().min(1) }).parse(req.body);
     const userId = await redis.get(`refresh:${body.refresh_token}`);
     await redis.del(`refresh:${body.refresh_token}`);
-    if (userId) await logAudit("LOGOUT", { userId, req });
+    if (userId) {
+      await unregisterRefreshToken(userId, body.refresh_token);
+      await logAudit("LOGOUT", { userId, req });
+    }
     res.status(204).send();
   }),
 );
@@ -148,8 +159,15 @@ authRouter.post(
     const validOld = await bcrypt.compare(body.old_password, user.password_hash);
     if (!validOld) throw badRequest("Old password is incorrect");
 
-    const password_hash = await bcrypt.hash(body.new_password, 10);
+    const password_hash = await bcrypt.hash(body.new_password, 12);
     await prisma.user.update({ where: { id: userId }, data: { password_hash, must_change_password: false } });
+    // Real gap fixed (security audit, 2026-08-09): a refresh token issued
+    // before this change previously stayed valid for up to its full 7-day
+    // life even after the account owner deliberately changed their
+    // password — closing exactly the scenario a password change is meant
+    // to protect against (a stolen credential). This account's OTHER
+    // active sessions are now force-logged-out too, not just this one.
+    await revokeAllRefreshTokensForUser(userId);
 
     res.json({ success: true, message: "Password changed successfully" });
   }),
@@ -164,7 +182,7 @@ authRouter.post(
     if (!user) throw notFound("No account found with this phone number");
 
     const otp = randomInt(100000, 999999).toString();
-    const hashedOtp = await bcrypt.hash(otp, 10);
+    const hashedOtp = await bcrypt.hash(otp, 12);
     await redis.set(`otp:${body.phone}`, hashedOtp, "EX", OTP_TTL_SECONDS);
 
     await sendSms(body.phone, `Your Education ERP OTP is ${otp}. It expires in 10 minutes.`);
@@ -175,6 +193,7 @@ authRouter.post(
 
 authRouter.post(
   "/verify-otp",
+  otpVerifyLimiter,
   asyncHandler(async (req, res) => {
     const body = verifyOtpSchema.parse(req.body);
     const hashedOtp = await redis.get(`otp:${body.phone}`);
@@ -201,9 +220,13 @@ authRouter.post(
     const user = await prisma.user.findUnique({ where: { phone } });
     if (!user) throw notFound("Account not found");
 
-    const password_hash = await bcrypt.hash(body.new_password, 10);
+    const password_hash = await bcrypt.hash(body.new_password, 12);
     await prisma.user.update({ where: { id: user.id }, data: { password_hash, must_change_password: false } });
     await redis.del(`reset:${body.reset_token}`);
+    // Same reasoning as /change-password: a password reset is exactly the
+    // scenario where any already-issued refresh token (possibly the very
+    // thing that made the reset necessary) must not survive it.
+    await revokeAllRefreshTokensForUser(user.id);
 
     await sendSms(phone, "Your password has been reset successfully. If this wasn't you, contact admin immediately.");
 

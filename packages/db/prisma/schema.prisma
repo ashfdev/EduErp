@@ -197,6 +197,11 @@ model AttendanceRules {
   count_late_as_absent_after         Int                      @default(3)
   sms_on_absent                      Boolean                  @default(true)
   sms_on_late                        Boolean                  @default(false)
+  // Fires STUDENT_ARRIVAL on a student's first biometric punch of the day
+  // and STUDENT_DEPARTURE on their last (2026-08-09 audit finding — this
+  // previously didn't exist at all, unlike the LATE-specific SMS above).
+  // Default off, matching sms_on_late's own default.
+  sms_on_entry_exit                  Boolean                  @default(false)
   // Which computation checkPromotionEligibility() uses. Default
   // DAILY_ATTENDANCE_ONLY deliberately preserves today's exact existing
   // behavior (the blanket AttendanceRecord calculation) so this migration
@@ -3894,6 +3899,11 @@ model RoutineSubstitution {
   substitute_teacher_id String
   substitute_teacher    Staff       @relation("SubstituteTeacherSubstitutions", fields: [substitute_teacher_id], references: [id])
   reason                String?
+  // Explicit, deliberate escape hatch (Plan Twenty-Seven) for a genuine
+  // rescheduled/makeup class held on a day other than the slot's normal
+  // scheduled day -- never a silent bypass, the admin must say so. When
+  // true, the weekday-match check at creation time is skipped for this row.
+  is_makeup_class       Boolean     @default(false)
   assigned_by_id        String
   assigned_at           DateTime    @default(now())
   created_at            DateTime    @default(now())
@@ -4179,6 +4189,7 @@ enum PaymentGatewayProvider {
   NAGAD
   SSLCOMMERZ
   ROCKET
+  AAMARPAY
 }
 
 // Admin-editable, encrypted-at-rest credential storage for the payment
@@ -4340,6 +4351,13 @@ enum NotificationTrigger {
   // Plan Twenty-Six, Phase B2 -- replaces the raw sendSms() previously
   // used on POST /cycles/:id/merit-list/publish.
   ADMISSION_MERIT_LIST_PUBLISHED
+  // Real gap fixed (security/functional audit, 2026-08-09) -- a student's
+  // first and last biometric punch of the day previously fired no guardian
+  // SMS at all (only a separate, LATE-specific trigger existed). Gated
+  // behind AttendanceRules.sms_on_entry_exit, default off, same convention
+  // as sms_on_late.
+  STUDENT_ARRIVAL
+  STUDENT_DEPARTURE
 }
 
 enum InAppNotificationType {

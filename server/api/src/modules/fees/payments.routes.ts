@@ -6,7 +6,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { FEE_COLLECTION_ROLES } from "../../lib/roles";
 import { initiatePaymentSchema } from "@education-erp/validators";
-import { getPaymentAdapter } from "../../services/payment";
+import { getPaymentAdapter, initiatePaymentSafely } from "../../services/payment";
 import { getSignedDownloadUrl } from "../../services/storage.service";
 import { sendSms } from "../../services/sms.service";
 import { sendNotification } from "../../services/notification.service";
@@ -83,9 +83,111 @@ paymentsRouter.get(
   }),
 );
 
+// Gateway transaction reconciliation (2026-08-09) — real gap found during a
+// full-system audit: money coming in through the online gateways (bKash/
+// Nagad/Rocket/SSLCommerz/AamarPay) had no single cross-check view anywhere
+// — the "/" route above only shows already-COMPLETED payments (a receipts
+// fallback list), so a staff member could never see, in one place, which
+// gateway transactions are still INITIATED (awaiting webhook/manual verify)
+// or FAILED, alongside each transaction's real gateway-given transaction_id,
+// exact time, and amount. This route deliberately shows every status, not
+// just COMPLETED, and excludes CASH/BANK_TRANSFER/CREDIT_BALANCE (those
+// aren't "gateway" transactions in the sense being cross-checked here — bank
+// transfers already have their own dedicated pending/verify queue below).
+const ONLINE_GATEWAYS = ["BKASH", "NAGAD", "SSLCOMMERZ", "ROCKET", "AAMARPAY"] as const;
+
+paymentsRouter.get(
+  "/gateway-reconciliation",
+  authenticate,
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        gateway: z.enum(ONLINE_GATEWAYS).optional(),
+        status: z.enum(["INITIATED", "COMPLETED", "FAILED", "REFUNDED"]).optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(req.query);
+
+    // created_at, not paid_at -- an INITIATED/FAILED attempt never gets a
+    // paid_at at all, and this view's whole point is surfacing those too.
+    const where = {
+      gateway: query.gateway ? query.gateway : { in: [...ONLINE_GATEWAYS] },
+      ...(query.status && { status: query.status }),
+      ...((query.from || query.to) && {
+        created_at: {
+          ...(query.from && { gte: new Date(query.from) }),
+          ...(query.to && { lte: new Date(query.to) }),
+        },
+      }),
+    };
+
+    const [items, total, summaryRows] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        include: {
+          invoice: {
+            select: {
+              category: true,
+              student: { select: { id: true, name_en: true, student_uid: true } },
+              application: { select: { id: true, applicant_name: true, admission_roll: true } },
+            },
+          },
+        },
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.payment.count({ where }),
+      // Summary always reflects the gateway/date filters but ignores the
+      // status filter and pagination -- so the per-gateway/per-status
+      // breakdown stays a stable reference while the list below narrows.
+      prisma.payment.groupBy({
+        by: ["gateway", "status"],
+        where: {
+          gateway: query.gateway ? query.gateway : { in: [...ONLINE_GATEWAYS] },
+          ...((query.from || query.to) && {
+            created_at: {
+              ...(query.from && { gte: new Date(query.from) }),
+              ...(query.to && { lte: new Date(query.to) }),
+            },
+          }),
+        },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const summary = summaryRows.map((row) => ({
+      gateway: row.gateway,
+      status: row.status,
+      count: row._count._all,
+      total_amount: row._sum.amount ?? 0,
+    }));
+
+    res.json({ success: true, data: items, summary, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
+  }),
+);
+
+// Real IDOR fixed (security audit, 2026-08-09): this route previously had
+// `authenticate` only, no `authorize()`, and no ownership check on the
+// caller-supplied invoice_id — any authenticated user (including a
+// GUARDIAN/STUDENT) could probe/act on another student's invoice and
+// obtain a live payment-gateway URL for it. The portal already has its
+// own, correctly ownership-checked self-service equivalent
+// (portalRouter's own POST /student/:id/pay in portal.routes.ts, gated by
+// assertAccess) — this route is the STAFF-initiated counterpart (e.g. an
+// accountant starting a gateway payment on a guardian's behalf at the
+// counter), so it's gated to FEE_COLLECTION_ROLES instead of duplicating
+// assertAccess here for a caller shape (STUDENT/GUARDIAN) that shouldn't
+// be reaching this specific route at all.
 paymentsRouter.post(
   "/initiate",
   authenticate,
+  authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const body = initiatePaymentSchema.parse(req.body);
     const invoice = await prisma.invoice.findUnique({ where: { id: body.invoice_id } });
@@ -97,7 +199,7 @@ paymentsRouter.post(
     }
 
     const transactionId = randomUUID();
-    const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });
+    const result = await initiatePaymentSafely(adapter, { invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });
 
     const payment = await prisma.payment.create({
       data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: invoice.amount_due - invoice.amount_paid, status: "INITIATED" },
@@ -180,7 +282,7 @@ export async function completePayment(payment: Payment) {
   }
 }
 
-async function handleCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ", payload: unknown) {
+async function handleCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ" | "AAMARPAY", payload: unknown) {
   const adapter = getPaymentAdapter(gateway);
   const verified = await adapter.verifyCallback(payload);
 
@@ -199,6 +301,7 @@ async function handleCallback(gateway: "BKASH" | "NAGAD" | "SSLCOMMERZ", payload
 paymentsRouter.post("/callback/bkash", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("BKASH", req.body) })));
 paymentsRouter.post("/callback/nagad", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("NAGAD", req.body) })));
 paymentsRouter.post("/callback/sslcommerz", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("SSLCOMMERZ", req.body) })));
+paymentsRouter.post("/callback/aamarpay", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("AAMARPAY", req.body) })));
 
 // ── Manual payment verification (bank transfer + self-reported wallets) ──
 // Bank transfers have no webhook — a payer uploads a slip (sets

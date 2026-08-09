@@ -9,6 +9,7 @@ import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
 import { subjectSchema, subjectAssignmentSchema } from "@education-erp/validators";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 import { resolveAssignedSubjectIds } from "../../lib/subject-teacher-assignment";
+import { assertNoTeacherClash } from "../settings/academic.routes";
 
 export const subjectsRouter = Router();
 subjectsRouter.use(authenticate);
@@ -185,11 +186,50 @@ subjectsRouter.get(
   }),
 );
 
+// Real bug fixed (Plan Twenty-Seven, item 5): the DB's own
+// @@unique([subject_id, section_id, academic_year_id]) does NOT prevent a
+// whole-class (section_id: null) assignment and a section-specific
+// assignment from coexisting for the same subject+year -- Postgres never
+// treats a NULL as equal to anything, including another NULL, for
+// uniqueness purposes. Left unchecked, this meant a section already fully
+// covered by a whole-class assignment could silently gain a SECOND,
+// different teacher via a section-specific assignment (or vice versa),
+// with both simultaneously passing hasSubjectTeacherAssignment()'s OR-based
+// check -- exactly the "already assigned, but I could still assign someone
+// else" bug reported directly. Soft-warning-with-override, matching this
+// codebase's own established convention (section-capacity, credit-hour
+// cap, fee-structure overlap) rather than a hard block, since a genuine
+// temporary co-teaching arrangement is a real, if uncommon, case.
+async function findAssignmentOverlap(subjectId: string, sectionId: string | null, academicYearId: string, excludeStaffId?: string) {
+  const where = sectionId
+    // Adding a section-specific row -- conflicts with an existing
+    // whole-class (null-section) row for a DIFFERENT teacher.
+    ? { subject_id: subjectId, academic_year_id: academicYearId, section_id: null, ...(excludeStaffId ? { staff_id: { not: excludeStaffId } } : {}) }
+    // Adding a whole-class row -- conflicts with ANY existing
+    // section-specific row (or another whole-class row) for a DIFFERENT teacher.
+    : { subject_id: subjectId, academic_year_id: academicYearId, ...(excludeStaffId ? { staff_id: { not: excludeStaffId } } : {}) };
+  return prisma.subjectTeacherAssignment.findFirst({
+    where,
+    include: { staff: { select: { name_en: true } } },
+  });
+}
+
 subjectsRouter.post(
   "/assign",
   authorize(SETTINGS_ACADEMIC_ROLES),
   asyncHandler(async (req, res) => {
-    const body = subjectAssignmentSchema.parse(req.body);
+    const { override, ...body } = subjectAssignmentSchema.parse(req.body);
+
+    if (!override) {
+      const conflictRow = await findAssignmentOverlap(body.subject_id, body.section_id ?? null, body.academic_year_id, body.staff_id);
+      if (conflictRow) {
+        const message = body.section_id
+          ? `This subject already has a whole-class teacher assigned (${conflictRow.staff.name_en}) -- adding a section-specific teacher would mean two teachers are both assigned for this section. Continue anyway?`
+          : `This subject already has a teacher assigned (${conflictRow.staff.name_en}) for one or more sections -- adding a whole-class teacher would mean two teachers are both assigned there. Continue anyway?`;
+        return res.status(400).json({ success: false, error: { code: "SUBJECT_ASSIGNMENT_OVERLAP", message } });
+      }
+    }
+
     const assignment = await prisma.subjectTeacherAssignment.create({ data: body });
     res.status(201).json({ success: true, data: assignment });
   }),
@@ -201,8 +241,61 @@ subjectsRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = z.object({ staff_id: z.string().min(1) }).parse(req.body);
+
+    const existing = await prisma.subjectTeacherAssignment.findUnique({ where: { id } });
+    if (!existing) throw notFound("Assignment not found");
+    const oldStaffId = existing.staff_id;
+
     const assignment = await prisma.subjectTeacherAssignment.update({ where: { id }, data: body });
-    res.json({ success: true, data: assignment });
+
+    // Routine auto-sync prompt data (Plan Twenty-Seven, item 4) -- the
+    // Routine never auto-updates on its own (deliberate, confirmed default
+    // behavior), but count how many RoutineSlot rows the OLD teacher held
+    // for this exact subject(+section) so the frontend can offer a one-click
+    // "update the routine too?" prompt instead of leaving the admin to
+    // notice and fix it manually, slot by slot.
+    const routineSlotsAffected = oldStaffId === body.staff_id
+      ? 0
+      : await prisma.routineSlot.count({
+          where: { subject_id: existing.subject_id, teacher_id: oldStaffId, ...(existing.section_id ? { section_id: existing.section_id } : {}) },
+        });
+
+    res.json({ success: true, data: { ...assignment, old_staff_id: oldStaffId, routine_slots_affected: routineSlotsAffected } });
+  }),
+);
+
+// Explicit, separate, opt-in confirm step (Plan Twenty-Seven, item 4) --
+// the routine only ever updates when the admin clicks "Yes" on the prompt
+// PUT /assign/:id's response makes possible; never auto-applied. Any
+// matching slot where the new teacher would clash with their own existing
+// schedule is skipped and reported, not silently double-booked.
+subjectsRouter.post(
+  "/assign/:id/sync-routine",
+  authorize(SETTINGS_ACADEMIC_ROLES),
+  asyncHandler(async (req, res) => {
+    const id = reqParam(req, "id");
+    const body = z.object({ old_staff_id: z.string().min(1) }).parse(req.body);
+
+    const assignment = await prisma.subjectTeacherAssignment.findUnique({ where: { id } });
+    if (!assignment) throw notFound("Assignment not found");
+
+    const slots = await prisma.routineSlot.findMany({
+      where: { subject_id: assignment.subject_id, teacher_id: body.old_staff_id, ...(assignment.section_id ? { section_id: assignment.section_id } : {}) },
+    });
+
+    let updated = 0;
+    const skipped: { routine_slot_id: string; reason: string }[] = [];
+    for (const slot of slots) {
+      try {
+        await assertNoTeacherClash({ teacher_id: assignment.staff_id, day_of_week: slot.day_of_week, period_no: slot.period_no }, slot.id);
+        await prisma.routineSlot.update({ where: { id: slot.id }, data: { teacher_id: assignment.staff_id } });
+        updated++;
+      } catch (err) {
+        skipped.push({ routine_slot_id: slot.id, reason: err instanceof Error ? err.message : "Could not update this slot" });
+      }
+    }
+
+    res.json({ success: true, data: { updated, skipped } });
   }),
 );
 

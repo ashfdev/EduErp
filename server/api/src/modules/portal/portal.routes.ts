@@ -11,7 +11,7 @@ import { pushSubscribeSchema, pushUnsubscribeSchema, portalPaySchema, createComp
 import { quizFlagLimiter } from "../../middleware/rate-limit";
 import { calculateStudentResult } from "../../utils/grading.engine";
 import { cached } from "../../lib/cache";
-import { getPaymentAdapter } from "../../services/payment";
+import { getPaymentAdapter, initiatePaymentSafely } from "../../services/payment";
 import { renderDocument, generateQrDataUrl } from "../../services/pdf.service";
 import { buildMarksheetData, sendPdf } from "../documents/documents.routes";
 import { documentUpload, verifyDocumentMagicBytes } from "../../middleware/upload";
@@ -1254,7 +1254,7 @@ portalRouter.post(
     if (!(await adapter.isConfigured())) throw badRequest(`${body.gateway} is not configured yet — merchant credentials are pending`);
 
     const transactionId = randomUUID();
-    const result = await adapter.initiatePayment({ invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });
+    const result = await initiatePaymentSafely(adapter, { invoice_id: invoice.id, amount: invoice.amount_due - invoice.amount_paid, transaction_id: transactionId });
     const payment = await prisma.payment.create({ data: { invoice_id: invoice.id, gateway: body.gateway, transaction_id: transactionId, amount: invoice.amount_due - invoice.amount_paid, status: "INITIATED" } });
 
     res.json({ success: true, data: { payment_id: payment.id, payment_url: result.payment_url, session_id: result.session_id } });

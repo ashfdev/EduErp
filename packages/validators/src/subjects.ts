@@ -27,4 +27,11 @@ export const subjectAssignmentSchema = z.object({
   staff_id: z.string().min(1),
   section_id: z.string().optional().nullable(),
   academic_year_id: z.string().min(1),
+  // Soft-warning-with-override (Plan Twenty-Seven, item 5) — a whole-class
+  // (section_id: null) assignment and a section-specific assignment for the
+  // same subject+year can otherwise silently coexist (Postgres never treats
+  // NULL as equal to anything, so the DB unique constraint doesn't catch
+  // this), leaving two different teachers simultaneously "assigned" to the
+  // same section. Explicit override required to create one anyway.
+  override: z.boolean().optional().default(false),
 });

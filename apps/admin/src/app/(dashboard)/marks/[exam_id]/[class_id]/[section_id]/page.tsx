@@ -26,7 +26,11 @@ interface ComponentFetchEntry {
   annotation: string | null;
 }
 interface MarkEntryData {
-  entry_deadline_info: { is_open: boolean; closes_at: string | null };
+  entry_deadline_info: {
+    is_open: boolean;
+    closes_at: string | null;
+    closed_reason: "NOT_YET_OPENED" | "DEADLINE_PASSED" | "COMPLETED" | "PUBLISHED" | null;
+  };
   exam_has_subjects_for_class: boolean;
   subjects: Subject[];
   students: {
@@ -72,6 +76,19 @@ export default function MarkEntryGridPage() {
     queryKey: ["marks", exam_id, class_id, section_id],
     queryFn: async () => (await api.get(`/api/marks/${exam_id}/${class_id}/${section_id}`)).data.data,
   });
+
+  // Real bug fixed (Plan Twenty-Seven, item 6/7 audit): inputs here were
+  // previously only ever disabled by role (readOnly) or is_absent -- never
+  // by the exam's own status, so a DRAFT/ACTIVE/PUBLISHED exam (not yet
+  // opened, or already published) rendered fully-editable inputs that would
+  // then fail on submit with a generic "not open" error. COMPLETED is
+  // intentionally NOT included here -- SUPER_ADMIN/ADMIN/PRINCIPAL/
+  // EXAM_CONTROLLER now correctly bypass that gate server-side (see
+  // marks.routes.ts), matching this project's "admin access never shrinks"
+  // rule; a SUBJECT_TEACHER without an approved correction would still be
+  // rejected on submit there and should use the teacher app's own
+  // correction-request flow instead.
+  const entryLocked = !!data && !data.entry_deadline_info.is_open && data.entry_deadline_info.closed_reason !== "COMPLETED";
 
   const { data: exam } = useQuery<ExamInfo>({
     queryKey: ["exams", exam_id],
@@ -278,6 +295,22 @@ export default function MarkEntryGridPage() {
         <p className="text-sm text-muted-foreground">You can view marks for your class, but only Subject Teachers, Exam Controllers, and Admins can enter or edit them.</p>
       )}
 
+      {entryLocked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          {data.entry_deadline_info.closed_reason === "NOT_YET_OPENED" &&
+            "Mark entry hasn't been opened for this exam yet — move it to Mark Entry status before marks can be submitted."}
+          {data.entry_deadline_info.closed_reason === "DEADLINE_PASSED" && "The mark entry window for this exam has closed."}
+          {data.entry_deadline_info.closed_reason === "PUBLISHED" &&
+            "Results for this exam have already been published. Corrections aren't available once results are published."}
+        </div>
+      )}
+      {data.entry_deadline_info.closed_reason === "COMPLETED" && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+          Mark entry is closed for this exam. As an exam-management role you can still submit corrections directly here; a Subject Teacher
+          would need to request a correction from the Teacher app instead.
+        </div>
+      )}
+
       {data.subjects.length > 0 && (
         <div className="flex gap-3">
           <SearchInput placeholder="Search by name or roll..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
@@ -384,7 +417,7 @@ export default function MarkEntryGridPage() {
                                         className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
                                           isOverCap ? "border-red-500 bg-red-50 text-red-700" : isAutoUnedited ? "border-dashed text-muted-foreground" : ""
                                         }`}
-                                        disabled={readOnly || v.is_absent}
+                                        disabled={readOnly || entryLocked || v.is_absent}
                                         value={entry?.value ?? ""}
                                         onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
                                       />
@@ -408,7 +441,7 @@ export default function MarkEntryGridPage() {
                                         max={s.config?.full_marks_theory}
                                         title={theoryOverCap ? `Theory cannot exceed ${s.config!.full_marks_theory}` : s.config ? `Theory, out of ${s.config.full_marks_theory}` : "Theory"}
                                         className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${theoryOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
-                                        disabled={readOnly || v.is_absent}
+                                        disabled={readOnly || entryLocked || v.is_absent}
                                         value={v.marks_theory ?? ""}
                                         onChange={(e) =>
                                           setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
@@ -429,7 +462,7 @@ export default function MarkEntryGridPage() {
                                           max={s.config.full_marks_practical}
                                           title={practicalOverCap ? `Practical cannot exceed ${s.config.full_marks_practical}` : `Practical, out of ${s.config.full_marks_practical}`}
                                           className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${practicalOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
-                                          disabled={readOnly || v.is_absent}
+                                          disabled={readOnly || entryLocked || v.is_absent}
                                           value={v.marks_practical ?? ""}
                                           onChange={(e) =>
                                             setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
@@ -445,7 +478,7 @@ export default function MarkEntryGridPage() {
                             <label className="flex items-center gap-1 text-xs">
                               <Checkbox
                                 checked={v.is_absent ?? false}
-                                disabled={readOnly}
+                                disabled={readOnly || entryLocked}
                                 onCheckedChange={(checked) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, is_absent: checked === true } }))}
                               />
                               Ab

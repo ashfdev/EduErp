@@ -161,7 +161,7 @@ export type AdHocInvoiceBulkInput = z.infer<typeof adHocInvoiceBulkSchema>;
 
 export const initiatePaymentSchema = z.object({
   invoice_id: z.string().min(1),
-  gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ"]),
+  gateway: z.enum(["BKASH", "NAGAD", "ROCKET", "SSLCOMMERZ", "AAMARPAY"]),
 });
 
 // Plan Fourteen, Phase N4 -- Fee Collection redesign. Multi-line "Receive

@@ -246,7 +246,7 @@ hrStaffRouter.post(
         // row even when no interactive login is granted, so create a
         // deactivated shell account in that case.
         const shellPhone = body.phone ?? `00${Date.now().toString().slice(-9)}`;
-        const password_hash = await bcrypt.hash(randomBytes(16).toString("hex"), 10);
+        const password_hash = await bcrypt.hash(randomBytes(16).toString("hex"), 12);
         const user = await tx.user.create({
           data: { name_en: body.name_en, name_bn: body.name_bn, phone: shellPhone, email: body.email, role: body.role as UserRole, password_hash, is_active: false },
         });

@@ -10,7 +10,7 @@ import {
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
   Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
-  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, type LucideIcon,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, ArrowLeftRight, Network, type LucideIcon,
 } from "lucide-react";
 import { usePendingCounts, type PendingCounts } from "@/hooks/use-pending-counts";
 
@@ -74,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/fees", key: "fees", icon: Wallet },
       { href: "/finance/all-invoices", key: "allInvoices", icon: FileText },
       { href: "/fees/bank-transfers", key: "paymentReview", icon: CreditCard, countKey: "paymentReview" },
+      { href: "/accounts/gateway-reconciliation", key: "gatewayReconciliation", icon: ArrowLeftRight },
       { href: "/accounts", key: "accounts", icon: Calculator },
       { href: "/fees/waivers", key: "waiverSetup", icon: Wallet },
       { href: "/fees/sub-categories", key: "feeSubCategories", icon: Tags },
@@ -95,6 +96,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/hr/appraisals", key: "appraisals", icon: ClipboardList },
       { href: "/hr/jobs", key: "jobPostings", icon: Newspaper },
       { href: "/hr/substitutes", key: "proxySubstitute", icon: Repeat },
+      { href: "/hr/assignments-overview", key: "assignmentsOverview", icon: Network },
     ],
   },
   {

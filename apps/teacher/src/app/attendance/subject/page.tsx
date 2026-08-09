@@ -55,10 +55,13 @@ interface RosterResponse {
     period_no: number;
     start_time: string;
     end_time: string;
+    day_of_week: number;
   };
   date: string;
   students: RosterStudent[];
 }
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 // Deliberately 3 statuses here, not the full 5-value enum — LEAVE/HALF_DAY
 // are whole-day concepts that belong to the daily/campus attendance flow,
@@ -78,6 +81,11 @@ export default function SubjectAttendancePage() {
   const queryClient = useQueryClient();
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [pickerDate, setPickerDate] = useState(todayLocalDateString());
+  // null = auto (browse the picked date's own weekday). Set explicitly only
+  // when finding a makeup class held on a different day than usual — e.g.
+  // school was closed on the class's normal day and it's being made up on
+  // a different weekday.
+  const [pickerDayOverride, setPickerDayOverride] = useState<number | null>(null);
 
   const { data: weekSchedule } = useQuery<WeekScheduleSlot[]>({
     queryKey: ["teacher", "schedule", "week"],
@@ -96,11 +104,18 @@ export default function SubjectAttendancePage() {
   const alreadyMarked = (data?.students ?? []).some((s) => !!s.existing);
   const unmarked = (data?.students.length ?? 0) - Object.values(effectiveMarks).filter(Boolean).length;
 
+  // A makeup class: the slot's own scheduled weekday doesn't match the
+  // actual date this attendance is being marked for. Detected automatically
+  // by comparing the two, rather than a manual toggle the teacher could
+  // forget to check.
+  const isMakeupClass = !!data && data.slot.day_of_week !== dayOfWeekFor(date);
+
   const saveMutation = useMutation({
     mutationFn: () =>
       api.post("/api/attendance/subject-wise/mark", {
         routine_slot_id: routineSlotId,
         date,
+        is_makeup_class: isMakeupClass,
         records: Object.entries(effectiveMarks).filter(([, v]) => v).map(([student_id, status]) => ({ student_id, status })),
       }),
     onSuccess: (res) => {
@@ -113,7 +128,9 @@ export default function SubjectAttendancePage() {
   });
 
   if (!routineSlotId) {
-    const pickerDayOfWeek = dayOfWeekFor(pickerDate);
+    const naturalDayOfWeek = dayOfWeekFor(pickerDate);
+    const pickerDayOfWeek = pickerDayOverride ?? naturalDayOfWeek;
+    const isBrowsingMakeup = pickerDayOfWeek !== naturalDayOfWeek;
     const daySlots = (weekSchedule ?? [])
       .filter((s) => s.day_of_week === pickerDayOfWeek && s.subject !== null && s.section !== null)
       .sort((a, b) => a.period_no - b.period_no);
@@ -125,13 +142,45 @@ export default function SubjectAttendancePage() {
             title="Subject Attendance"
             subtitle="Pick a date to see your periods that day, then mark attendance for any of them — including a period you missed on a past date."
           />
-          <div className="flex items-center gap-3">
-            <Input type="date" value={pickerDate} onChange={(e) => setPickerDate(e.target.value)} className="w-48" />
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Date</label>
+              <Input
+                type="date"
+                value={pickerDate}
+                onChange={(e) => { setPickerDate(e.target.value); setPickerDayOverride(null); }}
+                className="w-48"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">
+                Routine day <span className="font-normal">(change only for a makeup/rescheduled class)</span>
+              </label>
+              <select
+                value={pickerDayOfWeek}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setPickerDayOverride(v === naturalDayOfWeek ? null : v);
+                }}
+                className="h-9 w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+              >
+                {DAY_NAMES.map((name, idx) => (
+                  <option key={idx} value={idx}>{name}{idx === naturalDayOfWeek ? " (this date's day)" : ""}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {isBrowsingMakeup && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              Showing {DAY_NAMES[pickerDayOfWeek]}&apos;s periods for a makeup class on {pickerDate}. Marking attendance
+              here will be flagged as a makeup class.
+            </div>
+          )}
 
           {!daySlots.length && (
             <p className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-muted-foreground">
-              You have no scheduled periods on this date.
+              You have no scheduled periods on this {isBrowsingMakeup ? DAY_NAMES[pickerDayOfWeek] : "date"}.
             </p>
           )}
 
@@ -175,6 +224,13 @@ export default function SubjectAttendancePage() {
               title={`${data.slot.subject.name_en} — Period ${data.slot.period_no}`}
               subtitle={`${data.slot.class.name_en} · Section ${data.slot.section.name}${data.slot.group ? ` · ${data.slot.group.name_en}` : ""} · ${data.slot.start_time}-${data.slot.end_time} · ${date}`}
             />
+
+            {isMakeupClass && (
+              <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">Makeup Class</Badge>
+                This period is normally scheduled on {DAY_NAMES[data.slot.day_of_week]}, being marked here for {date}.
+              </div>
+            )}
 
             {alreadyMarked && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
