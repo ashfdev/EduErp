@@ -687,18 +687,29 @@ export async function buildMarksheetData(examId: string, studentId: string) {
   // until every mark happens to already be entered.
   const enrolledSubjectIds = new Set(studentSubjectRows.map((r) => r.subject_id));
 
-  const studentResult = calculateStudentResult(
-    entries.map((e) => ({
-      subject_id: e.subject_id,
-      subject_name: e.subject.name_en,
-      is_optional: e.subject.is_optional,
-      is_fourth_subject: e.subject_id === fourthSubjectId,
-      marks_total: e.marks_total,
-      is_absent: e.is_absent,
-    })),
-    exam.grading_scale?.ranges ?? [],
-    institutionConfig?.fourth_subject_rule ?? false,
-  );
+  // Real bug fixed (2026-08-10): calculateStudentResult() has no concept of
+  // "no data" -- called with zero real MarkEntry rows it still returns a
+  // number, and grade-scale lookup on GPA 0 happens to land on the bottom
+  // grade (typically "F"), which combined with has_failed defaulting false
+  // meant a student never marked for this exam would print an OFFICIAL
+  // marksheet reading "GPA 0.00" and "Promoted to..." (has_failed false) --
+  // both actively wrong, not just blank. See the identical fix/comment on
+  // portal.routes.ts's /student/:id/results route.
+  const notEntered = entries.length === 0;
+  const studentResult = notEntered
+    ? { subjects: [], total_gpa: null, overall_grade_letter: null, has_failed: false }
+    : calculateStudentResult(
+        entries.map((e) => ({
+          subject_id: e.subject_id,
+          subject_name: e.subject.name_en,
+          is_optional: e.subject.is_optional,
+          is_fourth_subject: e.subject_id === fourthSubjectId,
+          marks_total: e.marks_total,
+          is_absent: e.is_absent,
+        })),
+        exam.grading_scale?.ranges ?? [],
+        institutionConfig?.fourth_subject_rule ?? false,
+      );
 
   // Per-subject (Written/Practical) full/pass marks come from this exam's
   // own subject configuration, not the Subject's static defaults -- the
@@ -809,13 +820,25 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     const classResults = await computeClassResults(examId, student.current_class_id, student.group_id ?? undefined);
     const positionByStudent = new Map(classResults.map((r) => [r.student.id, r.position]));
     const sectionResults = classResults.filter((r) => r.student.current_section_id === student.current_section_id);
+    // Real bug fixed (2026-08-10): every class-wide stat below (average
+    // marks/GPA, highest-in-class/section, section position) previously
+    // averaged/ranked over EVERY student in the class, including anyone
+    // computeClassResults couldn't fully grade yet -- who used to contribute
+    // a fabricated total_gpa: 0 to these averages. Restricting to
+    // is_complete students means an in-progress exam's class-wide stats on a
+    // printed marksheet only ever reflect students who are actually done,
+    // never a number dragged down by classmates who simply aren't graded
+    // yet. For a fully-graded exam (the common case) this is a no-op --
+    // every student is complete, so nothing here changes.
+    const completeClassResults = classResults.filter((r) => r.result.is_complete);
+    const completeSectionResults = sectionResults.filter((r) => r.result.is_complete);
     const sectionPositioned = calculatePositions(
-      sectionResults.map((r) => ({ student_id: r.student.id, total_gpa: r.result.total_gpa, total_marks: r.total_marks })),
+      completeSectionResults.map((r) => ({ student_id: r.student.id, total_gpa: r.result.total_gpa as number, total_marks: r.total_marks })),
     );
     const sectionPositionByStudent = new Map(sectionPositioned.map((p) => [p.student_id, p.position]));
 
-    const classAverageMarks = classResults.length
-      ? Math.round((classResults.reduce((s, r) => s + r.total_marks, 0) / classResults.length) * 100) / 100
+    const classAverageMarks = completeClassResults.length
+      ? Math.round((completeClassResults.reduce((s, r) => s + r.total_marks, 0) / completeClassResults.length) * 100) / 100
       : null;
 
     // Denominator for a class-average PERCENTAGE: this student's own subject
@@ -846,11 +869,11 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     position = {
       position_in_class: positionByStudent.get(studentId) ?? null,
       position_in_section: sectionPositionByStudent.get(studentId) ?? null,
-      highest_in_class: classResults.length ? Math.max(...classResults.map((r) => r.total_marks)) : null,
-      highest_in_section: sectionResults.length ? Math.max(...sectionResults.map((r) => r.total_marks)) : null,
+      highest_in_class: completeClassResults.length ? Math.max(...completeClassResults.map((r) => r.total_marks)) : null,
+      highest_in_section: completeSectionResults.length ? Math.max(...completeSectionResults.map((r) => r.total_marks)) : null,
       class_average_marks: classAverageMarks,
-      class_average_gpa: classResults.length
-        ? Math.round((classResults.reduce((s, r) => s + r.result.total_gpa, 0) / classResults.length) * 100) / 100
+      class_average_gpa: completeClassResults.length
+        ? Math.round((completeClassResults.reduce((s, r) => s + (r.result.total_gpa as number), 0) / completeClassResults.length) * 100) / 100
         : null,
       class_average_percentage: classAveragePercentage,
       average_remarks: matchingRange?.remarks ?? null,
@@ -952,6 +975,7 @@ export async function buildMarksheetData(examId: string, studentId: string) {
     // every other result surface.
     overall_grade: studentResult.overall_grade_letter,
     has_failed: hasFailed,
+    not_entered: notEntered,
     overall_remarks: overallRemarks,
     next_class_name: "",
     display,
@@ -1123,7 +1147,9 @@ export async function buildTabulationSheetJob(params: {
       position: r.position,
     }));
 
-  const passed = results.filter((r) => !r.result.has_failed).length;
+  // is_complete required alongside !has_failed -- see the identical note on
+  // the merit-list routes in results.routes.ts.
+  const passed = results.filter((r) => r.result.is_complete && !r.result.has_failed).length;
   const buffer = await renderDocument(
     "TABULATION_SHEET",
     {
@@ -1198,8 +1224,10 @@ export async function buildMeritListJob(params: {
   if (!exam) throw notFound("Exam not found");
   const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
 
+  // is_complete required alongside !has_failed -- see the identical note on
+  // the merit-list routes in results.routes.ts.
   const rows = results
-    .filter((r) => !r.result.has_failed)
+    .filter((r) => r.result.is_complete && !r.result.has_failed)
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
     .map((r) => ({
       rank: r.position,

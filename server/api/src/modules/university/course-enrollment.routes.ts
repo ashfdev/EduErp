@@ -167,11 +167,23 @@ courseEnrollmentRouter.put(
     const finalizing = body.status === "COMPLETED" || body.status === "FAILED";
     const effectiveMarks = body.marks_total !== undefined ? body.marks_total : existing.marks_total;
 
+    // Real bug fixed (2026-08-10): marks_total and status are both
+    // independently optional on this schema, so a caller could finalize a
+    // course (status: COMPLETED/FAILED) with no marks_total in the request
+    // AND none already on the row -- effectiveMarks ?? 0 silently graded
+    // that as a real 0-mark score (almost always the bottom band, "F"/0.0),
+    // permanently written to grade_letter/grade_point and then folded into
+    // the student's actual CGPA below. Never grade a course that has no
+    // real marks anywhere to grade from.
+    if (finalizing && effectiveMarks === null) {
+      throw badRequest("Cannot finalize this course without marks — enter marks_total before marking it COMPLETED or FAILED");
+    }
+
     let grade_letter = existing.grade_letter;
     let grade_point = existing.grade_point;
-    if (body.marks_total !== undefined || finalizing) {
+    if (effectiveMarks !== null && (body.marks_total !== undefined || finalizing)) {
       const scale = await getGpa4Scale();
-      const graded = calculateGrade(effectiveMarks ?? 0, false, scale.ranges);
+      const graded = calculateGrade(effectiveMarks, false, scale.ranges);
       grade_letter = graded.grade_letter;
       grade_point = graded.grade_point;
     }

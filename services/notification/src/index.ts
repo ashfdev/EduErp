@@ -1,3 +1,7 @@
+// Same fix as server/api/src/index.ts (2026-08-10 audit finding) — explicit
+// timezone pin, not a shared assumption about the host's own clock.
+process.env.TZ = "Asia/Dhaka";
+
 import "dotenv/config";
 import express from "express";
 import { startSmsWorker } from "./workers/sms.worker";

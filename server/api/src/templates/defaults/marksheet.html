@@ -132,12 +132,17 @@
       {{/each}}
       <tr class="total-row">
         <td colspan="{{#if display.show_subject_full_marks}}{{#if display.show_subject_pass_marks}}5{{else}}4{{/if}}{{else}}{{#if display.show_subject_pass_marks}}4{{else}}3{{/if}}{{/if}}">Total / Overall</td>
-        <td>{{total_marks}}</td><td>{{overall_grade}}</td><td>{{total_gpa}}</td>
+        <td>{{#unless not_entered}}{{total_marks}}{{/unless}}</td><td>{{#unless not_entered}}{{overall_grade}}{{/unless}}</td><td>{{#unless not_entered}}{{total_gpa}}{{/unless}}</td>
       </tr>
     </tbody>
   </table>
 
-  <p class="promo">{{#if has_failed}}Result: FAILED{{else}}Promoted to {{next_class_name}}{{/if}}</p>
+  {{! Real bug fixed (2026-08-10): this used to be a hard binary
+      FAILED/PROMOTED choice with no way to say "marks aren't entered yet" --
+      a student never marked for this exam printed an official document
+      confidently reading "Promoted to ..." (has_failed defaults false),
+      which is actively wrong, not just incomplete. }}
+  <p class="promo">{{#if not_entered}}Marks Not Yet Entered{{else}}{{#if has_failed}}Result: FAILED{{else}}Promoted to {{next_class_name}}{{/if}}{{/if}}</p>
 
   {{#if position}}
   <div class="stats-box" style="margin-top: 8px; display: inline-block;">

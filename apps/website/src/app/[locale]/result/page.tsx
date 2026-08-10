@@ -27,6 +27,11 @@ interface AcademicYearOption {
   label: string;
   is_active: boolean;
 }
+interface ExamOption {
+  id: string;
+  name: string;
+  academic_year_id: string;
+}
 
 export default function ResultLookupPage() {
   const t = useTranslations("result");
@@ -35,12 +40,14 @@ export default function ResultLookupPage() {
   const [rollNo, setRollNo] = useState("");
   const [registrationNo, setRegistrationNo] = useState("");
   const [academicYearId, setAcademicYearId] = useState("");
+  const [examId, setExamId] = useState("");
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [institution, setInstitution] = useState<InstitutionInfo | null>(null);
   const [academicYears, setAcademicYears] = useState<AcademicYearOption[]>([]);
+  const [exams, setExams] = useState<ExamOption[]>([]);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +57,19 @@ export default function ResultLookupPage() {
     fetch(`${API_URL}/api/content/institution`).then((r) => r.json()).then((body) => setInstitution(body.data ?? null)).catch(() => setInstitution(null));
     fetch(`${API_URL}/api/content/academic-years`).then((r) => r.json()).then((body) => setAcademicYears(body.data ?? [])).catch(() => setAcademicYears([]));
   }, []);
+
+  // Real bug fixed (2026-08-10) — this page previously only ever let a
+  // visitor pick a Year, with no way to see or choose which SPECIFIC exam's
+  // result they want, even though a year routinely has several (Class
+  // Test/Half-Yearly/Annual). Re-fetches whenever the selected year changes
+  // (or "Any year" is chosen, fetching every publicly-published exam
+  // instead); resets the exam selection so a stale exam_id from a
+  // previously-selected year can never silently carry over.
+  useEffect(() => {
+    setExamId("");
+    const params = academicYearId ? `?academic_year_id=${academicYearId}` : "";
+    fetch(`${API_URL}/api/content/exams${params}`).then((r) => r.json()).then((body) => setExams(body.data ?? [])).catch(() => setExams([]));
+  }, [academicYearId]);
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
@@ -61,6 +81,7 @@ export default function ResultLookupPage() {
       mode === "uid" ? { student_uid: studentUid, registration_no: registrationNo } : { roll_no: rollNo, registration_no: registrationNo },
     );
     if (showExamFilters && academicYearId) params.set("academic_year_id", academicYearId);
+    if (showExamFilters && examId) params.set("exam_id", examId);
 
     try {
       const res = await fetch(`${API_URL}/api/results/public/lookup?${params.toString()}`);
@@ -151,12 +172,19 @@ export default function ResultLookupPage() {
           )}
 
           {showExamFilters && (
-            <div className="grid grid-cols-1 gap-4 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div>
-                <label className={labelCls}>Select Year</label>
+                <label className={labelCls}>{t("selectYearLabel")}</label>
                 <select value={academicYearId} onChange={(e) => setAcademicYearId(e.target.value)} className={`${inputCls} appearance-none cursor-pointer`}>
                   <option value="">{t("anyYear")}</option>
                   {academicYears.map((y) => <option key={y.id} value={y.id}>{y.label}{y.is_active ? t("currentSuffix") : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t("selectExamLabel")}</label>
+                <select value={examId} onChange={(e) => setExamId(e.target.value)} className={`${inputCls} appearance-none cursor-pointer`}>
+                  <option value="">{t("anyExam")}</option>
+                  {exams.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                 </select>
               </div>
             </div>

@@ -43,9 +43,14 @@ interface StudentResult {
   student_uid: string;
   name_en: string;
   roll_no: string | null;
-  total_gpa: number;
+  total_gpa: number | null;
   overall_grade: string | null;
-  has_failed: boolean;
+  has_failed: boolean | null;
+  // false when at least one of this student's eligible subjects has no
+  // MarkEntry yet -- GPA/grade/pass-fail are all null in that case, never a
+  // fabricated result. See the identical is_complete fix in
+  // computeClassResults() (server/api).
+  is_complete: boolean;
   position: number | null;
 }
 
@@ -183,14 +188,14 @@ export default function ExamResultsPage() {
                           <TableBody>
                             {filteredStudents.map((s) => (
                               <TableRow key={s.student_id}>
-                                <TableCell>{s.has_failed ? "—" : s.position}</TableCell>
+                                <TableCell>{s.is_complete && !s.has_failed ? s.position : "—"}</TableCell>
                                 <TableCell>{s.roll_no}</TableCell>
                                 <TableCell>
                                   <Link href={`/students/${s.student_id}`} className="hover:underline" target="_blank">{s.name_en}</Link>
                                 </TableCell>
-                                <TableCell>{s.total_gpa}</TableCell>
-                                <TableCell>{s.overall_grade}</TableCell>
-                                <TableCell><StatusBadge status={s.has_failed ? "FAILED" : "PASSED"} /></TableCell>
+                                <TableCell>{s.is_complete ? s.total_gpa : <span className="text-slate-400">Not graded</span>}</TableCell>
+                                <TableCell>{s.is_complete ? s.overall_grade : "—"}</TableCell>
+                                <TableCell><StatusBadge status={!s.is_complete ? "PENDING" : s.has_failed ? "FAILED" : "PASSED"} /></TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

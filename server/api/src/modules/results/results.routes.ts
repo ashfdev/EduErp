@@ -76,23 +76,64 @@ export async function computeClassResults(examId: string, classId: string, group
     const eligibleSubjects = subjects.filter(
       (s) => (s.group_id === null || s.group_id === student.group_id) && (!s.is_optional || optionalEnrollment.has(s.id)),
     );
-    const subjectInputs = eligibleSubjects.map((s) => {
-      const entry = studentEntries.find((e) => e.subject_id === s.id);
-      return {
-        subject_id: s.id,
-        subject_name: s.name_en,
-        is_optional: s.is_optional,
-        is_fourth_subject: optionalEnrollment.get(s.id) ?? false,
-        marks_total: entry?.marks_total ?? null,
-        is_absent: entry?.is_absent ?? true,
-      };
-    });
-    const result = calculateStudentResult(subjectInputs, scale, institutionConfig?.fourth_subject_rule ?? false);
-    const totalMarks = result.subjects.reduce((sum, s) => sum + (s.marks_total ?? 0), 0);
+    // Real bug fixed (2026-08-10): a subject with no MarkEntry row yet used
+    // to be synthesized as `is_absent: true` (line below, previously the
+    // fallback for `entry?.is_absent ?? true`) -- calculateGrade() treats
+    // "Ab" the same as "F", so ANY student with even one not-yet-graded
+    // subject got their whole GPA forced to 0 and has_failed forced true,
+    // indistinguishable from a genuine failure. This fed 5 unguarded
+    // consumers (class-results view, tabulation sheet + export, merit list +
+    // export, the class-comparison dashboard widget, and the marksheet PDF's
+    // own class-average/position block) with fabricated fail data for any
+    // exam that isn't 100% graded yet. Fix: only subjects with a REAL
+    // MarkEntry row are fed into calculateStudentResult at all; a student
+    // with any missing subject is marked is_complete: false and gets
+    // total_gpa/overall_grade_letter/has_failed: null instead of a
+    // confidently-wrong number -- exactly the same "never fabricate, always
+    // distinguish no-data from a real result" discipline already applied to
+    // the individual student-facing result routes.
+    const gradedInputs = eligibleSubjects
+      .filter((s) => studentEntries.some((e) => e.subject_id === s.id))
+      .map((s) => {
+        const entry = studentEntries.find((e) => e.subject_id === s.id)!;
+        return {
+          subject_id: s.id,
+          subject_name: s.name_en,
+          is_optional: s.is_optional,
+          is_fourth_subject: optionalEnrollment.get(s.id) ?? false,
+          marks_total: entry.marks_total,
+          is_absent: entry.is_absent,
+        };
+      });
+    const isComplete = gradedInputs.length === eligibleSubjects.length;
+    const computed = calculateStudentResult(gradedInputs, scale, institutionConfig?.fourth_subject_rule ?? false);
+    const gradedBySubject = new Map(computed.subjects.map((s) => [s.subject_id, s]));
+    // Preserve eligibleSubjects' own order so tabulation/marksheet columns
+    // stay stable -- an ungraded subject prints as a real column with blank
+    // cells, never silently dropped and never silently graded.
+    const subjectsOut = eligibleSubjects.map(
+      (s) =>
+        gradedBySubject.get(s.id) ?? {
+          subject_id: s.id,
+          subject_name: s.name_en,
+          marks_total: null,
+          grade_letter: null,
+          grade_point: null,
+          is_fourth_subject: optionalEnrollment.get(s.id) ?? false,
+        },
+    );
+    const result = isComplete
+      ? { subjects: subjectsOut, total_gpa: computed.total_gpa, overall_grade_letter: computed.overall_grade_letter, has_failed: computed.has_failed, is_complete: true as const }
+      : { subjects: subjectsOut, total_gpa: null, overall_grade_letter: null, has_failed: null, is_complete: false as const };
+    const totalMarks = computed.subjects.reduce((sum, s) => sum + (s.marks_total ?? 0), 0);
     return { student, result, total_marks: totalMarks };
   });
 
-  const positioned = calculatePositions(perStudent.map((p) => ({ student_id: p.student.id, total_gpa: p.result.total_gpa, total_marks: p.total_marks })));
+  // Position ranking only ever makes sense among students whose result is
+  // actually final -- an incomplete student is never ranked (position:
+  // null), rather than sorting on a fabricated/partial GPA.
+  const completeStudents = perStudent.filter((p) => p.result.is_complete);
+  const positioned = calculatePositions(completeStudents.map((p) => ({ student_id: p.student.id, total_gpa: p.result.total_gpa as number, total_marks: p.total_marks })));
   const positionByStudent = new Map(positioned.map((p) => [p.student_id, p.position]));
 
   return perStudent.map((p) => ({ ...p, position: positionByStudent.get(p.student.id) ?? null }));
@@ -177,6 +218,7 @@ resultsRouter.get(
           total_gpa: r.result.total_gpa,
           overall_grade: r.result.overall_grade_letter,
           has_failed: r.result.has_failed,
+          is_complete: r.result.is_complete,
           position: r.position,
         })),
     });
@@ -384,6 +426,7 @@ resultsRouter.get(
             marks_by_subject: Object.fromEntries(r.result.subjects.map((s) => [s.subject_id, s.marks_total])),
             total_gpa: r.result.total_gpa,
             overall_grade: r.result.overall_grade_letter,
+            is_complete: r.result.is_complete,
             position: r.position,
           })),
       },
@@ -450,8 +493,13 @@ resultsRouter.get(
     const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
     res.json({
       success: true,
+      // is_complete required alongside !has_failed -- has_failed is null
+      // (not false) for a not-yet-fully-graded student, and `!null` is
+      // truthy in JS, so without this an ungraded student would silently
+      // slip onto the merit list with a blank GPA instead of being excluded
+      // until their result is actually final.
       data: results
-        .filter((r) => !r.result.has_failed)
+        .filter((r) => r.result.is_complete && !r.result.has_failed)
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
         .map((r) => ({ rank: r.position, roll_no: r.student.current_roll_no, name_en: r.student.name_en, student_uid: r.student.student_uid, total_gpa: r.result.total_gpa })),
     });
@@ -469,8 +517,9 @@ resultsRouter.get(
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
     const [klass, allResults] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId, groupId)]);
     const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
+    // See the identical is_complete note on the JSON merit-list route above.
     const merit = results
-      .filter((r) => !r.result.has_failed)
+      .filter((r) => r.result.is_complete && !r.result.has_failed)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
     const workbook = new ExcelJS.Workbook();
@@ -561,7 +610,10 @@ resultsRouter.get(
       // multiple groups (once per group's row).
       const classResults = await computeClassResults(examId, pub.class_id);
       const results = pub.group_id ? classResults.filter((r) => r.student.group_id === pub.group_id) : classResults;
-      const passed = results.filter((r) => !r.result.has_failed).length;
+      // This publication row only exists post-approval, so every student
+      // here should already be is_complete -- the check is defensive, not a
+      // silent-0 fallback (see the identical note in the /publish route).
+      const passed = results.filter((r) => r.result.is_complete && !r.result.has_failed).length;
       summary.push({
         class_id: pub.class_id,
         class_name: klass?.name_en,

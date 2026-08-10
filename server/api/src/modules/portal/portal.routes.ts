@@ -293,7 +293,10 @@ portalRouter.get(
     await assertAccess(req.user!.sub, req.user!.role, id);
     const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
 
-    const student = await prisma.student.findUnique({ where: { id } });
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: { current_class: { include: { program: { select: { name_en: true } } } }, current_section: { select: { name: true } } },
+    });
     if (!student) throw notFound("Student not found");
 
     // A student's class at the time of an exam may differ from their
@@ -312,7 +315,7 @@ portalRouter.get(
           exam: { academic_year_id: query.academic_year_id },
         }),
       },
-      include: { exam: { include: { grading_scale: { include: { ranges: true } } } } },
+      include: { exam: { include: { grading_scale: { include: { ranges: { orderBy: { display_order: "asc" } } } }, academic_year: { select: { label: true } } } } },
     });
     const publications = candidatePublications.filter((pub) => {
       const resolvedClassId = classForYear.get(pub.exam.academic_year_id) ?? student.current_class_id;
@@ -357,7 +360,19 @@ portalRouter.get(
         marks_total: e.marks_total,
         is_absent: e.is_absent,
       }));
-      const result = calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], institutionConfig?.fourth_subject_rule ?? false);
+      // Real bug fixed (2026-08-10): calculateStudentResult() has no concept
+      // of "no data" — called with zero real subjects (every one of this
+      // exam's subjects still not_conducted for this student) it still
+      // returns a number, and gpaToLetter(0, scale) happens to match the
+      // bottom of most grading scales, so a student who was simply never
+      // marked for this exam looked identical to one who sat it and failed
+      // every subject (GPA 0.00, grade F) — a materially misleading result
+      // to show a parent. Only compute a real GPA/grade when at least one
+      // subject has an actual entered mark; otherwise surface it as
+      // genuinely unavailable (null), not a fabricated failing score.
+      const result = subjectInputs.length
+        ? calculateStudentResult(subjectInputs, pub.exam.grading_scale?.ranges ?? [], institutionConfig?.fourth_subject_rule ?? false)
+        : { total_gpa: null, overall_grade_letter: null, has_failed: false };
 
       const entryBySubject = new Map(entries.map((e) => [e.subject_id, e]));
       const allSubjectIds = new Set([...entries.map((e) => e.subject_id), ...enrolledSubjects.map((es) => es.subject_id)]);
@@ -404,6 +419,7 @@ portalRouter.get(
           marks_practical: entry?.marks_practical ?? null,
           marks_total: entry?.marks_total ?? null,
           grade_letter: entry?.grade_letter ?? null,
+          grade_point: entry?.grade_point ?? null,
           is_absent: entry?.is_absent ?? false,
           has_mark_components: components.length > 0,
           mark_components: components.map((c) => ({
@@ -415,14 +431,50 @@ portalRouter.get(
         };
       });
 
+      // A marks-range -> grade-letter -> GPA legend for this exam's own
+      // active grading scale (mirrors buildMarksheetData's identical
+      // gradingLegend, Plan Fourteen, Phase L2) -- the portal's own "Live
+      // Result" view needs this to render the Grading System reference
+      // table alongside the result, matching the reference UI.
+      const gradingLegend = (pub.exam.grading_scale?.ranges ?? []).map((r) => ({
+        range: `${r.min_marks}-${r.max_marks}`,
+        grade_letter: r.grade_letter,
+        grade_point: r.grade_point,
+        remarks: r.remarks ?? null,
+      }));
+
       results.push({
         exam_id: pub.exam_id, exam_name: pub.exam.name,
+        academic_year_label: pub.exam.academic_year.label,
         subjects: subjectRows,
         total_gpa: result.total_gpa, overall_grade: result.overall_grade_letter, has_failed: result.has_failed,
+        grading_legend: gradingLegend,
       });
     }
 
-    res.json({ success: true, data: results });
+    // Real gap found (2026-08-10): the portal's "Live Result" search view
+    // needs Student Information (name/program-or-class/batch-or-section/
+    // student ID/registration ID) alongside each exam's result -- this was
+    // previously only ever assembled client-side from the auth store's
+    // PortalStudent (which has no program/registration_no), forcing the old
+    // card-grid UI to skip that context entirely. One place, computed once
+    // per request rather than duplicated in the frontend.
+    res.json({
+      success: true,
+      data: {
+        student: {
+          name_en: student.name_en,
+          student_uid: student.student_uid,
+          registration_no: student.registration_no,
+          photo_url: student.photo_url,
+          roll_no: student.current_roll_no,
+          program_name: student.current_class?.program?.name_en ?? null,
+          class_name: student.current_class?.name_en ?? null,
+          section_name: student.current_section?.name ?? null,
+        },
+        exams: results,
+      },
+    });
   }),
 );
 

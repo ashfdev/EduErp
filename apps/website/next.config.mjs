@@ -1,3 +1,7 @@
+// Pin the Next.js server process's timezone explicitly (2026-08-10 audit
+// finding) — see apps/admin/next.config.mjs's identical comment for why.
+process.env.TZ = "Asia/Dhaka";
+
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");

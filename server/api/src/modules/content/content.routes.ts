@@ -405,6 +405,33 @@ contentRouter.get(
   }),
 );
 
+// Public, read-only exam list for the public Result Lookup page (real bug
+// found 2026-08-10: removing "Exam Type" earlier this session dropped the
+// only way that page had to narrow a lookup to one specific exam — it was
+// left with just a Year selector, so a year with several real exams (Class
+// Test/Half-Yearly/Annual) had no way to pick which one's result to check).
+// Deliberately scoped to only exams with at least one PUBLISHED + PUBLIC
+// ResultPublication, so an anonymous visitor can never see the name/
+// existence of an exam whose results aren't public yet — same bar the
+// lookup route itself already enforces.
+contentRouter.get(
+  "/exams",
+  asyncHandler(async (req, res) => {
+    const academic_year_id = req.query.academic_year_id as string | undefined;
+    const data = await cached(contentCacheKey(`exams:${academic_year_id ?? "all"}`), CONTENT_CACHE_TTL_SECONDS, async () =>
+      prisma.exam.findMany({
+        where: {
+          ...(academic_year_id && { academic_year_id }),
+          result_publications: { some: { is_published: true, is_public: true } },
+        },
+        select: { id: true, name: true, academic_year_id: true },
+        orderBy: { created_at: "desc" },
+      }),
+    );
+    res.json({ success: true, data });
+  }),
+);
+
 // Public, read-only — Department/Program listing for university-type
 // institutions. Confirmed no such route existed anywhere: Program/Course
 // data was only ever exposed via authenticated /api/settings/* routes.

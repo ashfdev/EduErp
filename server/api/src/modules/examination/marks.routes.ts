@@ -890,17 +890,23 @@ marksRouter.post(
     // "everyone matches" fallback) — correct both for a class with no
     // groups at all (every student's own group_id is null too) and for the
     // new "no group" unit inside an otherwise-grouped class.
-    const perStudent = (await computeClassResults(examId, classId)).filter((p) => p.student.group_id === (groupId ?? null));
+    // The completeness gate above (approvedCount >= expectedCount, both
+    // derived from StudentSubject) guarantees every student here is fully
+    // graded — filtering to is_complete is a defensive no-op in practice,
+    // never a fallback to a fabricated GPA, matching the discipline in
+    // computeClassResults itself.
+    const perStudent = (await computeClassResults(examId, classId)).filter((p) => p.student.group_id === (groupId ?? null) && p.result.is_complete);
     const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
     const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
     const guardianById = new Map(guardians.map((g) => [g.id, g]));
 
     for (const p of perStudent) {
       const guardian = p.student.guardian_id ? guardianById.get(p.student.guardian_id) : undefined;
+      const gpa = (p.result.total_gpa as number).toFixed(2);
       await sendNotification({
         trigger: "RESULT_PUBLISHED",
         recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
-        template_data: { student_name: p.student.name_en, exam_name: exam?.name ?? "", gpa: p.result.total_gpa.toFixed(2) },
+        template_data: { student_name: p.student.name_en, exam_name: exam?.name ?? "", gpa },
       });
       // Previously SMS/email-only — "Result Published" never showed up in the
       // guardian's/student's in-app bell, unlike Notices/Documents/Leave,
@@ -908,7 +914,7 @@ marksRouter.post(
       const recipientUserIds = [guardian?.user_id, p.student.user_id].filter((v): v is string => !!v);
       await Promise.all(
         recipientUserIds.map((userId) =>
-          createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam?.name ?? ""}`, body: `${p.student.name_en} — GPA ${p.result.total_gpa.toFixed(2)}`, link: "/results" }),
+          createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam?.name ?? ""}`, body: `${p.student.name_en} — GPA ${gpa}`, link: "/results" }),
         ),
       );
     }
@@ -961,21 +967,22 @@ marksRouter.post(
         });
 
         // See the identical note in /publish above.
-        const perStudent = (await computeClassResults(examId, unit.class_id)).filter((p) => p.student.group_id === unit.group_id);
+        const perStudent = (await computeClassResults(examId, unit.class_id)).filter((p) => p.student.group_id === unit.group_id && p.result.is_complete);
         const guardianIds = perStudent.map((p) => p.student.guardian_id).filter((id): id is string => !!id);
         const guardians = await prisma.guardian.findMany({ where: { id: { in: guardianIds } }, select: { id: true, user_id: true, email: true } });
         const guardianById = new Map(guardians.map((g) => [g.id, g]));
         for (const p of perStudent) {
           const guardian = p.student.guardian_id ? guardianById.get(p.student.guardian_id) : undefined;
+          const gpa = (p.result.total_gpa as number).toFixed(2);
           await sendNotification({
             trigger: "RESULT_PUBLISHED",
             recipients: [{ name: p.student.name_en, phone: p.student.father_phone, email: guardian?.email, user_id: guardian?.user_id, person_id: p.student.id }],
-            template_data: { student_name: p.student.name_en, exam_name: exam.name, gpa: p.result.total_gpa.toFixed(2) },
+            template_data: { student_name: p.student.name_en, exam_name: exam.name, gpa },
           });
           const recipientUserIds = [guardian?.user_id, p.student.user_id].filter((v): v is string => !!v);
           await Promise.all(
             recipientUserIds.map((userId) =>
-              createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam.name}`, body: `${p.student.name_en} — GPA ${p.result.total_gpa.toFixed(2)}`, link: "/results" }),
+              createInAppNotification({ userId, type: "RESULT_PUBLISHED", title: `Result published: ${exam.name}`, body: `${p.student.name_en} — GPA ${gpa}`, link: "/results" }),
             ),
           );
         }

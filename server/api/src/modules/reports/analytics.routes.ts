@@ -337,9 +337,9 @@ analyticsRouter.get(
     const perExamByClass: { exam_name: string; class_name: string; avg_gpa: number }[] = [];
     for (const exam of exams) {
       for (const klass of classes) {
-        const results = await computeClassResults(exam.id, klass.id).catch(() => []);
+        const results = (await computeClassResults(exam.id, klass.id).catch(() => [])).filter((r) => r.result.is_complete);
         if (!results.length) continue;
-        const avgGpa = results.reduce((s, r) => s + r.result.total_gpa, 0) / results.length;
+        const avgGpa = results.reduce((s, r) => s + (r.result.total_gpa as number), 0) / results.length;
         perExamByClass.push({ exam_name: exam.name, class_name: klass.name_en, avg_gpa: Math.round(avgGpa * 100) / 100 });
       }
     }
@@ -556,9 +556,22 @@ analyticsRouter.get(
         ]);
 
         let avgGpa: number | null = null;
+        let gradingIncompleteCount = 0;
         if (query.exam_id) {
+          // Real bug fixed (2026-08-10): this route accepts ANY exam_id with
+          // no status/completeness gate (unlike /result-performance above,
+          // which only ever queries PUBLISHED exams) -- computeClassResults
+          // now correctly excludes any not-yet-fully-graded student from the
+          // average instead of forcing their GPA to 0, but a still-in-
+          // progress exam's average would previously have been fabricated
+          // outright. Filter to complete results and surface how many
+          // students are still pending, so the dashboard can show "avg GPA
+          // (N students still ungraded)" instead of a confidently wrong
+          // number.
           const results = await computeClassResults(query.exam_id, klass.id).catch(() => []);
-          if (results.length) avgGpa = Math.round((results.reduce((s, r) => s + r.result.total_gpa, 0) / results.length) * 100) / 100;
+          const completeResults = results.filter((r) => r.result.is_complete);
+          gradingIncompleteCount = results.length - completeResults.length;
+          if (completeResults.length) avgGpa = Math.round((completeResults.reduce((s, r) => s + (r.result.total_gpa as number), 0) / completeResults.length) * 100) / 100;
         }
 
         const invoices = await prisma.invoice.findMany({ where: { student_id: { in: studentIds } } });
@@ -571,6 +584,7 @@ analyticsRouter.get(
           student_count: students.length,
           attendance_percentage: total ? Math.round((present / total) * 1000) / 10 : null,
           avg_gpa: avgGpa,
+          grading_incomplete_count: gradingIncompleteCount,
           fee_collection_percentage: totalDue ? Math.round((totalPaid / totalDue) * 1000) / 10 : null,
         };
       }),
