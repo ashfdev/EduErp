@@ -16,6 +16,7 @@
     "documentRequests": "Document Requests",
     "studentLeaveRequests": "Leave Requests",
     "attendance": "Attendance",
+    "attendanceEntryExit": "Student Entry/Exit",
     "examination": "Examination",
     "marks": "Marks",
     "results": "Results",

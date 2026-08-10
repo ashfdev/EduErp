@@ -10,7 +10,7 @@ import {
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
   Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
-  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, ArrowLeftRight, Network, type LucideIcon,
+  ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, ArrowLeftRight, Network, Fingerprint, type LucideIcon,
 } from "lucide-react";
 import { usePendingCounts, type PendingCounts } from "@/hooks/use-pending-counts";
 
@@ -45,6 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
     key: "academic",
     items: [
       { href: "/attendance/mark", key: "attendance", icon: ClipboardCheck },
+      { href: "/attendance/entry-exit", key: "attendanceEntryExit", icon: Fingerprint },
       { href: "/examination", key: "examination", icon: FileSpreadsheet },
       { href: "/marks", key: "marks", icon: Edit3 },
       { href: "/results", key: "results", icon: Award },

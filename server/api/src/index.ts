@@ -18,10 +18,6 @@ import { createApp } from "./app";
 import { logger } from "./lib/logger";
 import { loadPermissionsFromDb } from "./lib/permissions";
 import { attachSocketServer } from "./realtime/socket";
-import { registerExamReminderJob } from "./jobs/exam-reminder.job";
-import { registerMonthlyFeeGenerationJob } from "./jobs/monthly-fee-generation.job";
-import { registerFeeReconciliationJob } from "./jobs/fee-reconciliation.job";
-import { registerDocumentBatchJob } from "./jobs/document-batch.job";
 
 const port = env.PORT;
 
@@ -37,10 +33,6 @@ async function start() {
     logger.info(`API listening on http://localhost:${port}`);
   });
   attachSocketServer(httpServer);
-  await registerExamReminderJob();
-  await registerMonthlyFeeGenerationJob();
-  await registerFeeReconciliationJob();
-  await registerDocumentBatchJob();
 }
 
 start().catch((err) => {

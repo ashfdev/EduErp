@@ -60,6 +60,28 @@ export async function runScheduledMonthlyFeeGeneration(): Promise<{ created: num
   return { created, skipped, academicYearId: activeYear.id };
 }
 
+export async function runManualFeeGeneration(data: { academic_year_id: string; month: number; year: number; user_id: string }) {
+  const { created, skipped } = await prisma.$transaction(
+    (tx) => runMonthlyFeeGeneration(tx, data.academic_year_id, data.month, data.year),
+    { timeout: 120_000 },
+  );
+
+  await prisma.invoiceGenerationRun.create({
+    data: { run_by_id: data.user_id, trigger: "BULK_MONTHLY", created_count: created, skipped_count: skipped, academic_year_id: data.academic_year_id, month: data.month, year: data.year },
+  });
+
+  return { created, skipped_duplicates: skipped };
+}
+
+export async function enqueueManualFeeGenerationJob(data: { academic_year_id: string; month: number; year: number; user_id: string }) {
+  const job = await monthlyFeeGenerationQueue.add("manual-run", data, { removeOnComplete: 100, removeOnFail: 100 });
+  return job.id;
+}
+
+export async function getMonthlyFeeGenerationJob(jobId: string) {
+  return await monthlyFeeGenerationQueue.getJob(jobId);
+}
+
 let workerStarted = false;
 
 export async function registerMonthlyFeeGenerationJob(): Promise<void> {
@@ -68,7 +90,10 @@ export async function registerMonthlyFeeGenerationJob(): Promise<void> {
 
   new Worker(
     "monthly-fee-generation",
-    async () => {
+    async (job) => {
+      if (job.name === "manual-run") {
+        return await runManualFeeGeneration(job.data);
+      }
       try {
         const result = await runScheduledMonthlyFeeGeneration();
         logger.info(result, "scheduled monthly fee generation completed");

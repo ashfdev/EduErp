@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
@@ -91,13 +91,41 @@ export default function InvoicesPage() {
     onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to waive invoice"),
   });
 
+  const [pollingJobId, setPollingJobId] = useState<string | null>(null);
+
+  const { data: jobStatus } = useQuery({
+    queryKey: ["job", pollingJobId],
+    queryFn: () => api.get(`/api/fees/invoices/generate-bulk-monthly/${pollingJobId}`),
+    enabled: !!pollingJobId,
+    refetchInterval: (query) => {
+      const state = query.state.data?.data?.data?.state;
+      return state === "completed" || state === "failed" ? false : 2000;
+    },
+  });
+
+  useEffect(() => {
+    if (jobStatus?.data?.data) {
+      const { state, result, error } = jobStatus.data.data;
+      if (state === "completed") {
+        toast.success(`Generated ${result.created} invoices (${result.skipped_duplicates} already existed)`);
+        queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
+        setPollingJobId(null);
+      } else if (state === "failed") {
+        toast.error(`Job failed: ${error}`);
+        setPollingJobId(null);
+      }
+    }
+  }, [jobStatus, queryClient]);
+
   const bulkGenerateMutation = useMutation({
     mutationFn: () => api.post("/api/fees/invoices/generate-bulk-monthly", { academic_year_id: activeYear?.id, month, year }),
     onSuccess: (res) => {
-      toast.success(`Generated ${res.data.data.created} invoices (${res.data.data.skipped_duplicates} already existed)`);
-      queryClient.invalidateQueries({ queryKey: ["fees", "invoices"] });
+      if (res.data.data.jobId) {
+        toast.info("Invoice generation started in the background...");
+        setPollingJobId(res.data.data.jobId);
+      }
     },
-    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to generate monthly invoices"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to start monthly invoices job"),
   });
 
   return (
@@ -105,7 +133,7 @@ export default function InvoicesPage() {
       <PageHeader
         title="Invoices"
         breadcrumbs={[{ label: "Fees", href: "/fees" }, { label: "Invoices" }]}
-        action={<Button onClick={() => bulkGenerateMutation.mutate()} disabled={bulkGenerateMutation.isPending || !activeYear}>Generate Monthly Invoices</Button>}
+        action={<Button onClick={() => bulkGenerateMutation.mutate()} disabled={bulkGenerateMutation.isPending || !!pollingJobId || !activeYear}>{pollingJobId ? "Generating..." : "Generate Monthly Invoices"}</Button>}
       />
 
       <div className="flex flex-wrap gap-3">

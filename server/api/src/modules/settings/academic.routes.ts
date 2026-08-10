@@ -933,6 +933,11 @@ export interface UnplacedItem {
 }
 
 export async function generateClassRoutine(tx: Prisma.TransactionClient, classId: string, workingDays: number[]) {
+  // Prevent concurrent routine generation race conditions (double-booking)
+  // across the campus by locking the RoutineSlot table exclusively until the
+  // transaction commits.
+  await tx.$executeRaw`LOCK TABLE "RoutineSlot" IN EXCLUSIVE MODE`;
+
   const klass = await tx.class.findUnique({
     where: { id: classId },
     include: {

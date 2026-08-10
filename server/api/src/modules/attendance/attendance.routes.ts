@@ -320,6 +320,110 @@ attendanceRouter.get(
   }),
 );
 
+// Student Entry/Exit (campus punch) log — the direct student-side mirror of
+// /staff/daily-summary above, per the exact same "read-only aggregation,
+// writes nothing" contract. Real gap found (2026-08-10): the punch pipeline
+// (services/device/src/processor/punch.processor.ts) already resolves a
+// biometric punch to a Student row via Student.biometric_id using the exact
+// same code path as staff, including deriving check_in_at/check_out_at —
+// but unlike staff, there was no admin page anywhere to actually see it, a
+// pure UI gap, not a missing data pipeline. A student's own shift comes
+// from their Section (Section.shift_id), not an individual override like
+// staff's custom_shift_start_time/end_time.
+attendanceRouter.get(
+  "/students/daily-summary",
+  asyncHandler(async (req, res) => {
+    const query = z
+      .object({
+        date: z.coerce.date(),
+        class_id: z.string().optional(),
+        section_id: z.string().optional(),
+        status: z.string().optional(),
+      })
+      .parse(req.query);
+
+    const d = query.date;
+    const dayStart = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayEnd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+    const dayOfWeek = dayStart.getUTCDay();
+
+    const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
+    const workingDays = (rules?.working_days as number[] | null) ?? [0, 1, 2, 3, 4, 6];
+    const isWorkingDay = workingDays.includes(dayOfWeek);
+
+    const students = await prisma.student.findMany({
+      where: {
+        deleted_at: null,
+        status: "ACTIVE",
+        ...(query.class_id && { current_class_id: query.class_id }),
+        ...(query.section_id && { current_section_id: query.section_id }),
+      },
+      select: {
+        id: true,
+        name_en: true,
+        student_uid: true,
+        current_roll_no: true,
+        current_class: { select: { name_en: true } },
+        current_section: { select: { name: true, shift: { select: { start_time: true, end_time: true } } } },
+      },
+      orderBy: [{ current_class_id: "asc" }, { current_roll_no: "asc" }],
+    });
+    const studentIds = students.map((s) => s.id);
+
+    const [records, punchGroups] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        where: { person_id: { in: studentIds }, person_type: "STUDENT", date: dayStart },
+      }),
+      prisma.devicePunchLog.groupBy({
+        by: ["mapped_person_id"],
+        where: { mapped_person_id: { in: studentIds }, mapped_person_type: "STUDENT", punch_at: { gte: dayStart, lt: dayEnd } },
+        _count: { _all: true },
+      }),
+    ]);
+    const recordByStudent = new Map(records.map((r) => [r.person_id, r]));
+    const punchCountByStudent = new Map(punchGroups.map((g) => [g.mapped_person_id, g._count._all]));
+
+    function computeWorkingHours(checkIn: Date | null, checkOut: Date | null): number | null {
+      if (!checkIn || !checkOut) return null;
+      return Math.round(((checkOut.getTime() - checkIn.getTime()) / 3_600_000) * 100) / 100;
+    }
+
+    const rows = students.map((s) => {
+      const record = recordByStudent.get(s.id) ?? null;
+      const rowStatus = !isWorkingDay ? "WEEKEND" : record ? record.status : "UNMARKED";
+      return {
+        student_id: s.id,
+        student_uid: s.student_uid,
+        name: s.name_en,
+        roll_no: s.current_roll_no,
+        class_name: s.current_class?.name_en ?? null,
+        section_name: s.current_section?.name ?? null,
+        shift_start_time: s.current_section?.shift?.start_time ?? null,
+        shift_end_time: s.current_section?.shift?.end_time ?? null,
+        check_in_at: record?.check_in_at ?? null,
+        check_out_at: record?.check_out_at ?? null,
+        working_hours: computeWorkingHours(record?.check_in_at ?? null, record?.check_out_at ?? null),
+        status: rowStatus,
+        punch_count: punchCountByStudent.get(s.id) ?? 0,
+      };
+    });
+
+    const filteredRows = query.status ? rows.filter((r) => r.status === query.status) : rows;
+
+    const summary = {
+      total: students.length,
+      present: rows.filter((r) => r.status === "PRESENT").length,
+      late: rows.filter((r) => r.status === "LATE").length,
+      absent: rows.filter((r) => r.status === "ABSENT").length,
+      on_leave: rows.filter((r) => r.status === "LEAVE").length,
+      weekend: rows.filter((r) => r.status === "WEEKEND").length,
+      unmarked: rows.filter((r) => r.status === "UNMARKED").length,
+    };
+
+    res.json({ success: true, data: { date: dayStart.toISOString().slice(0, 10), is_working_day: isWorkingDay, summary, rows: filteredRows } });
+  }),
+);
+
 // Individual staff attendance history (2026-08-09) — real gap found during a
 // full-system audit: biometric punch data for staff is already correctly
 // recorded (see the comment on /staff/daily-summary above), but was only

@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 
 const result =
   process.platform === "win32"
-    ? spawnSync("turbo", ["dev"], { stdio: "inherit", shell: true })
-    : spawnSync("bash", ["-lc", "ulimit -n 4096 2>/dev/null; exec turbo dev"], { stdio: "inherit" });
+    ? spawnSync("turbo", ["dev", "dev:worker"], { stdio: "inherit", shell: true })
+    : spawnSync("bash", ["-lc", "ulimit -n 4096 2>/dev/null; exec turbo dev dev:worker"], { stdio: "inherit" });
 
 process.exit(result.status ?? 1);

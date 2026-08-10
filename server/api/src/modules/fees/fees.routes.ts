@@ -18,7 +18,8 @@ import {
 import { sendSms } from "../../services/sms.service";
 import { createFeeReceiptJournal } from "../accounts/auto-journal.service";
 import { generateInvoiceNo, generateReceiptNo } from "./fee-number.generator";
-import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, runMonthlyFeeGeneration, applyWaiverToExistingInvoices, formatFeePeriod } from "./invoice-helpers";
+import { createMonthlyInvoiceIfMissing, syncOverdueInvoices, applyWaiversToInvoice, applyWaiverToExistingInvoices, formatFeePeriod } from "./invoice-helpers";
+import { enqueueManualFeeGenerationJob } from "../../jobs/monthly-fee-generation.job";
 import { feeStructureAppliesToStudent, buildFeeStructureStudentWhere } from "./fee-structure-scope";
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
@@ -346,13 +347,40 @@ feesRouter.post(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const body = generateBulkMonthlySchema.parse(req.body);
-    const { created, skipped } = await runMonthlyFeeGeneration(prisma, body.academic_year_id, body.month, body.year);
-
-    await prisma.invoiceGenerationRun.create({
-      data: { run_by_id: req.user!.sub, trigger: "BULK_MONTHLY", created_count: created, skipped_count: skipped, academic_year_id: body.academic_year_id, month: body.month, year: body.year },
+    
+    // Instead of processing synchronously, add the job to the queue
+    const jobId = await enqueueManualFeeGenerationJob({
+      academic_year_id: body.academic_year_id,
+      month: body.month,
+      year: body.year,
+      user_id: req.user!.sub,
     });
 
-    res.json({ success: true, data: { created, skipped_duplicates: skipped } });
+    res.status(202).json({ success: true, data: { jobId, status: "processing" } });
+  }),
+);
+
+feesRouter.get(
+  "/invoices/generate-bulk-monthly/:jobId",
+  authorize(FEE_COLLECTION_ROLES),
+  asyncHandler(async (req, res) => {
+    const { getMonthlyFeeGenerationJob } = await import("../../jobs/monthly-fee-generation.job");
+    const job = await getMonthlyFeeGenerationJob(req.params.jobId);
+    if (!job) throw notFound("Job not found");
+
+    const state = await job.getState();
+    const result = job.returnvalue;
+    const error = job.failedReason;
+
+    res.json({
+      success: true,
+      data: {
+        id: job.id,
+        state,
+        result,
+        error,
+      },
+    });
   }),
 );
 
@@ -403,7 +431,13 @@ feesRouter.put(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = waiveInvoiceSchema.parse(req.body);
-    const invoice = await prisma.invoice.update({ where: { id }, data: { status: "WAIVED" } });
+    const invoice = await prisma.$transaction(async (tx) => {
+      const existing = await tx.invoice.findUnique({ where: { id } });
+      if (!existing) throw notFound("Invoice not found");
+      const remainingBalance = Math.max(0, existing.amount_due + existing.fine_amount - existing.amount_paid);
+      if (remainingBalance <= 0) throw badRequest("Invoice is already fully paid and cannot be waived");
+      return tx.invoice.update({ where: { id }, data: { status: "WAIVED" } });
+    });
     await logAudit("FEE_WAIVE", { userId: req.user!.sub, targetType: "Invoice", targetId: id, metadata: { reason: body.reason }, req });
     res.json({ success: true, data: invoice, message: `Waived: ${body.reason}` });
   }),

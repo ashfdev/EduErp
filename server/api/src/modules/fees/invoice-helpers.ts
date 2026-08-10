@@ -44,7 +44,8 @@ async function applySingleWaiverToInvoice(tx: Tx, invoice: Invoice, waiver: Waiv
 
   const rawDiscount =
     waiver.waiver_type.discount_type === "PERCENTAGE" ? invoice.amount_due * (waiver.waiver_type.discount_value / 100) : waiver.waiver_type.discount_value;
-  const discount = Math.min(Math.round(rawDiscount * 100) / 100, invoice.amount_due);
+  const remainingBalance = Math.max(0, invoice.amount_due + invoice.fine_amount - invoice.amount_paid);
+  const discount = Math.min(Math.round(rawDiscount * 100) / 100, remainingBalance, invoice.amount_due);
   if (discount <= 0) return invoice;
 
   await tx.invoiceWaiverApplication.create({

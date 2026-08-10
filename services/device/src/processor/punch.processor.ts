@@ -43,11 +43,17 @@ export async function processPunch(raw: RawPunch): Promise<{ status: string; ski
   }
 
   // 2. Map person
-  const student = await prisma.student.findFirst({ where: { biometric_id: raw.device_user_id, deleted_at: null } });
+  // status: "ACTIVE" / is_active: true added (2026-08-10, QA audit spot-
+  // check) alongside the new active-scoped unique index on biometric_id —
+  // a resigned-but-not-deleted staff member (Staff.is_active flips false on
+  // resign without soft-deleting the row, Plan Fourteen Phase I) or a
+  // GRADUATED/TRANSFERRED/EXPELLED student must never still match new
+  // punches meant for whoever inherited their device slot next.
+  const student = await prisma.student.findFirst({ where: { biometric_id: raw.device_user_id, deleted_at: null, status: "ACTIVE" } });
   const staff = student
     ? null
     : await prisma.staff.findFirst({
-        where: { biometric_id: raw.device_user_id, deleted_at: null },
+        where: { biometric_id: raw.device_user_id, deleted_at: null, is_active: true },
         include: { shift: { select: { id: true, start_time: true, end_time: true } } },
       });
 
