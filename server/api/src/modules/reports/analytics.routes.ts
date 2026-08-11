@@ -14,6 +14,7 @@ import { ANALYTICS_MESSAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { accountBalance } from "../accounts/accounts.routes";
 import { dateOnlyDayRange, dateOnlyMonthRange } from "../../lib/date-only";
+import { syncOverdueInvoices } from "../fees/invoice-helpers";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -145,6 +146,14 @@ analyticsRouter.get(
     const newThisYearWhere = activeYear
       ? { created_at: { gte: activeYear.start_date, lte: activeYear.end_date } }
       : { created_at: { gte: new Date(now.getFullYear(), 0, 1) } };
+
+    // Sync overdue status before the parallel read so the dashboard's
+    // overdue_invoices count reflects reality — invoices that passed
+    // due_date but had no payment interaction (the only other path that
+    // flips status) would otherwise show as PENDING here, making the
+    // count an undercount. Runs globally (no student_id filter) once
+    // per dashboard load: fast (a single UPDATE ... WHERE), not per-row.
+    await syncOverdueInvoices(prisma);
 
     const [
       studentsTotal, studentsActive, studentsNewThisYear,

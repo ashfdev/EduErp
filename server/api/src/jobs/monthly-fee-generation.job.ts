@@ -1,7 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { prisma } from "../lib/prisma";
-import { runMonthlyFeeGeneration } from "../modules/fees/invoice-helpers";
+import { runMonthlyFeeGenerationChunked } from "../modules/fees/invoice-helpers";
 import { notifyRoles } from "../services/in-app-notification.service";
 import { FEE_COLLECTION_ROLES } from "../lib/roles";
 import { logger } from "../lib/logger";
@@ -37,9 +37,14 @@ export async function runScheduledMonthlyFeeGeneration(): Promise<{ created: num
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
 
-  const { created, skipped } = await prisma.$transaction(
-    (tx) => runMonthlyFeeGeneration(tx, activeYear.id, month, year),
-    { timeout: 120_000 },
+  // Use the chunked variant (per-structure transactions) instead of the
+  // single 120-second transaction — prevents timeout failures at schools
+  // with 1000+ students across many fee structures.
+  const { created, skipped, structuresProcessed, structuresFailed } = await runMonthlyFeeGenerationChunked(
+    prisma,
+    activeYear.id,
+    month,
+    year,
   );
 
   await prisma.invoiceGenerationRun.create({
@@ -50,10 +55,11 @@ export async function runScheduledMonthlyFeeGeneration(): Promise<{ created: num
   // invoices is exactly as worth a human's attention as one that errored,
   // and FEE_COLLECTION_ROLES has no other way to notice a scheduled job ran
   // at all otherwise.
+  const failNote = structuresFailed > 0 ? ` (${structuresFailed} structure(s) failed — run manually to catch up)` : "";
   await notifyRoles(FEE_COLLECTION_ROLES, {
     type: "SCHEDULED_FEE_GENERATION_COMPLETE",
     title: "Scheduled monthly fee generation completed",
-    body: `${created} invoice(s) created, ${skipped} already existed, for ${month}/${year}.`,
+    body: `${created} invoice(s) created, ${skipped} already existed, for ${month}/${year}. ${structuresProcessed} structure(s) processed${failNote}.`,
     link: "/fees/invoices",
   });
 
@@ -61,16 +67,19 @@ export async function runScheduledMonthlyFeeGeneration(): Promise<{ created: num
 }
 
 export async function runManualFeeGeneration(data: { academic_year_id: string; month: number; year: number; user_id: string }) {
-  const { created, skipped } = await prisma.$transaction(
-    (tx) => runMonthlyFeeGeneration(tx, data.academic_year_id, data.month, data.year),
-    { timeout: 120_000 },
+  // Chunked for the same timeout-prevention reason as the scheduled path.
+  const { created, skipped, structuresFailed } = await runMonthlyFeeGenerationChunked(
+    prisma,
+    data.academic_year_id,
+    data.month,
+    data.year,
   );
 
   await prisma.invoiceGenerationRun.create({
     data: { run_by_id: data.user_id, trigger: "BULK_MONTHLY", created_count: created, skipped_count: skipped, academic_year_id: data.academic_year_id, month: data.month, year: data.year },
   });
 
-  return { created, skipped_duplicates: skipped };
+  return { created, skipped_duplicates: skipped, structures_failed: structuresFailed };
 }
 
 export async function enqueueManualFeeGenerationJob(data: { academic_year_id: string; month: number; year: number; user_id: string }) {

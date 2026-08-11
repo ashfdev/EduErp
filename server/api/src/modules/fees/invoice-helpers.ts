@@ -245,6 +245,76 @@ export async function runMonthlyFeeGeneration(
   return { created, skipped };
 }
 
+// Chunked variant of runMonthlyFeeGeneration for the scheduled and manual
+// background jobs \u2014 processes each FeeStructure in its OWN independent
+// $transaction instead of wrapping every structure \xd7 every student in a
+// single 120-second transaction.
+//
+// Why this matters: 10 structures \xd7 1000 students = 10,000 iterations inside
+// one transaction, each doing 2-3 queries \u2014 easily hits the 120s Prisma
+// transaction timeout at scale, aborting the entire run and leaving no
+// invoices generated for that month. Chunking breaks it into N transactions
+// of ~1000 iterations each; a timeout on structure N doesn't roll back
+// the invoices already committed for structures 1..N-1.
+//
+// Safety: createMonthlyInvoiceIfMissing is idempotent per
+// @@unique([student_id, fee_structure_id, month, year]), so re-running after
+// a partial failure (or running the manual button after the cron partial-
+// ran) is always safe and never double-invoices.
+//
+// The original runMonthlyFeeGeneration (single-tx) is intentionally kept
+// for the /invoices/generate-bulk-monthly route, where the caller already
+// provides a transaction and wants all-or-nothing semantics.
+export async function runMonthlyFeeGenerationChunked(
+  db: PrismaClient,
+  academicYearId: string,
+  month: number,
+  year: number,
+): Promise<{ created: number; skipped: number; structuresProcessed: number; structuresFailed: number }> {
+  const structures = await db.feeStructure.findMany({
+    where: { academic_year_id: academicYearId, frequency: "MONTHLY", is_active: true },
+  });
+
+  let created = 0;
+  let skipped = 0;
+  let structuresFailed = 0;
+
+  for (const structure of structures) {
+    try {
+      const result = await db.$transaction(
+        async (tx) => {
+          const scopeWhere = await buildFeeStructureStudentWhere(tx, structure);
+          const students = await tx.student.findMany({
+            where: { deleted_at: null, status: "ACTIVE", ...scopeWhere },
+          });
+          let c = 0;
+          let s = 0;
+          for (const student of students) {
+            const r = await createMonthlyInvoiceIfMissing(tx, student.id, structure, month, year);
+            if (r.created) c++;
+            else s++;
+          }
+          return { created: c, skipped: s };
+        },
+        // Per-structure timeout: one structure's students should complete
+        // comfortably within 60 seconds even for very large classes.
+        { timeout: 60_000 },
+      );
+      created += result.created;
+      skipped += result.skipped;
+    } catch {
+      // Don't let one structure's failure (e.g. a particularly large class
+      // hitting the per-structure 60s limit, or a transient DB error)
+      // abort the entire run. The caller logs the failed count; those
+      // students will be caught on the next run (idempotent) or via the
+      // manual "Generate Invoices" button.
+      structuresFailed++;
+    }
+  }
+
+  return { created, skipped, structuresProcessed: structures.length - structuresFailed, structuresFailed };
+}
+
 // Promotion-triggered readmission fee — invoiced only if the destination
 // class actually has an active READMISSION FeeStructure defined for the
 // target academic year (mirrors the admission-enroll ADMISSION/FORM invoice
