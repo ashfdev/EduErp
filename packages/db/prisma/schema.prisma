@@ -381,13 +381,13 @@ model ShiftPeriod {
 // existing row) never needs a room at all, matching this feature's "opt-in,
 // inert until configured" convention.
 model Room {
-  id          String        @id @default(cuid())
-  name        String
-  capacity    Int?
-  is_lab      Boolean       @default(false)
-  is_active   Boolean       @default(true)
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  name          String
+  capacity      Int?
+  is_lab        Boolean       @default(false)
+  is_active     Boolean       @default(true)
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
   routine_slots RoutineSlot[]
 }
 
@@ -685,6 +685,8 @@ model Student {
   // never silently carried over from the old class's group row.
   group_id                    String?
   group                       Group?                     @relation(fields: [group_id], references: [id])
+  sibling_group_id            String?
+  sibling_group               SiblingGroup?              @relation(fields: [sibling_group_id], references: [id])
   current_roll_no             String?
   registration_no             String?
   board_roll                  String?
@@ -736,12 +738,13 @@ model Student {
   visitors                    Visitor[]
   documents                   StudentDocument[]
   waivers                     StudentWaiver[]
-  waiver_requests              WaiverRequest[]
+  waiver_requests             WaiverRequest[]
   leave_requests              StudentLeaveRequest[]
   fee_structure_assignments   FeeStructureStudent[]
   fee_reconciliation_findings FeeReconciliationFinding[]
   transport_requests          TransportRequest[]
   hostel_requests             HostelRequest[]
+  alumni_profile              AlumniProfile?
 
   @@index([current_class_id])
   @@index([current_section_id])
@@ -1035,7 +1038,7 @@ model Staff {
   // late-window comparison, overtime always computes to 0, matching the
   // confirmed pre-existing behavior byte-for-byte.
   shift_id                         String?
-  shift                             Shift?                    @relation(fields: [shift_id], references: [id])
+  shift                            Shift?                     @relation(fields: [shift_id], references: [id])
   custom_shift_start_time          String?
   custom_shift_end_time            String?
   max_periods_per_day              Int?
@@ -1073,6 +1076,11 @@ model Staff {
   substitute_teacher_substitutions RoutineSubstitution[]      @relation("SubstituteTeacherSubstitutions")
   experience                       StaffExperience[]
   references                       StaffReference[]
+  advances                         StaffAdvance[]
+  provident_fund                   ProvidentFund?
+  tax_deductions                   TaxDeduction[]
+  salary_increments                SalaryIncrement[]
+  leave_encashments                LeaveEncashment[]
 
   @@index([department_id])
   @@index([program_id])
@@ -1450,6 +1458,7 @@ model ExamHall {
   // Stored (not purely derived) so a hall with an irregular/partial last row
   // can still cap capacity below rows*seats_per_row without a schema change.
   capacity      Int
+  reorder_level Int?
   is_active     Boolean        @default(true)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
@@ -2821,9 +2830,9 @@ model SalaryStructure {
 }
 
 model PayrollRecord {
-  id                    String        @id @default(cuid())
+  id                    String         @id @default(cuid())
   staff_id              String
-  staff                 Staff         @relation(fields: [staff_id], references: [id])
+  staff                 Staff          @relation(fields: [staff_id], references: [id])
   month                 Int
   year                  Int
   working_days          Int
@@ -2833,28 +2842,30 @@ model PayrollRecord {
   // days contribute zero absence deduction (never inferred as absent), so
   // this flag exists to surface "review before finalizing" rather than let
   // missing data silently under- or over-deduct.
-  attendance_incomplete Boolean       @default(false)
+  attendance_incomplete Boolean        @default(false)
   gross_salary          Float
   deductions            Float
   net_salary            Float
-  advance_deducted      Float         @default(0)
+  advance_deducted      Float          @default(0)
   // Itemized breakdown (Plan Fourteen, Phase J) -- stored so the itemized
   // payslip can render each component without recomputing after the fact;
   // all default 0, purely additive.
-  overtime_pay          Float         @default(0)
-  late_deduction        Float         @default(0)
-  substitution_bonus    Float         @default(0)
-  pf_amount             Float         @default(0)
-  tds_amount            Float         @default(0)
-  absent_deduction      Float         @default(0)
-  status                PayrollStatus @default(DRAFT)
+  overtime_pay          Float          @default(0)
+  late_deduction        Float          @default(0)
+  substitution_bonus    Float          @default(0)
+  pf_amount             Float          @default(0)
+  tds_amount            Float          @default(0)
+  absent_deduction      Float          @default(0)
+  status                PayrollStatus  @default(DRAFT)
   payslip_url           String?
   processed_by_id       String?
-  created_at            DateTime      @default(now())
+  created_at            DateTime       @default(now())
   // Set only when status flips to PAID via POST /mark-paid (Plan Thirteen,
   // Phase I) -- distinct from created_at, which reflects when the record
   // was first calculated/finalized, not when salary was actually disbursed.
   paid_at               DateTime?
+  pftransaction         PFTransaction?
+  taxDeduction          TaxDeduction?
 
   @@unique([staff_id, month, year])
 }
@@ -3345,23 +3356,23 @@ enum FacilityRequestStatus {
 // forward per that structure's own frequency — replacing the old direct-
 // assign route's flat one-off invoice with a real, correctly-recurring fee.
 model TransportRequest {
-  id                    String                @id @default(cuid())
-  student_id            String
-  student               Student               @relation(fields: [student_id], references: [id])
-  route_id              String
-  route                 TransportRoute        @relation(fields: [route_id], references: [id])
-  pickup_stop           String?
-  reason                String?
-  requested_by_user_id  String
-  status                FacilityRequestStatus @default(PENDING)
-  reviewed_by_id        String?
-  reviewed_at           DateTime?
-  rejection_reason      String?
+  id                   String                @id @default(cuid())
+  student_id           String
+  student              Student               @relation(fields: [student_id], references: [id])
+  route_id             String
+  route                TransportRoute        @relation(fields: [route_id], references: [id])
+  pickup_stop          String?
+  reason               String?
+  requested_by_user_id String
+  status               FacilityRequestStatus @default(PENDING)
+  reviewed_by_id       String?
+  reviewed_at          DateTime?
+  rejection_reason     String?
   // Set only at approval time — the specific TRANSPORT-category Fee
   // Structure the approver picked (see the model comment above).
-  fee_structure_id      String?
-  fee_structure         FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
-  created_at            DateTime              @default(now())
+  fee_structure_id     String?
+  fee_structure        FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
+  created_at           DateTime              @default(now())
 
   @@index([student_id])
   @@index([route_id])
@@ -3418,20 +3429,20 @@ model HostelAllocation {
 // going forward, matching how directly-assigned Transport/Hostel students
 // are also being migrated onto this same fee-attachment mechanism.
 model HostelRequest {
-  id                    String                @id @default(cuid())
-  student_id            String
-  student               Student               @relation(fields: [student_id], references: [id])
-  room_id               String
-  room                  HostelRoom            @relation(fields: [room_id], references: [id])
-  reason                String?
-  requested_by_user_id  String
-  status                FacilityRequestStatus @default(PENDING)
-  reviewed_by_id        String?
-  reviewed_at           DateTime?
-  rejection_reason      String?
-  fee_structure_id      String?
-  fee_structure         FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
-  created_at            DateTime              @default(now())
+  id                   String                @id @default(cuid())
+  student_id           String
+  student              Student               @relation(fields: [student_id], references: [id])
+  room_id              String
+  room                 HostelRoom            @relation(fields: [room_id], references: [id])
+  reason               String?
+  requested_by_user_id String
+  status               FacilityRequestStatus @default(PENDING)
+  reviewed_by_id       String?
+  reviewed_at          DateTime?
+  rejection_reason     String?
+  fee_structure_id     String?
+  fee_structure        FeeStructure?         @relation(fields: [fee_structure_id], references: [id])
+  created_at           DateTime              @default(now())
 
   @@index([student_id])
   @@index([room_id])
@@ -4595,4 +4606,118 @@ enum POStatus {
 enum PurchaseType {
   ASSET
   CONSUMABLE
+}
+
+// ─────────────────────────────────────────────
+// PHASE 2 EXPANSION MODELS
+// ─────────────────────────────────────────────
+
+enum AdvanceStatus {
+  PENDING
+  PARTIAL
+  CLEARED
+}
+
+model StaffAdvance {
+  id             String        @id @default(cuid())
+  staff_id       String
+  staff          Staff         @relation(fields: [staff_id], references: [id])
+  amount         Float
+  amount_cleared Float         @default(0)
+  monthly_emi    Float?
+  reason         String?
+  date_given     DateTime      @db.Date
+  status         AdvanceStatus @default(PENDING)
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  @@index([staff_id])
+}
+
+model ProvidentFund {
+  id            String          @id @default(cuid())
+  staff_id      String          @unique
+  staff         Staff           @relation(fields: [staff_id], references: [id])
+  total_balance Float           @default(0)
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
+  transactions  PFTransaction[]
+}
+
+enum PFTransactionType {
+  CONTRIBUTION
+  WITHDRAWAL
+}
+
+model PFTransaction {
+  id                String            @id @default(cuid())
+  provident_fund_id String
+  provident_fund    ProvidentFund     @relation(fields: [provident_fund_id], references: [id])
+  payroll_record_id String?           @unique
+  payroll_record    PayrollRecord?    @relation(fields: [payroll_record_id], references: [id])
+  transaction_type  PFTransactionType
+  amount            Float
+  date              DateTime          @db.Date
+  description       String?
+  created_at        DateTime          @default(now())
+
+  @@index([provident_fund_id])
+}
+
+model TaxDeduction {
+  id                String        @id @default(cuid())
+  staff_id          String
+  staff             Staff         @relation(fields: [staff_id], references: [id])
+  payroll_record_id String        @unique
+  payroll_record    PayrollRecord @relation(fields: [payroll_record_id], references: [id])
+  amount            Float
+  created_at        DateTime      @default(now())
+
+  @@index([staff_id])
+}
+
+model SalaryIncrement {
+  id               String   @id @default(cuid())
+  staff_id         String
+  staff            Staff    @relation(fields: [staff_id], references: [id])
+  increment_amount Float
+  new_gross_salary Float
+  effective_date   DateTime @db.Date
+  reason           String?
+  created_at       DateTime @default(now())
+
+  @@index([staff_id])
+}
+
+model LeaveEncashment {
+  id              String   @id @default(cuid())
+  staff_id        String
+  staff           Staff    @relation(fields: [staff_id], references: [id])
+  year            Int
+  unused_leaves   Int
+  encashed_amount Float
+  date_paid       DateTime @db.Date
+  created_at      DateTime @default(now())
+
+  @@index([staff_id])
+}
+
+model AlumniProfile {
+  id                 String   @id @default(cuid())
+  student_id         String   @unique
+  student            Student  @relation(fields: [student_id], references: [id])
+  graduation_year    Int
+  current_profession String?
+  higher_education   String?
+  is_member_of_assoc Boolean  @default(false)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+}
+
+model SiblingGroup {
+  id                     String    @id @default(cuid())
+  auto_waiver_percentage Float     @default(0)
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  students               Student[]
 }
