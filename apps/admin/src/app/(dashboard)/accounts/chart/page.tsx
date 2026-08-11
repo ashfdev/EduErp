@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Input, Label, PageHeader, PageWrapper, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, extractErrorMessage, ErrorState, LoadingSpinner, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Account {
@@ -31,6 +32,7 @@ const emptyForm = { account_group_id: "", code: "", name: "", account_nature: "D
 
 export default function ChartOfAccountsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [editTarget, setEditTarget] = useState<Account | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<Account | null>(null);
@@ -89,6 +91,7 @@ export default function ChartOfAccountsPage() {
               variant="outline"
               onClick={async () => {
                 const res = await api.get("/api/accounts/chart/export", { responseType: "blob" });
+                if (await handleBatchDownloadResponse(res, router)) return;
                 const url = URL.createObjectURL(res.data);
                 const a = document.createElement("a");
                 a.href = url;

@@ -4,14 +4,40 @@ import { prisma } from "../lib/prisma";
 import { uploadBuffer } from "../services/storage.service";
 import { createInAppNotification } from "../services/in-app-notification.service";
 import { logger } from "../lib/logger";
-import { runBatchJobBuilder, type BatchJobKind } from "../modules/documents/documents.routes";
+import { getBatchJobBuilder } from "../lib/batch-job-registry";
 
-// Plan Twenty (built via Plan Twenty-Six, Phase C) -- consumes documentQueue
-// (lib/queues.ts), the async half of the large-batch-PDF threshold routing
-// in documents.routes.ts. Purely job-driven, no cron/repeat schedule --
-// unlike monthly-fee-generation.job.ts/exam-reminder.job.ts, a job here is
-// only ever enqueued on-demand by a route handler once a batch exceeds
-// BATCH_JOB_THRESHOLD, never on a timer.
+// Every module below registers its own batch-job kind(s) as a side effect
+// of being imported (registerBatchJobKind, called at each module's own
+// top level) -- these imports exist ONLY to trigger that side effect so
+// getBatchJobBuilder() below can resolve every kind, even though this
+// worker process never mounts any of these Express routers. Add a line
+// here whenever a new module registers a kind, or its jobs will fail at
+// runtime with "No batch job builder registered for kind ...".
+import "../modules/documents/documents.routes";
+import "../modules/admission/admission.routes";
+import "../modules/fees/fees.routes";
+import "../modules/attendance/attendance.routes";
+import "../modules/results/results.routes";
+import "../modules/hr/staff.routes";
+import "../modules/library/library.routes";
+import "../modules/transport/transport.routes";
+import "../modules/hr/payroll.routes";
+import "../modules/students/students.routes";
+import "../modules/accounts/accounts.routes";
+import "../modules/accounts/vouchers.routes";
+import "../modules/complaints/complaints.routes";
+import "../modules/health/health.routes";
+import "../modules/discipline/discipline.routes";
+import "../modules/appraisals/appraisals.routes";
+
+// Plan Twenty (built via Plan Twenty-Six, Phase C; generalized beyond PDFs
+// in a later pass) -- consumes documentQueue (lib/queues.ts), the async
+// half of every large-batch-export threshold routing across the codebase
+// (batch PDFs in documents.routes.ts/admission.routes.ts, and Excel/CSV
+// bulk exports in the 12 modules above). Purely job-driven, no cron/repeat
+// schedule -- unlike monthly-fee-generation.job.ts/exam-reminder.job.ts, a
+// job here is only ever enqueued on-demand by a route handler once a batch
+// exceeds its own threshold, never on a timer.
 const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", { maxRetriesPerRequest: null });
 
 let workerStarted = false;
@@ -37,8 +63,9 @@ export async function registerDocumentBatchJob(): Promise<void> {
         // builder function the synchronous route path calls -- never a
         // stale snapshot of `params` from when the request was made, and
         // guaranteed to never silently drift from the sync path's output.
-        const { buffer, filename } = await runBatchJobBuilder(job.job_kind as BatchJobKind, job.params as Record<string, unknown>);
-        const { blobKey } = await uploadBuffer("document-batches", filename, buffer, "application/pdf");
+        const build = getBatchJobBuilder(job.job_kind);
+        const { buffer, filename, mimeType } = await build(job.params as Record<string, unknown>);
+        const { blobKey } = await uploadBuffer("document-batches", filename, buffer, mimeType ?? "application/pdf");
         await prisma.documentBatchJob.update({
           where: { id: jobId },
           data: { status: "COMPLETED", file_blob_key: blobKey, filename, completed_at: new Date() },

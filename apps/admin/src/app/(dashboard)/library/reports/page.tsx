@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface OverdueIssue {
@@ -19,11 +20,13 @@ interface FineReport {
 }
 
 export default function LibraryReportsPage() {
+  const router = useRouter();
   const { data: overdue, isLoading, isError, error, refetch } = useQuery<OverdueIssue[]>({ queryKey: ["library", "reports", "overdue"], queryFn: async () => (await api.get("/api/library/reports/overdue")).data.data });
   const { data: fineReport } = useQuery<FineReport>({ queryKey: ["library", "reports", "fine"], queryFn: async () => (await api.get("/api/library/reports/fine-report")).data.data });
 
   async function downloadOverdueExcel() {
     const res = await api.get("/api/library/issues/export", { params: { overdue: "true" }, responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

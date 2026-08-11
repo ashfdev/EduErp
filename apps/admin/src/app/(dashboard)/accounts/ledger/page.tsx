@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, EmptyState, Table, TableHeader, TableBody, TableFooter, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface AccountOption {
@@ -31,6 +32,7 @@ interface LedgerData {
 }
 
 export default function LedgerPage() {
+  const router = useRouter();
   const [accountId, setAccountId] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -51,6 +53,7 @@ export default function LedgerPage() {
       params: { from_date: fromDate || undefined, to_date: toDate || undefined },
       responseType: "blob",
     });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

@@ -10,7 +10,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-  ErrorState, LoadingSpinner, extractErrorMessage,
+  ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse,
 } from "@education-erp/ui";
 import { MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/api";
@@ -133,6 +133,7 @@ export default function StudentsPage() {
 
   async function downloadExcel() {
     const res = await api.get("/api/students/export", { params: filterParams, responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

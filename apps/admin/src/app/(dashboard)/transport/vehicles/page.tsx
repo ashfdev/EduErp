@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   PageWrapper, PageHeader, Card, CardContent, Button, Input, Label, Badge, EmptyState, SearchInput,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  ErrorState, LoadingSpinner, extractErrorMessage,
+  ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -30,6 +31,7 @@ interface Vehicle {
 
 export default function VehiclesPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [form, setForm] = useState({ vehicle_no: "", type: "Bus", capacity: 40, driver_name: "", driver_phone: "", route_id: "" });
   const [revealedKey, setRevealedKey] = useState<{ vehicle_no: string; key: string } | null>(null);
   const [search, setSearch] = useState("");
@@ -44,6 +46,7 @@ export default function VehiclesPage() {
 
   async function downloadExcel() {
     const res = await api.get("/api/transport/vehicles/export", { responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Textarea, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Textarea, extractErrorMessage, ErrorState, LoadingSpinner, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ComplaintRow {
@@ -31,6 +32,7 @@ const STATUS_OPTIONS = ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"];
 
 export default function ComplaintsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ category: "ACADEMIC", description: "" });
   const [resolveId, setResolveId] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export default function ComplaintsPage() {
 
   async function downloadExcel() {
     const res = await api.get("/api/complaints/export", { responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

@@ -36,6 +36,7 @@
     "isomorphic-dompurify": "^2.19.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
+    "pdf-lib": "^1.17.1",
     "pino": "^9.6.0",
     "pino-http": "^10.4.0",
     "puppeteer": "^25.3.0",

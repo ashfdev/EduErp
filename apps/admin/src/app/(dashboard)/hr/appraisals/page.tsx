@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface Criterion { key: string; label: string; max_score: number }
@@ -25,6 +26,7 @@ function slugify(label: string): string {
 
 export default function AppraisalsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const { data: templates } = useQuery<Template[]>({
     queryKey: ["appraisals", "templates"],
@@ -41,6 +43,7 @@ export default function AppraisalsPage() {
 
   async function downloadExcel() {
     const res = await api.get("/api/appraisals/reviews/export", { responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

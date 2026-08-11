@@ -24,6 +24,7 @@ import { feeStructureAppliesToStudent, buildFeeStructureStudentWhere } from "./f
 import { resolveFineForInvoice, describeFineSource } from "./fee-fine-engine";
 import { logAudit } from "../../lib/audit-log";
 import { createInAppNotification } from "../../services/in-app-notification.service";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { ApiError, badRequest, conflict, notFound } from "../../lib/errors";
 import { accountBalance } from "../accounts/accounts.routes";
 
@@ -365,7 +366,7 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const { getMonthlyFeeGenerationJob } = await import("../../jobs/monthly-fee-generation.job");
-    const job = await getMonthlyFeeGenerationJob(req.params.jobId);
+    const job = await getMonthlyFeeGenerationJob(reqParam(req, "jobId"));
     if (!job) throw notFound("Job not found");
 
     const state = await job.getState();
@@ -1655,46 +1656,71 @@ feesRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+// Below EXCEL_EXPORT_BATCH_THRESHOLD, still built and streamed back
+// synchronously exactly as before this existed; a genuinely large date
+// range is instead routed through the shared documentQueue worker, which
+// calls this exact same builder so the two paths can never drift.
+async function buildFeeCollectionExportJob(params: { from: string; to: string }): Promise<BatchJobResult> {
+  const from = new Date(params.from);
+  const to = new Date(params.to);
+  // Scoped to real (post-enrollment) student fee collections -- a
+  // pre-enrollment application-linked payment (Plan Twenty-Three, Phase
+  // 3) has no Student ID/class to report here; it isn't excluded from the
+  // real accounts ledger, just from this specific per-student export.
+  const payments = await prisma.payment.findMany({
+    where: { paid_at: { gte: from, lte: to }, status: "COMPLETED", invoice: { student_id: { not: null } } },
+    include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
+    orderBy: { paid_at: "asc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Fee Collection");
+  sheet.columns = [
+    { header: "Date", key: "date", width: 15 },
+    { header: "Student ID", key: "uid", width: 15 },
+    { header: "Name", key: "name", width: 25 },
+    { header: "Category", key: "category", width: 15 },
+    { header: "Amount", key: "amount", width: 12 },
+    { header: "Gateway", key: "gateway", width: 12 },
+  ];
+  for (const p of payments) {
+    sheet.addRow({
+      date: p.paid_at?.toISOString().slice(0, 10),
+      uid: p.invoice.student?.student_uid ?? "-",
+      name: p.invoice.student?.name_en ?? "-",
+      category: p.invoice.category,
+      amount: p.amount,
+      gateway: p.gateway,
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  const filename = `Fee_Collection_${from.toISOString().slice(0, 10)}_${to.toISOString().slice(0, 10)}.xlsx`;
+  return { buffer, filename, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("FEES_COLLECTION_EXPORT", "FEES_COLLECTION_EXPORT", (params) =>
+  buildFeeCollectionExportJob(params as { from: string; to: string }),
+);
+
 feesRouter.get(
   "/reports/export",
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ from: z.coerce.date(), to: z.coerce.date() }).parse(req.query);
-    // Scoped to real (post-enrollment) student fee collections -- a
-    // pre-enrollment application-linked payment (Plan Twenty-Three, Phase
-    // 3) has no Student ID/class to report here; it isn't excluded from the
-    // real accounts ledger, just from this specific per-student export.
-    const payments = await prisma.payment.findMany({
+    const count = await prisma.payment.count({
       where: { paid_at: { gte: query.from, lte: query.to }, status: "COMPLETED", invoice: { student_id: { not: null } } },
-      include: { invoice: { include: { student: { select: { name_en: true, student_uid: true } } } } },
-      orderBy: { paid_at: "asc" },
     });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Fee Collection");
-    sheet.columns = [
-      { header: "Date", key: "date", width: 15 },
-      { header: "Student ID", key: "uid", width: 15 },
-      { header: "Name", key: "name", width: 25 },
-      { header: "Category", key: "category", width: 15 },
-      { header: "Amount", key: "amount", width: 12 },
-      { header: "Gateway", key: "gateway", width: 12 },
-    ];
-    for (const p of payments) {
-      sheet.addRow({
-        date: p.paid_at?.toISOString().slice(0, 10),
-        uid: p.invoice.student?.student_uid ?? "-",
-        name: p.invoice.student?.name_en ?? "-",
-        category: p.invoice.category,
-        amount: p.amount,
-        gateway: p.gateway,
-      });
+    const params = { from: query.from.toISOString(), to: query.to.toISOString() };
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildFeeCollectionExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Fee_Collection_${query.from.toISOString().slice(0, 10)}_${query.to.toISOString().slice(0, 10)}.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("FEES_COLLECTION_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

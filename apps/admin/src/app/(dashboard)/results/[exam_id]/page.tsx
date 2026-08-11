@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, StatusBadge, Tabs, TabsList, TabsTrigger, TabsContent, EmptyState, SearchInput, Button, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -55,6 +55,7 @@ interface StudentResult {
 }
 
 export default function ExamResultsPage() {
+  const router = useRouter();
   const { exam_id } = useParams<{ exam_id: string }>();
   const [classId, setClassId] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -112,6 +113,7 @@ export default function ExamResultsPage() {
   async function downloadExcel(kind: "tabulation" | "merit") {
     const path = kind === "tabulation" ? `/api/results/tabulation/${exam_id}/${classId}/export` : `/api/results/reports/merit-list/${exam_id}/${classId}/export`;
     const res = await api.get(path, { params: { group_id: groupId || undefined }, responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

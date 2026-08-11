@@ -4,7 +4,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Badge, Button, Card, CardContent, Checkbox, Input, Label, PageHeader, PageWrapper, RecordPickerDialog, RichTextEditor, Textarea, extractBlobErrorMessage } from "@education-erp/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Input,
+  Label,
+  PageHeader,
+  PageWrapper,
+  RecordPickerDialog,
+  RichTextEditor,
+  Textarea,
+  extractBlobErrorMessage,
+  handleBatchDownloadResponse,
+} from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -436,16 +451,7 @@ export default function DocumentPrintCenterPage() {
           path += `&override_student_ids=${encodeURIComponent([...overrideSelected].join(","))}&override_reason=${encodeURIComponent(overrideReason)}`;
         }
         const res = await api.get(path, { params: { download: "true" }, responseType: "blob" });
-        if (res.status === 202) {
-          // Large batch (Plan Twenty) -- routed to the background job queue
-          // instead of blocking this request. The "blob" is actually a JSON
-          // {job_id} body, not a PDF, since responseType:"blob" was chosen
-          // before the server decided which shape to return -- parse it back
-          // out and hand off to the batch-job page, which polls until ready.
-          const body = JSON.parse(await (res.data as Blob).text());
-          router.push(`/documents/batch-jobs/${body.data.job_id}`);
-          return;
-        }
+        if (await handleBatchDownloadResponse(res, router)) return;
         triggerDownload(res.data, `${doc.key}.pdf`);
       }
     } catch (err) {

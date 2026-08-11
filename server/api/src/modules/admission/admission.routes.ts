@@ -44,6 +44,7 @@ import { getPaymentAdapter } from "../../services/payment";
 import { completePayment } from "../fees/payments.routes";
 import { computeApplicationPaymentStatus } from "./admission-payment-status";
 import { renderDocument, renderDocumentBatch } from "../../services/pdf.service";
+import { registerBatchJobKind, enqueueBatchJob, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound, conflict } from "../../lib/errors";
 import type { AdmissionApplication, AdmissionCycle, AdmissionApplicationStage, Class, AcademicYear, AdmissionStatus, AdmissionStageType } from "@education-erp/db";
 import { Prisma } from "@education-erp/db";
@@ -119,6 +120,34 @@ function buildRegistrationCardData(application: ApplicationForCard, stage: Admis
     academic_year_label: cycle.academic_year.label,
   };
 }
+
+// Plan Twenty (large-batch background jobs), extended here to the same
+// batch-shaped registration-card PDF route -- a big admission cycle's stage
+// cards render one Puppeteer page per applicant, the exact shape that
+// already timed out for a large student ID-card class. Below
+// ADMISSION_BATCH_JOB_THRESHOLD the route still generates and returns
+// synchronously exactly as before; only a genuinely large batch is routed
+// through the shared documentQueue worker instead.
+const ADMISSION_BATCH_JOB_THRESHOLD = 100;
+
+async function buildRegistrationCardsBatchJob(params: { cycle_id: string; stage_type: string }): Promise<BatchJobResult> {
+  const stageType = admissionStageTypeSchema.parse(params.stage_type);
+  const cycle = await prisma.admissionCycle.findUnique({ where: { id: params.cycle_id } });
+  if (!cycle) throw notFound("Admission cycle not found");
+  const applications = await prisma.admissionApplication.findMany({
+    where: { cycle_id: params.cycle_id, stages: { some: { stage_type: stageType } } },
+    include: { cycle: { include: { class: true, academic_year: true } }, stages: { where: { stage_type: stageType } } },
+    orderBy: { admission_roll: "asc" },
+  });
+  if (!applications.length) throw badRequest("No applicants scheduled for this stage yet");
+  const dataList = applications.map((a) => buildRegistrationCardData(a, a.stages[0]!));
+  const buffer = await renderDocumentBatch("REGISTRATION_CARD", dataList, { pageSize: "A4" });
+  return { buffer, filename: `${stageType}_Cards_${cycle.name.replace(/\s+/g, "_")}.pdf` };
+}
+
+registerBatchJobKind("REGISTRATION_CARDS_CYCLE", "REGISTRATION_CARD", (params) =>
+  buildRegistrationCardsBatchJob(params as { cycle_id: string; stage_type: string }),
+);
 
 async function cycleStats(cycleId: string) {
   const [total, shortlisted, waitlisted, confirmed, enrolled, rejected] = await Promise.all([
@@ -1949,18 +1978,19 @@ admissionRouter.get(
     const cycle = await prisma.admissionCycle.findUnique({ where: { id } });
     if (!cycle) throw notFound("Admission cycle not found");
 
-    const applications = await prisma.admissionApplication.findMany({
-      where: { cycle_id: id, stages: { some: { stage_type: stageType } } },
-      include: { cycle: { include: { class: true, academic_year: true } }, stages: { where: { stage_type: stageType } } },
-      orderBy: { admission_roll: "asc" },
-    });
-    if (!applications.length) throw badRequest("No applicants scheduled for this stage yet");
+    const count = await prisma.admissionApplication.count({ where: { cycle_id: id, stages: { some: { stage_type: stageType } } } });
+    if (!count) throw badRequest("No applicants scheduled for this stage yet");
 
-    const dataList = applications.map((a) => buildRegistrationCardData(a, a.stages[0]!));
-    const pdf = await renderDocumentBatch("REGISTRATION_CARD", dataList, { pageSize: "A4" });
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${stageType}_Cards_${cycle.name.replace(/\s+/g, "_")}.pdf"`);
-    res.send(pdf);
+    const params = { cycle_id: id, stage_type: stageType };
+    if (count <= ADMISSION_BATCH_JOB_THRESHOLD) {
+      const { buffer, filename } = await buildRegistrationCardsBatchJob(params);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
+    }
+    const job = await enqueueBatchJob("REGISTRATION_CARDS_CYCLE", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

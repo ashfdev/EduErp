@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
+import { Badge, Button, Card, CardContent, PageHeader, PageWrapper, Tabs, TabsContent, TabsList, TabsTrigger, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ChartPreviewRow {
@@ -34,8 +35,9 @@ interface VoucherGroupPreview {
   errors: string[];
 }
 
-async function download(url: string, filename: string, params?: Record<string, string>) {
+async function download(router: { push: (href: string) => void }, url: string, filename: string, params?: Record<string, string>) {
   const res = await api.get(url, { params, responseType: "blob" });
+  if (await handleBatchDownloadResponse(res, router)) return;
   const objUrl = URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = objUrl;
@@ -44,6 +46,7 @@ async function download(url: string, filename: string, params?: Record<string, s
 }
 
 function ChartImportExport() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ total: number; valid: number; preview: ChartPreviewRow[] } | null>(null);
   const [result, setResult] = useState<{ created: number; failed: { row: number; reason: string }[] } | null>(null);
@@ -91,7 +94,7 @@ function ChartImportExport() {
         <CardContent className="space-y-3 pt-6">
           <p className="font-medium">Export</p>
           <p className="text-sm text-muted-foreground">Download the current chart of accounts as an Excel file.</p>
-          <Button variant="outline" onClick={() => download("/api/accounts/chart/export", "Chart_of_Accounts.xlsx")}>Export Chart of Accounts</Button>
+          <Button variant="outline" onClick={() => download(router, "/api/accounts/chart/export", "Chart_of_Accounts.xlsx")}>Export Chart of Accounts</Button>
         </CardContent>
       </Card>
 
@@ -168,6 +171,7 @@ function ChartImportExport() {
 }
 
 function VoucherImportExport() {
+  const router = useRouter();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -220,7 +224,7 @@ function VoucherImportExport() {
           <div className="flex items-end gap-3">
             <div><label className="text-sm">From</label><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block rounded-md border px-3 py-2 text-sm" /></div>
             <div><label className="text-sm">To</label><input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block rounded-md border px-3 py-2 text-sm" /></div>
-            <Button variant="outline" onClick={() => download("/api/accounts/vouchers/export", "Vouchers.xlsx", { from: from || undefined, to: to || undefined } as never)}>
+            <Button variant="outline" onClick={() => download(router, "/api/accounts/vouchers/export", "Vouchers.xlsx", { from: from || undefined, to: to || undefined } as never)}>
               Export Vouchers
             </Button>
           </div>

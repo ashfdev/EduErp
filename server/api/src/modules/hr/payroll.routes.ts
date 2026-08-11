@@ -18,6 +18,7 @@ import { renderDocument } from "../../services/pdf.service";
 import { uploadBuffer } from "../../services/storage.service";
 import { createPayrollJournal, reverseVoucher } from "../accounts/auto-journal.service";
 import { logAudit } from "../../lib/audit-log";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const payrollRouter = Router();
@@ -221,57 +222,81 @@ payrollRouter.get(
   }),
 );
 
+interface PayrollExportParams {
+  month?: number;
+  year?: number;
+  department_id?: string;
+  status?: string;
+}
+
+function buildPayrollExportWhere(params: PayrollExportParams) {
+  return {
+    ...(params.month && { month: params.month }),
+    ...(params.year && { year: params.year }),
+    ...(params.status && { status: params.status as never }),
+    ...(params.department_id && { staff: { department_id: params.department_id } }),
+  };
+}
+
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildPayrollExportJob(params: PayrollExportParams): Promise<BatchJobResult> {
+  const records = await prisma.payrollRecord.findMany({
+    where: buildPayrollExportWhere(params),
+    include: { staff: { select: { name_en: true, staff_uid: true, department: { select: { name_en: true } } } } },
+    orderBy: [{ year: "desc" }, { month: "desc" }],
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Payroll");
+  sheet.columns = [
+    { header: "Staff ID", key: "staff_uid", width: 16 },
+    { header: "Name", key: "name_en", width: 24 },
+    { header: "Department", key: "department", width: 18 },
+    { header: "Month", key: "month", width: 8 },
+    { header: "Year", key: "year", width: 8 },
+    { header: "Working Days", key: "working_days", width: 12 },
+    { header: "Present Days", key: "present_days", width: 12 },
+    { header: "Gross Salary", key: "gross_salary", width: 14 },
+    { header: "Deductions", key: "deductions", width: 12 },
+    { header: "Net Salary", key: "net_salary", width: 14 },
+    { header: "Status", key: "status", width: 12 },
+  ];
+  for (const r of records) {
+    sheet.addRow({
+      staff_uid: r.staff.staff_uid,
+      name_en: r.staff.name_en,
+      department: r.staff.department?.name_en ?? "",
+      month: r.month,
+      year: r.year,
+      working_days: r.working_days,
+      present_days: r.present_days,
+      gross_salary: r.gross_salary,
+      deductions: r.deductions,
+      net_salary: r.net_salary,
+      status: r.status,
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Payroll.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("PAYROLL_EXPORT", "PAYROLL_EXPORT", (params) => buildPayrollExportJob(params as PayrollExportParams));
+
 payrollRouter.get(
   "/export",
   authorize(PAYROLL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ month: z.coerce.number().int().optional(), year: z.coerce.number().int().optional(), department_id: z.string().optional(), status: z.string().optional() }).parse(req.query);
-    const records = await prisma.payrollRecord.findMany({
-      where: {
-        ...(query.month && { month: query.month }),
-        ...(query.year && { year: query.year }),
-        ...(query.status && { status: query.status as never }),
-        ...(query.department_id && { staff: { department_id: query.department_id } }),
-      },
-      include: { staff: { select: { name_en: true, staff_uid: true, department: { select: { name_en: true } } } } },
-      orderBy: [{ year: "desc" }, { month: "desc" }],
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Payroll");
-    sheet.columns = [
-      { header: "Staff ID", key: "staff_uid", width: 16 },
-      { header: "Name", key: "name_en", width: 24 },
-      { header: "Department", key: "department", width: 18 },
-      { header: "Month", key: "month", width: 8 },
-      { header: "Year", key: "year", width: 8 },
-      { header: "Working Days", key: "working_days", width: 12 },
-      { header: "Present Days", key: "present_days", width: 12 },
-      { header: "Gross Salary", key: "gross_salary", width: 14 },
-      { header: "Deductions", key: "deductions", width: 12 },
-      { header: "Net Salary", key: "net_salary", width: 14 },
-      { header: "Status", key: "status", width: 12 },
-    ];
-    for (const r of records) {
-      sheet.addRow({
-        staff_uid: r.staff.staff_uid,
-        name_en: r.staff.name_en,
-        department: r.staff.department?.name_en ?? "",
-        month: r.month,
-        year: r.year,
-        working_days: r.working_days,
-        present_days: r.present_days,
-        gross_salary: r.gross_salary,
-        deductions: r.deductions,
-        net_salary: r.net_salary,
-        status: r.status,
-      });
+    const count = await prisma.payrollRecord.count({ where: buildPayrollExportWhere(query) });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildPayrollExportJob(query);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Payroll.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("PAYROLL_EXPORT", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

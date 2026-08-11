@@ -10,6 +10,7 @@ import { HEALTH_MANAGE_ROLES } from "../../lib/roles";
 import { healthProfileSchema, healthIncidentSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { assertClassTeacherOfStudent } from "../../lib/class-teacher-ownership";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { forbidden } from "../../lib/errors";
 
 // Staff-only (ADMIN/PRINCIPAL/CLASS_TEACHER) — medical data, never surfaced
@@ -106,42 +107,66 @@ studentHealthRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+// Takes the already-resolved `where` (built once, synchronously, by
+// buildReportsWhere above -- including its CLASS_TEACHER own-section
+// permission check) rather than the raw request, since that check has no
+// meaningful "caller" to re-run against inside a background worker; the
+// authorization decision is snapshotted at request time, same discipline
+// already used by the admit-card override system. Prisma's DateTimeFilter
+// accepts a plain ISO string as well as a real Date, so the where object
+// round-trips through the job's JSON params column with no reconstruction
+// needed.
+async function buildHealthIncidentsExportJob(where: Awaited<ReturnType<typeof buildReportsWhere>>): Promise<BatchJobResult> {
+  const incidents = await prisma.healthIncident.findMany({
+    where,
+    include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } } },
+    orderBy: { date: "desc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Health Incidents");
+  sheet.columns = [
+    { header: "Student ID", key: "student_uid", width: 16 },
+    { header: "Name", key: "name_en", width: 22 },
+    { header: "Class", key: "class_name", width: 14 },
+    { header: "Section", key: "section_name", width: 12 },
+    { header: "Description", key: "description", width: 36 },
+    { header: "Action Taken", key: "action_taken", width: 24 },
+    { header: "Date", key: "date", width: 14 },
+  ];
+  for (const i of incidents) {
+    sheet.addRow({
+      student_uid: i.student.student_uid,
+      name_en: i.student.name_en,
+      class_name: i.student.current_class?.name_en ?? "",
+      section_name: i.student.current_section?.name ?? "",
+      description: i.description,
+      action_taken: i.action_taken ?? "",
+      date: i.date.toISOString().slice(0, 10),
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Health_Incidents.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("HEALTH_INCIDENTS_EXPORT", "HEALTH_INCIDENTS_EXPORT", (params) =>
+  buildHealthIncidentsExportJob(params as Awaited<ReturnType<typeof buildReportsWhere>>),
+);
+
 studentHealthRouter.get(
   "/reports/export",
   asyncHandler(async (req, res) => {
     const where = await buildReportsWhere(req);
-    const incidents = await prisma.healthIncident.findMany({
-      where,
-      include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } } },
-      orderBy: { date: "desc" },
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Health Incidents");
-    sheet.columns = [
-      { header: "Student ID", key: "student_uid", width: 16 },
-      { header: "Name", key: "name_en", width: 22 },
-      { header: "Class", key: "class_name", width: 14 },
-      { header: "Section", key: "section_name", width: 12 },
-      { header: "Description", key: "description", width: 36 },
-      { header: "Action Taken", key: "action_taken", width: 24 },
-      { header: "Date", key: "date", width: 14 },
-    ];
-    for (const i of incidents) {
-      sheet.addRow({
-        student_uid: i.student.student_uid,
-        name_en: i.student.name_en,
-        class_name: i.student.current_class?.name_en ?? "",
-        section_name: i.student.current_section?.name ?? "",
-        description: i.description,
-        action_taken: i.action_taken ?? "",
-        date: i.date.toISOString().slice(0, 10),
-      });
+    const count = await prisma.healthIncident.count({ where });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildHealthIncidentsExportJob(where);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Health_Incidents.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("HEALTH_INCIDENTS_EXPORT", where, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );

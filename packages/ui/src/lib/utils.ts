@@ -63,6 +63,29 @@ export async function extractBlobErrorMessage(err: unknown): Promise<string | un
   return extractErrorMessage(err);
 }
 
+// Plan Twenty (large-batch background jobs), generalized beyond the single
+// Document Print Center page it started on: every bulk PDF/Excel/CSV
+// download in this app calls this exact same axios pattern (GET or POST
+// with `responseType: "blob"`), and any of them can now come back as a 202
+// once its own route decides the batch is too large to build inline. With
+// responseType:"blob" set, axios parses ANY response body as a Blob
+// regardless of status code — so a 202's real JSON body ({job_id, status})
+// has to be read back out of the Blob before it's usable, exactly the same
+// unwrapping extractBlobErrorMessage above already does for error bodies.
+// Returns true (and navigates to the batch-job status/download page) when
+// the response was a 202; the caller should return immediately without
+// attempting its own normal blob download. Returns false for every other
+// status, meaning "handle this response yourself, it's a real file."
+export async function handleBatchDownloadResponse(
+  res: { status: number; data: unknown },
+  router: { push: (href: string) => void },
+): Promise<boolean> {
+  if (res.status !== 202) return false;
+  const body = JSON.parse(await (res.data as Blob).text());
+  router.push(`/documents/batch-jobs/${body.data.job_id}`);
+  return true;
+}
+
 // Mirrors packages/validators/src/auth.ts's passwordSchema exactly (min 8,
 // one lowercase, one uppercase, one number) — kept here too, not imported
 // from validators, since these 3 apps' change-password pages need this text

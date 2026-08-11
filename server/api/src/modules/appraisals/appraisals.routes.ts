@@ -9,6 +9,7 @@ import { resolveOwnStaffId } from "../../lib/own-staff";
 import { APPRAISAL_MANAGE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { appraisalTemplateSchema, createReviewSchema, submitReviewScoresSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const appraisalsRouter = Router();
@@ -56,44 +57,63 @@ appraisalsRouter.get(
   }),
 );
 
+interface AppraisalsExportParams {
+  staff_id?: string;
+}
+
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildPerformanceReviewsExportJob(params: AppraisalsExportParams): Promise<BatchJobResult> {
+  const reviews = await prisma.performanceReview.findMany({
+    where: params.staff_id ? { staff_id: params.staff_id } : {},
+    include: { template: { select: { name: true } }, staff: { select: { name_en: true, staff_uid: true } } },
+    orderBy: { created_at: "desc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Performance Reviews");
+  sheet.columns = [
+    { header: "Staff ID", key: "staff_uid", width: 16 },
+    { header: "Staff Name", key: "staff_name", width: 22 },
+    { header: "Template", key: "template", width: 22 },
+    { header: "Review Period", key: "review_period", width: 16 },
+    { header: "Overall Score", key: "overall_score", width: 14 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Submitted At", key: "submitted_at", width: 14 },
+  ];
+  for (const r of reviews) {
+    sheet.addRow({
+      staff_uid: r.staff.staff_uid,
+      staff_name: r.staff.name_en,
+      template: r.template.name,
+      review_period: r.review_period,
+      overall_score: r.overall_score ?? "",
+      status: r.status,
+      submitted_at: r.submitted_at ? r.submitted_at.toISOString().slice(0, 10) : "",
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Performance_Reviews.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("PERFORMANCE_REVIEWS_EXPORT", "PERFORMANCE_REVIEWS_EXPORT", (params) =>
+  buildPerformanceReviewsExportJob(params as AppraisalsExportParams),
+);
+
 appraisalsRouter.get(
   "/reviews/export",
   authorize(APPRAISAL_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
-    const query = req.query as { staff_id?: string };
-    const reviews = await prisma.performanceReview.findMany({
-      where: query.staff_id ? { staff_id: query.staff_id } : {},
-      include: { template: { select: { name: true } }, staff: { select: { name_en: true, staff_uid: true } } },
-      orderBy: { created_at: "desc" },
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Performance Reviews");
-    sheet.columns = [
-      { header: "Staff ID", key: "staff_uid", width: 16 },
-      { header: "Staff Name", key: "staff_name", width: 22 },
-      { header: "Template", key: "template", width: 22 },
-      { header: "Review Period", key: "review_period", width: 16 },
-      { header: "Overall Score", key: "overall_score", width: 14 },
-      { header: "Status", key: "status", width: 14 },
-      { header: "Submitted At", key: "submitted_at", width: 14 },
-    ];
-    for (const r of reviews) {
-      sheet.addRow({
-        staff_uid: r.staff.staff_uid,
-        staff_name: r.staff.name_en,
-        template: r.template.name,
-        review_period: r.review_period,
-        overall_score: r.overall_score ?? "",
-        status: r.status,
-        submitted_at: r.submitted_at ? r.submitted_at.toISOString().slice(0, 10) : "",
-      });
+    const query = req.query as AppraisalsExportParams;
+    const count = await prisma.performanceReview.count({ where: query.staff_id ? { staff_id: query.staff_id } : {} });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildPerformanceReviewsExportJob(query);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Performance_Reviews.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("PERFORMANCE_REVIEWS_EXPORT", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

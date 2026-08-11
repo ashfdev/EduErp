@@ -1,6 +1,7 @@
 import Handlebars from "handlebars";
 import puppeteer from "puppeteer";
 import QRCode from "qrcode";
+import { PDFDocument } from "pdf-lib";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { prisma } from "../lib/prisma";

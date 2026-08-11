@@ -11,6 +11,22 @@ import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, MARK_VIEW_ROLES, RESULT_PUBLISH_ROLES } from "../../lib/roles";
 import { calculateStudentResult, calculatePositions } from "../../utils/grading.engine";
 import { badRequest, notFound } from "../../lib/errors";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
+
+// Same cheap count-only proxy as documents.routes.ts's resolveBatchJobCount
+// -- used purely to decide sync-vs-async routing before the real (heavier,
+// computeClassResults-driven) export build.
+async function resolveResultsExportCount(params: { class_id: string; group_id?: string; section_id?: string }): Promise<number> {
+  return prisma.student.count({
+    where: {
+      current_class_id: params.class_id,
+      deleted_at: null,
+      status: "ACTIVE",
+      ...(params.group_id && { group_id: params.group_id }),
+      ...(params.section_id && { current_section_id: params.section_id }),
+    },
+  });
+}
 
 export const resultsRouter = Router();
 
@@ -434,6 +450,46 @@ resultsRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildTabulationExportJob(params: { exam_id: string; class_id: string; group_id?: string; section_id?: string }): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  const [subjects, klass, allResults] = await Promise.all([
+    prisma.subject.findMany({ where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
+    prisma.class.findUnique({ where: { id: classId } }),
+    computeClassResults(examId, classId, groupId),
+  ]);
+  const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
+  const sorted = results.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Tabulation");
+  sheet.columns = [
+    { header: "Roll No", key: "roll_no", width: 10 },
+    { header: "Name", key: "name_en", width: 24 },
+    ...subjects.map((s) => ({ header: s.name_en, key: s.id, width: 14 })),
+    { header: "Total GPA", key: "total_gpa", width: 12 },
+    { header: "Grade", key: "overall_grade", width: 10 },
+    { header: "Position", key: "position", width: 10 },
+  ];
+  for (const r of sorted) {
+    const marksBySubject = Object.fromEntries(r.result.subjects.map((s) => [s.subject_id, s.marks_total]));
+    sheet.addRow({
+      roll_no: r.student.current_roll_no,
+      name_en: r.student.name_en,
+      ...marksBySubject,
+      total_gpa: r.result.total_gpa,
+      overall_grade: r.result.overall_grade_letter,
+      position: r.position,
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: `Tabulation_${klass?.name_en ?? classId}.xlsx`, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("TABULATION_EXPORT", "TABULATION_EXPORT", (params) =>
+  buildTabulationExportJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string }),
+);
+
 resultsRouter.get(
   "/tabulation/:exam_id/:class_id/export",
   authenticate,
@@ -443,40 +499,17 @@ resultsRouter.get(
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    const [subjects, klass, allResults] = await Promise.all([
-      prisma.subject.findMany({ where: { class_id: classId, is_active: true, ...(groupId && { OR: [{ group_id: null }, { group_id: groupId }] }) } }),
-      prisma.class.findUnique({ where: { id: classId } }),
-      computeClassResults(examId, classId, groupId),
-    ]);
-    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
-    const sorted = results.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Tabulation");
-    sheet.columns = [
-      { header: "Roll No", key: "roll_no", width: 10 },
-      { header: "Name", key: "name_en", width: 24 },
-      ...subjects.map((s) => ({ header: s.name_en, key: s.id, width: 14 })),
-      { header: "Total GPA", key: "total_gpa", width: 12 },
-      { header: "Grade", key: "overall_grade", width: 10 },
-      { header: "Position", key: "position", width: 10 },
-    ];
-    for (const r of sorted) {
-      const marksBySubject = Object.fromEntries(r.result.subjects.map((s) => [s.subject_id, s.marks_total]));
-      sheet.addRow({
-        roll_no: r.student.current_roll_no,
-        name_en: r.student.name_en,
-        ...marksBySubject,
-        total_gpa: r.result.total_gpa,
-        overall_grade: r.result.overall_grade_letter,
-        position: r.position,
-      });
+    const count = await resolveResultsExportCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildTabulationExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Tabulation_${klass?.name_en ?? classId}.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("TABULATION_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -506,6 +539,36 @@ resultsRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildMeritListExportJob(params: { exam_id: string; class_id: string; group_id?: string; section_id?: string }): Promise<BatchJobResult> {
+  const { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId } = params;
+  const [klass, allResults] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId, groupId)]);
+  const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
+  // See the identical is_complete note on the JSON merit-list route above.
+  const merit = results
+    .filter((r) => r.result.is_complete && !r.result.has_failed)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Merit List");
+  sheet.columns = [
+    { header: "Rank", key: "rank", width: 8 },
+    { header: "Roll No", key: "roll_no", width: 10 },
+    { header: "Name", key: "name_en", width: 24 },
+    { header: "Student ID", key: "student_uid", width: 18 },
+    { header: "Total GPA", key: "total_gpa", width: 12 },
+  ];
+  for (const r of merit) {
+    sheet.addRow({ rank: r.position, roll_no: r.student.current_roll_no, name_en: r.student.name_en, student_uid: r.student.student_uid, total_gpa: r.result.total_gpa });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: `Merit_List_${klass?.name_en ?? classId}.xlsx`, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("MERIT_LIST_EXPORT", "MERIT_LIST_EXPORT", (params) =>
+  buildMeritListExportJob(params as { exam_id: string; class_id: string; group_id?: string; section_id?: string }),
+);
+
 resultsRouter.get(
   "/reports/merit-list/:exam_id/:class_id/export",
   authenticate,
@@ -515,30 +578,17 @@ resultsRouter.get(
     const classId = reqParam(req, "class_id");
     const groupId = typeof req.query.group_id === "string" ? req.query.group_id : undefined;
     const sectionId = typeof req.query.section_id === "string" ? req.query.section_id : undefined;
-    const [klass, allResults] = await Promise.all([prisma.class.findUnique({ where: { id: classId } }), computeClassResults(examId, classId, groupId)]);
-    const results = sectionId ? allResults.filter((r) => r.student.current_section_id === sectionId) : allResults;
-    // See the identical is_complete note on the JSON merit-list route above.
-    const merit = results
-      .filter((r) => r.result.is_complete && !r.result.has_failed)
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Merit List");
-    sheet.columns = [
-      { header: "Rank", key: "rank", width: 8 },
-      { header: "Roll No", key: "roll_no", width: 10 },
-      { header: "Name", key: "name_en", width: 24 },
-      { header: "Student ID", key: "student_uid", width: 18 },
-      { header: "Total GPA", key: "total_gpa", width: 12 },
-    ];
-    for (const r of merit) {
-      sheet.addRow({ rank: r.position, roll_no: r.student.current_roll_no, name_en: r.student.name_en, student_uid: r.student.student_uid, total_gpa: r.result.total_gpa });
+    const count = await resolveResultsExportCount({ class_id: classId, group_id: groupId, section_id: sectionId });
+    const params = { exam_id: examId, class_id: classId, group_id: groupId, section_id: sectionId };
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildMeritListExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Merit_List_${klass?.name_en ?? classId}.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("MERIT_LIST_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

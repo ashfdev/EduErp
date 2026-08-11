@@ -13,6 +13,7 @@ import { voucherSchema } from "@education-erp/validators";
 import { createVoucher, validateBalance } from "./voucher-helpers";
 import { reverseVoucher } from "./auto-journal.service";
 import { logAudit } from "../../lib/audit-log";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 
 export const vouchersRouter = Router();
@@ -53,6 +54,63 @@ vouchersRouter.get(
   }),
 );
 
+interface VouchersExportParams {
+  from?: string;
+  to?: string;
+  type?: string;
+}
+
+function buildVouchersExportWhere(params: VouchersExportParams) {
+  const from = params.from ? new Date(params.from) : undefined;
+  const to = params.to ? new Date(params.to) : undefined;
+  return {
+    deleted_at: null,
+    status: "POSTED" as const,
+    ...((from || to) && { date: { ...(from && { gte: from }), ...(to && { lte: to }) } }),
+    ...(params.type && { voucher_type: params.type as never }),
+  };
+}
+
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildVouchersExportJob(params: VouchersExportParams): Promise<BatchJobResult> {
+  const vouchers = await prisma.voucher.findMany({
+    where: buildVouchersExportWhere(params),
+    include: { journal_entries: { include: { debit_account: true, credit_account: true } } },
+    orderBy: { date: "asc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Vouchers");
+  // Same "wide" shape as the bulk-import format (one row = one journal-entry
+  // leg, grouped by voucher_no) so an export can be edited and re-imported.
+  sheet.columns = [
+    { header: "Voucher No", key: "voucher_no", width: 16 },
+    { header: "Date", key: "date", width: 12 },
+    { header: "Type", key: "type", width: 12 },
+    { header: "Narration", key: "narration", width: 35 },
+    { header: "Debit Account Code", key: "debit_account_code", width: 16 },
+    { header: "Credit Account Code", key: "credit_account_code", width: 16 },
+    { header: "Amount", key: "amount", width: 14 },
+  ];
+  for (const v of vouchers) {
+    for (const e of v.journal_entries) {
+      sheet.addRow({
+        voucher_no: v.voucher_no,
+        date: v.date.toISOString().slice(0, 10),
+        type: v.voucher_type,
+        narration: e.narration ?? v.narration,
+        debit_account_code: e.debit_account?.code ?? "",
+        credit_account_code: e.credit_account?.code ?? "",
+        amount: e.amount,
+      });
+    }
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Vouchers.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("VOUCHERS_EXPORT", "VOUCHERS_EXPORT", (params) => buildVouchersExportJob(params as VouchersExportParams));
+
 // Placed before "/:id" — Express matches routes in definition order, and
 // both are single-segment patterns, so "/export" must come first or it
 // would be swallowed as an :id lookup.
@@ -61,48 +119,17 @@ vouchersRouter.get(
   authorize(ACCOUNTS_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ from: z.coerce.date().optional(), to: z.coerce.date().optional(), type: z.string().optional() }).parse(req.query);
-    const vouchers = await prisma.voucher.findMany({
-      where: {
-        deleted_at: null,
-        status: "POSTED",
-        ...((query.from || query.to) && { date: { ...(query.from && { gte: query.from }), ...(query.to && { lte: query.to }) } }),
-        ...(query.type && { voucher_type: query.type as never }),
-      },
-      include: { journal_entries: { include: { debit_account: true, credit_account: true } } },
-      orderBy: { date: "asc" },
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Vouchers");
-    // Same "wide" shape as the bulk-import format (one row = one journal-entry
-    // leg, grouped by voucher_no) so an export can be edited and re-imported.
-    sheet.columns = [
-      { header: "Voucher No", key: "voucher_no", width: 16 },
-      { header: "Date", key: "date", width: 12 },
-      { header: "Type", key: "type", width: 12 },
-      { header: "Narration", key: "narration", width: 35 },
-      { header: "Debit Account Code", key: "debit_account_code", width: 16 },
-      { header: "Credit Account Code", key: "credit_account_code", width: 16 },
-      { header: "Amount", key: "amount", width: 14 },
-    ];
-    for (const v of vouchers) {
-      for (const e of v.journal_entries) {
-        sheet.addRow({
-          voucher_no: v.voucher_no,
-          date: v.date.toISOString().slice(0, 10),
-          type: v.voucher_type,
-          narration: e.narration ?? v.narration,
-          debit_account_code: e.debit_account?.code ?? "",
-          credit_account_code: e.credit_account?.code ?? "",
-          amount: e.amount,
-        });
-      }
+    const params = { from: query.from?.toISOString(), to: query.to?.toISOString(), type: query.type };
+    const count = await prisma.voucher.count({ where: buildVouchersExportWhere(params) });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildVouchersExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Vouchers.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("VOUCHERS_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -478,6 +505,51 @@ ledgerRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+// Unlike every other builder in this codebase, the "how big is this" check
+// can't be done more cheaply than the real build here -- computeLedger IS
+// the query, there's no lighter count-only proxy for one account's running
+// balance. finalizeLedgerWorkbook takes an already-fetched result (cheap:
+// only ExcelJS serialization, not a DB round-trip) so the route below can
+// call computeLedger exactly once and reuse it, whichever path it takes;
+// buildLedgerExportJob (which re-runs computeLedger from live data, never a
+// stale snapshot) exists only for the worker to call for a genuinely large
+// ledger, matching every other kind's "the worker never trusts a stashed
+// dataset" rule.
+async function finalizeLedgerWorkbook(data: Awaited<ReturnType<typeof computeLedger>>): Promise<BatchJobResult> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Ledger");
+  // Column widths only (no `header` property) — with `header` set, ExcelJS
+  // auto-writes a header row into row 1, which would collide with the
+  // title/opening-balance rows added manually below.
+  sheet.columns = [{ width: 12 }, { width: 16 }, { width: 12 }, { width: 35 }, { width: 14 }, { width: 14 }, { width: 16 }];
+
+  sheet.addRow([`${data.account.code} - ${data.account.name}`]);
+  sheet.addRow([`Opening Balance: ৳${data.opening_balance.amount} ${data.opening_balance.type}`]);
+  sheet.addRow([]);
+  sheet.addRow(["Date", "Voucher No", "Type", "Narration", "Debit", "Credit", "Running Balance"]);
+  for (const e of data.entries) {
+    sheet.addRow([e.date.toISOString().slice(0, 10), e.voucher_no, e.voucher_type, e.narration, e.debit || "", e.credit || "", e.running_balance]);
+  }
+  sheet.addRow([]);
+  sheet.addRow([`Closing Balance: ৳${data.closing_balance.amount} ${data.closing_balance.type}`]);
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: `Ledger_${data.account.code}.xlsx`, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+
+async function buildLedgerExportJob(params: { account_id: string; from_date?: string; to_date?: string }): Promise<BatchJobResult> {
+  const data = await computeLedger(
+    params.account_id,
+    params.from_date ? new Date(params.from_date) : undefined,
+    params.to_date ? new Date(params.to_date) : undefined,
+  );
+  return finalizeLedgerWorkbook(data);
+}
+registerBatchJobKind("LEDGER_EXPORT", "LEDGER_EXPORT", (params) =>
+  buildLedgerExportJob(params as { account_id: string; from_date?: string; to_date?: string }),
+);
+
 // Placed after "/:account_id" would shadow "/:account_id/export" as a
 // two-segment path — no collision, since a single-segment "/:account_id"
 // pattern never matches a two-segment URL.
@@ -488,27 +560,15 @@ ledgerRouter.get(
     const accountId = reqParam(req, "account_id");
     const query = z.object({ from_date: z.coerce.date().optional(), to_date: z.coerce.date().optional() }).parse(req.query);
     const data = await computeLedger(accountId, query.from_date, query.to_date);
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Ledger");
-    // Column widths only (no `header` property) — with `header` set, ExcelJS
-    // auto-writes a header row into row 1, which would collide with the
-    // title/opening-balance rows added manually below.
-    sheet.columns = [{ width: 12 }, { width: 16 }, { width: 12 }, { width: 35 }, { width: 14 }, { width: 14 }, { width: 16 }];
-
-    sheet.addRow([`${data.account.code} - ${data.account.name}`]);
-    sheet.addRow([`Opening Balance: ৳${data.opening_balance.amount} ${data.opening_balance.type}`]);
-    sheet.addRow([]);
-    sheet.addRow(["Date", "Voucher No", "Type", "Narration", "Debit", "Credit", "Running Balance"]);
-    for (const e of data.entries) {
-      sheet.addRow([e.date.toISOString().slice(0, 10), e.voucher_no, e.voucher_type, e.narration, e.debit || "", e.credit || "", e.running_balance]);
+    if (data.entries.length <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await finalizeLedgerWorkbook(data);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-    sheet.addRow([]);
-    sheet.addRow([`Closing Balance: ৳${data.closing_balance.amount} ${data.closing_balance.type}`]);
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Ledger_${data.account.code}.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const params = { account_id: accountId, from_date: query.from_date?.toISOString(), to_date: query.to_date?.toISOString() };
+    const job = await enqueueBatchJob("LEDGER_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );

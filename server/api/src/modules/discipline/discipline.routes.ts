@@ -10,6 +10,7 @@ import { DISCIPLINE_MANAGE_ROLES } from "../../lib/roles";
 import { disciplineRecordSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
 import { assertClassTeacherOfStudent } from "../../lib/class-teacher-ownership";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { forbidden } from "../../lib/errors";
 
 // Staff-only (ADMIN/PRINCIPAL/CLASS_TEACHER) — mirrors the legacy scope
@@ -88,44 +89,63 @@ disciplineRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export
+// -- see the identical note on health.routes.ts's own reports/export
+// addition for why this takes the already-resolved `where`, not the raw
+// request (buildReportsWhere's CLASS_TEACHER own-section check has no
+// meaningful "caller" to re-run against inside a background worker).
+async function buildDisciplineRecordsExportJob(where: Awaited<ReturnType<typeof buildReportsWhere>>): Promise<BatchJobResult> {
+  const records = await prisma.disciplineRecord.findMany({
+    where,
+    include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } } },
+    orderBy: { occurred_at: "desc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Discipline Records");
+  sheet.columns = [
+    { header: "Student ID", key: "student_uid", width: 16 },
+    { header: "Name", key: "name_en", width: 22 },
+    { header: "Class", key: "class_name", width: 14 },
+    { header: "Section", key: "section_name", width: 12 },
+    { header: "Category", key: "category", width: 14 },
+    { header: "Description", key: "description", width: 36 },
+    { header: "Action Taken", key: "action_taken", width: 24 },
+    { header: "Occurred At", key: "occurred_at", width: 14 },
+  ];
+  for (const r of records) {
+    sheet.addRow({
+      student_uid: r.student.student_uid,
+      name_en: r.student.name_en,
+      class_name: r.student.current_class?.name_en ?? "",
+      section_name: r.student.current_section?.name ?? "",
+      category: r.category,
+      description: r.description,
+      action_taken: r.action_taken ?? "",
+      occurred_at: r.occurred_at.toISOString().slice(0, 10),
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Discipline_Records.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("DISCIPLINE_RECORDS_EXPORT", "DISCIPLINE_RECORDS_EXPORT", (params) =>
+  buildDisciplineRecordsExportJob(params as Awaited<ReturnType<typeof buildReportsWhere>>),
+);
+
 disciplineRouter.get(
   "/reports/export",
   asyncHandler(async (req, res) => {
     const where = await buildReportsWhere(req);
-    const records = await prisma.disciplineRecord.findMany({
-      where,
-      include: { student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } } },
-      orderBy: { occurred_at: "desc" },
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Discipline Records");
-    sheet.columns = [
-      { header: "Student ID", key: "student_uid", width: 16 },
-      { header: "Name", key: "name_en", width: 22 },
-      { header: "Class", key: "class_name", width: 14 },
-      { header: "Section", key: "section_name", width: 12 },
-      { header: "Category", key: "category", width: 14 },
-      { header: "Description", key: "description", width: 36 },
-      { header: "Action Taken", key: "action_taken", width: 24 },
-      { header: "Occurred At", key: "occurred_at", width: 14 },
-    ];
-    for (const r of records) {
-      sheet.addRow({
-        student_uid: r.student.student_uid,
-        name_en: r.student.name_en,
-        class_name: r.student.current_class?.name_en ?? "",
-        section_name: r.student.current_section?.name ?? "",
-        category: r.category,
-        description: r.description,
-        action_taken: r.action_taken ?? "",
-        occurred_at: r.occurred_at.toISOString().slice(0, 10),
-      });
+    const count = await prisma.disciplineRecord.count({ where });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildDisciplineRecordsExportJob(where);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Discipline_Records.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("DISCIPLINE_RECORDS_EXPORT", where, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );

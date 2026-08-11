@@ -9,6 +9,7 @@ import { reqParam } from "../../lib/req-param";
 import { STAFF_ONLY_ROLES, COMPLAINT_MANAGE_ROLES } from "../../lib/roles";
 import { createComplaintSchema, updateComplaintSchema, createComplaintMessageSchema } from "@education-erp/validators";
 import { logAudit } from "../../lib/audit-log";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound } from "../../lib/errors";
 import { postComplaintMessage } from "./complaint-message.helper";
 import { notifyRoles } from "../../services/in-app-notification.service";
@@ -43,48 +44,74 @@ complaintsRouter.get(
   }),
 );
 
+interface ComplaintsExportParams {
+  scope: "all" | "own";
+  user_id: string;
+}
+
+function buildComplaintsExportWhere(params: ComplaintsExportParams) {
+  return params.scope === "all" ? {} : { raised_by_user_id: params.user_id };
+}
+
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+// scope/user_id capture the caller's manageAll()-derived permission at
+// request time (the worker has no req to re-check against later) -- the
+// same "snapshot the authorization decision, not just the query filter"
+// discipline already used by the admit-card override system.
+async function buildComplaintsExportJob(params: ComplaintsExportParams): Promise<BatchJobResult> {
+  const complaints = await prisma.complaint.findMany({ where: buildComplaintsExportWhere(params), orderBy: { created_at: "desc" } });
+
+  const userIds = [...new Set(complaints.map((c) => c.raised_by_user_id))];
+  const staffIds = [...new Set(complaints.map((c) => c.assigned_to_id).filter((id): id is string => !!id))];
+  const [users, staff] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name_en: true } }),
+    prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name_en: true } }),
+  ]);
+  const userNameById = new Map(users.map((u) => [u.id, u.name_en]));
+  const staffNameById = new Map(staff.map((s) => [s.id, s.name_en]));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Complaints");
+  sheet.columns = [
+    { header: "Raised By", key: "raised_by", width: 22 },
+    { header: "Category", key: "category", width: 16 },
+    { header: "Description", key: "description", width: 40 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Assigned To", key: "assigned_to", width: 20 },
+    { header: "Raised At", key: "created_at", width: 14 },
+    { header: "Resolved At", key: "resolved_at", width: 14 },
+  ];
+  for (const c of complaints) {
+    sheet.addRow({
+      raised_by: userNameById.get(c.raised_by_user_id) ?? "",
+      category: c.category,
+      description: c.description,
+      status: c.status,
+      assigned_to: c.assigned_to_id ? (staffNameById.get(c.assigned_to_id) ?? "") : "",
+      created_at: c.created_at.toISOString().slice(0, 10),
+      resolved_at: c.resolved_at ? c.resolved_at.toISOString().slice(0, 10) : "",
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Complaints.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("COMPLAINTS_EXPORT", "COMPLAINTS_EXPORT", (params) => buildComplaintsExportJob(params as unknown as ComplaintsExportParams));
+
 complaintsRouter.get(
   "/export",
   asyncHandler(async (req, res) => {
-    const where = manageAll(req.user!.role) ? {} : { raised_by_user_id: req.user!.sub };
-    const complaints = await prisma.complaint.findMany({ where, orderBy: { created_at: "desc" } });
-
-    const userIds = [...new Set(complaints.map((c) => c.raised_by_user_id))];
-    const staffIds = [...new Set(complaints.map((c) => c.assigned_to_id).filter((id): id is string => !!id))];
-    const [users, staff] = await Promise.all([
-      prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name_en: true } }),
-      prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name_en: true } }),
-    ]);
-    const userNameById = new Map(users.map((u) => [u.id, u.name_en]));
-    const staffNameById = new Map(staff.map((s) => [s.id, s.name_en]));
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Complaints");
-    sheet.columns = [
-      { header: "Raised By", key: "raised_by", width: 22 },
-      { header: "Category", key: "category", width: 16 },
-      { header: "Description", key: "description", width: 40 },
-      { header: "Status", key: "status", width: 14 },
-      { header: "Assigned To", key: "assigned_to", width: 20 },
-      { header: "Raised At", key: "created_at", width: 14 },
-      { header: "Resolved At", key: "resolved_at", width: 14 },
-    ];
-    for (const c of complaints) {
-      sheet.addRow({
-        raised_by: userNameById.get(c.raised_by_user_id) ?? "",
-        category: c.category,
-        description: c.description,
-        status: c.status,
-        assigned_to: c.assigned_to_id ? (staffNameById.get(c.assigned_to_id) ?? "") : "",
-        created_at: c.created_at.toISOString().slice(0, 10),
-        resolved_at: c.resolved_at ? c.resolved_at.toISOString().slice(0, 10) : "",
-      });
+    const params: ComplaintsExportParams = { scope: manageAll(req.user!.role) ? "all" : "own", user_id: req.user!.sub };
+    const count = await prisma.complaint.count({ where: buildComplaintsExportWhere(params) });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildComplaintsExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Complaints.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("COMPLAINTS_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

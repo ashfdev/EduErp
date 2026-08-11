@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, Input, Tabs, TabsList, TabsTrigger, TabsContent, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface ClassOption {
@@ -190,6 +191,7 @@ function DefaultersTab({ classes }: { classes?: ClassOption[] }) {
 }
 
 function BulkExportTab({ classes }: { classes?: ClassOption[] }) {
+  const router = useRouter();
   const [classId, setClassId] = useState("");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -204,6 +206,7 @@ function BulkExportTab({ classes }: { classes?: ClassOption[] }) {
       params: { academic_year_id: activeYear?.id, month, year, class_id: classId || undefined },
       responseType: "blob",
     });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

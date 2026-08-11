@@ -14,6 +14,8 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeOvertime } from "../../utils/overtime";
 import { resolveStaffShiftTimes } from "../../lib/staff-shift";
 import { dateOnlyFrom } from "../../lib/date-only";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
+import { emitToUser } from "../../realtime/socket";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
 // actually attached to — either as the section's class teacher, or via a
@@ -155,6 +157,22 @@ attendanceRouter.post(
           recipients: [{ name: s.name_en, phone: s.father_phone, email: s.guardian?.email, user_id: s.guardian?.user_id, person_id: s.id }],
           template_data: { student_name: s.name_en, date: date.toLocaleDateString(), school_phone: institution?.phone_primary ?? "" },
         });
+      }
+    }
+
+    // Real-time UI Sync (Plan Twenty-Seven, Phase 7): Instantly tell the
+    // affected students and their guardians to invalidate their cached
+    // attendance dashboard widget, so the UI turns red exactly as the SMS
+    // arrives, without requiring a manual refresh.
+    const allAffectedStudentIds = body.records.map((r) => r.student_id);
+    if (allAffectedStudentIds.length > 0) {
+      const affectedUsers = await prisma.student.findMany({
+        where: { id: { in: allAffectedStudentIds } },
+        select: { user_id: true, guardian: { select: { user_id: true } } },
+      });
+      for (const u of affectedUsers) {
+        if (u.user_id) emitToUser(u.user_id, "attendance:updated", { date: date.toISOString() });
+        if (u.guardian?.user_id) emitToUser(u.guardian.user_id, "attendance:updated", { date: date.toISOString() });
       }
     }
 
@@ -705,56 +723,94 @@ attendanceRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export
+// -- the heaviest of the 14 export routes to genuinely rebuild threshold-
+// aware, since it's not one query but a whole class->section->student->
+// attendance-record tree walk. Below EXCEL_EXPORT_BATCH_THRESHOLD (measured
+// by total matched student count, the actual per-row cost driver here), the
+// route below still builds and streams back synchronously exactly as
+// before; a genuinely large academic-year-wide export goes through the
+// shared documentQueue worker, calling this exact same builder.
+async function buildAttendanceBulkExportJob(params: {
+  academic_year_id: string;
+  month: number;
+  year: number;
+  class_id?: string;
+}): Promise<BatchJobResult> {
+  const start = new Date(params.year, params.month - 1, 1);
+  const end = new Date(params.year, params.month, 1);
+
+  const classes = await prisma.class.findMany({
+    where: { academic_year_id: params.academic_year_id, ...(params.class_id && { id: params.class_id }) },
+    include: { sections: true },
+  });
+  if (!classes.length) throw badRequest("No classes found for this academic year");
+
+  const workbook = new ExcelJS.Workbook();
+
+  for (const klass of classes) {
+    const sheet = workbook.addWorksheet(klass.name_en.slice(0, 31));
+    sheet.columns = [
+      { header: "Roll", key: "roll", width: 10 },
+      { header: "Name", key: "name", width: 30 },
+      { header: "Section", key: "section", width: 12 },
+      { header: "Present", key: "present", width: 10 },
+      { header: "Absent", key: "absent", width: 10 },
+      { header: "Late", key: "late", width: 10 },
+      { header: "%", key: "pct", width: 10 },
+    ];
+
+    for (const section of klass.sections) {
+      const students = await prisma.student.findMany({ where: { current_section_id: section.id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
+      for (const s of students) {
+        const records = await prisma.attendanceRecord.findMany({ where: { student_id: s.id, date: { gte: start, lt: end } } });
+        const present = records.filter((r) => r.status === "PRESENT").length;
+        const absent = records.filter((r) => r.status === "ABSENT").length;
+        const late = records.filter((r) => r.status === "LATE").length;
+        sheet.addRow({
+          roll: s.current_roll_no,
+          name: s.name_en,
+          section: section.name,
+          present,
+          absent,
+          late,
+          pct: records.length ? Math.round((present / records.length) * 1000) / 10 : "",
+        });
+      }
+    }
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  const filename = `Attendance_${params.month}_${params.year}.xlsx`;
+  return { buffer, filename, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("ATTENDANCE_BULK_EXPORT", "ATTENDANCE_BULK_EXPORT", (params) =>
+  buildAttendanceBulkExportJob(params as { academic_year_id: string; month: number; year: number; class_id?: string }),
+);
+
 attendanceRouter.get(
   "/reports/bulk-export",
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().min(1), month: z.coerce.number(), year: z.coerce.number(), class_id: z.string().optional() }).parse(req.query);
-    const start = new Date(query.year, query.month - 1, 1);
-    const end = new Date(query.year, query.month, 1);
 
-    const classes = await prisma.class.findMany({
-      where: { academic_year_id: query.academic_year_id, ...(query.class_id && { id: query.class_id }) },
-      include: { sections: true },
-    });
-    if (!classes.length) throw badRequest("No classes found for this academic year");
+    const sectionIds = (
+      await prisma.class.findMany({
+        where: { academic_year_id: query.academic_year_id, ...(query.class_id && { id: query.class_id }) },
+        include: { sections: { select: { id: true } } },
+      })
+    ).flatMap((c) => c.sections.map((s) => s.id));
+    if (!sectionIds.length) throw badRequest("No classes found for this academic year");
+    const count = await prisma.student.count({ where: { current_section_id: { in: sectionIds }, deleted_at: null, status: "ACTIVE" } });
 
-    const workbook = new ExcelJS.Workbook();
-
-    for (const klass of classes) {
-      const sheet = workbook.addWorksheet(klass.name_en.slice(0, 31));
-      sheet.columns = [
-        { header: "Roll", key: "roll", width: 10 },
-        { header: "Name", key: "name", width: 30 },
-        { header: "Section", key: "section", width: 12 },
-        { header: "Present", key: "present", width: 10 },
-        { header: "Absent", key: "absent", width: 10 },
-        { header: "Late", key: "late", width: 10 },
-        { header: "%", key: "pct", width: 10 },
-      ];
-
-      for (const section of klass.sections) {
-        const students = await prisma.student.findMany({ where: { current_section_id: section.id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
-        for (const s of students) {
-          const records = await prisma.attendanceRecord.findMany({ where: { student_id: s.id, date: { gte: start, lt: end } } });
-          const present = records.filter((r) => r.status === "PRESENT").length;
-          const absent = records.filter((r) => r.status === "ABSENT").length;
-          const late = records.filter((r) => r.status === "LATE").length;
-          sheet.addRow({
-            roll: s.current_roll_no,
-            name: s.name_en,
-            section: section.name,
-            present,
-            absent,
-            late,
-            pct: records.length ? Math.round((present / records.length) * 1000) / 10 : "",
-          });
-        }
-      }
+    const params = { academic_year_id: query.academic_year_id, month: query.month, year: query.year, class_id: query.class_id };
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildAttendanceBulkExportJob(params);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Attendance_${query.month}_${query.year}.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("ATTENDANCE_BULK_EXPORT", params, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );

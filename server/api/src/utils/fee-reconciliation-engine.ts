@@ -245,45 +245,70 @@ export async function findAssignmentGaps(tx: Tx, academicYearId: string, minorit
 export async function findAmountVariances(tx: Tx, academicYearId: string, tolerance = 1): Promise<ReconciliationFindingInput[]> {
   const findings: ReconciliationFindingInput[] = [];
 
-  const structureInvoices = await tx.invoice.findMany({
-    where: { academic_year_id: academicYearId, fee_structure_id: { not: null } },
-    include: {
-      fee_structure: { select: { id: true, name: true, amount: true } },
-      waiver_applications: { select: { discount_amount: true } },
-      // Confirmed via a live investigation, not assumed: /collect-batch has
-      // its own ad-hoc manual-discount field on a Payment (a staff-entered
-      // one-off reduction, completely separate from the StudentWaiver
-      // system), which directly lowers Invoice.amount_due at collection
-      // time. The first version of this check only subtracted waiver
-      // discounts and didn't know this second, equally legitimate discount
-      // path existed -- it flagged two real, correctly-discounted invoices
-      // as "mismatches" purely because of that gap. Only COMPLETED payments
-      // count -- an INITIATED/FAILED payment's discount was never actually
-      // applied to the invoice.
-      payments: { where: { status: "COMPLETED" }, select: { discount_amount: true } },
-      student: { select: { name_en: true, current_class_id: true, current_section_id: true, group_id: true } },
-    },
-  });
+  // Chunked, not one findMany() over every structure-linked invoice at
+  // once: Postgres caps a prepared statement at 32767 bind variables, and
+  // Prisma's default relation-loading strategy resolves each `include`d
+  // relation (waiver_applications, payments) as its own follow-up query
+  // keyed by `WHERE parentId IN (...)` -- one bind param per parent row,
+  // per relation. At real school scale (tens of thousands of invoices in
+  // a single academic year) that's easily 2x the row count, blowing past
+  // the limit and 500ing the entire nightly sweep. Confirmed live: this
+  // function crashed for real once this institution's invoice count for
+  // one academic year crossed ~16,384 rows. Fetching IDs first (a single
+  // lightweight, relation-free query) then paging the full include through
+  // in bounded chunks keeps bind-variable usage flat regardless of how
+  // large the dataset grows -- mirrors the same CHUNK_SIZE pattern already
+  // used for bulk SMS sends (notifications/bulk.routes.ts).
+  const CHUNK_SIZE = 2000;
+  const structureInvoiceIds = (
+    await tx.invoice.findMany({
+      where: { academic_year_id: academicYearId, fee_structure_id: { not: null } },
+      select: { id: true },
+    })
+  ).map((i) => i.id);
 
-  for (const invoice of structureInvoices) {
-    if (!invoice.fee_structure) continue;
-    const waiverTotal = invoice.waiver_applications.reduce((sum, w) => sum + w.discount_amount, 0);
-    const manualDiscountTotal = invoice.payments.reduce((sum, p) => sum + (p.discount_amount ?? 0), 0);
-    const expected = Math.round((invoice.fee_structure.amount - waiverTotal - manualDiscountTotal) * 100) / 100;
-    const actual = Math.round(invoice.amount_due * 100) / 100;
-    if (Math.abs(expected - actual) > tolerance) {
-      findings.push({
-        type: "AMOUNT_VARIANCE",
-        student_id: invoice.student_id,
-        fee_structure_id: invoice.fee_structure.id,
-        invoice_id: invoice.id,
-        class_id: invoice.student?.current_class_id,
-        section_id: invoice.student?.current_section_id,
-        group_id: invoice.student?.group_id,
-        expected_amount: expected,
-        actual_amount: actual,
-        description: `${invoice.student?.name_en ?? "Unknown payer"} — "${invoice.fee_structure.name}" invoice shows ৳${actual} due, expected ৳${expected} (structure amount minus applied waivers and manual discounts)`,
-      });
+  for (let i = 0; i < structureInvoiceIds.length; i += CHUNK_SIZE) {
+    const idChunk = structureInvoiceIds.slice(i, i + CHUNK_SIZE);
+    const structureInvoices = await tx.invoice.findMany({
+      where: { id: { in: idChunk } },
+      include: {
+        fee_structure: { select: { id: true, name: true, amount: true } },
+        waiver_applications: { select: { discount_amount: true } },
+        // Confirmed via a live investigation, not assumed: /collect-batch
+        // has its own ad-hoc manual-discount field on a Payment (a
+        // staff-entered one-off reduction, completely separate from the
+        // StudentWaiver system), which directly lowers Invoice.amount_due
+        // at collection time. The first version of this check only
+        // subtracted waiver discounts and didn't know this second, equally
+        // legitimate discount path existed -- it flagged two real,
+        // correctly-discounted invoices as "mismatches" purely because of
+        // that gap. Only COMPLETED payments count -- an INITIATED/FAILED
+        // payment's discount was never actually applied to the invoice.
+        payments: { where: { status: "COMPLETED" }, select: { discount_amount: true } },
+        student: { select: { name_en: true, current_class_id: true, current_section_id: true, group_id: true } },
+      },
+    });
+
+    for (const invoice of structureInvoices) {
+      if (!invoice.fee_structure) continue;
+      const waiverTotal = invoice.waiver_applications.reduce((sum, w) => sum + w.discount_amount, 0);
+      const manualDiscountTotal = invoice.payments.reduce((sum, p) => sum + (p.discount_amount ?? 0), 0);
+      const expected = Math.round((invoice.fee_structure.amount - waiverTotal - manualDiscountTotal) * 100) / 100;
+      const actual = Math.round(invoice.amount_due * 100) / 100;
+      if (Math.abs(expected - actual) > tolerance) {
+        findings.push({
+          type: "AMOUNT_VARIANCE",
+          student_id: invoice.student_id,
+          fee_structure_id: invoice.fee_structure.id,
+          invoice_id: invoice.id,
+          class_id: invoice.student?.current_class_id,
+          section_id: invoice.student?.current_section_id,
+          group_id: invoice.student?.group_id,
+          expected_amount: expected,
+          actual_amount: actual,
+          description: `${invoice.student?.name_en ?? "Unknown payer"} — "${invoice.fee_structure.name}" invoice shows ৳${actual} due, expected ৳${expected} (structure amount minus applied waivers and manual discounts)`,
+        });
+      }
     }
   }
 

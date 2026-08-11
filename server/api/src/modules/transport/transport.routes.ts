@@ -15,6 +15,7 @@ import { applyWaiversToInvoice, attachFeeStructureToStudent } from "../fees/invo
 import { notFound } from "../../lib/errors";
 import { logAudit } from "../../lib/audit-log";
 import { createInAppNotification } from "../../services/in-app-notification.service";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 
 export const transportRouter = Router();
 
@@ -129,48 +130,64 @@ transportRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended to this Excel export
+// for consistency with the rest of the app -- realistically never large at
+// one institution's actual vehicle-fleet scale, but the same threshold
+// check costs nothing and keeps this route from being a silent exception.
+async function buildVehiclesExportJob(): Promise<BatchJobResult> {
+  const vehicles = await prisma.vehicle.findMany({
+    select: {
+      vehicle_no: true, type: true, capacity: true,
+      driver_name: true, driver_phone: true, insurance_exp: true, is_active: true,
+      route: { select: { name: true } },
+    },
+    orderBy: { vehicle_no: "asc" },
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Vehicles");
+  sheet.columns = [
+    { header: "Vehicle No", key: "vehicle_no", width: 16 },
+    { header: "Type", key: "type", width: 12 },
+    { header: "Capacity", key: "capacity", width: 10 },
+    { header: "Route", key: "route", width: 18 },
+    { header: "Driver", key: "driver_name", width: 20 },
+    { header: "Driver Phone", key: "driver_phone", width: 16 },
+    { header: "Insurance Expires", key: "insurance_exp", width: 16 },
+    { header: "Active", key: "is_active", width: 10 },
+  ];
+  for (const v of vehicles) {
+    sheet.addRow({
+      vehicle_no: v.vehicle_no,
+      type: v.type,
+      capacity: v.capacity,
+      route: v.route?.name ?? "",
+      driver_name: v.driver_name ?? "",
+      driver_phone: v.driver_phone ?? "",
+      insurance_exp: v.insurance_exp ? v.insurance_exp.toISOString().slice(0, 10) : "",
+      is_active: v.is_active ? "Yes" : "No",
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Vehicles.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("VEHICLES_EXPORT", "VEHICLES_EXPORT", () => buildVehiclesExportJob());
+
 transportRouter.get(
   "/vehicles/export",
   authorize(TRANSPORT_MANAGE_ROLES),
-  asyncHandler(async (_req, res) => {
-    const vehicles = await prisma.vehicle.findMany({
-      select: {
-        vehicle_no: true, type: true, capacity: true,
-        driver_name: true, driver_phone: true, insurance_exp: true, is_active: true,
-        route: { select: { name: true } },
-      },
-      orderBy: { vehicle_no: "asc" },
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Vehicles");
-    sheet.columns = [
-      { header: "Vehicle No", key: "vehicle_no", width: 16 },
-      { header: "Type", key: "type", width: 12 },
-      { header: "Capacity", key: "capacity", width: 10 },
-      { header: "Route", key: "route", width: 18 },
-      { header: "Driver", key: "driver_name", width: 20 },
-      { header: "Driver Phone", key: "driver_phone", width: 16 },
-      { header: "Insurance Expires", key: "insurance_exp", width: 16 },
-      { header: "Active", key: "is_active", width: 10 },
-    ];
-    for (const v of vehicles) {
-      sheet.addRow({
-        vehicle_no: v.vehicle_no,
-        type: v.type,
-        capacity: v.capacity,
-        route: v.route?.name ?? "",
-        driver_name: v.driver_name ?? "",
-        driver_phone: v.driver_phone ?? "",
-        insurance_exp: v.insurance_exp ? v.insurance_exp.toISOString().slice(0, 10) : "",
-        is_active: v.is_active ? "Yes" : "No",
-      });
+  asyncHandler(async (req, res) => {
+    const count = await prisma.vehicle.count();
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildVehiclesExportJob();
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Vehicles.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("VEHICLES_EXPORT", {}, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
@@ -270,6 +287,46 @@ transportRouter.post(
     }
 
     res.status(201).json({ success: true, data: assignment });
+  }),
+);
+
+transportRouter.delete(
+  "/assign/:student_id",
+  authorize(TRANSPORT_MANAGE_ROLES),
+  asyncHandler(async (req, res) => {
+    const studentId = reqParam(req, "student_id");
+    
+    // Validate assignment exists
+    const assignment = await prisma.studentTransport.findUnique({
+      where: { student_id: studentId },
+    });
+    if (!assignment) throw notFound("Student is not assigned to any transport");
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Remove the core transport assignment
+      await tx.studentTransport.delete({
+        where: { student_id: studentId },
+      });
+
+      // 2. Identify any active TRANSPORT-category Fee Structures the student is attached to
+      const transportStructures = await tx.feeStructure.findMany({
+        where: { category: "TRANSPORT" },
+        select: { id: true },
+      });
+
+      // 3. Sever the student's link to those fee structures
+      // (This guarantees the auto-invoice chron won't pick them up on the 1st of next month)
+      if (transportStructures.length > 0) {
+        await tx.feeStructureStudent.deleteMany({
+          where: {
+            student_id: studentId,
+            fee_structure_id: { in: transportStructures.map((s) => s.id) },
+          },
+        });
+      }
+    });
+
+    res.status(204).send();
   }),
 );
 

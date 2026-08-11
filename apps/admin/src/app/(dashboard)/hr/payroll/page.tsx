@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AdjustmentNote, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ConfirmDialog, Dialog, DialogContent, DialogHeader, DialogTitle, Input, Badge, StatusBadge, EmptyState, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, AdjustmentNote, extractErrorMessage, ErrorState, LoadingSpinner, handleBatchDownloadResponse } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
 interface PayrollRow {
@@ -31,6 +32,7 @@ interface DepartmentOption {
 }
 
 export default function PayrollPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -109,6 +111,7 @@ export default function PayrollPage() {
 
   async function downloadExcel() {
     const res = await api.get("/api/hr/payroll/export", { params: { month, year }, responseType: "blob" });
+    if (await handleBatchDownloadResponse(res, router)) return;
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a");
     a.href = url;

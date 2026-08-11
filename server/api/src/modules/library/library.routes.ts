@@ -9,6 +9,7 @@ import { reqParam } from "../../lib/req-param";
 import { LIBRARY_MANAGE_ROLES } from "../../lib/roles";
 import { bookSchema, addCopiesSchema, issueBookSchema, returnBookSchema } from "@education-erp/validators";
 import { sendSms } from "../../services/sms.service";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound } from "../../lib/errors";
 
 export const libraryRouter = Router();
@@ -160,64 +161,87 @@ libraryRouter.get(
   }),
 );
 
+interface BookIssuesExportParams {
+  status?: string;
+  person_type?: string;
+  overdue?: string;
+}
+
+function buildBookIssuesExportWhere(params: BookIssuesExportParams) {
+  return {
+    ...(params.status && { status: params.status as never }),
+    ...(params.person_type && { person_type: params.person_type as never }),
+    ...(params.overdue === "true" && { status: "ISSUED" as const, due_date: { lt: new Date() } }),
+  };
+}
+
+// Plan Twenty (large-batch background jobs), extended to this Excel export.
+async function buildBookIssuesExportJob(params: BookIssuesExportParams): Promise<BatchJobResult> {
+  const issues = await prisma.bookIssue.findMany({
+    where: buildBookIssuesExportWhere(params),
+    include: { book: true },
+    orderBy: { issued_at: "desc" },
+  });
+
+  const studentIds = issues.filter((i) => i.person_type === "STUDENT").map((i) => i.person_id);
+  const staffIds = issues.filter((i) => i.person_type === "STAFF").map((i) => i.person_id);
+  const [students, staff] = await Promise.all([
+    prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name_en: true, student_uid: true } }),
+    prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name_en: true, staff_uid: true } }),
+  ]);
+  const nameById = new Map<string, { name: string; uid: string }>([
+    ...students.map((s) => [s.id, { name: s.name_en, uid: s.student_uid }] as const),
+    ...staff.map((s) => [s.id, { name: s.name_en, uid: s.staff_uid }] as const),
+  ]);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Book Issues");
+  sheet.columns = [
+    { header: "Book Title", key: "book_title", width: 28 },
+    { header: "Person", key: "person_name", width: 22 },
+    { header: "ID", key: "person_uid", width: 16 },
+    { header: "Type", key: "person_type", width: 10 },
+    { header: "Issued At", key: "issued_at", width: 14 },
+    { header: "Due Date", key: "due_date", width: 14 },
+    { header: "Returned At", key: "returned_at", width: 14 },
+    { header: "Status", key: "status", width: 12 },
+    { header: "Fine", key: "fine_amount", width: 10 },
+  ];
+  for (const i of issues) {
+    const person = nameById.get(i.person_id);
+    sheet.addRow({
+      book_title: i.book.title,
+      person_name: person?.name ?? "",
+      person_uid: person?.uid ?? "",
+      person_type: i.person_type,
+      issued_at: i.issued_at.toISOString().slice(0, 10),
+      due_date: i.due_date.toISOString().slice(0, 10),
+      returned_at: i.returned_at ? i.returned_at.toISOString().slice(0, 10) : "",
+      status: i.status,
+      fine_amount: i.fine_amount ?? 0,
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Book_Issues.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("BOOK_ISSUES_EXPORT", "BOOK_ISSUES_EXPORT", (params) => buildBookIssuesExportJob(params as BookIssuesExportParams));
+
 libraryRouter.get(
   "/issues/export",
   authorize(LIBRARY_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ status: z.string().optional(), person_type: z.string().optional(), overdue: z.string().optional() }).parse(req.query);
-    const issues = await prisma.bookIssue.findMany({
-      where: {
-        ...(query.status && { status: query.status as never }),
-        ...(query.person_type && { person_type: query.person_type as never }),
-        ...(query.overdue === "true" && { status: "ISSUED", due_date: { lt: new Date() } }),
-      },
-      include: { book: true },
-      orderBy: { issued_at: "desc" },
-    });
-
-    const studentIds = issues.filter((i) => i.person_type === "STUDENT").map((i) => i.person_id);
-    const staffIds = issues.filter((i) => i.person_type === "STAFF").map((i) => i.person_id);
-    const [students, staff] = await Promise.all([
-      prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name_en: true, student_uid: true } }),
-      prisma.staff.findMany({ where: { id: { in: staffIds } }, select: { id: true, name_en: true, staff_uid: true } }),
-    ]);
-    const nameById = new Map<string, { name: string; uid: string }>([
-      ...students.map((s) => [s.id, { name: s.name_en, uid: s.student_uid }] as const),
-      ...staff.map((s) => [s.id, { name: s.name_en, uid: s.staff_uid }] as const),
-    ]);
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Book Issues");
-    sheet.columns = [
-      { header: "Book Title", key: "book_title", width: 28 },
-      { header: "Person", key: "person_name", width: 22 },
-      { header: "ID", key: "person_uid", width: 16 },
-      { header: "Type", key: "person_type", width: 10 },
-      { header: "Issued At", key: "issued_at", width: 14 },
-      { header: "Due Date", key: "due_date", width: 14 },
-      { header: "Returned At", key: "returned_at", width: 14 },
-      { header: "Status", key: "status", width: 12 },
-      { header: "Fine", key: "fine_amount", width: 10 },
-    ];
-    for (const i of issues) {
-      const person = nameById.get(i.person_id);
-      sheet.addRow({
-        book_title: i.book.title,
-        person_name: person?.name ?? "",
-        person_uid: person?.uid ?? "",
-        person_type: i.person_type,
-        issued_at: i.issued_at.toISOString().slice(0, 10),
-        due_date: i.due_date.toISOString().slice(0, 10),
-        returned_at: i.returned_at ? i.returned_at.toISOString().slice(0, 10) : "",
-        status: i.status,
-        fine_amount: i.fine_amount ?? 0,
-      });
+    const count = await prisma.bookIssue.count({ where: buildBookIssuesExportWhere(query) });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildBookIssuesExportJob(query);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Book_Issues.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("BOOK_ISSUES_EXPORT", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

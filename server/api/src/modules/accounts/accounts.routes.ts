@@ -10,6 +10,7 @@ import { csvUpload } from "../../middleware/upload";
 import { reqParam } from "../../lib/req-param";
 import { ACCOUNTS_MANAGE_ROLES } from "../../lib/roles";
 import { accountSchema, financialYearSchema } from "@education-erp/validators";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, conflict, notFound } from "../../lib/errors";
 
 // CSV/JSON booleans arrive as strings ("true"/""/"TRUE") from a spreadsheet,
@@ -73,44 +74,59 @@ accountsRouter.get(
   }),
 );
 
+// Plan Twenty (large-batch background jobs), extended for consistency --
+// inherently small at real chart-of-accounts scale, but wired the same way
+// as every other export in this codebase rather than a silent exception.
+async function buildChartOfAccountsExportJob(): Promise<BatchJobResult> {
+  const accounts = await prisma.account.findMany({ include: { account_group: true }, orderBy: { code: "asc" } });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Chart of Accounts");
+  sheet.columns = [
+    { header: "Code", key: "code", width: 12 },
+    { header: "Name", key: "name", width: 30 },
+    { header: "Name (Bangla)", key: "name_bn", width: 20 },
+    { header: "Account Group", key: "account_group", width: 20 },
+    { header: "Account Nature", key: "account_nature", width: 16 },
+    { header: "Opening Balance", key: "opening_balance", width: 16 },
+    { header: "Opening Balance Type", key: "opening_balance_type", width: 14 },
+    { header: "Is Bank Account", key: "is_bank_account", width: 14 },
+    { header: "Is Cash Account", key: "is_cash_account", width: 14 },
+    { header: "Active", key: "is_active", width: 10 },
+  ];
+  for (const a of accounts) {
+    sheet.addRow({
+      code: a.code,
+      name: a.name,
+      name_bn: a.name_bn ?? "",
+      account_group: a.account_group.name,
+      account_nature: a.account_nature,
+      opening_balance: a.opening_balance,
+      opening_balance_type: a.opening_balance_type,
+      is_bank_account: a.is_bank_account,
+      is_cash_account: a.is_cash_account,
+      is_active: a.is_active,
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Chart_of_Accounts.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("CHART_OF_ACCOUNTS_EXPORT", "CHART_OF_ACCOUNTS_EXPORT", () => buildChartOfAccountsExportJob());
+
 accountsRouter.get(
   "/chart/export",
-  asyncHandler(async (_req, res) => {
-    const accounts = await prisma.account.findMany({ include: { account_group: true }, orderBy: { code: "asc" } });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Chart of Accounts");
-    sheet.columns = [
-      { header: "Code", key: "code", width: 12 },
-      { header: "Name", key: "name", width: 30 },
-      { header: "Name (Bangla)", key: "name_bn", width: 20 },
-      { header: "Account Group", key: "account_group", width: 20 },
-      { header: "Account Nature", key: "account_nature", width: 16 },
-      { header: "Opening Balance", key: "opening_balance", width: 16 },
-      { header: "Opening Balance Type", key: "opening_balance_type", width: 14 },
-      { header: "Is Bank Account", key: "is_bank_account", width: 14 },
-      { header: "Is Cash Account", key: "is_cash_account", width: 14 },
-      { header: "Active", key: "is_active", width: 10 },
-    ];
-    for (const a of accounts) {
-      sheet.addRow({
-        code: a.code,
-        name: a.name,
-        name_bn: a.name_bn ?? "",
-        account_group: a.account_group.name,
-        account_nature: a.account_nature,
-        opening_balance: a.opening_balance,
-        opening_balance_type: a.opening_balance_type,
-        is_bank_account: a.is_bank_account,
-        is_cash_account: a.is_cash_account,
-        is_active: a.is_active,
-      });
+  asyncHandler(async (req, res) => {
+    const count = await prisma.account.count();
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildChartOfAccountsExportJob();
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="Chart_of_Accounts.xlsx"`);
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("CHART_OF_ACCOUNTS_EXPORT", {}, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 

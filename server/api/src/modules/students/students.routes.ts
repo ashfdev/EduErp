@@ -25,6 +25,7 @@ import { assertSectionCapacity } from "../../lib/section-capacity";
 import { assertNoOutstandingDues } from "../../lib/outstanding-dues";
 import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound, conflict } from "../../lib/errors";
 
 export const studentsRouter = Router();
@@ -284,6 +285,82 @@ studentsRouter.get(
   }),
 );
 
+interface StudentsExportParams {
+  search?: string;
+  class_id?: string;
+  section_id?: string;
+  group_id?: string;
+  status?: string;
+  gender?: string;
+  program_id?: string;
+  department_id?: string;
+}
+
+function buildStudentsExportWhere(params: StudentsExportParams) {
+  // Same collision fix as GET / — merge into one current_class filter
+  // object instead of two separate spread entries with the same key.
+  const currentClassFilter = {
+    ...(params.program_id && { program_id: params.program_id }),
+    ...(params.department_id && { program: { department_id: params.department_id } }),
+  };
+
+  return {
+    deleted_at: null,
+    ...(params.class_id && { current_class_id: params.class_id }),
+    ...(params.section_id && { current_section_id: params.section_id }),
+    ...(params.group_id && { group_id: params.group_id }),
+    ...(params.status && { status: params.status as never }),
+    ...(params.gender && { gender: params.gender as never }),
+    ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
+    ...(params.search && {
+      OR: [
+        { name_en: { contains: params.search, mode: "insensitive" as const } },
+        { student_uid: { contains: params.search, mode: "insensitive" as const } },
+        { current_roll_no: { contains: params.search, mode: "insensitive" as const } },
+        { registration_no: { contains: params.search, mode: "insensitive" as const } },
+      ],
+    }),
+  };
+}
+
+// Plan Twenty (large-batch background jobs) -- the route that originally
+// surfaced this whole gap: a real class-9-sized unfiltered export (~4,400
+// students institution-wide) built its whole workbook inside the request/
+// response cycle with no size limit at all. Below EXCEL_EXPORT_BATCH_
+// THRESHOLD, still built and streamed back synchronously exactly as before;
+// a genuinely large/unfiltered export is instead routed through the shared
+// documentQueue worker, which calls this exact same builder.
+async function buildStudentsExportJob(params: StudentsExportParams): Promise<BatchJobResult> {
+  const students = await prisma.student.findMany({ where: buildStudentsExportWhere(params), select: STUDENT_LIST_SELECT, orderBy: { created_at: "desc" } });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Students");
+  sheet.columns = [
+    { header: "Student ID", key: "student_uid", width: 18 },
+    { header: "Name", key: "name_en", width: 24 },
+    { header: "Roll No", key: "roll_no", width: 12 },
+    { header: "Class", key: "class_name", width: 16 },
+    { header: "Section", key: "section_name", width: 12 },
+    { header: "Status", key: "status", width: 12 },
+    { header: "Guardian Phone", key: "guardian_phone", width: 16 },
+  ];
+  for (const s of students) {
+    sheet.addRow({
+      student_uid: s.student_uid,
+      name_en: s.name_en,
+      roll_no: s.current_roll_no ?? "",
+      class_name: s.current_class?.name_en ?? "",
+      section_name: s.current_section?.name ?? "",
+      status: s.status,
+      guardian_phone: s.guardian?.phone ?? s.father_phone ?? "",
+    });
+  }
+
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  return { buffer, filename: "Students.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+}
+registerBatchJobKind("STUDENTS_EXPORT", "STUDENTS_EXPORT", (params) => buildStudentsExportJob(params as StudentsExportParams));
+
 // Registered before "/:id" — otherwise Express would match "export" as an id.
 studentsRouter.get(
   "/export",
@@ -305,60 +382,16 @@ studentsRouter.get(
       })
       .parse(req.query);
 
-    // Same collision fix as GET / — merge into one current_class filter
-    // object instead of two separate spread entries with the same key.
-    const currentClassFilter = {
-      ...(query.program_id && { program_id: query.program_id }),
-      ...(query.department_id && { program: { department_id: query.department_id } }),
-    };
-
-    const where = {
-      deleted_at: null,
-      ...(query.class_id && { current_class_id: query.class_id }),
-      ...(query.section_id && { current_section_id: query.section_id }),
-      ...(query.group_id && { group_id: query.group_id }),
-      ...(query.status && { status: query.status as never }),
-      ...(query.gender && { gender: query.gender as never }),
-      ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
-      ...(query.search && {
-        OR: [
-          { name_en: { contains: query.search, mode: "insensitive" as const } },
-          { student_uid: { contains: query.search, mode: "insensitive" as const } },
-          { current_roll_no: { contains: query.search, mode: "insensitive" as const } },
-          { registration_no: { contains: query.search, mode: "insensitive" as const } },
-        ],
-      }),
-    };
-
-    const students = await prisma.student.findMany({ where, select: STUDENT_LIST_SELECT, orderBy: { created_at: "desc" } });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Students");
-    sheet.columns = [
-      { header: "Student ID", key: "student_uid", width: 18 },
-      { header: "Name", key: "name_en", width: 24 },
-      { header: "Roll No", key: "roll_no", width: 12 },
-      { header: "Class", key: "class_name", width: 16 },
-      { header: "Section", key: "section_name", width: 12 },
-      { header: "Status", key: "status", width: 12 },
-      { header: "Guardian Phone", key: "guardian_phone", width: 16 },
-    ];
-    for (const s of students) {
-      sheet.addRow({
-        student_uid: s.student_uid,
-        name_en: s.name_en,
-        roll_no: s.current_roll_no ?? "",
-        class_name: s.current_class?.name_en ?? "",
-        section_name: s.current_section?.name ?? "",
-        status: s.status,
-        guardian_phone: s.guardian?.phone ?? s.father_phone ?? "",
-      });
+    const count = await prisma.student.count({ where: buildStudentsExportWhere(query) });
+    if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
+      const { buffer, filename, mimeType } = await buildStudentsExportJob(query);
+      res.setHeader("Content-Type", mimeType!);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buffer);
+      return;
     }
-
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Students.xlsx"');
-    await workbook.xlsx.write(res);
-    res.end();
+    const job = await enqueueBatchJob("STUDENTS_EXPORT", query, req.user!.sub);
+    res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );
 
