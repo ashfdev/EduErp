@@ -1578,12 +1578,16 @@ feesRouter.get(
     const query = z.object({ month: z.coerce.number(), year: z.coerce.number() }).parse(req.query);
     const start = new Date(query.year, query.month - 1, 1);
     const end = new Date(query.year, query.month, 1);
-    const payments = await prisma.payment.findMany({ where: { paid_at: { gte: start, lt: end }, status: "COMPLETED" } });
+    // Previously fetched invoice inside the loop (N+1: 500 payments = 501 DB
+    // round-trips). Now fetched once via a single JOIN — same data, one query.
+    const payments = await prisma.payment.findMany({
+      where: { paid_at: { gte: start, lt: end }, status: "COMPLETED" },
+      include: { invoice: { select: { category: true } } },
+    });
 
     const byCategory = new Map<string, number>();
     for (const p of payments) {
-      const invoice = await prisma.invoice.findUnique({ where: { id: p.invoice_id } });
-      if (invoice) byCategory.set(invoice.category, (byCategory.get(invoice.category) ?? 0) + p.amount);
+      byCategory.set(p.invoice.category, (byCategory.get(p.invoice.category) ?? 0) + p.amount);
     }
 
     res.json({
@@ -1598,6 +1602,11 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), days_overdue: z.coerce.number().optional() }).parse(req.query);
+    // Lazily sync overdue status before reading — mirrors the portal /fees
+    // view and the collect workspace. Without this, a due invoice could
+    // still show PENDING here even though it has been past its due_date for
+    // weeks, because no payment ever triggered a status recompute.
+    await syncOverdueInvoices(prisma);
     const invoices = await prisma.invoice.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
@@ -1631,6 +1640,8 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), days_overdue: z.coerce.number().default(30) }).parse(req.query);
+    // Same lazy overdue sync as /reports/dues above.
+    await syncOverdueInvoices(prisma);
     // A pre-enrollment application-linked due (Plan Twenty-Three, Phase 3)
     // isn't a "defaulter" in this report's sense -- that's tracked via the
     // admission module's own payment_status, not this enrolled-student view.

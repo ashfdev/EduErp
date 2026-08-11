@@ -332,18 +332,23 @@ payrollRouter.post(
     if (!records.length) throw badRequest("No draft payroll records found for this month");
 
     let generated = 0;
+    // Surface individual payslip failures rather than silently swallowing
+    // them: a Puppeteer crash or S3 error leaves the record stuck as DRAFT
+    // with no trace. Admin now gets an explicit list of who failed so they
+    // can retry those specific records without re-running the whole batch.
+    const failures: { name: string; staff_uid: string; error: string }[] = [];
     for (const record of records) {
       try {
         const pdf = await renderDocument("PAYSLIP", buildPayslipData(record) as unknown as Record<string, unknown>);
         const { url } = await uploadBuffer("payslips", `${record.staff.staff_uid}-${record.month}-${record.year}.pdf`, pdf, "application/pdf");
         await prisma.payrollRecord.update({ where: { id: record.id }, data: { status: "FINALIZED", payslip_url: url } });
         generated++;
-      } catch {
-        // A single payslip render failure shouldn't block finalizing the rest of the batch.
+      } catch (err) {
+        failures.push({ name: record.staff.name_en, staff_uid: record.staff.staff_uid, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
-    res.json({ success: true, data: { finalized: generated } });
+    res.json({ success: true, data: { finalized: generated, failed: failures } });
   }),
 );
 

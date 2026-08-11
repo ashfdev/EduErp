@@ -205,7 +205,15 @@ documentsRouter.get(
     const student = await prisma.student.findFirst({ where: { id, deleted_at: null }, include: { current_class: true } });
     if (!student) throw notFound("Student not found");
 
-    const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+    // Serialise concurrent TC generation with a session advisory lock so
+    // two staff hitting this endpoint simultaneously cannot both read the
+    // same TRANSFERRED count and emit the same TC number (an official
+    // government document must have a unique serial). Lock 999001 is
+    // arbitrary but the same value used in the POST and /approve paths.
+    const tcCount = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(999001)`;
+      return tx.student.count({ where: { status: "TRANSFERRED" } });
+    });
     const defaults = await resolveTransferCertDefaults(id);
     const pdf = await renderDocument("TRANSFER_CERTIFICATE", {
       student,
@@ -251,7 +259,11 @@ documentsRouter.post(
     const student = await prisma.student.findFirst({ where: { id, deleted_at: null }, include: { current_class: true } });
     if (!student) throw notFound("Student not found");
 
-    const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+    // Same advisory lock as GET path — serialises all concurrent TC generation.
+    const tcCount = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(999001)`;
+      return tx.student.count({ where: { status: "TRANSFERRED" } });
+    });
     const pdf = await renderDocument("TRANSFER_CERTIFICATE", {
       student,
       tc_number: `TC-${new Date().getFullYear()}-${String(tcCount + 1).padStart(4, "0")}`,
@@ -265,6 +277,7 @@ documentsRouter.post(
     sendPdf(res, pdf, `${student.student_uid}-transfer-certificate.pdf`, download);
   }),
 );
+
 
 // ─────────────── Student-Initiated Document Requests ───────────────
 // The TESTIMONIAL/TRANSFER_CERTIFICATE routes above are staff-triggered and
@@ -338,7 +351,13 @@ documentsRouter.put(
         issue_date: new Date(),
       });
     } else {
-      const tcCount = await prisma.student.count({ where: { status: "TRANSFERRED" } });
+      // Same advisory lock as the staff-direct GET/POST TC paths — all three
+      // TC generation entry points share lock 999001 so concurrent calls from
+      // any path serialize and never emit duplicate TC numbers.
+      const tcCount = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(999001)`;
+        return tx.student.count({ where: { status: "TRANSFERRED" } });
+      });
       pdf = await renderDocument("TRANSFER_CERTIFICATE", {
         student,
         tc_number: `TC-${new Date().getFullYear()}-${String(tcCount + 1).padStart(4, "0")}`,
