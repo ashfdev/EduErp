@@ -14,3 +14,15 @@ prisma/generated/
 *.tsbuildinfo
 local-uploads/
 token.env
+
+# Ad-hoc verification scripts/artifacts occasionally created at the repo
+# root or under services/device while testing against a live dev server —
+# real access/refresh tokens have landed in these before (see git history:
+# services/device/token.txt, admin-login.json on feat/async-ui-progress-
+# and-fixes). Never commit a live credential; keep this kind of scratch
+# output out of git entirely instead of relying on remembering to delete it.
+/automated_tests.js
+/*.token.txt
+token.txt
+*-login.json
+*-token.json
