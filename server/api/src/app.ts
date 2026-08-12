@@ -55,6 +55,7 @@ import { inventoryModuleRouter } from "./modules/inventory";
 import { bulkSmsRouter } from "./modules/notifications/bulk.routes";
 import { notificationCenterRouter } from "./modules/notifications/notification-center.routes";
 import { internalRouter } from "./routes/internal";
+import { alumniRouter, siblingGroupRouter } from "./modules/students/alumni-sibling.routes";
 
 const ALLOWED_ORIGINS = [env.ADMIN_URL, env.PORTAL_URL, env.WEBSITE_URL, env.TEACHER_URL].filter((url): url is string => !!url);
 
@@ -182,6 +183,8 @@ export function createApp(): Express {
   app.use("/api/payments", paymentsRouter);
   app.use("/api/admission", admissionRouter);
   app.use("/api/documents", documentsRouter);
+  app.use("/api/alumni", alumniRouter);
+  app.use("/api/sibling-groups", siblingGroupRouter);
   app.use("/api/website", websiteRouter);
   app.use("/api/hr", hrRouter);
   app.use("/api/library", libraryRouter);

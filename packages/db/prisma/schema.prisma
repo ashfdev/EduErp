@@ -1458,7 +1458,6 @@ model ExamHall {
   // Stored (not purely derived) so a hall with an irregular/partial last row
   // can still cap capacity below rows*seats_per_row without a schema change.
   capacity      Int
-  reorder_level Int?
   is_active     Boolean        @default(true)
   created_at    DateTime       @default(now())
   updated_at    DateTime       @updatedAt
@@ -2473,6 +2472,7 @@ model Item {
   reorder_qty        Float              @default(0)
   expense_account_id String?
   expense_account    Account?           @relation(fields: [expense_account_id], references: [id])
+  reorder_level      Int?
   is_active          Boolean            @default(true)
   created_at         DateTime           @default(now())
   updated_at         DateTime           @updatedAt

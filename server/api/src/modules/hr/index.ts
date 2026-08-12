@@ -6,6 +6,7 @@ import { payrollRouter } from "./payroll.routes";
 import { jobsRouter } from "./jobs.routes";
 import { advanceRouter } from "./advance.routes";
 import { pfRouter } from "./pf.routes";
+import { taxDeductionRouter, salaryIncrementRouter, leaveEncashmentRouter } from "./hr-extras.routes";
 
 export const hrRouter = Router();
 
@@ -17,3 +18,6 @@ hrRouter.use("/payroll", payrollRouter);
 hrRouter.use("/jobs", jobsRouter);
 hrRouter.use("/advances", advanceRouter);
 hrRouter.use("/pf", pfRouter);
+hrRouter.use("/tax-deductions", taxDeductionRouter);
+hrRouter.use("/increments", salaryIncrementRouter);
+hrRouter.use("/leave-encashments", leaveEncashmentRouter);

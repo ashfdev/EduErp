@@ -215,3 +215,50 @@ itemsRouter.get(
     res.json({ success: true, data: lowStock });
   }),
 );
+
+// GET /stock/reorder-alerts
+// Returns all items where current_stock <= reorder_level (the new Phase 2
+// field on Item, distinct from minimum_stock which was the old threshold).
+// reorder_level is the "order now" trigger; minimum_stock is the "out of stock"
+// emergency floor.  Null reorder_level means the item has no alert configured.
+itemsRouter.get(
+  "/stock/reorder-alerts",
+  asyncHandler(async (_req, res) => {
+    const items = await prisma.item.findMany({
+      where: {
+        is_active: true,
+        reorder_level: { not: null },
+      },
+      include: { category: { select: { name: true } } },
+    });
+    // Filter in application layer because Prisma doesn't support column-to-column
+    // comparisons directly (current_stock <= reorder_level).
+    const alerts = items
+      .filter((i) => i.reorder_level !== null && i.current_stock <= i.reorder_level!)
+      .sort((a, b) => a.current_stock - b.current_stock)
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        unit: i.unit,
+        current_stock: i.current_stock,
+        reorder_level: i.reorder_level,
+        category: i.category?.name ?? null,
+      }));
+
+    res.json({ success: true, data: alerts, count: alerts.length });
+  }),
+);
+
+// GET /stock/reorder-alerts/count
+// Lightweight endpoint for dashboard badge: just returns the count.
+itemsRouter.get(
+  "/stock/reorder-alerts/count",
+  asyncHandler(async (_req, res) => {
+    const items = await prisma.item.findMany({
+      where: { is_active: true, reorder_level: { not: null } },
+      select: { current_stock: true, reorder_level: true },
+    });
+    const count = items.filter((i) => i.reorder_level !== null && i.current_stock <= i.reorder_level!).length;
+    res.json({ success: true, data: { count } });
+  }),
+);

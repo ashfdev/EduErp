@@ -406,6 +406,19 @@ payrollRouter.post(
           }
         }
 
+        // Tax deduction history: log a TaxDeduction row for every record
+        // where tds_amount > 0. Idempotent — the @unique payroll_record_id
+        // constraint on TaxDeduction prevents double-logging if finalize is
+        // re-run after a partial failure.
+        if (record.tds_amount > 0) {
+          const existingTax = await prisma.taxDeduction.findUnique({ where: { payroll_record_id: record.id } });
+          if (!existingTax) {
+            await prisma.taxDeduction.create({
+              data: { staff_id: record.staff_id, payroll_record_id: record.id, amount: record.tds_amount },
+            });
+          }
+        }
+
         await prisma.payrollRecord.update({ where: { id: record.id }, data: { status: "FINALIZED", payslip_url: url } });
         generated++;
       } catch (err) {
