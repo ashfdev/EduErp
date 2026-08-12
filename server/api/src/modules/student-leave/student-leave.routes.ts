@@ -72,17 +72,28 @@ studentLeaveRouter.get(
 studentLeaveRouter.get(
   "/requests",
   asyncHandler(async (req, res) => {
-    const query = z.object({ status: z.string().optional() }).parse(req.query);
-    const requests = await prisma.studentLeaveRequest.findMany({
-      where: { ...(query.status && { status: query.status as never }) },
-      include: {
-        student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } },
-        approvals: { include: { teacher: { select: { name_en: true } } } },
-      },
-      orderBy: { created_at: "desc" },
-      take: 200,
-    });
-    res.json({ success: true, data: requests });
+    const query = z
+      .object({
+        status: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(req.query);
+    const where = { ...(query.status && { status: query.status as never }) };
+    const [requests, total] = await Promise.all([
+      prisma.studentLeaveRequest.findMany({
+        where,
+        include: {
+          student: { select: { id: true, name_en: true, student_uid: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } } },
+          approvals: { include: { teacher: { select: { name_en: true } } } },
+        },
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.studentLeaveRequest.count({ where }),
+    ]);
+    res.json({ success: true, data: requests, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

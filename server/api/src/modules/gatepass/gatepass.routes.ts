@@ -38,6 +38,8 @@ gatePassRouter.get(
         date: z.string().optional(),
         student_id: z.string().optional(),
         class_id: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
       })
       .parse(req.query);
 
@@ -53,17 +55,21 @@ gatePassRouter.get(
       }),
     };
 
-    const visitors = await prisma.visitor.findMany({
-      where,
-      include: {
-        student: { select: { id: true, name_en: true, student_uid: true } },
-        class: { select: { id: true, name_en: true } },
-        section: { select: { id: true, name: true } },
-      },
-      orderBy: { in_time: "desc" },
-      take: 200,
-    });
-    res.json({ success: true, data: visitors });
+    const [visitors, total] = await Promise.all([
+      prisma.visitor.findMany({
+        where,
+        include: {
+          student: { select: { id: true, name_en: true, student_uid: true } },
+          class: { select: { id: true, name_en: true } },
+          section: { select: { id: true, name: true } },
+        },
+        orderBy: { in_time: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.visitor.count({ where }),
+    ]);
+    res.json({ success: true, data: visitors, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

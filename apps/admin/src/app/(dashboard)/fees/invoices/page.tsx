@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, CardContent, Button, ErrorState, Input, Label, LoadingSpinner, StatusBadge, EmptyState, PdfPreviewModal, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SearchInput } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -22,6 +22,11 @@ interface Invoice {
   // has no AdmissionApplication. Exactly one of the two is ever set.
   student: { name_en: string; student_uid: string; current_class?: { name_en: string } | null } | null;
   application: { id: string; applicant_name: string; admission_roll: string } | null;
+}
+
+interface InvoicesResponse {
+  data: Invoice[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
 }
 
 function payerName(inv: Pick<Invoice, "student" | "application">): string {
@@ -55,9 +60,11 @@ export default function InvoicesPage() {
   const [classId, setClassId] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
   const [yearFilter, setYearFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const pdfPreview = usePdfPreview();
-  const { data: invoices, isLoading, isError, error, refetch } = useQuery<Invoice[]>({
-    queryKey: ["fees", "invoices", status, classId, monthFilter, yearFilter],
+  const { data, isLoading, isError, error, refetch } = useQuery<InvoicesResponse>({
+    queryKey: ["fees", "invoices", status, classId, monthFilter, yearFilter, search, page],
     queryFn: async () =>
       (
         await api.get("/api/fees/invoices", {
@@ -66,10 +73,15 @@ export default function InvoicesPage() {
             class_id: classId || undefined,
             month: monthFilter || undefined,
             year: yearFilter || undefined,
+            search: search || undefined,
+            page,
+            limit: 20,
           },
         })
-      ).data.data,
+      ).data,
   });
+  const invoices = data?.data ?? [];
+  const meta = data?.meta;
 
   const { data: classes } = useQuery<ClassOption[]>({ queryKey: ["settings", "classes"], queryFn: async () => (await api.get("/api/settings/classes")).data.data });
   const { data: years } = useQuery<YearOption[]>({ queryKey: ["settings", "academic-years"], queryFn: async () => (await api.get("/api/settings/academic-years")).data.data });
@@ -136,8 +148,15 @@ export default function InvoicesPage() {
         action={<Button onClick={() => bulkGenerateMutation.mutate()} disabled={bulkGenerateMutation.isPending || !!pollingJobId || !activeYear}>{pollingJobId ? "Generating..." : "Generate Monthly Invoices"}</Button>}
       />
 
-      <div className="flex flex-wrap gap-3">
-        <select className="w-44 rounded-md border px-3 py-2 text-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+      <div className="flex flex-wrap items-end gap-3">
+        <SearchInput
+          placeholder="Search by invoice no, student name, or ID..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          className="max-w-sm"
+        />
+
+        <select className="w-44 rounded-md border px-3 py-2 text-sm" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
           <option value="">All Status</option>
           <option value="PENDING">Pending</option>
           <option value="PARTIAL">Partial</option>
@@ -146,7 +165,7 @@ export default function InvoicesPage() {
           <option value="WAIVED">Waived</option>
         </select>
 
-        <Select value={classId || "all"} onValueChange={(v) => setClassId(v === "all" ? "" : v)}>
+        <Select value={classId || "all"} onValueChange={(v) => { setClassId(v === "all" ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-44"><SelectValue placeholder="All Classes" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Classes</SelectItem>
@@ -154,7 +173,7 @@ export default function InvoicesPage() {
           </SelectContent>
         </Select>
 
-        <Select value={monthFilter || "all"} onValueChange={(v) => setMonthFilter(v === "all" ? "" : v)}>
+        <Select value={monthFilter || "all"} onValueChange={(v) => { setMonthFilter(v === "all" ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="All Months" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Months</SelectItem>
@@ -162,7 +181,7 @@ export default function InvoicesPage() {
           </SelectContent>
         </Select>
 
-        <Select value={yearFilter || "all"} onValueChange={(v) => setYearFilter(v === "all" ? "" : v)}>
+        <Select value={yearFilter || "all"} onValueChange={(v) => { setYearFilter(v === "all" ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-32"><SelectValue placeholder="All Years" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Years</SelectItem>
@@ -229,6 +248,13 @@ export default function InvoicesPage() {
           </Table>
         </CardContent>
       </Card>
+      {meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-4">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages} ({meta.total} total)</span>
+          <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+        </div>
+      )}
         </>
       )}
 

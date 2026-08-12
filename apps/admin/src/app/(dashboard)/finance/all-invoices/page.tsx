@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   PageWrapper, PageHeader, Card, CardContent, Badge, StatusBadge, SearchInput, EmptyState, ErrorState, LoadingSpinner, extractErrorMessage,
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, Label,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Input, Label, Button,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
 
@@ -23,7 +23,7 @@ interface UnifiedInvoiceRow {
 }
 interface UnifiedInvoiceResponse {
   data: UnifiedInvoiceRow[];
-  meta: { total: number; total_amount: number; total_paid: number };
+  meta: { total: number; total_amount: number; total_paid: number; page: number; limit: number; totalPages: number };
 }
 
 const TYPE_LABEL: Record<UnifiedInvoiceRow["type"], string> = {
@@ -43,9 +43,10 @@ export default function AllInvoicesPage() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isFetching, isLoading, isError, error, refetch } = useQuery<UnifiedInvoiceResponse>({
-    queryKey: ["finance", "all-invoices", type, status, search, from, to],
+    queryKey: ["finance", "all-invoices", type, status, search, from, to, page],
     queryFn: async () =>
       (
         await api.get("/api/finance/all-invoices", {
@@ -55,6 +56,8 @@ export default function AllInvoicesPage() {
             search: search || undefined,
             from: from || undefined,
             to: to || undefined,
+            page,
+            limit: 20,
           },
         })
       ).data,
@@ -79,7 +82,7 @@ export default function AllInvoicesPage() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Type</Label>
-          <Select value={type || "all"} onValueChange={(v) => setType(v === "all" ? "" : v)}>
+          <Select value={type || "all"} onValueChange={(v) => { setType(v === "all" ? "" : v); setPage(1); }}>
             <SelectTrigger className="w-44"><SelectValue placeholder="All Types" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
@@ -91,19 +94,19 @@ export default function AllInvoicesPage() {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Status</Label>
-          <Input className="w-36" placeholder="e.g. PAID" value={status} onChange={(e) => setStatus(e.target.value.toUpperCase())} />
+          <Input className="w-36" placeholder="e.g. PAID" value={status} onChange={(e) => { setStatus(e.target.value.toUpperCase()); setPage(1); }} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">From</Label>
-          <Input type="date" className="w-40" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <Input type="date" className="w-40" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">To</Label>
-          <Input type="date" className="w-40" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Input type="date" className="w-40" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
         </div>
         <div className="min-w-[220px] flex-1 space-y-1.5">
           <Label className="text-xs">Search (student / staff / supplier name)</Label>
-          <SearchInput placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <SearchInput placeholder="Search by name..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
       </div>
 
@@ -151,6 +154,13 @@ export default function AllInvoicesPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      {data?.meta && data.meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-4">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {data.meta.page} of {data.meta.totalPages} ({data.meta.total} total)</span>
+          <Button size="sm" variant="outline" disabled={page >= data.meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+        </div>
       )}
         </>
       )}

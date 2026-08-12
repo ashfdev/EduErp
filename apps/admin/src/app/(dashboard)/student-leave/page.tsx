@@ -58,9 +58,16 @@ export default function StudentLeaveOversightPage() {
   const [rejectTarget, setRejectTarget] = useState<{ kind: "request" | "approval"; id: string } | null>(null);
   const [reason, setReason] = useState("");
 
+  // This page buckets one fetched list into Pending/Decided tabs with real
+  // counts for each -- real pagination would break that (you'd only see
+  // counts for whatever page happens to be loaded), and student leave
+  // requests are a much lower-volume table in practice than invoices (an
+  // occasional per-student event, not a recurring monthly one), so the
+  // safe fix here is requesting the backend's max page size rather than
+  // rebuilding this into a per-tab paginated view.
   const { data: requests, isLoading, isError, error, refetch } = useQuery<RequestRow[]>({
     queryKey: ["student-leave", "requests"],
-    queryFn: async () => (await api.get("/api/student-leave/requests")).data.data,
+    queryFn: async () => (await api.get("/api/student-leave/requests", { params: { limit: 100 } })).data.data,
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["student-leave", "requests"] });

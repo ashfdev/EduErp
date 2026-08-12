@@ -47,9 +47,19 @@ financeRouter.get(
         from: z.coerce.date().optional(),
         to: z.coerce.date().optional(),
         search: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
       })
       .parse(req.query);
 
+    // This merges 3 unrelated tables in application code (a real SQL UNION
+    // across Invoice/PayrollRecord/PurchaseOrder is possible but a much
+    // bigger rewrite for a secondary overview page, not the primary browse
+    // screen for any one of these -- that's /fees/invoices, /hr/payroll,
+    // /inventory/purchase-orders, all separately and properly paginated).
+    // Per-type fetch window grows with the requested page so deep pages
+    // stay correct instead of silently running out of rows to merge from.
+    const perTypeWindow = Math.max(200, query.page * query.limit);
     const rows: UnifiedInvoiceRow[] = [];
 
     if (!query.type || query.type === "FEE") {
@@ -66,7 +76,7 @@ financeRouter.get(
           application: { select: { applicant_name: true, admission_roll: true } },
         },
         orderBy: { due_date: "desc" },
-        take: 200,
+        take: perTypeWindow,
       });
       rows.push(
         ...invoices.map((inv) => ({
@@ -95,7 +105,7 @@ financeRouter.get(
         },
         include: { staff: { select: { name_en: true, staff_uid: true } } },
         orderBy: [{ year: "desc" }, { month: "desc" }],
-        take: 200,
+        take: perTypeWindow,
       });
       rows.push(
         ...payroll
@@ -131,7 +141,7 @@ financeRouter.get(
         },
         include: { supplier: { select: { name: true } } },
         orderBy: { order_date: "desc" },
-        take: 200,
+        take: perTypeWindow,
       });
       rows.push(
         ...purchaseOrders.map((po) => ({
@@ -151,13 +161,23 @@ financeRouter.get(
 
     rows.sort((a, b) => b.date.getTime() - a.date.getTime());
 
+    // total/total_amount/total_paid reflect everything currently merged
+    // (up to perTypeWindow per type) -- an accurate grand total across the
+    // full, unbounded filtered set would need a separate SUM/COUNT
+    // aggregate per type; not worth the extra 3 queries for this overview
+    // page's summary tiles, and this window already grows with page depth.
+    const pageRows = rows.slice((query.page - 1) * query.limit, query.page * query.limit);
+
     res.json({
       success: true,
-      data: rows,
+      data: pageRows,
       meta: {
         total: rows.length,
         total_amount: Math.round(rows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100,
         total_paid: Math.round(rows.reduce((sum, r) => sum + r.paid, 0) * 100) / 100,
+        page: query.page,
+        limit: query.limit,
+        totalPages: Math.ceil(rows.length / query.limit),
       },
     });
   }),

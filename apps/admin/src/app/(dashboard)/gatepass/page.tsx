@@ -69,11 +69,21 @@ export default function GatePassPage() {
   const [pickerClassId, setPickerClassId] = useState("");
   const [pickerSectionId, setPickerSectionId] = useState("");
 
-  const { data: visitors, isLoading, isError, error, refetch } = useQuery<VisitorRow[]>({
-    queryKey: ["gatepass", "visitors", activeOnly, dateFilter],
+  const [visitorsPage, setVisitorsPage] = useState(1);
+  const { data: visitorsResponse, isLoading, isError, error, refetch } = useQuery<{
+    data: VisitorRow[];
+    meta: { total: number; page: number; limit: number; totalPages: number };
+  }>({
+    queryKey: ["gatepass", "visitors", activeOnly, dateFilter, visitorsPage],
     queryFn: async () =>
-      (await api.get("/api/gatepass/visitors", { params: { active: activeOnly ? "true" : undefined, date: activeOnly ? undefined : dateFilter } })).data.data,
+      (
+        await api.get("/api/gatepass/visitors", {
+          params: { active: activeOnly ? "true" : undefined, date: activeOnly ? undefined : dateFilter, page: visitorsPage, limit: 20 },
+        })
+      ).data,
   });
+  const visitors = visitorsResponse?.data;
+  const visitorsMeta = visitorsResponse?.meta;
 
   const { data: classes } = useQuery<ClassOption[]>({
     queryKey: ["settings", "classes"],
@@ -169,9 +179,9 @@ export default function GatePassPage() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Date</label>
-          <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} disabled={activeOnly} className="w-40" />
+          <Input type="date" value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); setVisitorsPage(1); }} disabled={activeOnly} className="w-40" />
         </div>
-        <Button variant={activeOnly ? "default" : "outline"} size="sm" onClick={() => setActiveOnly((v) => !v)}>
+        <Button variant={activeOnly ? "default" : "outline"} size="sm" onClick={() => { setActiveOnly((v) => !v); setVisitorsPage(1); }}>
           {activeOnly ? "Showing: Currently Inside" : "Show Currently Inside Only"}
         </Button>
       </div>
@@ -243,6 +253,13 @@ export default function GatePassPage() {
                 </Table>
               </CardContent>
             </Card>
+          )}
+          {visitorsMeta && visitorsMeta.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 py-4">
+              <Button size="sm" variant="outline" disabled={visitorsPage <= 1} onClick={() => setVisitorsPage((p) => p - 1)}>Previous</Button>
+              <span className="text-sm text-muted-foreground">Page {visitorsMeta.page} of {visitorsMeta.totalPages} ({visitorsMeta.total} total)</span>
+              <Button size="sm" variant="outline" disabled={visitorsPage >= visitorsMeta.totalPages} onClick={() => setVisitorsPage((p) => p + 1)}>Next</Button>
+            </div>
           )}
         </>
       )}

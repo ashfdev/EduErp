@@ -53,7 +53,7 @@ function DeviceCard({ device }: { device: Device }) {
 
   const { data: unmapped } = useQuery<PunchLog[]>({
     queryKey: ["devices", device.id, "unmapped"],
-    queryFn: async () => (await api.get(`/api/devices/${device.id}/unmapped`)).data.data,
+    queryFn: async () => (await api.get(`/api/devices/${device.id}/unmapped`, { params: { limit: 50 } })).data.data,
     enabled: showUnmapped,
   });
 

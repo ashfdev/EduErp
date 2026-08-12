@@ -164,14 +164,15 @@ devicesRouter.get(
   "/:id/unmapped",
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const query = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(200).default(50) }).parse(req.query);
     // Unmapped punches stay is_processed=false on purpose (see punch.processor.ts) so
     // the reconciliation job keeps retrying them once the biometric_id is registered —
     // so "unmapped" here means "no person resolved yet", not "processed with no match".
-    const logs = await prisma.devicePunchLog.findMany({
-      where: { device_id: id, mapped_person_id: null },
-      orderBy: { punch_at: "desc" },
-      take: 200,
-    });
-    res.json({ success: true, data: logs });
+    const where = { device_id: id, mapped_person_id: null };
+    const [logs, total] = await Promise.all([
+      prisma.devicePunchLog.findMany({ where, orderBy: { punch_at: "desc" }, skip: (query.page - 1) * query.limit, take: query.limit }),
+      prisma.devicePunchLog.count({ where }),
+    ]);
+    res.json({ success: true, data: logs, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );

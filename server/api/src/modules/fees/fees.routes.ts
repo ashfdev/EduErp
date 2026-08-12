@@ -392,24 +392,51 @@ feesRouter.get(
   "/invoices",
   authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (req, res) => {
-    const query = z.object({ student_id: z.string().optional(), status: z.string().optional(), class_id: z.string().optional(), month: z.coerce.number().optional(), year: z.coerce.number().optional() }).parse(req.query);
+    const query = z
+      .object({
+        student_id: z.string().optional(),
+        status: z.string().optional(),
+        class_id: z.string().optional(),
+        month: z.coerce.number().optional(),
+        year: z.coerce.number().optional(),
+        search: z.string().optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(req.query);
     await syncOverdueInvoices(prisma, query.student_id);
-    const invoices = await prisma.invoice.findMany({
-      where: {
-        ...(query.student_id && { student_id: query.student_id }),
-        ...(query.status && { status: query.status as never }),
-        ...(query.month != null && { month: query.month }),
-        ...(query.year != null && { year: query.year }),
-        ...(query.class_id && { student: { current_class_id: query.class_id } }),
-      },
-      include: {
-        student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } },
-        application: { select: { id: true, applicant_name: true, admission_roll: true } },
-      },
-      orderBy: { due_date: "desc" },
-      take: 200, // Added to prevent frontend freeze from massive DB dumps
+    const where = {
+      ...(query.student_id && { student_id: query.student_id }),
+      ...(query.status && { status: query.status as never }),
+      ...(query.month != null && { month: query.month }),
+      ...(query.year != null && { year: query.year }),
+      ...(query.class_id && { student: { current_class_id: query.class_id } }),
+      ...(query.search && {
+        OR: [
+          { invoice_no: { contains: query.search, mode: "insensitive" as const } },
+          { student: { name_en: { contains: query.search, mode: "insensitive" as const } } },
+          { student: { student_uid: { contains: query.search, mode: "insensitive" as const } } },
+        ],
+      }),
+    };
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        include: {
+          student: { select: { name_en: true, student_uid: true, current_class: { select: { name_en: true } } } },
+          application: { select: { id: true, applicant_name: true, admission_roll: true } },
+        },
+        orderBy: { due_date: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.invoice.count({ where }),
+    ]);
+    res.json({
+      success: true,
+      data: invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })),
+      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
     });
-    res.json({ success: true, data: invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })) });
   }),
 );
 

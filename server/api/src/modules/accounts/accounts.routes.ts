@@ -447,13 +447,24 @@ accountsRouter.put(
 accountsRouter.get(
   "/journal-failures",
   asyncHandler(async (req, res) => {
-    const query = z.object({ resolved: z.enum(["true", "false"]).optional() }).parse(req.query);
-    const failures = await prisma.journalPostingFailure.findMany({
-      where: query.resolved === undefined ? {} : { resolved_at: query.resolved === "true" ? { not: null } : null },
-      orderBy: { created_at: "desc" },
-      take: 200,
-    });
-    res.json({ success: true, data: failures });
+    const query = z
+      .object({
+        resolved: z.enum(["true", "false"]).optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(req.query);
+    const where = query.resolved === undefined ? {} : { resolved_at: query.resolved === "true" ? { not: null } : null };
+    const [failures, total] = await Promise.all([
+      prisma.journalPostingFailure.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      prisma.journalPostingFailure.count({ where }),
+    ]);
+    res.json({ success: true, data: failures, meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) } });
   }),
 );
 

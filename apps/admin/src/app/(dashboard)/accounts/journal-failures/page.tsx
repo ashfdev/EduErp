@@ -14,15 +14,22 @@ interface JournalFailure {
   resolved_at: string | null;
   created_at: string;
 }
+interface JournalFailuresResponse {
+  data: JournalFailure[];
+  meta: { total: number; page: number; limit: number; totalPages: number };
+}
 
 export default function JournalFailuresPage() {
   const queryClient = useQueryClient();
   const [showResolved, setShowResolved] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const { data: failures, isLoading, isError, error, refetch } = useQuery<JournalFailure[]>({
-    queryKey: ["accounts", "journal-failures", showResolved],
-    queryFn: async () => (await api.get("/api/accounts/journal-failures", { params: { resolved: showResolved ? "true" : "false" } })).data.data,
+  const { data, isLoading, isError, error, refetch } = useQuery<JournalFailuresResponse>({
+    queryKey: ["accounts", "journal-failures", showResolved, page],
+    queryFn: async () => (await api.get("/api/accounts/journal-failures", { params: { resolved: showResolved ? "true" : "false", page, limit: 20 } })).data,
   });
+  const failures = data?.data ?? [];
+  const meta = data?.meta;
 
   const resolveMutation = useMutation({
     mutationFn: (id: string) => api.post(`/api/accounts/journal-failures/${id}/resolve`, {}),
@@ -40,7 +47,7 @@ export default function JournalFailuresPage() {
         subtitle="Money movements whose accounting entry failed to post — the payment/payroll/purchase still went through, but the books are out of sync until this is fixed."
         breadcrumbs={[{ label: "Accounts", href: "/accounts" }, { label: "Journal Failures" }]}
         action={
-          <Button variant="outline" size="sm" onClick={() => setShowResolved((v) => !v)}>
+          <Button variant="outline" size="sm" onClick={() => { setShowResolved((v) => !v); setPage(1); }}>
             {showResolved ? "Show Unresolved" : "Show Resolved"}
           </Button>
         }
@@ -93,6 +100,13 @@ export default function JournalFailuresPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      {meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 py-4">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {meta.page} of {meta.totalPages} ({meta.total} total)</span>
+          <Button size="sm" variant="outline" disabled={page >= meta.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+        </div>
       )}
         </>
       )}
