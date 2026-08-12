@@ -381,10 +381,24 @@ export async function renderDocument(docType: DocumentType, data: Record<string,
   return renderDocumentBatch(docType, [data], options);
 }
 
+// Below this many records, rendered exactly as always (one Puppeteer pass,
+// no merge step) -- byte-identical to every prior version of this function.
+// Above it, a single combined HTML document has repeatedly failed under
+// real memory pressure even with the timeout/--disable-dev-shm-usage
+// mitigations already in renderHtmlToPdf (confirmed live against a real
+// 628-student class and a real 176-staff batch, both post-mitigation, both
+// still failing -- "Protocol error (Page.printToPDF): Printing failed" and
+// a 120s timeout respectively). Each chunk instead gets its own fully
+// independent, fully-cleaned-up Puppeteer browser launch, and the resulting
+// small PDFs are merged together with pdf-lib.
+const BATCH_RENDER_CHUNK_SIZE = 100;
+
 // Compiles the template once and renders every record's HTML into a single
 // Puppeteer pass (page-break between records) instead of one browser launch
 // per record — this is what makes bulk endpoints (all admit cards for a
-// class, all marksheets, etc.) produce one genuine multi-page PDF.
+// class, all marksheets, etc.) produce one genuine multi-page PDF. Above
+// BATCH_RENDER_CHUNK_SIZE, this becomes several smaller Puppeteer passes
+// merged into one PDF afterward -- see the chunk-size comment above.
 export async function renderDocumentBatch(docType: DocumentType, dataList: Record<string, unknown>[], options?: RenderOptions): Promise<Buffer> {
   registerHelpers();
 
@@ -410,11 +424,31 @@ export async function renderDocumentBatch(docType: DocumentType, dataList: Recor
   // blocks (harmless — same content) followed by N bodies in order.
   const pageBreak = `<div style="page-break-after: always;"></div>`;
   const overrideStyle = template.css_content ? `<style>${template.css_content}</style>` : "";
-  const html = overrideStyle + dataList
-    .map((data) => compiled({ ...data, institution, signatures }))
-    .join(pageBreak);
+  const buildHtml = (records: Record<string, unknown>[]) =>
+    overrideStyle + records.map((data) => compiled({ ...data, institution, signatures })).join(pageBreak);
 
-  return renderHtmlToPdf(html, options);
+  if (dataList.length <= BATCH_RENDER_CHUNK_SIZE) {
+    return renderHtmlToPdf(buildHtml(dataList), options);
+  }
+
+  // Sequential, not parallel -- running several chunks' browsers at once
+  // would multiply the exact memory pressure this is meant to relieve.
+  const chunkBuffers: Buffer[] = [];
+  for (let i = 0; i < dataList.length; i += BATCH_RENDER_CHUNK_SIZE) {
+    const chunk = dataList.slice(i, i + BATCH_RENDER_CHUNK_SIZE);
+    chunkBuffers.push(await renderHtmlToPdf(buildHtml(chunk), options));
+  }
+  return mergePdfBuffers(chunkBuffers);
+}
+
+async function mergePdfBuffers(buffers: Buffer[]): Promise<Buffer> {
+  const merged = await PDFDocument.create();
+  for (const buffer of buffers) {
+    const doc = await PDFDocument.load(buffer);
+    const pages = await merged.copyPages(doc, doc.getPageIndices());
+    for (const page of pages) merged.addPage(page);
+  }
+  return Buffer.from(await merged.save());
 }
 
 export async function renderHtmlToPdf(html: string, options?: RenderOptions): Promise<Buffer> {
