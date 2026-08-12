@@ -365,7 +365,7 @@ feesRouter.get(
   authorize(FEE_COLLECTION_ROLES),
   asyncHandler(async (req, res) => {
     const { getMonthlyFeeGenerationJob } = await import("../../jobs/monthly-fee-generation.job");
-    const job = await getMonthlyFeeGenerationJob(req.params.jobId);
+    const job = await getMonthlyFeeGenerationJob(reqParam(req, "jobId"));
     if (!job) throw notFound("Job not found");
 
     const state = await job.getState();
