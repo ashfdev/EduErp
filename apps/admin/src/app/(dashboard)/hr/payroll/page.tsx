@@ -59,7 +59,14 @@ export default function PayrollPage() {
   const calculateMutation = useMutation({
     mutationFn: () => api.post("/api/hr/payroll/calculate", { month, year, department_id: departmentId || undefined }),
     onSuccess: (res) => {
-      toast.success(`Processed ${res.data.data.processed} staff — total payable ৳${res.data.data.total_payable}`);
+      const d = res.data.data;
+      toast.success(`Processed ${d.processed} staff — total payable ৳${d.total_payable}`);
+      if (d.has_pending_advance) {
+        toast.warning(
+          `${d.pending_advance_staff_count} staff member(s) in this batch have uncleared advances. You must manually deduct the EMI via their payroll record before finalizing.`,
+          { duration: 8000 }
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["hr", "payroll", month, year] });
     },
     onError: () => toast.error("Failed to calculate payroll"),

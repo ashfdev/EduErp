@@ -47,7 +47,9 @@ export type AuditAction =
   | "SIGNATURE_DELETE"
   | "FEE_RECONCILIATION_FINDING_REVIEW"
   | "SMS_GATEWAY_CONFIG_UPDATE"
-  | "FACILITY_REQUEST_REVIEWED";
+  | "FACILITY_REQUEST_REVIEWED"
+  | "PF_WITHDRAWAL"
+  | "SALARY_INCREMENT";
 
 // Fire-and-forget: an audit-log write must never break the request it's
 // recording. Failures are logged, not thrown.

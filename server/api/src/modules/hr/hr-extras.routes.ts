@@ -7,6 +7,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PAYROLL_MANAGE_ROLES, HR_MANAGE_ROLES } from "../../lib/roles";
 import { badRequest, notFound } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
 
 // ─────────────────────────────────────────────────────────────────
 // TAX DEDUCTION ROUTER  — /hr/tax-deductions
@@ -89,6 +90,14 @@ salaryIncrementRouter.post(
       });
 
       return record;
+    });
+
+    await logAudit("SALARY_INCREMENT", {
+      userId: req.user?.sub,
+      targetType: "Staff",
+      targetId: body.staff_id,
+      metadata: { increment_amount: body.increment_amount, new_gross_salary: body.new_gross_salary, reason: body.reason ?? null },
+      req,
     });
 
     res.status(201).json({ success: true, data: increment });

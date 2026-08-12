@@ -407,6 +407,7 @@ feesRouter.get(
         application: { select: { id: true, applicant_name: true, admission_roll: true } },
       },
       orderBy: { due_date: "desc" },
+      take: 200, // Added to prevent frontend freeze from massive DB dumps
     });
     res.json({ success: true, data: invoices.map((inv) => ({ ...inv, period: formatFeePeriod(inv.month, inv.year) })) });
   }),
@@ -956,7 +957,9 @@ feesRouter.get(
       where: { student_id: studentId, status: { notIn: ["PAID", "WAIVED"] } },
       include: {
         fee_sub_category: { select: { name: true } },
-        waiver_applications: { include: { student_waiver: { include: { waiver_type: { select: { name: true } } } } } },
+        waiver_applications: {
+          include: { student_waiver: { include: { waiver_type: { select: { name: true } } } }, sibling_group: { select: { id: true } } },
+        },
       },
       orderBy: { due_date: "asc" },
     });
@@ -980,7 +983,15 @@ feesRouter.get(
           fine_source: fineSource,
           outstanding,
           is_manual_fine: inv.is_manual_fine,
-          waivers: inv.waiver_applications.map((w) => ({ id: w.id, waiver_name: w.student_waiver.waiver_type.name, discount_amount: w.discount_amount })),
+          waivers: inv.waiver_applications.map((w) => ({
+            id: w.id,
+            // Every application is sourced from either a real StudentWaiver
+            // or (sibling auto-waiver) a SiblingGroup with no waiver_type to
+            // name -- fall back to a plain, still-informative label so this
+            // doesn't crash on the one row type that has no waiver_type.
+            waiver_name: w.student_waiver?.waiver_type.name ?? "Sibling Discount",
+            discount_amount: w.discount_amount,
+          })),
         };
       }),
     );
@@ -1096,7 +1107,7 @@ feesRouter.post(
             include: { student_waiver: { include: { waiver_type: { select: { name: true } } } } },
           });
           overriddenWaiverAmount = overridden.reduce((s, w) => s + w.discount_amount, 0);
-          overriddenWaiverNames = overridden.map((w) => `${w.student_waiver.waiver_type.name} (৳${w.discount_amount})`);
+          overriddenWaiverNames = overridden.map((w) => `${w.student_waiver?.waiver_type.name ?? "Sibling Discount"} (৳${w.discount_amount})`);
         }
 
         const discount = Math.min(line.discount_amount ?? 0, invoice.amount_due + overriddenWaiverAmount);

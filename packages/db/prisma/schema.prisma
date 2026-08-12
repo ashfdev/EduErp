@@ -2053,16 +2053,30 @@ enum FeeReconciliationFindingStatus {
 // rather than opaquely mutating Invoice.amount_due, since the Student-wise
 // Waivers report (Phase G) needs this trail.
 model InvoiceWaiverApplication {
-  id                String        @id @default(cuid())
+  id                String         @id @default(cuid())
   invoice_id        String
-  invoice           Invoice       @relation(fields: [invoice_id], references: [id])
-  student_waiver_id String
-  student_waiver    StudentWaiver @relation(fields: [student_waiver_id], references: [id])
+  invoice           Invoice        @relation(fields: [invoice_id], references: [id])
+  // Exactly one of student_waiver_id / sibling_group_id is set, never both
+  // and never neither -- the two represent the two distinct sources of a
+  // waiver discount this table traces. A regular waiver (scholarship, staff
+  // discount, etc.) is always tied to a real StudentWaiver row; the sibling
+  // auto-waiver has no StudentWaiver/WaiverType behind it at all (it's a
+  // computed discount off SiblingGroup.auto_waiver_percentage), so it needed
+  // its own nullable FK rather than forcing a fake StudentWaiver into
+  // existence just to satisfy this table's original student_waiver_id-only
+  // shape (fixed 2026-08-12 -- the sibling auto-waiver previously bypassed
+  // this table entirely, silently mutating amount_due with no audit trail
+  // and no idempotency guard).
+  student_waiver_id String?
+  student_waiver    StudentWaiver? @relation(fields: [student_waiver_id], references: [id])
+  sibling_group_id  String?
+  sibling_group     SiblingGroup?  @relation(fields: [sibling_group_id], references: [id])
   discount_amount   Float
-  applied_at        DateTime      @default(now())
+  applied_at        DateTime       @default(now())
 
   @@index([invoice_id])
   @@index([student_waiver_id])
+  @@index([sibling_group_id])
 }
 
 model Payment {
@@ -4715,9 +4729,10 @@ model AlumniProfile {
 }
 
 model SiblingGroup {
-  id                     String    @id @default(cuid())
-  auto_waiver_percentage Float     @default(0)
-  created_at             DateTime  @default(now())
-  updated_at             DateTime  @updatedAt
+  id                     String                     @id @default(cuid())
+  auto_waiver_percentage Float                      @default(0)
+  created_at             DateTime                   @default(now())
+  updated_at             DateTime                   @updatedAt
   students               Student[]
+  applications           InvoiceWaiverApplication[]
 }

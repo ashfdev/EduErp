@@ -12,10 +12,10 @@ import { badRequest, notFound } from "../../lib/errors";
 // General campus Gate Pass (Plan Thirteen, Phase H) — deliberately generalizes
 // HostelVisitor's shape into a new, independent, campus-wide model rather than
 // merging into or repurposing it (HostelVisitor stays exactly as-is, hostel-
-// resident visits only). Unlike hostel.routes.ts's own visitor routes (whose
-// GET has no authorize() at all beyond authenticate — a known, pre-existing
-// gap, flagged separately, not fixed here since it's a different table), this
-// router gates every route with STAFF_ONLY_ROLES from the start.
+// resident visits only). hostel.routes.ts's own visitor routes are now also
+// fully authorize()-gated (HOSTEL_MANAGE_ROLES, including GET) — this router
+// gates every route with STAFF_ONLY_ROLES from the start, same discipline,
+// different role set since gate-pass visits aren't hostel-scoped.
 export const gatePassRouter = Router();
 gatePassRouter.use(authenticate);
 gatePassRouter.use(authorize(STAFF_ONLY_ROLES));

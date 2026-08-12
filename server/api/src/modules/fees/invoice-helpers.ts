@@ -78,6 +78,7 @@ export async function applyWaiversToInvoice(tx: Tx, invoice: Invoice): Promise<I
   // -- no real Student exists yet to hold a waiver against, so there is
   // structurally nothing to apply. Waivers only ever attach post-enrollment.
   if (!invoice.student_id) return invoice;
+  const studentId = invoice.student_id;
   const waivers = await tx.studentWaiver.findMany({
     where: {
       student_id: invoice.student_id,
@@ -92,6 +93,55 @@ export async function applyWaiversToInvoice(tx: Tx, invoice: Invoice): Promise<I
   for (const w of waivers) {
     current = await applySingleWaiverToInvoice(tx, current, w);
   }
+
+  // Sibling Auto-Waiver -- studentId is invoice.student_id (narrowed
+  // non-null by the guard at the top of this function; unlike current, it's
+  // never reassigned, so it stays a plain `string` for TypeScript here).
+  // Two flat, single-table selects instead of one nested `select: {
+  // sibling_group: {...} }` -- the nested form type-checked incorrectly
+  // through this file's `Tx = Prisma.TransactionClient | PrismaClient`
+  // union (a known Prisma/TypeScript generic-inference gap with unioned
+  // client types), silently widening the result to the full, un-narrowed
+  // Student shape. Splitting into two scalar-only selects sidesteps it
+  // entirely rather than papering over it with a cast.
+  if (current.category === "TUITION" && current.amount_due > 0) {
+    const student = await tx.student.findUnique({ where: { id: studentId }, select: { sibling_group_id: true } });
+    const siblingGroup = student?.sibling_group_id
+      ? await tx.siblingGroup.findUnique({ where: { id: student.sibling_group_id }, select: { id: true, auto_waiver_percentage: true } })
+      : null;
+    if (siblingGroup && siblingGroup.auto_waiver_percentage > 0) {
+      // Same idempotency guard as applySingleWaiverToInvoice -- without it,
+      // a second call to applyWaiversToInvoice for the same invoice (e.g.
+      // applyWaiverToExistingInvoices retroactively re-running the whole
+      // waiver set) would double-discount the sibling waiver, which has no
+      // per-waiver-row natural protection the way a real StudentWaiver does.
+      const already = await tx.invoiceWaiverApplication.findFirst({ where: { invoice_id: current.id, sibling_group_id: siblingGroup.id } });
+      if (!already) {
+        const rawDiscount = current.amount_due * (siblingGroup.auto_waiver_percentage / 100);
+        const remainingBalance = Math.max(0, current.amount_due + current.fine_amount - current.amount_paid);
+        const discount = Math.min(Math.round(rawDiscount * 100) / 100, remainingBalance, current.amount_due);
+        if (discount > 0) {
+          await tx.invoiceWaiverApplication.create({
+            data: { invoice_id: current.id, sibling_group_id: siblingGroup.id, discount_amount: discount },
+          });
+          const newAmountDue = current.amount_due - discount;
+          const newStatus =
+            current.status === "PENDING" || current.status === "PARTIAL" || current.status === "OVERDUE"
+              ? current.amount_paid >= newAmountDue + current.fine_amount
+                ? "PAID"
+                : current.amount_paid > 0
+                  ? "PARTIAL"
+                  : current.status
+              : current.status;
+          current = await tx.invoice.update({
+            where: { id: current.id },
+            data: { amount_due: newAmountDue, status: newStatus },
+          });
+        }
+      }
+    }
+  }
+
   return current;
 }
 

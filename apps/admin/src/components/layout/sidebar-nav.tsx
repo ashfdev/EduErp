@@ -56,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
     key: "students",
     items: [
       { href: "/students", key: "students", icon: Users },
+      { href: "/students/sibling-groups", key: "siblingGroups", icon: Users },
       { href: "/alumni", key: "alumni", icon: GraduationCap },
       { href: "/complaints", key: "complaints", icon: AlertCircle, countKey: "complaints" },
       { href: "/document-requests", key: "documentRequests", icon: FileText, countKey: "documentRequests" },
@@ -92,6 +93,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/hr/attendance", key: "employeeAttendance", icon: ClipboardCheck },
       { href: "/hr/leave", key: "staffLeaveRequests", icon: CalendarOff, countKey: "staffLeaveRequests" },
       { href: "/hr/payroll", key: "managePayroll", icon: DollarSign },
+      { href: "/hr/advances", key: "staffAdvances", icon: DollarSign },
+      { href: "/hr/provident-fund", key: "providentFund", icon: Wallet },
+      { href: "/hr/increments", key: "salaryIncrements", icon: BarChart3 },
+      { href: "/hr/leave-encashments", key: "leaveEncashments", icon: Calculator },
       { href: "/hr/faculty", key: "facultyList", icon: Contact },
       { href: "/hr/staff", key: "staffList", icon: IdCard },
       { href: "/hr/appraisals", key: "appraisals", icon: ClipboardList },

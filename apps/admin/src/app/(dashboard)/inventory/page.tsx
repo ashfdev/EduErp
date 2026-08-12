@@ -33,6 +33,10 @@ export default function InventoryDashboardPage() {
     queryKey: ["inventory", "purchase-history"],
     queryFn: async () => (await api.get("/api/inventory/reports/purchase-history")).data.data,
   });
+  const { data: reorderAlerts } = useQuery<{ count: number }>({
+    queryKey: ["inventory", "reorder-alerts-count"],
+    queryFn: async () => (await api.get("/api/inventory/stock/reorder-alerts/count")).data.data,
+  });
 
   return (
     <PageWrapper>
@@ -51,7 +55,16 @@ export default function InventoryDashboardPage() {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Total Assets</p><p className="text-2xl font-semibold">{data?.total_assets ?? 0}</p><p className="text-xs text-muted-foreground">Book value: {fmt(data?.total_book_value ?? 0)}</p></CardContent></Card>
-        <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Total Items</p><p className="text-2xl font-semibold">{data?.total_items ?? 0}</p>{!!data?.low_stock_count && <Badge variant="destructive">Low Stock: {data.low_stock_count}</Badge>}</CardContent></Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground">Total Items</p>
+            <p className="text-2xl font-semibold">{data?.total_items ?? 0}</p>
+            <div className="flex flex-col gap-1 mt-1 items-start">
+              {!!data?.low_stock_count && <Badge variant="destructive">Low Stock: {data.low_stock_count}</Badge>}
+              {!!reorderAlerts?.count && <Badge variant="warning">Reorder Alerts: {reorderAlerts.count}</Badge>}
+            </div>
+          </CardContent>
+        </Card>
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Pending POs</p><p className="text-2xl font-semibold">{data?.pending_pos ?? 0}</p><p className="text-xs text-muted-foreground">{fmt(data?.total_po_value_this_year ?? 0)} this year</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Maintenance Due</p><p className="text-2xl font-semibold">{data?.maintenance_due_count ?? 0}</p></CardContent></Card>
       </div>

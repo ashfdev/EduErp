@@ -7,6 +7,7 @@ import { authorize } from "../../middleware/authorize";
 import { reqParam } from "../../lib/req-param";
 import { PAYROLL_MANAGE_ROLES } from "../../lib/roles";
 import { badRequest, notFound } from "../../lib/errors";
+import { logAudit } from "../../lib/audit-log";
 
 export const pfRouter = Router();
 pfRouter.use(authenticate);
@@ -31,6 +32,7 @@ pfRouter.get(
       create: { staff_id: staffId, total_balance: 0 },
       update: {},
       include: {
+
         transactions: { orderBy: { date: "desc" } },
       },
     });
@@ -75,9 +77,16 @@ pfRouter.post(
     const staff = await prisma.staff.findFirst({ where: { id: body.staff_id, deleted_at: null } });
     if (!staff) throw notFound("Staff not found");
 
-    // All PF mutations use a transaction to prevent race conditions when
-    // two withdrawals are submitted concurrently for the same staff member.
+    // FOR UPDATE serializes any concurrent withdrawal for the same staff
+    // member behind this one -- without it, two concurrent requests could
+    // both read the same pre-decrement balance, both pass the sufficiency
+    // check below, and both commit, pushing total_balance negative (the
+    // same lost-update race already fixed for Invoice.amount_paid in
+    // fees.routes.ts's /collect and for Item.current_stock in
+    // items.routes.ts's /stock/issue -- found here during a fresh audit
+    // pass, 2026-08-12, following the identical pattern).
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "ProvidentFund" WHERE staff_id = ${body.staff_id} FOR UPDATE`;
       const pf = await tx.providentFund.findUnique({ where: { staff_id: body.staff_id } });
 
       if (!pf) {
@@ -104,6 +113,14 @@ pfRouter.post(
       });
 
       return { pf: updated, transaction: txRecord };
+    });
+
+    await logAudit("PF_WITHDRAWAL", {
+      userId: req.user?.sub,
+      targetType: "ProvidentFund",
+      targetId: result.pf.id,
+      metadata: { staff_id: body.staff_id, amount: body.amount, new_balance: result.pf.total_balance },
+      req,
     });
 
     res.status(201).json({ success: true, data: result });
