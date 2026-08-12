@@ -199,7 +199,25 @@ payrollRouter.post(
       data: { run_by_id: req.user!.sub, month: body.month, year: body.year, department_id: body.department_id, processed_count: processed, total_payable: roundedTotal },
     });
 
-    res.json({ success: true, data: { processed, total_payable: roundedTotal } });
+    // Warn if any of the just-processed staff have uncleared advance loans.
+    // advance_deducted defaults to 0 on every DRAFT record and must be set
+    // manually by the accountant via PUT /:id before finalize.  Surfacing the
+    // count here (not after finalize) gives them a clear signal to act before
+    // payslips are printed with an inflated net-salary figure.
+    const staffIds = staffList.map((s) => s.id);
+    const pendingAdvanceCount = staffIds.length
+      ? await prisma.staffAdvance.count({ where: { staff_id: { in: staffIds }, status: { in: ["PENDING", "PARTIAL"] } } })
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        processed,
+        total_payable: roundedTotal,
+        has_pending_advance: pendingAdvanceCount > 0,
+        pending_advance_staff_count: pendingAdvanceCount,
+      },
+    });
   }),
 );
 
@@ -341,6 +359,53 @@ payrollRouter.post(
       try {
         const pdf = await renderDocument("PAYSLIP", buildPayslipData(record) as unknown as Record<string, unknown>);
         const { url } = await uploadBuffer("payslips", `${record.staff.staff_uid}-${record.month}-${record.year}.pdf`, pdf, "application/pdf");
+
+        // PF contribution: if a non-zero pf_amount was computed during /calculate,
+        // upsert the staff's ProvidentFund account and record the contribution.
+        if (record.pf_amount > 0) {
+          const pf = await prisma.providentFund.upsert({
+            where: { staff_id: record.staff_id },
+            create: { staff_id: record.staff_id, total_balance: record.pf_amount },
+            update: { total_balance: { increment: record.pf_amount } },
+          });
+          // Only create a PFTransaction if this record isn't already linked
+          // (i.e., re-running finalize after a partial success won't double-count).
+          const existing = await prisma.pFTransaction.findUnique({ where: { payroll_record_id: record.id } });
+          if (!existing) {
+            await prisma.pFTransaction.create({
+              data: {
+                provident_fund_id: pf.id,
+                payroll_record_id: record.id,
+                transaction_type: "CONTRIBUTION",
+                amount: record.pf_amount,
+                date: new Date(record.year, record.month - 1, 1),
+                description: `PF contribution for ${record.month}/${record.year}`,
+              },
+            });
+          }
+        }
+
+        // Advance clearance: if the accountant set advance_deducted > 0 on
+        // this draft, find the oldest uncleared advance and increment its
+        // amount_cleared.  Flip to CLEARED when fully settled, PARTIAL when
+        // partially settled.  Uses the module-level prisma client (not a tx)
+        // matching the existing createPayrollJournal() pattern — see mark-paid
+        // comment below for why a tx is deliberately avoided here.
+        if (record.advance_deducted > 0) {
+          const openAdvance = await prisma.staffAdvance.findFirst({
+            where: { staff_id: record.staff_id, status: { in: ["PENDING", "PARTIAL"] } },
+            orderBy: { date_given: "asc" },
+          });
+          if (openAdvance) {
+            const newCleared = Math.min(openAdvance.amount_cleared + record.advance_deducted, openAdvance.amount);
+            const newStatus = newCleared >= openAdvance.amount ? "CLEARED" : "PARTIAL";
+            await prisma.staffAdvance.update({
+              where: { id: openAdvance.id },
+              data: { amount_cleared: newCleared, status: newStatus },
+            });
+          }
+        }
+
         await prisma.payrollRecord.update({ where: { id: record.id }, data: { status: "FINALIZED", payslip_url: url } });
         generated++;
       } catch (err) {

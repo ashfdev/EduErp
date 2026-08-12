@@ -4,6 +4,8 @@ import { leaveTypesRouter, leavesRouter } from "./leave.routes";
 import { salaryStructuresRouter } from "./salary.routes";
 import { payrollRouter } from "./payroll.routes";
 import { jobsRouter } from "./jobs.routes";
+import { advanceRouter } from "./advance.routes";
+import { pfRouter } from "./pf.routes";
 
 export const hrRouter = Router();
 
@@ -13,3 +15,5 @@ hrRouter.use("/leaves", leavesRouter);
 hrRouter.use("/salary-structures", salaryStructuresRouter);
 hrRouter.use("/payroll", payrollRouter);
 hrRouter.use("/jobs", jobsRouter);
+hrRouter.use("/advances", advanceRouter);
+hrRouter.use("/pf", pfRouter);
