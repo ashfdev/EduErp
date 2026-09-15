@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { TeacherShell } from "@/components/teacher-shell";
 import { Badge, Button, Input, PageHeader, PageWrapper, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
@@ -74,7 +74,7 @@ const STATUS_COLOR: Record<string, string> = {
   LATE: "bg-amber-100 border-amber-400",
 };
 
-export default function SubjectAttendancePage() {
+function SubjectAttendanceContent() {
   const searchParams = useSearchParams();
   const routineSlotId = searchParams.get("routine_slot_id") ?? "";
   const date = searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
@@ -301,5 +301,13 @@ export default function SubjectAttendancePage() {
         )}
       </PageWrapper>
     </TeacherShell>
+  );
+}
+
+export default function SubjectAttendancePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f0fdf4]" />}>
+      <SubjectAttendanceContent />
+    </Suspense>
   );
 }
