@@ -25,6 +25,8 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY packages/db packages/db
 RUN pnpm --filter=@education-erp/db exec prisma generate
+RUN pnpm --filter=@education-erp/types build
+RUN pnpm --filter=@education-erp/validators build
 RUN pnpm --filter=@education-erp/teacher build
 
 # next.config.mjs sets output:"standalone", so the runtime image only needs
