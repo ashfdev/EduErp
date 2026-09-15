@@ -1,11 +1,20 @@
-# Production overrides — apply with:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Adds resource limits, always-restart policies, and container healthchecks
-# on top of the base dev compose file.
-
 services:
   postgres:
+    image: postgres:16-alpine
     restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: education_erp
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     deploy:
       resources:
         limits:
@@ -13,7 +22,17 @@ services:
           memory: 2G
 
   redis:
+    image: redis:7-alpine
     restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     deploy:
       resources:
         limits:
@@ -21,7 +40,19 @@ services:
           memory: 512M
 
   api:
+    build:
+      context: .
+      dockerfile: server/api/Dockerfile
     restart: always
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eduerp-api.rule=Host(`erpapi.ashdevs.com`)"
+      - "traefik.http.routers.eduerp-api.entrypoints=websecure"
+      - "traefik.http.routers.eduerp-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eduerp-api.loadbalancer.server.port=4000"
     deploy:
       resources:
         limits:
@@ -33,9 +64,34 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      NODE_ENV: production
+      DEVICE_SERVICE_URL: http://device-service:4500
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
     restart: always
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eduerp-admin.rule=Host(`erp.ashdevs.com`)"
+      - "traefik.http.routers.eduerp-admin.entrypoints=websecure"
+      - "traefik.http.routers.eduerp-admin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eduerp-admin.loadbalancer.server.port=3000"
     deploy:
       resources:
         limits:
@@ -47,9 +103,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      - api
 
   portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
     restart: always
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eduerp-portal.rule=Host(`student.ashdevs.com`)"
+      - "traefik.http.routers.eduerp-portal.entrypoints=websecure"
+      - "traefik.http.routers.eduerp-portal.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eduerp-portal.loadbalancer.server.port=3001"
     deploy:
       resources:
         limits:
@@ -61,9 +133,25 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      - api
 
   website:
+    build:
+      context: .
+      dockerfile: apps/website/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
     restart: always
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eduerp-website.rule=Host(`alhumaira.ashdevs.com`)"
+      - "traefik.http.routers.eduerp-website.entrypoints=websecure"
+      - "traefik.http.routers.eduerp-website.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eduerp-website.loadbalancer.server.port=3002"
     deploy:
       resources:
         limits:
@@ -75,9 +163,48 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      - api
+
+  teacher:
+    build:
+      context: .
+      dockerfile: apps/teacher/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    restart: always
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eduerp-teacher.rule=Host(`teacher.ashdevs.com`)"
+      - "traefik.http.routers.eduerp-teacher.entrypoints=websecure"
+      - "traefik.http.routers.eduerp-teacher.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eduerp-teacher.loadbalancer.server.port=3003"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      - api
 
   device-service:
+    build:
+      context: .
+      dockerfile: services/device/Dockerfile
     restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      API_URL: http://api:4000
+      DEVICE_SERVICE_PORT: 4500
     deploy:
       resources:
         limits:
@@ -89,9 +216,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
 
   notification-service:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
     restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      REDIS_URL: redis://redis:6379
+      NOTIFICATION_SERVICE_PORT: 4600
     deploy:
       resources:
         limits:
@@ -103,3 +242,16 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  dokploy-network:
+    external: true

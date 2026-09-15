@@ -40,4 +40,4 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app /app
 EXPOSE 4000
-CMD ["node", "server/api/dist/index.js"]
+CMD ["sh", "-c", "cd packages/db && npx prisma migrate deploy && cd ../.. && node server/api/dist/index.js"]
