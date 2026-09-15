@@ -89,6 +89,14 @@ services:
       DEVICE_SERVICE_SECRET: ${DEVICE_SERVICE_SECRET}
       # Revalidate secret for Next.js ISR
       WEBSITE_REVALIDATE_SECRET: ${WEBSITE_REVALIDATE_SECRET:-changeme}
+    volumes:
+      # storage.service.ts resolves the local-upload fallback to
+      # $(pwd)/local-uploads, which is /app/local-uploads at container
+      # runtime (see server/api/Dockerfile CMD). Without this volume every
+      # uploaded file (student photos, documents, signatures) is lost on
+      # each redeploy. Prefer Azure Blob in production; this is the safety
+      # net for whenever AZURE_STORAGE_CONNECTION_STRING is unset.
+      - api_local_uploads:/app/local-uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -283,6 +291,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  api_local_uploads:
 
 networks:
   dokploy-network:

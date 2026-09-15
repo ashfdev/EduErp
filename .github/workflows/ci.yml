@@ -72,12 +72,9 @@ jobs:
       - name: Build
         run: pnpm build
 
-  deploy-staging:
-    needs: build-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Azure App Service (staging)
-        run: echo "Wire azure/webapps-deploy here once Azure resources exist (see infra/bicep)."
+# Deployment is not a job in this workflow. Dokploy watches `main` directly
+# via its own GitHub webhook (configured in the Dokploy dashboard, not here)
+# and rebuilds/redeploys docker-compose.prod.yml on every push. This
+# workflow's only job is the quality gate — require `build-test` as a
+# required status check on `main` (Settings → Branches) so nothing broken
+# ever reaches the branch Dokploy deploys from.

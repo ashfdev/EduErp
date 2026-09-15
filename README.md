@@ -215,21 +215,40 @@ Full phase-by-phase schema history, including exactly what was added and why, is
 
 ## Deployment
 
-### Docker Compose
+### Dokploy (Contabo VPS) — primary deployment target
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
+The stack deploys as a single Dokploy **Compose** application, driven by its own GitHub webhook:
 
-The prod overlay adds resource limits, `restart: always`, and container healthchecks on top of
-the base compose file. `server/api`'s image bundles a system Chromium for Puppeteer PDF
-rendering (no separate download at container start).
+1. Dokploy → New Project → **Compose** app → connect the GitHub repo, branch `main`, compose
+   path `docker-compose.prod.yml`. Enable **Auto Deploy** — Dokploy registers the webhook itself
+   and rebuilds + redeploys on every push to `main`. There is no deploy job in GitHub Actions;
+   `.github/workflows/ci.yml` is the quality gate only. Make its `build-test` job a required
+   status check on `main` (GitHub → Settings → Branches) so nothing broken ever reaches the
+   branch Dokploy watches.
+2. `docker-compose.prod.yml` is self-contained — Postgres, Redis, all 7 app/service containers,
+   Traefik labels, and the external `dokploy-network`. Point Dokploy at it directly; do **not**
+   merge it with the dev `docker-compose.yml` (that file publishes host ports for local
+   development, which would bypass Traefik/TLS if carried into prod).
+3. Set every `${VAR}` the compose file references in the Dokploy **Environment** tab — unlike the
+   dev file, it has no `:-` fallbacks, so an unset var deploys as an empty string:
+   `ADMIN_URL`, `PORTAL_URL`, `WEBSITE_URL`, `TEACHER_URL`, `API_URL`, `NEXT_PUBLIC_API_URL`,
+   `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY`, `LOCAL_STORAGE_SECRET`,
+   `DEVICE_SERVICE_SECRET`, `WEBSITE_REVALIDATE_SECRET`. `NEXT_PUBLIC_API_URL` is a Next.js
+   build-time arg — changing it later needs a rebuild, not just a redeploy.
+4. `DATABASE_URL`/`REDIS_URL` are hardcoded in the compose file to the in-stack `postgres`/`redis`
+   containers (single-VPS setup, not managed cloud instances) — protect that data with backups
+   instead (scheduled `pg_dump`, shipped off the VPS). Postgres/Redis data live in the named
+   volumes `postgres_data`/`redis_data`; uploaded files (when `AZURE_STORAGE_CONNECTION_STRING`
+   is unset) live in `api_local_uploads`. All three must survive redeploys and be included in any
+   backup plan.
+5. Migrations run automatically — `server/api/Dockerfile`'s CMD runs `prisma migrate deploy`
+   before starting the server, so no manual migration step is needed after deploy.
 
-### Azure (infra/bicep)
+### Azure (infra/bicep) — not the current target
 
 `infra/bicep/main.bicep` provisions App Service, PostgreSQL Flexible Server, Blob Storage, and
-Key Vault. Not yet wired into CI — deploy manually until Azure credentials are configured as
-GitHub secrets:
+Key Vault as an alternative to the VPS/Dokploy path above. Not wired into CI and not currently
+used; kept for reference in case managed-Azure hosting is needed later:
 
 ```bash
 az deployment group create \
@@ -240,12 +259,15 @@ az deployment group create \
 
 ### Production checklist
 
-- Set real `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` (32+ random characters each).
-- Point `DATABASE_URL`/`REDIS_URL` at managed instances, not the compose-local containers.
+- Set real `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`/`ENCRYPTION_KEY`/`LOCAL_STORAGE_SECRET`
+  (32+ random characters each) in the Dokploy Environment tab — never commit real values.
 - Fill in SMS/SMTP/VAPID/payment-gateway credentials in `services/notification/.env` and
   `server/api/.env` — everything runs in mock/logging mode until then.
-- Set `ADMIN_URL`/`PORTAL_URL`/`WEBSITE_URL` to real domains — the API's CORS allowlist and the
-  website's ISR-revalidation webhook both depend on these.
+- Set `ADMIN_URL`/`PORTAL_URL`/`WEBSITE_URL`/`TEACHER_URL` to real domains — the API's CORS
+  allowlist and the website's ISR-revalidation webhook both depend on these.
+- Configure Azure Blob Storage, or confirm the `api_local_uploads` volume is mounted, before
+  onboarding real students — otherwise uploaded files don't survive a redeploy.
+- Schedule off-VPS backups of the `postgres_data` volume before going live.
 - Rate limiting, Prisma-error-code mapping, request IDs, and file-upload magic-byte validation
   are already wired in `server/api` (see `src/middleware/`).
 
