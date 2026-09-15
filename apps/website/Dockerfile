@@ -5,6 +5,7 @@ WORKDIR /app
 
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/db/package.json packages/db/package.json
 COPY packages/types/package.json packages/types/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/config/package.json packages/config/package.json
@@ -20,6 +21,8 @@ COPY apps/website apps/website
 # read at container startup — must be a build ARG, not a runtime ENV.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+COPY packages/db packages/db
+RUN pnpm --filter=@education-erp/db exec prisma generate
 RUN pnpm --filter=@education-erp/website build
 
 # next.config.mjs sets output:"standalone", so the runtime image only needs
