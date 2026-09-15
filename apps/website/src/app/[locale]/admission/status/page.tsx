@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Search, Phone, FileText, CheckCircle2, AlertCircle, Calendar, MapPin, Download, CreditCard, Send, Clock } from "lucide-react";
@@ -361,7 +361,7 @@ function PaymentSection({ admissionRoll, phone, onStatusChange }: { admissionRol
   );
 }
 
-export default function AdmissionStatusPage() {
+function AdmissionStatusContent() {
   const t = useTranslations("admissionStatus");
   const searchParams = useSearchParams();
   const [admissionRoll, setAdmissionRoll] = useState(searchParams.get("admission_roll") ?? "");
@@ -548,5 +548,13 @@ export default function AdmissionStatusPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function AdmissionStatusPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f0fdf4]" />}>
+      <AdmissionStatusContent />
+    </Suspense>
   );
 }

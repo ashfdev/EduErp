@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
@@ -27,7 +27,7 @@ interface SearchResults {
 // already used by the navbar and the /about, /academic sidebars.
 const ACADEMIC_PAGE_KEYS = new Set(["course_curriculum", "grading_system", "academic_regulations", "policies"]);
 
-export default function SearchPage() {
+function SearchContent() {
   const t = useTranslations("search");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -96,5 +96,13 @@ export default function SearchPage() {
         </section>
       )}
     </main>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-3xl px-4 py-10" />}>
+      <SearchContent />
+    </Suspense>
   );
 }
