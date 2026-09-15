@@ -72,6 +72,16 @@ services:
       PORT: 4000
       NODE_ENV: production
       DEVICE_SERVICE_URL: http://device-service:4500
+      # CORS allowlist — must match the public domains of every frontend
+      ADMIN_URL: ${ADMIN_URL}
+      PORTAL_URL: ${PORTAL_URL}
+      WEBSITE_URL: ${WEBSITE_URL}
+      TEACHER_URL: ${TEACHER_URL}
+      API_URL: ${API_URL}
+      # JWT secret — required for auth token signing
+      JWT_SECRET: ${JWT_SECRET}
+      # Revalidate secret for Next.js ISR
+      WEBSITE_REVALIDATE_SECRET: ${WEBSITE_REVALIDATE_SECRET:-changeme}
     depends_on:
       postgres:
         condition: service_healthy
