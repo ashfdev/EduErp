@@ -33,6 +33,8 @@ COPY packages/validators packages/validators
 COPY packages/config packages/config
 COPY server/api server/api
 RUN pnpm --filter=@education-erp/db exec prisma generate
+RUN pnpm --filter=@education-erp/types build
+RUN pnpm --filter=@education-erp/validators build
 RUN pnpm --filter=@education-erp/api build
 
 FROM base AS runner
