@@ -26,11 +26,11 @@ RUN pnpm --filter=@education-erp/db exec prisma generate
 RUN pnpm --filter=@education-erp/website build
 
 # next.config.mjs sets output:"standalone", so the runtime image only needs
-# .next/standalone + .next/static + public — not node_modules or source.
+# .next/standalone + .next/static — this app has no apps/website/public dir
+# (robots.txt/sitemap.xml are generated via route handlers instead).
 FROM node:20-bookworm-slim AS runner
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/apps/website/public ./apps/website/public
 COPY --from=build /app/apps/website/.next/standalone ./
 COPY --from=build /app/apps/website/.next/static ./apps/website/.next/static
 EXPOSE 3002
