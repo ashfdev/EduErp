@@ -78,8 +78,15 @@ services:
       WEBSITE_URL: ${WEBSITE_URL}
       TEACHER_URL: ${TEACHER_URL}
       API_URL: ${API_URL}
-      # JWT secret — required for auth token signing
-      JWT_SECRET: ${JWT_SECRET}
+      # JWT secrets — required for auth token signing
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      # At-rest encryption key for sensitive settings (payment creds etc.)
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      # HMAC secret for signed local-file download URLs
+      LOCAL_STORAGE_SECRET: ${LOCAL_STORAGE_SECRET}
+      # Shared secret for device-service ↔ api calls
+      DEVICE_SERVICE_SECRET: ${DEVICE_SERVICE_SECRET}
       # Revalidate secret for Next.js ISR
       WEBSITE_REVALIDATE_SECRET: ${WEBSITE_REVALIDATE_SECRET:-changeme}
     depends_on:
