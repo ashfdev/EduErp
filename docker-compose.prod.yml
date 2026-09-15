@@ -105,6 +105,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    environment:
+      PORT: 3000
     depends_on:
       - api
 
@@ -135,6 +137,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    environment:
+      PORT: 3001
     depends_on:
       - api
 
@@ -165,6 +169,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    environment:
+      PORT: 3002
     depends_on:
       - api
 
@@ -195,6 +201,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+    environment:
+      PORT: 3003
     depends_on:
       - api
 
