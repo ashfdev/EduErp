@@ -24,8 +24,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    ports:
-      - "6380:6379"
+    # Not published to the host: every service reaches it over the internal
+    # docker network via redis://redis:6379 (no service needs host access,
+    # and this image has no password set, so a host port would be exposed
+    # unauthenticated).
     volumes:
       - redis_data:/data
     healthcheck:
