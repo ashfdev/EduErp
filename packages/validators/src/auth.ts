@@ -1,3 +1,4 @@
+// auth validators — phone, login, OTP schemas
 import { z } from "zod";
 
 export const bdPhoneSchema = z
