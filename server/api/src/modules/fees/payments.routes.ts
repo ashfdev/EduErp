@@ -17,6 +17,7 @@ import { logAudit } from "../../lib/audit-log";
 import { z } from "zod";
 import { badRequest, notFound } from "../../lib/errors";
 import type { Payment } from "@education-erp/db";
+import { env } from "../../lib/env";
 
 export const paymentsRouter = Router();
 
@@ -302,6 +303,58 @@ paymentsRouter.post("/callback/bkash", asyncHandler(async (req, res) => res.json
 paymentsRouter.post("/callback/nagad", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("NAGAD", req.body) })));
 paymentsRouter.post("/callback/sslcommerz", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("SSLCOMMERZ", req.body) })));
 paymentsRouter.post("/callback/aamarpay", asyncHandler(async (req, res) => res.json({ success: true, data: await handleCallback("AAMARPAY", req.body) })));
+
+// SSLCommerz bounces the payer's own browser back to success_url/fail_url/
+// cancel_url as an HTML-form POST — separate from the ipn_url callback
+// above, and not the authoritative confirmation (a payer can close the tab
+// before the bounce, or it can arrive before/after/never relative to the
+// IPN). The success path re-runs the exact same verified handleCallback
+// path as a resilience fallback in case IPN delivery is ever delayed or
+// misconfigured — safe because completePayment() is idempotent, so running
+// it from both the IPN and this redirect for the same payment just no-ops
+// the second time.
+function feePaymentRedirectUrl(outcome: "success" | "fail" | "cancel", paymentId: string | null): string {
+  const base = env.PORTAL_URL ?? env.ADMIN_URL ?? "/";
+  return `${base}/fees?payment=${outcome}${paymentId ? `&payment_id=${paymentId}` : ""}`;
+}
+
+paymentsRouter.post(
+  "/gateway-redirect/sslcommerz/success",
+  asyncHandler(async (req, res) => {
+    try {
+      await handleCallback("SSLCOMMERZ", req.body);
+    } catch {
+      // Swallow — this is a UX bounce-back, not the authoritative
+      // confirmation. If verification genuinely fails, the payment simply
+      // stays non-COMPLETED for staff to follow up on via the gateway
+      // reconciliation view or manual-verify queue.
+    }
+    const tran_id = typeof req.body?.tran_id === "string" ? req.body.tran_id : null;
+    const payment = tran_id ? await prisma.payment.findUnique({ where: { transaction_id: tran_id } }) : null;
+    res.redirect(302, feePaymentRedirectUrl("success", payment?.id ?? null));
+  }),
+);
+
+paymentsRouter.post(
+  "/gateway-redirect/sslcommerz/fail",
+  asyncHandler(async (req, res) => {
+    const tran_id = typeof req.body?.tran_id === "string" ? req.body.tran_id : null;
+    const payment = tran_id ? await prisma.payment.findUnique({ where: { transaction_id: tran_id } }) : null;
+    if (payment && payment.status === "INITIATED") {
+      await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+    }
+    res.redirect(302, feePaymentRedirectUrl("fail", payment?.id ?? null));
+  }),
+);
+
+paymentsRouter.post(
+  "/gateway-redirect/sslcommerz/cancel",
+  asyncHandler(async (req, res) => {
+    const tran_id = typeof req.body?.tran_id === "string" ? req.body.tran_id : null;
+    const payment = tran_id ? await prisma.payment.findUnique({ where: { transaction_id: tran_id } }) : null;
+    res.redirect(302, feePaymentRedirectUrl("cancel", payment?.id ?? null));
+  }),
+);
 
 // ── Manual payment verification (bank transfer + self-reported wallets) ──
 // Bank transfers have no webhook — a payer uploads a slip (sets

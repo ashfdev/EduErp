@@ -8,6 +8,10 @@ export interface ResolvedGatewayCredentials {
   app_secret?: string;
   username?: string;
   password?: string;
+  // Defaults true (matches PaymentGatewayConfig.sandbox_mode's own default)
+  // so an env-fallback-only setup (no DB row yet) never accidentally hits a
+  // live endpoint with sandbox credentials.
+  sandbox_mode: boolean;
 }
 
 // DB-stored, admin-entered credentials (Settings -> Payment Gateways, Plan
@@ -17,7 +21,7 @@ export interface ResolvedGatewayCredentials {
 // isConfigured() already treats as such.
 export async function resolveGatewayCredentials(
   provider: PaymentGatewayProvider,
-  envFallback: { app_key?: string; app_secret?: string; username?: string; password?: string },
+  envFallback: { app_key?: string; app_secret?: string; username?: string; password?: string; sandbox_mode?: boolean },
 ): Promise<ResolvedGatewayCredentials> {
   const row = await prisma.paymentGatewayConfig.findUnique({ where: { provider } });
   if (row?.is_active && row.app_key && row.app_secret) {
@@ -27,7 +31,8 @@ export async function resolveGatewayCredentials(
       app_secret: decryptSecret(row.app_secret),
       username: row.username ?? undefined,
       password: row.password ? decryptSecret(row.password) : undefined,
+      sandbox_mode: row.sandbox_mode,
     };
   }
-  return { configured: Boolean(envFallback.app_key && envFallback.app_secret), ...envFallback };
+  return { configured: Boolean(envFallback.app_key && envFallback.app_secret), sandbox_mode: envFallback.sandbox_mode ?? true, ...envFallback };
 }
