@@ -10,6 +10,23 @@ import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { hasSubjectTeacherAssignment } from "../../lib/subject-teacher-assignment";
 import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { reqParam } from "../../lib/req-param";
+import { assertSectionOwnership } from "./attendance.routes";
+
+// Security fix: these two GET routes had no ownership check at all beyond
+// STAFF_ONLY_ROLES — any staff role could read any student's per-subject
+// attendance. Reuses attendance.routes.ts's assertSectionOwnership (class
+// teacher of the section OR any subject assignment in it) rather than the
+// stricter hasSubjectTeacherAssignment used for marking above — these are
+// read-only student-profile views, and a class teacher legitimately needs
+// to see every subject's attendance for their own homeroom students, not
+// just subjects they personally teach (unlike marking, which stays strict).
+async function assertSectionReadAccessForStudent(userId: string, role: string, studentId: string): Promise<void> {
+  if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL") return;
+  const student = await prisma.student.findUnique({ where: { id: studentId }, select: { current_section_id: true } });
+  if (!student) throw notFound("Student not found");
+  if (!student.current_section_id) throw forbidden("You are not assigned to this student's section");
+  await assertSectionOwnership(userId, role, student.current_section_id);
+}
 
 // Strict, no class-teacher-any-period fallback — confirmed directly with
 // the product owner (Plan Twelve, decision #2): only a staff member with a
@@ -217,6 +234,7 @@ subjectAttendanceRouter.get(
   asyncHandler(async (req, res) => {
     const studentId = reqParam(req, "id");
     const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+    await assertSectionReadAccessForStudent(req.user!.sub, req.user!.role, studentId);
 
     let dateRange: { gte: Date; lte: Date } | undefined;
     let yearId: string | undefined;
@@ -276,6 +294,7 @@ subjectAttendanceRouter.get(
     const studentId = reqParam(req, "id");
     const subjectId = reqParam(req, "subject_id");
     const query = z.object({ academic_year_id: z.string().optional() }).parse(req.query);
+    await assertSectionReadAccessForStudent(req.user!.sub, req.user!.role, studentId);
 
     let dateRange: { gte: Date; lte: Date } | undefined;
     if (query.academic_year_id) {

@@ -17,14 +17,27 @@ export function calculateGrade(marks: number, isAbsent: boolean, scale: GradeRan
   const match = scale.find((r) => marks >= r.min_marks && marks <= r.max_marks);
   if (match) return { grade_letter: match.grade_letter, grade_point: match.grade_point };
 
-  // marks outside every configured range (e.g. above the top band's max due
-  // to rounding) — clamp to the highest/lowest band rather than erroring.
   const sorted = [...scale].sort((a, b) => a.min_marks - b.min_marks);
   if (sorted.length === 0) return { grade_letter: "N/A", grade_point: 0 };
   const highest = sorted[sorted.length - 1]!;
   const lowest = sorted[0]!;
+  // Marks outside every configured range: above the top band's max (e.g.
+  // rounding) clamps to the highest band; below the bottom band's min
+  // clamps to the lowest.
   if (marks > highest.max_marks) return { grade_letter: highest.grade_letter, grade_point: highest.grade_point };
-  return { grade_letter: lowest.grade_letter, grade_point: lowest.grade_point };
+  if (marks < lowest.min_marks) return { grade_letter: lowest.grade_letter, grade_point: lowest.grade_point };
+
+  // Real bug fixed: marks land in a genuine GAP between two adjacent bands
+  // (e.g. scale rows "70-79" and "80-100" with no ".99" padding — 79.5
+  // matches neither) used to fall all the way through to the LOWEST band,
+  // grading a good score as a fail. Bands are contiguous tiers in practice
+  // ([min_marks, next band's min_marks)), so a gap belongs to the band with
+  // the highest min_marks still <= marks, not the bottom of the whole scale.
+  let best = lowest;
+  for (const r of sorted) {
+    if (r.min_marks <= marks) best = r;
+  }
+  return { grade_letter: best.grade_letter, grade_point: best.grade_point };
 }
 
 export interface SubjectMarkInput {

@@ -22,7 +22,7 @@ import { emitToUser } from "../../realtime/socket";
 // SubjectTeacherAssignment covering this section (or the whole class, when
 // section_id is null on the assignment). ADMIN/SUPER_ADMIN always bypass this
 // entirely, matching marks.routes.ts's existing subject-ownership pattern.
-async function assertSectionOwnership(userId: string, role: string, sectionId: string) {
+export async function assertSectionOwnership(userId: string, role: string, sectionId: string) {
   if (role === "ADMIN" || role === "SUPER_ADMIN") return;
 
   const section = await prisma.section.findUnique({ where: { id: sectionId } });
@@ -43,6 +43,40 @@ async function assertSectionOwnership(userId: string, role: string, sectionId: s
   if (assignment) return;
 
   throw forbidden("You are not assigned to this section");
+}
+
+// ── Read-access scoping ──────────────────────────────────────────────
+// Security fix: every GET/report route below previously had no ownership
+// check beyond the router-level STAFF_ONLY_ROLES gate — any staff role
+// (including LIBRARIAN/TRANSPORT_MANAGER/HOSTEL_MANAGER/PROCTOR, not just
+// CLASS_TEACHER/SUBJECT_TEACHER) could read any section's roster+photos,
+// any student's attendance history, the institution-wide defaulters list
+// (incl. guardian phone numbers), or bulk-export all attendance. These
+// wrappers close that gap while additionally bypassing for PRINCIPAL
+// (institution-wide oversight reads) — PRINCIPAL isn't in
+// ATTENDANCE_MARK_ROLES so it never reaches assertSectionOwnership above
+// via the POST /mark routes, and shouldn't be newly blocked from reading.
+async function assertSectionReadAccess(userId: string, role: string, sectionId: string): Promise<void> {
+  if (role === "PRINCIPAL") return;
+  await assertSectionOwnership(userId, role, sectionId);
+}
+
+async function assertSectionReadAccessForStudent(userId: string, role: string, studentId: string): Promise<void> {
+  if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL") return;
+  const student = await prisma.student.findUnique({ where: { id: studentId }, select: { current_section_id: true } });
+  if (!student) throw notFound("Student not found");
+  if (!student.current_section_id) throw forbidden("You are not assigned to this student's section");
+  await assertSectionOwnership(userId, role, student.current_section_id);
+}
+
+async function assertClassReadAccess(userId: string, role: string, classId: string): Promise<void> {
+  if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL") return;
+  const staff = await prisma.staff.findFirst({ where: { user_id: userId } });
+  const ownsSection = staff ? await prisma.section.findFirst({ where: { class_id: classId, class_teacher_id: staff.id } }) : null;
+  if (ownsSection) return;
+  const assignment = staff ? await prisma.subjectTeacherAssignment.findFirst({ where: { staff_id: staff.id, subject: { class_id: classId } } }) : null;
+  if (assignment) return;
+  throw forbidden("You are not assigned to this class");
 }
 
 export const attendanceRouter = Router();
@@ -508,6 +542,7 @@ attendanceRouter.get(
     const query = z
       .object({ section_id: z.string().min(1), date: z.coerce.date(), shift_id: z.string().optional(), period_no: z.coerce.number().optional() })
       .parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
     const date = startOfDay(query.date);
 
     const students = await prisma.student.findMany({
@@ -540,6 +575,7 @@ attendanceRouter.get(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const query = z.object({ month: z.coerce.number().optional(), year: z.coerce.number().optional() }).parse(req.query);
+    await assertSectionReadAccessForStudent(req.user!.sub, req.user!.role, id);
 
     if (query.month != null && query.year != null) {
       const start = new Date(query.year, query.month - 1, 1);
@@ -586,6 +622,13 @@ attendanceRouter.get(
   "/defaulters",
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), threshold: z.coerce.number().optional() }).parse(req.query);
+    const role = req.user!.role;
+    const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
+    if (!isAdminTier && !query.section_id && !query.class_id) {
+      throw forbidden("section_id or class_id is required for this role");
+    }
+    if (query.section_id) await assertSectionReadAccess(req.user!.sub, role, query.section_id);
+    else if (query.class_id) await assertClassReadAccess(req.user!.sub, role, query.class_id);
     const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
     const threshold = query.threshold ?? rules?.min_attendance_percentage ?? 75;
 
@@ -622,6 +665,10 @@ attendanceRouter.get(
   "/daily-summary",
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.coerce.date(), class_id: z.string().optional() }).parse(req.query);
+    const role = req.user!.role;
+    const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
+    if (!isAdminTier && !query.class_id) throw forbidden("class_id is required for this role");
+    if (query.class_id) await assertClassReadAccess(req.user!.sub, role, query.class_id);
     const date = startOfDay(query.date);
 
     const classes = await prisma.class.findMany({
@@ -660,6 +707,7 @@ attendanceRouter.get(
   "/reports/daily-register",
   asyncHandler(async (req, res) => {
     const query = z.object({ date: z.coerce.date(), class_id: z.string().min(1), section_id: z.string().min(1) }).parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
     const date = startOfDay(query.date);
 
     const [klass, section, students] = await Promise.all([
@@ -689,6 +737,7 @@ attendanceRouter.get(
   "/reports/monthly-sheet",
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().min(1), section_id: z.string().min(1), month: z.coerce.number(), year: z.coerce.number() }).parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
     const start = new Date(query.year, query.month - 1, 1);
     const end = new Date(query.year, query.month, 1);
     const daysInMonth = new Date(query.year, query.month, 0).getDate();
@@ -712,6 +761,7 @@ attendanceRouter.get(
   "/reports/blank-sheet",
   asyncHandler(async (req, res) => {
     const query = z.object({ class_id: z.string().min(1), section_id: z.string().min(1), from_date: z.coerce.date(), to_date: z.coerce.date() }).parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
     const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
 
     const dates: string[] = [];
@@ -792,6 +842,10 @@ attendanceRouter.get(
   "/reports/bulk-export",
   asyncHandler(async (req, res) => {
     const query = z.object({ academic_year_id: z.string().min(1), month: z.coerce.number(), year: z.coerce.number(), class_id: z.string().optional() }).parse(req.query);
+    const role = req.user!.role;
+    const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
+    if (!isAdminTier && !query.class_id) throw forbidden("class_id is required for this role");
+    if (query.class_id) await assertClassReadAccess(req.user!.sub, role, query.class_id);
 
     const sectionIds = (
       await prisma.class.findMany({

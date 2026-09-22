@@ -12,7 +12,7 @@ import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.servi
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema, createStudentLoginSchema } from "@education-erp/validators";
-import { generateStudentUID } from "../../utils/student-id.generator";
+import { createWithUniqueStudentUid } from "../../utils/student-id.generator";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
 import { invoiceReadmissionFeeIfConfigured, formatFeePeriod, createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
@@ -784,7 +784,8 @@ studentsRouter.post(
       throw badRequest("The 4th subject must be one of the selected optional subjects");
     }
 
-    const { student, studentLogin, guardianLogin, student_uid, loginWarnings } = await prisma.$transaction(async (tx) => {
+    const { student, studentLogin, guardianLogin, student_uid, loginWarnings } = await createWithUniqueStudentUid(body.current_class_id, (student_uid) =>
+      prisma.$transaction(async (tx) => {
       const loginWarnings: string[] = [];
       let guardianId = body.guardian_id ?? null;
       let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
@@ -814,7 +815,6 @@ studentsRouter.post(
         }
       }
 
-      const student_uid = await generateStudentUID(body.current_class_id);
       const studentLoginResult = body.phone
         ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: body.phone, name: body.name_en })
         : null;
@@ -919,7 +919,8 @@ studentsRouter.post(
       }
 
       return { student: created, studentLogin: studentLoginResult, guardianLogin: guardianLoginResult, student_uid, loginWarnings };
-    });
+      }),
+    );
 
     if (body.send_portal_login_sms !== false) {
       if (body.father_phone) {
@@ -1557,8 +1558,8 @@ studentsRouter.post(
           if (hasGroups) throw new Error("this class has Groups/Streams defined — group_code is required");
         }
 
-        const student_uid = await generateStudentUID(row.current_class_id);
-        const { student, guardianLogin, studentLogin } = await prisma.$transaction(async (tx) => {
+        const { student, guardianLogin, studentLogin } = await createWithUniqueStudentUid(row.current_class_id, (student_uid) =>
+          prisma.$transaction(async (tx) => {
           // Same guardian-dedup shape as the manual single-add path: reuse
           // an existing Guardian row by phone, or find-or-link a login and
           // create a new one.
@@ -1601,7 +1602,8 @@ studentsRouter.post(
           });
           await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id, [], groupId);
           return { student: s, guardianLogin: guardianLoginResult, studentLogin: studentLoginResult };
-        });
+          }),
+        );
 
         if (guardianLogin?.conflict) {
           loginConflicts.push({

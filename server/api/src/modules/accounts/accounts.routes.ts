@@ -12,6 +12,7 @@ import { ACCOUNTS_MANAGE_ROLES } from "../../lib/roles";
 import { accountSchema, financialYearSchema } from "@education-erp/validators";
 import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, conflict, notFound } from "../../lib/errors";
+import { validateBalance } from "./voucher-helpers";
 
 // CSV/JSON booleans arrive as strings ("true"/""/"TRUE") from a spreadsheet,
 // not real booleans — z.coerce.boolean() would wrongly treat "false" as
@@ -385,6 +386,12 @@ accountsRouter.post(
 
       await tx.financialYear.update({ where: { id }, data: { is_closed: true, closed_at: new Date() } });
       if (closingLines.length > 0) {
+        // This constructs a Voucher directly instead of going through
+        // createVoucher() (the codebase's stated single entry point for
+        // that) — closingLines is self-balancing by construction today, but
+        // nothing enforced that invariant here. Guard it explicitly rather
+        // than trusting future changes to this loop to stay balanced.
+        validateBalance(closingLines);
         const voucherNo = `JV-CLOSE-${year.label}`;
         await tx.voucher.create({
           data: {

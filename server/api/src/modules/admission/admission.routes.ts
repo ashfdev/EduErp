@@ -30,7 +30,7 @@ import {
   admissionStageOutcomeSchema,
   admissionStageBulkNotifySchema,
 } from "@education-erp/validators";
-import { generateStudentUID } from "../../utils/student-id.generator";
+import { createWithUniqueStudentUid } from "../../utils/student-id.generator";
 import { generateInvoiceNo } from "../fees/fee-number.generator";
 import { createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
 import { feeStructureAppliesToStudent } from "../fees/fee-structure-scope";
@@ -1382,7 +1382,8 @@ admissionRouter.post(
     const guardianInfo = application.guardian_info as { father_name?: string; mother_name?: string; phone: string; email?: string; address?: string };
     const personalInfo = application.personal_info as Record<string, unknown>;
 
-    const { student, studentLogin, guardianLogin, guardianEmail, guardianUserId } = await prisma.$transaction(async (tx) => {
+    const { student, studentLogin, guardianLogin, guardianEmail, guardianUserId } = await createWithUniqueStudentUid(application.cycle.class_id, (student_uid) =>
+      prisma.$transaction(async (tx) => {
       let guardian = await tx.guardian.findFirst({ where: { phone: guardianInfo.phone } });
       let guardianLoginResult: Awaited<ReturnType<typeof createOrLinkPortalLogin>> | null = null;
       if (!guardian) {
@@ -1411,7 +1412,6 @@ admissionRouter.post(
         });
       }
 
-      const student_uid = await generateStudentUID(application.cycle.class_id);
       const studentPhone = typeof personalInfo.phone === "string" ? personalInfo.phone : undefined;
       // Previously generated and hashed but never sent or returned anywhere
       // — an unusable, effectively lost credential. Now flows through the
@@ -1605,7 +1605,8 @@ admissionRouter.post(
         guardianEmail: guardian.email,
         guardianUserId: guardian.user_id,
       };
-    });
+      }),
+    );
 
     // Resolved directly from the transaction's own guardian row (whichever
     // branch created/found it) instead of a post-commit re-query by phone —

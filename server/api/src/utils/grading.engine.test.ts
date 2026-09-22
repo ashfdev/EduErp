@@ -38,6 +38,34 @@ describe("calculateGrade — BD board boundaries", () => {
   });
 });
 
+describe("calculateGrade — gap between adjacent integer-boundary bands", () => {
+  // A custom scale using plain integer boundaries (no ".99" padding), which
+  // an admin can legitimately create via Settings → Grading. Real bug: a
+  // fractional score landing in the 79-80 gap used to fall through to the
+  // LOWEST band (F) instead of the band it actually belongs in.
+  const INTEGER_BOUNDARY_SCALE: GradeRangeLike[] = [
+    { min_marks: 80, max_marks: 100, grade_letter: "A+", grade_point: 5.0 },
+    { min_marks: 70, max_marks: 79, grade_letter: "A", grade_point: 4.0 },
+    { min_marks: 60, max_marks: 69, grade_letter: "A-", grade_point: 3.5 },
+    { min_marks: 33, max_marks: 59, grade_letter: "D", grade_point: 1.0 },
+    { min_marks: 0, max_marks: 32, grade_letter: "F", grade_point: 0.0 },
+  ];
+
+  it("assigns a fractional gap score to the nearest lower band, not the lowest band", () => {
+    // 79.5 matches neither "70-79" nor "80-100" exactly — must land in "A"
+    // (70-79), never "F".
+    expect(calculateGrade(79.5, false, INTEGER_BOUNDARY_SCALE)).toEqual({ grade_letter: "A", grade_point: 4.0 });
+  });
+
+  it("still clamps to the highest band above the top max", () => {
+    expect(calculateGrade(100.5, false, INTEGER_BOUNDARY_SCALE)).toEqual({ grade_letter: "A+", grade_point: 5.0 });
+  });
+
+  it("still clamps to the lowest band below the bottom min", () => {
+    expect(calculateGrade(-1, false, INTEGER_BOUNDARY_SCALE)).toEqual({ grade_letter: "F", grade_point: 0.0 });
+  });
+});
+
 describe("calculateStudentResult — 4th subject rule", () => {
   // Bangla 80->A+(5.0), English 75->A(4.0), Math 90->A+(5.0), Higher Math
   // (designated 4th subject) 85->A+(5.0), Biology (plain optional, not the
