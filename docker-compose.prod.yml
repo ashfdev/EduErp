@@ -280,6 +280,13 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/education_erp?schema=public
       REDIS_URL: redis://redis:6379
       NOTIFICATION_SERVICE_PORT: 4600
+      # Decrypts Settings -> SMS Gateway's DB-stored credential (AES-256,
+      # same scheme as PaymentGatewayConfig) before each send — was missing
+      # here (only the api service had it), so every SMS job failed at
+      # sms.worker.js's resolveActiveSmsGateway() with "ENCRYPTION_KEY must
+      # be set in production" even though the gateway was correctly
+      # configured in Settings.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     deploy:
       resources:
         limits:
