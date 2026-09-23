@@ -4,10 +4,19 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: education_erp
-    ports:
-      - "5433:5432"
+    # No host port published — security incident (2026-09-23): this was
+    # previously "5433:5432", exposing Postgres to the entire internet on
+    # 0.0.0.0. Combined with the default postgres/postgres credential, this
+    # was actively brute-forced (~19.5k failed logins/24h) and successfully
+    # compromised — an attacker installed a persistent backdoor (event
+    # triggers `log_start`/`log_end` calling a function `escalate_priv()`
+    # that recreated a superuser role on every DDL command, plus a second
+    # `wog` superuser role and the `postgres_fdw` extension). All of it was
+    # removed and the password rotated, but never publish this port again —
+    # every other service reaches Postgres over the internal Docker network
+    # via postgres:5432, no service needs host access.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -67,7 +76,7 @@ services:
       retries: 3
       start_period: 20s
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/education_erp?schema=public
       REDIS_URL: redis://redis:6379
       PORT: 4000
       NODE_ENV: production
@@ -241,7 +250,7 @@ services:
       dockerfile: services/device/Dockerfile
     restart: always
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/education_erp?schema=public
       API_URL: http://api:4000
       DEVICE_SERVICE_PORT: 4500
       DEVICE_SERVICE_SECRET: ${DEVICE_SERVICE_SECRET}
@@ -268,7 +277,7 @@ services:
       dockerfile: services/notification/Dockerfile
     restart: always
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/education_erp?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/education_erp?schema=public
       REDIS_URL: redis://redis:6379
       NOTIFICATION_SERVICE_PORT: 4600
     deploy:
