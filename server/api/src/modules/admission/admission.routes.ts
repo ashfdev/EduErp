@@ -180,6 +180,7 @@ admissionRouter.post(
         close_date: body.close_date,
         seat_count: body.seat_count,
         app_fee: body.app_fee,
+        form_fee: body.form_fee,
         form_config: body.form_config ?? undefined,
       },
     });
@@ -249,6 +250,7 @@ admissionRouter.put(
         ...(body.close_date && { close_date: body.close_date }),
         ...(body.seat_count !== undefined && { seat_count: body.seat_count }),
         ...(body.app_fee !== undefined && { app_fee: body.app_fee }),
+        ...(body.form_fee !== undefined && { form_fee: body.form_fee }),
         ...(body.form_config && { form_config: body.form_config }),
       },
     });

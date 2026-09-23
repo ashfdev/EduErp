@@ -46,7 +46,7 @@ export default function NewAdmissionCyclePage() {
       toast.success("Admission cycle created");
       router.push(`/admission/cycles/${res.data.data.id}`);
     },
-    onError: () => toast.error("Failed to create admission cycle"),
+    onError: (err: unknown) => toast.error(extractErrorMessage(err) ?? "Failed to create admission cycle"),
   });
 
   const canSubmit = name && classId && academicYearId && openDate && closeDate && seatCount > 0;
@@ -88,7 +88,7 @@ export default function NewAdmissionCyclePage() {
           </div>
           <div className="grid grid-cols-5 gap-4">
             <div className="space-y-1.5"><Label>Open Date</Label><Input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Close Date</Label><Input type="date" value={closeDate} onChange={(e) => setCloseDate(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Close Date</Label><Input type="date" value={closeDate} min={openDate || undefined} onChange={(e) => setCloseDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Seat Count</Label><Input type="number" value={seatCount} onChange={(e) => setSeatCount(Number(e.target.value))} /></div>
             <div className="space-y-1.5"><Label>Application Fee (৳)</Label><Input type="number" value={appFee} onChange={(e) => setAppFee(Number(e.target.value))} /></div>
             <div className="space-y-1.5"><Label>Form Fee (৳)</Label><Input type="number" value={formFee} onChange={(e) => setFormFee(Number(e.target.value))} /></div>
