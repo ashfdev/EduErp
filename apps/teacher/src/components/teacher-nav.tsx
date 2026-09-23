@@ -1,7 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -24,7 +22,11 @@ const NAV_ITEMS = [
   { href: "/profile", key: "profile", icon: User },
 ];
 
-export function TeacherNav({ isMobile }: { isMobile?: boolean }) {
+// Single vertical nav, reused as-is for the persistent desktop sidebar and
+// inside teacher-shell.tsx's mobile drawer — no more separate horizontal
+// bottom-bar rendering (product decision 2026-09-23: side nav on every
+// screen size, not just desktop, for consistency).
+export function TeacherNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
@@ -32,40 +34,10 @@ export function TeacherNav({ isMobile }: { isMobile?: boolean }) {
   const t = useTranslations("nav");
   const tCommon = useTranslations("common");
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const handleLogout = () => {
     logout();
     router.replace("/login");
   };
-
-  if (isMobile) {
-    return (
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-2 py-2">
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col min-w-[72px] items-center justify-center p-2 rounded-xl transition-all ${
-                isActive ? "text-primary bg-primary/10" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <Icon className={`h-5 w-5 ${isActive ? "text-primary" : ""}`} />
-              <span className="text-[10px] mt-1 font-medium">{t(item.key)}</span>
-            </Link>
-          );
-        })}
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-full flex-col p-4">
@@ -117,7 +89,7 @@ export function TeacherNav({ isMobile }: { isMobile?: boolean }) {
             <span className="truncate text-[10px] text-slate-400 capitalize">{user?.role?.replace(/_/g, ' ').toLowerCase()}</span>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-between px-1">
           <div className="text-slate-300">
             <LanguageToggle />
