@@ -43,7 +43,14 @@ export function startSmsWorker() {
     async (job: Job<SmsJobData>) => {
       const { log_id, phone, message } = job.data;
       const result = await sendSmsViaResolvedProvider(phone, message);
-      if (!result.sent) throw new Error("SMS provider reported failure");
+      // The provider's own response was previously discarded entirely on
+      // failure, leaving only a generic "SMS provider reported failure" in
+      // NotificationLog.error_message (surfaced in Settings -> Notifications
+      // -> Logs) — impossible for staff to self-diagnose (wrong credential
+      // vs. insufficient balance vs. invalid sender ID all looked identical).
+      if (!result.sent) {
+        throw new Error(`SMS provider reported failure: ${JSON.stringify(result.providerResponse ?? {})}`);
+      }
 
       await prisma.notificationLog.update({ where: { id: log_id }, data: { status: "SENT", sent_at: new Date() } });
       return result;
