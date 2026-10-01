@@ -71,18 +71,24 @@ function TeacherComplaintsContent() {
   return (
     <TeacherShell>
       <PageWrapper className="p-0">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} action={<Button onClick={() => setOpen(true)}>{t("raise")}</Button>} />
+        {/* Not PageHeader's action prop: that slot never stacks (shared
+            component, also used across apps/admin), so on a phone the button
+            squeezed the title. Same side-by-side layout from sm: up. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <PageHeader title={t("title")} subtitle={t("subtitle")} />
+          <Button className="h-11 w-full shrink-0 sm:h-9 sm:w-auto" onClick={() => setOpen(true)}>{t("raise")}</Button>
+        </div>
 
         {!data?.length && <EmptyState title={t("noComplaints")} />}
         <div className="space-y-2">
           {data?.map((c) => (
             <Card key={c.id}>
               <CardContent className="space-y-1 pt-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <Badge variant="outline">{c.category}</Badge>
                   <Badge variant={c.status === "RESOLVED" || c.status === "CLOSED" ? "default" : "outline"}>{c.status}</Badge>
                 </div>
-                <p className="text-sm">{c.description}</p>
+                <p className="break-words text-sm">{c.description}</p>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
                   <Button size="sm" variant="outline" onClick={() => { setThreadId(c.id); setReply(""); }}>{t("viewThread")}</Button>
@@ -127,7 +133,7 @@ function TeacherComplaintsContent() {
                 <div className="max-h-64 space-y-2 overflow-y-auto">
                   {thread.messages.map((m) => (
                     <div key={m.id} className="rounded-md bg-muted/50 p-2 text-sm">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">{m.sender_name ?? "-"}</span>
                         <span>{new Date(m.created_at).toLocaleString()}</span>
                       </div>

@@ -85,7 +85,7 @@ export default function TeacherLeavePage() {
                   {leaveTypes?.map((lt) => <option key={lt.id} value={lt.id}>{lt.name}</option>)}
                 </select>
               </div>
-              <div />
+              <div className="hidden sm:block" />
               <div className="space-y-1.5">
                 <Label>{t("from")}</Label>
                 <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
@@ -105,6 +105,7 @@ export default function TeacherLeavePage() {
               </div>
             </div>
             <Button
+              className="h-11 w-full sm:h-9 sm:w-auto"
               disabled={!leaveTypeId || !fromDate || !toDate || !reason || applyMutation.isPending}
               onClick={() => applyMutation.mutate()}
             >
@@ -119,8 +120,8 @@ export default function TeacherLeavePage() {
             {!history?.length && <p className="text-sm text-muted-foreground">{t("noRequests")}</p>}
             <div className="space-y-2">
               {history?.map((h) => (
-                <div key={h.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
-                  <div>
+                <div key={h.id} className="flex items-start justify-between gap-3 rounded-md border p-3 text-sm sm:items-center">
+                  <div className="min-w-0">
                     <p className="font-medium">{h.leave_type.name} — {new Date(h.from_date).toLocaleDateString()} to {new Date(h.to_date).toLocaleDateString()}</p>
                     <p className="text-xs text-muted-foreground">{h.reason}</p>
                     {h.status === "REJECTED" && h.rejection_reason && <p className="text-xs text-red-600">{t("rejectionReason", { reason: h.rejection_reason })}</p>}

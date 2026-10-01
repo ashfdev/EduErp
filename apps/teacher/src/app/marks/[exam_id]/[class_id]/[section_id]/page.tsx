@@ -273,6 +273,186 @@ export default function TeacherMarkEntryGridPage() {
     return entryStatus(studentId, subjectId) === "APPROVED";
   }).length;
 
+  // Phone layout shows one subject at a time (a students × subjects grid
+  // can't fit a 360px screen) — null = default to the first subject this
+  // teacher can actually edit.
+  const [mobileSubjectId, setMobileSubjectId] = useState<string | null>(null);
+
+  // Column header content, shared by the desktop table's <th> and the phone
+  // layout's selected-subject summary card.
+  function renderSubjectHeading(s: Subject) {
+    return (
+      <>
+        {s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span>
+        {!s.editable && (
+          <span className="ml-1 text-[10px] font-normal normal-case text-muted-foreground">({t("viewOnlyColumn")})</span>
+        )}
+        {s.editable && exam?.status === "COMPLETED" && (
+          <div className="mt-1">
+            {s.correction_status === "APPROVED_ACTIVE" && (
+              <Badge variant="success" className="text-[10px] font-normal normal-case">{t("correctionApprovedActive")}</Badge>
+            )}
+            {s.correction_status === "PENDING" && (
+              <Badge variant="warning" className="text-[10px] font-normal normal-case">{t("correctionRequestedBadge")}</Badge>
+            )}
+            {(s.correction_status === "NONE" || s.correction_status === "REJECTED" || s.correction_status === "REVOKED" || s.correction_status === "EXPIRED") && (
+              <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-normal normal-case sm:h-6 sm:px-2 sm:text-[10px]" onClick={() => setCorrectionTarget(s)}>
+                {t("lockedRequestCorrection")}
+              </Button>
+            )}
+          </div>
+        )}
+        {s.mark_components && s.mark_components.length > 0 ? (
+          <div className="flex flex-wrap gap-2 text-[10px] font-normal normal-case text-muted-foreground">
+            {s.mark_components.map((comp) => (
+              <span key={comp.key} title={comp.source_type !== "MANUAL" ? "Auto-fetched, editable" : undefined}>
+                {comp.label}/{comp.max_marks}
+              </span>
+            ))}
+          </div>
+        ) : (
+          !!s.config?.full_marks_practical && (
+            <div className="flex gap-2 text-[10px] font-normal normal-case text-muted-foreground">
+              <span>{t("theoryLabel", { max: s.config.full_marks_theory })}</span>
+              <span>{t("practicalLabel", { max: s.config.full_marks_practical })}</span>
+            </div>
+          )
+        )}
+      </>
+    );
+  }
+
+  // One student × subject cell's inputs, shared by the desktop table and the
+  // phone card list. Input sizing is responsive (bigger tap targets below
+  // sm:, the original compact h-8/w-16 from sm: up, where only the table is
+  // shown), and inputMode="decimal" brings up the number pad on phones.
+  function renderMarkInputs(st: MarkEntryData["students"][number], s: Subject) {
+    const v = getValue(st.id, s.id);
+    const status = entryStatus(st.id, s.id);
+    const hasMarkComponents = !!s.mark_components?.length;
+    const componentValues = hasMarkComponents ? getComponentValues(st.id, s.id) : {};
+    const componentSum = hasMarkComponents
+      ? Object.values(componentValues).reduce((sum, e) => sum + (e.value ?? 0), 0)
+      : undefined;
+    const subjectTotal = (s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0);
+    const annotations = hasMarkComponents
+      ? (s.mark_components ?? [])
+          .filter((c) => c.source_type !== "MANUAL")
+          .map((c) => st.component_fetch?.[s.id]?.[c.key]?.annotation)
+          .filter((a): a is string => !!a)
+      : [];
+    return (
+      <>
+        <div className="flex flex-wrap items-center gap-2">
+          {status === "APPROVED" && <Badge variant="success" title={t("approvedBadgeTitle")}>✓</Badge>}
+          {hasMarkComponents ? (
+            <>
+              {(s.mark_components ?? []).map((comp) => {
+                const entry = componentValues[comp.key];
+                const isAutoUnedited = comp.source_type !== "MANUAL" && !entry?.is_override;
+                const isOverCap = entry?.value != null && entry.value > comp.max_marks;
+                return (
+                  <div key={comp.key} className="flex flex-col items-start">
+                    <span className="text-[10px] text-muted-foreground sm:text-[9px]">{comp.label}/{comp.max_marks}</span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={comp.max_marks}
+                      title={
+                        isAutoUnedited
+                          ? t("componentAutoTitle", { label: comp.label, max: comp.max_marks })
+                          : t("componentTitle", { label: comp.label, max: comp.max_marks })
+                      }
+                      className={`h-10 w-20 sm:h-8 sm:w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                        isOverCap ? "border-red-500 bg-red-50 text-red-700" : isAutoUnedited ? "border-dashed text-muted-foreground" : ""
+                      }`}
+                      disabled={!effectiveEditable(s) || v.is_absent}
+                      value={entry?.value ?? ""}
+                      onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
+                    />
+                    {isOverCap && <span className="text-[9px] font-medium text-red-600">Max {comp.max_marks}</span>}
+                  </div>
+                );
+              })}
+              <span className={`text-xs font-medium ${(componentSum ?? 0) > subjectTotal ? "text-red-600" : "text-muted-foreground"}`}>
+                {t("componentTotalLabel", { total: componentSum, subjectTotal })}
+              </span>
+            </>
+          ) : (
+            <>
+              {(() => {
+                const theoryOverCap = v.marks_theory != null && !!s.config && v.marks_theory > s.config.full_marks_theory;
+                return (
+                  <div className="flex flex-col items-start">
+                    {/* Phone only: the desktop column header already says
+                        which box is theory and which is practical. */}
+                    {!!s.config?.full_marks_practical && (
+                      <span className="text-[10px] text-muted-foreground sm:hidden">{t("theoryLabel", { max: s.config.full_marks_theory })}</span>
+                    )}
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={s.config?.full_marks_theory}
+                      title={s.config ? t("theoryOutOf", { max: s.config.full_marks_theory }) : undefined}
+                      className={`h-10 w-20 sm:h-8 sm:w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${theoryOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
+                      disabled={!effectiveEditable(s) || v.is_absent}
+                      value={v.marks_theory ?? ""}
+                      onChange={(e) =>
+                        setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
+                      }
+                    />
+                    {theoryOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_theory}</span>}
+                  </div>
+                );
+              })()}
+              {!!s.config?.full_marks_practical && (
+                (() => {
+                  const practicalOverCap = v.marks_practical != null && v.marks_practical > s.config!.full_marks_practical;
+                  return (
+                    <div className="flex flex-col items-start">
+                      <span className="text-[10px] text-muted-foreground sm:hidden">{t("practicalLabel", { max: s.config.full_marks_practical })}</span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={s.config.full_marks_practical}
+                        title={t("practicalOutOf", { max: s.config.full_marks_practical })}
+                        className={`h-10 w-20 sm:h-8 sm:w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${practicalOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
+                        disabled={!effectiveEditable(s) || v.is_absent}
+                        value={v.marks_practical ?? ""}
+                        onChange={(e) =>
+                          setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
+                        }
+                      />
+                      {practicalOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_practical}</span>}
+                    </div>
+                  );
+                })()
+              )}
+            </>
+          )}
+          <label className="flex items-center gap-1.5 py-2 text-xs sm:gap-1 sm:py-0">
+            <Checkbox
+              disabled={!effectiveEditable(s)}
+              checked={v.is_absent ?? false}
+              onCheckedChange={(checked) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, is_absent: checked === true } }))}
+            />
+            {t("absentShort")}
+          </label>
+        </div>
+        {annotations.length > 0 && (
+          <div className="mt-1 space-y-0.5">
+            {annotations.map((a, i) => (
+              <p key={i} className="text-[10px] leading-tight text-red-600">{a}</p>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <TeacherShell>
       <PageWrapper className="p-0">
@@ -313,8 +493,69 @@ export default function TeacherMarkEntryGridPage() {
           <p className="text-sm text-muted-foreground">{t("noStudents")}</p>
         )}
 
+        {/* Phone: one subject at a time (chip switcher) and one card per
+            student — the students × subjects grid needed two-way scrolling
+            with ~32px inputs at phone width. */}
+        {data && data.subjects.length > 0 && data.students.length > 0 && (() => {
+          const mobileSubject =
+            data.subjects.find((s) => s.id === mobileSubjectId) ?? data.subjects.find(effectiveEditable) ?? data.subjects[0]!;
+          return (
+            <div className="space-y-3 sm:hidden">
+              {data.subjects.length > 1 && (
+                <div role="tablist" aria-label="Subject" className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1">
+                  {data.subjects.map((s) => {
+                    const active = s.id === mobileSubject.id;
+                    // Only one subject is visible at a time on a phone, so a
+                    // chip flags any over-cap value it holds — otherwise the
+                    // disabled Submit's "over the allowed mark" badge points
+                    // at a subject the teacher can't see.
+                    const hasOverCap = [...overCapCells].some((k) => k.endsWith(`:${s.id}`));
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => setMobileSubjectId(s.id)}
+                        className={`relative shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                          hasOverCap ? "ring-2 ring-red-500 ring-offset-1 " : ""
+                        }${active ? "border-primary bg-primary text-primary-foreground" : "border-slate-200 bg-white text-slate-600"}`}
+                      >
+                        {s.name_en}
+                        {hasOverCap && (
+                          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-red-500" aria-label="Has a value over the allowed mark" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="rounded-xl border bg-card p-3 text-sm font-bold text-muted-foreground">
+                {renderSubjectHeading(mobileSubject)}
+              </div>
+              <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+                {data.students.map((st) => (
+                  <li key={st.id} className="p-3">
+                    <div className="mb-1.5 flex items-start gap-3">
+                      <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
+                        {st.current_roll_no ?? "—"}
+                      </span>
+                      <p className="min-w-0 flex-1 break-words pt-0.5 text-sm font-medium leading-snug">{st.name_en}</p>
+                    </div>
+                    {isEnrolled(st.id, mobileSubject.id) ? (
+                      renderMarkInputs(st, mobileSubject)
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{t("notEnrolled")}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
+
         {data && data.subjects.length > 0 && data.students.length > 0 && (
-          <Card>
+          <Card className="hidden sm:block">
             <CardContent className="overflow-x-auto pt-6">
               <table className="w-full text-sm">
                 <thead>
@@ -323,41 +564,7 @@ export default function TeacherMarkEntryGridPage() {
                     <th className="p-2">{t("colName")}</th>
                     {data.subjects.map((s) => (
                       <th key={s.id} className="p-2 min-w-[200px]">
-                        {s.name_en} <span className="text-xs">/{(s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0)}</span>
-                        {!s.editable && (
-                          <span className="ml-1 text-[10px] font-normal normal-case text-muted-foreground">({t("viewOnlyColumn")})</span>
-                        )}
-                        {s.editable && exam?.status === "COMPLETED" && (
-                          <div className="mt-1">
-                            {s.correction_status === "APPROVED_ACTIVE" && (
-                              <Badge variant="success" className="text-[10px] font-normal normal-case">{t("correctionApprovedActive")}</Badge>
-                            )}
-                            {s.correction_status === "PENDING" && (
-                              <Badge variant="warning" className="text-[10px] font-normal normal-case">{t("correctionRequestedBadge")}</Badge>
-                            )}
-                            {(s.correction_status === "NONE" || s.correction_status === "REJECTED" || s.correction_status === "REVOKED" || s.correction_status === "EXPIRED") && (
-                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] font-normal normal-case" onClick={() => setCorrectionTarget(s)}>
-                                {t("lockedRequestCorrection")}
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                        {s.mark_components && s.mark_components.length > 0 ? (
-                          <div className="flex flex-wrap gap-2 text-[10px] font-normal normal-case text-muted-foreground">
-                            {s.mark_components.map((comp) => (
-                              <span key={comp.key} title={comp.source_type !== "MANUAL" ? "Auto-fetched, editable" : undefined}>
-                                {comp.label}/{comp.max_marks}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          !!s.config?.full_marks_practical && (
-                            <div className="flex gap-2 text-[10px] font-normal normal-case text-muted-foreground">
-                              <span>{t("theoryLabel", { max: s.config.full_marks_theory })}</span>
-                              <span>{t("practicalLabel", { max: s.config.full_marks_practical })}</span>
-                            </div>
-                          )
-                        )}
+                        {renderSubjectHeading(s)}
                       </th>
                     ))}
                   </tr>
@@ -367,131 +574,17 @@ export default function TeacherMarkEntryGridPage() {
                     <tr key={st.id} className="border-b">
                       <td className="p-2">{st.current_roll_no}</td>
                       <td className="p-2">{st.name_en}</td>
-                      {data.subjects.map((s) => {
-                        const enrolled = isEnrolled(st.id, s.id);
-                        if (!enrolled) {
-                          return (
-                            <td key={s.id} className="p-1 text-center">
-                              <span className="text-muted-foreground" title="Not enrolled in this subject">—</span>
-                            </td>
-                          );
-                        }
-                        const v = getValue(st.id, s.id);
-                        const status = entryStatus(st.id, s.id);
-                        const hasMarkComponents = !!s.mark_components?.length;
-                        const componentValues = hasMarkComponents ? getComponentValues(st.id, s.id) : {};
-                        const componentSum = hasMarkComponents
-                          ? Object.values(componentValues).reduce((sum, e) => sum + (e.value ?? 0), 0)
-                          : undefined;
-                        const subjectTotal = (s.config?.full_marks_theory ?? 0) + (s.config?.full_marks_practical ?? 0);
-                        const annotations = hasMarkComponents
-                          ? (s.mark_components ?? [])
-                              .filter((c) => c.source_type !== "MANUAL")
-                              .map((c) => st.component_fetch?.[s.id]?.[c.key]?.annotation)
-                              .filter((a): a is string => !!a)
-                          : [];
-                        return (
+                      {data.subjects.map((s) =>
+                        isEnrolled(st.id, s.id) ? (
                           <td key={s.id} className="p-1 align-top">
-                            <div className="flex flex-wrap items-center gap-2">
-                              {status === "APPROVED" && <Badge variant="success" title={t("approvedBadgeTitle")}>✓</Badge>}
-                              {hasMarkComponents ? (
-                                <>
-                                  {(s.mark_components ?? []).map((comp) => {
-                                    const entry = componentValues[comp.key];
-                                    const isAutoUnedited = comp.source_type !== "MANUAL" && !entry?.is_override;
-                                    const isOverCap = entry?.value != null && entry.value > comp.max_marks;
-                                    return (
-                                      <div key={comp.key} className="flex flex-col items-start">
-                                        <span className="text-[9px] text-muted-foreground">{comp.label}/{comp.max_marks}</span>
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          max={comp.max_marks}
-                                          title={
-                                            isAutoUnedited
-                                              ? t("componentAutoTitle", { label: comp.label, max: comp.max_marks })
-                                              : t("componentTitle", { label: comp.label, max: comp.max_marks })
-                                          }
-                                          className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                                            isOverCap ? "border-red-500 bg-red-50 text-red-700" : isAutoUnedited ? "border-dashed text-muted-foreground" : ""
-                                          }`}
-                                          disabled={!effectiveEditable(s) || v.is_absent}
-                                          value={entry?.value ?? ""}
-                                          onChange={(e) => setComponentValue(st.id, s.id, comp.key, e.target.value)}
-                                        />
-                                        {isOverCap && <span className="text-[9px] font-medium text-red-600">Max {comp.max_marks}</span>}
-                                      </div>
-                                    );
-                                  })}
-                                  <span className={`text-xs font-medium ${(componentSum ?? 0) > subjectTotal ? "text-red-600" : "text-muted-foreground"}`}>
-                                    {t("componentTotalLabel", { total: componentSum, subjectTotal })}
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  {(() => {
-                                    const theoryOverCap = v.marks_theory != null && !!s.config && v.marks_theory > s.config.full_marks_theory;
-                                    return (
-                                      <div className="flex flex-col items-start">
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          max={s.config?.full_marks_theory}
-                                          title={s.config ? t("theoryOutOf", { max: s.config.full_marks_theory }) : undefined}
-                                          className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${theoryOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
-                                          disabled={!effectiveEditable(s) || v.is_absent}
-                                          value={v.marks_theory ?? ""}
-                                          onChange={(e) =>
-                                            setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_theory: parseMarkInput(e.target.value) } }))
-                                          }
-                                        />
-                                        {theoryOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_theory}</span>}
-                                      </div>
-                                    );
-                                  })()}
-                                  {!!s.config?.full_marks_practical && (
-                                    (() => {
-                                      const practicalOverCap = v.marks_practical != null && v.marks_practical > s.config!.full_marks_practical;
-                                      return (
-                                        <div className="flex flex-col items-start">
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            max={s.config.full_marks_practical}
-                                            title={t("practicalOutOf", { max: s.config.full_marks_practical })}
-                                            className={`h-8 w-16 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${practicalOverCap ? "border-red-500 bg-red-50 text-red-700" : ""}`}
-                                            disabled={!effectiveEditable(s) || v.is_absent}
-                                            value={v.marks_practical ?? ""}
-                                            onChange={(e) =>
-                                              setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, marks_practical: parseMarkInput(e.target.value) } }))
-                                            }
-                                          />
-                                          {practicalOverCap && <span className="text-[9px] font-medium text-red-600">Max {s.config!.full_marks_practical}</span>}
-                                        </div>
-                                      );
-                                    })()
-                                  )}
-                                </>
-                              )}
-                              <label className="flex items-center gap-1 text-xs">
-                                <Checkbox
-                                  disabled={!effectiveEditable(s)}
-                                  checked={v.is_absent ?? false}
-                                  onCheckedChange={(checked) => setEdits((prev) => ({ ...prev, [key(st.id, s.id)]: { ...v, is_absent: checked === true } }))}
-                                />
-                                {t("absentShort")}
-                              </label>
-                            </div>
-                            {annotations.length > 0 && (
-                              <div className="mt-1 space-y-0.5">
-                                {annotations.map((a, i) => (
-                                  <p key={i} className="text-[10px] leading-tight text-red-600">{a}</p>
-                                ))}
-                              </div>
-                            )}
+                            {renderMarkInputs(st, s)}
                           </td>
-                        );
-                      })}
+                        ) : (
+                          <td key={s.id} className="p-1 text-center">
+                            <span className="text-muted-foreground" title={t("notEnrolled")}>—</span>
+                          </td>
+                        ),
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -505,8 +598,10 @@ export default function TeacherMarkEntryGridPage() {
         )}
 
         {data && data.subjects.length > 0 && data.students.length > 0 && data.subjects.some(effectiveEditable) && (
-          <div className="flex items-center gap-3">
-            <Button onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length || overCapCells.size > 0}>
+          // Pinned to the bottom of the screen on a phone (button full-width
+          // under the status badges); the original inline row from sm: up.
+          <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+            <Button className="order-last h-11 w-full sm:order-none sm:h-9 sm:w-auto" onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length || overCapCells.size > 0}>
               {submitMutation.isPending ? t("submitting") : t("submitMarks")}
             </Button>
             <Badge variant="outline">{t("pendingChanges", { count: Object.keys(edits).length })}</Badge>

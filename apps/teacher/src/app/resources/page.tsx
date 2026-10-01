@@ -188,8 +188,8 @@ function ResourcesContent() {
             {!resources?.length && <EmptyState title={t("noResources")} />}
             <div className="space-y-2">
               {resources?.map((r) => (
-                <div key={r.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
-                  <div>
+                <div key={r.id} className="flex flex-col gap-3 rounded-md border p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 break-words">
                     <p className="font-medium">
                       {r.title} <Badge variant="outline">{t(RESOURCE_TYPE_KEYS.find((rt) => rt.value === r.resource_type)?.key ?? "typeOther")}</Badge>
                     </p>
@@ -197,16 +197,16 @@ function ResourcesContent() {
                       {r.class.name_en}{r.section ? ` · ${r.section.name}` : ` ${t("allSections")}`}{r.subject ? ` · ${r.subject.name_en}` : ""} · {r.original_filename}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 sm:gap-3 sm:border-t-0 sm:pt-0">
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Switch checked={r.is_published} onCheckedChange={(v) => toggleMutation.mutate({ id: r.id, is_published: v })} />
                       {t("publishedLabel")}
                     </label>
                     {r.resource_type === "ASSIGNMENT" && (
-                      <button onClick={() => setSubmissionsResourceId(r.id)} className="text-primary hover:underline">{t("submissions")}</button>
+                      <button onClick={() => setSubmissionsResourceId(r.id)} className="py-1 text-primary hover:underline">{t("submissions")}</button>
                     )}
-                    <button onClick={() => download(r.id)} className="text-primary hover:underline">{t("download")}</button>
-                    <button onClick={() => deleteMutation.mutate(r.id)} className="text-destructive hover:underline">{t("delete")}</button>
+                    <button onClick={() => download(r.id)} className="py-1 text-primary hover:underline">{t("download")}</button>
+                    <button onClick={() => deleteMutation.mutate(r.id)} className="py-1 text-destructive hover:underline">{t("delete")}</button>
                   </div>
                 </div>
               ))}
@@ -219,7 +219,7 @@ function ResourcesContent() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{t("uploadResourceTitle")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>{t("class")}</Label>
                 <select className="w-full rounded-md border px-3 py-2 text-sm" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); setSubjectId(""); }}>
@@ -272,8 +272,8 @@ function ResourcesContent() {
               const draft = gradeDrafts[s.id] ?? {};
               return (
                 <div key={s.id} className="rounded-md border p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{s.student.name_en} <span className="font-mono text-xs text-muted-foreground">{s.student.student_uid}</span></p>
+                  <div className="flex items-start justify-between gap-2 sm:items-center">
+                    <p className="min-w-0 break-words font-medium">{s.student.name_en} <span className="font-mono text-xs text-muted-foreground">{s.student.student_uid}</span></p>
                     <Badge variant={s.status === "GRADED" ? "default" : "outline"}>{s.status}</Badge>
                   </div>
                   <button onClick={() => downloadSubmission(s.id)} className="text-xs text-primary hover:underline">{t("downloadFile", { filename: s.original_filename })}</button>
@@ -287,7 +287,7 @@ function ResourcesContent() {
                     />
                     <Input
                       placeholder={t("feedbackPlaceholder")}
-                      className="h-8 flex-1"
+                      className="h-8 min-w-0 flex-1"
                       value={draft.feedback ?? s.feedback ?? ""}
                       onChange={(e) => setGradeDrafts((prev) => ({ ...prev, [s.id]: { ...prev[s.id], feedback: e.target.value } }))}
                     />

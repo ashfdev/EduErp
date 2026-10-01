@@ -107,9 +107,11 @@ function StudentLeaveApprovalsContent() {
 
         {!isLoading && (
           <Tabs defaultValue="class">
-            <TabsList>
-              <TabsTrigger value="class">{t("classTeacherTab", { count: classTeacherPending.length })}</TabsTrigger>
-              <TabsTrigger value="subject">{t("subjectTeacherTab", { count: subjectTeacherPending.length })}</TabsTrigger>
+            {/* Full-width, wrappable tabs on a phone — two no-wrap labels
+                with counts overflowed a 360px screen (more so in Bangla). */}
+            <TabsList className="h-auto w-full sm:h-9 sm:w-auto">
+              <TabsTrigger value="class" className="flex-1 whitespace-normal py-1.5 sm:flex-none sm:whitespace-nowrap sm:py-1">{t("classTeacherTab", { count: classTeacherPending.length })}</TabsTrigger>
+              <TabsTrigger value="subject" className="flex-1 whitespace-normal py-1.5 sm:flex-none sm:whitespace-nowrap sm:py-1">{t("subjectTeacherTab", { count: subjectTeacherPending.length })}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="class">
@@ -117,8 +119,8 @@ function StudentLeaveApprovalsContent() {
               <div className="space-y-2">
                 {classTeacherPending.map((r) => (
                   <Card key={r.id}>
-                    <CardContent className="flex items-center justify-between gap-4 pt-6">
-                      <div>
+                    <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 break-words">
                         <p className="font-medium">
                           {r.student.name_en} <span className="text-xs text-muted-foreground">({r.student.student_uid}{r.student.current_section ? ` · ${r.student.current_section.name}` : ""})</span>
                         </p>
@@ -127,11 +129,11 @@ function StudentLeaveApprovalsContent() {
                         </p>
                         <p className="text-xs text-muted-foreground">{r.reason}</p>
                       </div>
-                      <div className="flex shrink-0 gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setRejectTarget({ kind: "request", id: r.id }); setReason(""); }}>
+                      <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                        <Button size="sm" className="h-10 sm:h-8" variant="outline" onClick={() => { setRejectTarget({ kind: "request", id: r.id }); setReason(""); }}>
                           {t("reject")}
                         </Button>
-                        <Button size="sm" onClick={() => approveRequestMutation.mutate(r.id)} disabled={approveRequestMutation.isPending}>
+                        <Button size="sm" className="h-10 sm:h-8" onClick={() => approveRequestMutation.mutate(r.id)} disabled={approveRequestMutation.isPending}>
                           {t("approve")}
                         </Button>
                       </div>
@@ -146,8 +148,8 @@ function StudentLeaveApprovalsContent() {
               <div className="space-y-2">
                 {subjectTeacherPending.map((a) => (
                   <Card key={a.id}>
-                    <CardContent className="flex items-center justify-between gap-4 pt-6">
-                      <div>
+                    <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 break-words">
                         <p className="font-medium">
                           {a.leave_request.student.name_en}{" "}
                           <span className="text-xs text-muted-foreground">({a.leave_request.student.student_uid})</span>
@@ -158,11 +160,11 @@ function StudentLeaveApprovalsContent() {
                         <p className="text-xs text-muted-foreground">{a.leave_request.reason}</p>
                         <Badge variant="outline" className="mt-1">{t("yourApprovalOnly")}</Badge>
                       </div>
-                      <div className="flex shrink-0 gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setRejectTarget({ kind: "approval", id: a.id }); setReason(""); }}>
+                      <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+                        <Button size="sm" className="h-10 sm:h-8" variant="outline" onClick={() => { setRejectTarget({ kind: "approval", id: a.id }); setReason(""); }}>
                           {t("reject")}
                         </Button>
-                        <Button size="sm" onClick={() => approveApprovalMutation.mutate(a.id)} disabled={approveApprovalMutation.isPending}>
+                        <Button size="sm" className="h-10 sm:h-8" onClick={() => approveApprovalMutation.mutate(a.id)} disabled={approveApprovalMutation.isPending}>
                           {t("approve")}
                         </Button>
                       </div>

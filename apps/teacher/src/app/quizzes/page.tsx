@@ -118,7 +118,7 @@ export default function TeacherQuizzesPage() {
 
   return (
     <TeacherShell>
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
         <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
         
@@ -133,10 +133,10 @@ export default function TeacherQuizzesPage() {
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <Label className="text-sm font-bold text-slate-500 uppercase">{t("subject")}</Label>
-            <select className="flex-1 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+            <select className="w-full sm:w-auto sm:flex-1 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
               <option value="">{t("selectSubject")}</option>
               {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
             </select>
@@ -148,18 +148,18 @@ export default function TeacherQuizzesPage() {
             
             {/* Questions Bank */}
             <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
                 <h2 className="text-base font-bold text-slate-800">
                   {t("questionBank", { count: questions?.length ?? 0 })}
                 </h2>
                 <button 
                   onClick={() => setQOpen(true)}
-                  className="text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                  className="shrink-0 text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-2 sm:py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
                 >
-                  + {t("addQuestion")}
+                  {t("addQuestion")}
                 </button>
               </div>
-              <div className="p-4 flex-1 overflow-y-auto max-h-[600px]">
+              <div className="p-4 flex-1 lg:overflow-y-auto lg:max-h-[600px]">
                 {!questions?.length && (
                   <div className="py-8"><EmptyState title={t("noQuestions")} /></div>
                 )}
@@ -183,19 +183,19 @@ export default function TeacherQuizzesPage() {
 
             {/* Quizzes */}
             <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
                 <h2 className="text-base font-bold text-slate-800">
                   {t("quizzesLabel")}
                 </h2>
                 <button 
                   onClick={() => setQuizOpen(true)}
                   disabled={!questions?.length}
-                  className="text-xs font-bold bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-2 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  + {t("createQuiz")}
+                  {t("createQuiz")}
                 </button>
               </div>
-              <div className="p-4 flex-1 overflow-y-auto max-h-[600px]">
+              <div className="p-4 flex-1 lg:overflow-y-auto lg:max-h-[600px]">
                 {!quizzes?.length && (
                   <div className="py-8"><EmptyState title={t("noQuizzes")} /></div>
                 )}
@@ -213,11 +213,11 @@ export default function TeacherQuizzesPage() {
                           {q.is_published ? t("published") : t("draft")}
                         </Badge>
                         {!q.is_published && (
-                          <button onClick={() => publishMutation.mutate(q.id)} className="text-xs font-bold text-primary hover:underline px-2 py-1">
+                          <button onClick={() => publishMutation.mutate(q.id)} className="text-xs font-bold text-primary hover:underline px-2 py-2 sm:py-1">
                             {t("publish")}
                           </button>
                         )}
-                        <button onClick={() => setResultsQuizId(q.id)} className="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+                        <button onClick={() => setResultsQuizId(q.id)} className="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-2 sm:py-1.5 rounded-lg hover:bg-slate-50">
                           {t("results")}
                         </button>
                       </div>
@@ -243,7 +243,7 @@ export default function TeacherQuizzesPage() {
                   value={o.text}
                   onChange={(e) => setQOptions((prev) => prev.map((p, idx) => (idx === i ? { ...p, text: e.target.value } : p)))}
                 />
-                <label className="flex items-center gap-1 text-xs">
+                <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs">
                   <input type="radio" checked={qCorrect === o.key} onChange={() => setQCorrect(o.key)} /> {t("correct")}
                 </label>
               </div>
@@ -292,9 +292,9 @@ export default function TeacherQuizzesPage() {
           {!attempts?.length && <p className="text-sm text-muted-foreground">{t("noAttempts")}</p>}
           <div className="space-y-2">
             {attempts?.map((a) => (
-              <div key={a.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
-                <span>{a.student.name_en} <span className="font-mono text-xs text-muted-foreground">{a.student.student_uid}</span></span>
-                <div className="flex items-center gap-2">
+              <div key={a.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
+                <span className="min-w-0 break-words">{a.student.name_en} <span className="font-mono text-xs text-muted-foreground">{a.student.student_uid}</span></span>
+                <div className="flex shrink-0 items-center gap-2">
                   {a.tamper_flag_count > 0 && <Badge variant="outline">{t("flagsCount", { count: a.tamper_flag_count })}</Badge>}
                   <Badge variant={a.status === "GRADED" ? "default" : "outline"}>{a.status === "GRADED" ? `${a.score}` : a.status}</Badge>
                 </div>

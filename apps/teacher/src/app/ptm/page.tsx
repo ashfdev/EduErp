@@ -57,11 +57,14 @@ export default function TeacherPtmPage() {
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
         <Card>
-          <CardContent className="flex items-end gap-3 pt-6">
-            <div className="space-y-1.5"><Label>{t("date")}</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>{t("start")}</Label><Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>{t("end")}</Label><Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div>
-            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !date || !startTime || !endTime}>{t("publishSlot")}</Button>
+          {/* Phone: 2-column grid (date full-width, start/end side by side,
+              full-width button) — the single no-wrap row overflowed the
+              screen sideways. Same single row as before from sm: up. */}
+          <CardContent className="grid grid-cols-2 items-end gap-3 pt-6 sm:flex">
+            <div className="col-span-2 space-y-1.5"><Label>{t("date")}</Label><Input type="date" className="h-11 sm:h-9" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <div className="min-w-0 space-y-1.5"><Label>{t("start")}</Label><Input type="time" className="h-11 sm:h-9" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div>
+            <div className="min-w-0 space-y-1.5"><Label>{t("end")}</Label><Input type="time" className="h-11 sm:h-9" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div>
+            <Button className="col-span-2 h-11 sm:h-9" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !date || !startTime || !endTime}>{t("publishSlot")}</Button>
           </CardContent>
         </Card>
 
@@ -69,8 +72,8 @@ export default function TeacherPtmPage() {
         <div className="space-y-2">
           {slots?.map((s) => (
             <Card key={s.id}>
-              <CardContent className="flex items-center justify-between pt-6">
-                <div>
+              <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-medium">{new Date(s.date).toLocaleDateString()} · {s.start_time}-{s.end_time}</p>
                   {s.booking ? (
                     <p className="text-sm text-muted-foreground">{t("bookedBy", { guardian: s.booking.guardian.name_en, phone: s.booking.guardian.phone, student: s.booking.student.name_en })}</p>
@@ -78,7 +81,7 @@ export default function TeacherPtmPage() {
                     <p className="text-sm text-muted-foreground">{t("open")}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <Badge variant={s.is_booked ? "default" : "outline"}>{s.is_booked ? t("booked") : t("open")}</Badge>
                   {!s.is_booked && (
                     <Button size="sm" variant="outline" onClick={() => deleteMutation.mutate(s.id)}>{t("remove")}</Button>

@@ -94,7 +94,7 @@ export default function TeacherHomePage() {
   return (
     <TeacherShell>
       {/* Header Section */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
         <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
         
@@ -102,7 +102,7 @@ export default function TeacherHomePage() {
           <p className="text-indigo-100 font-medium mb-1">
             {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
             {t("welcome", { name: user?.name_en?.split(" ")[0] ?? "" })} 👋
           </h1>
           <p className="mt-2 text-indigo-50 max-w-md text-sm leading-relaxed opacity-90">
@@ -124,7 +124,7 @@ export default function TeacherHomePage() {
         <div className="md:col-span-8 space-y-6">
           
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             {[
               { label: "Classes Today", value: schedule?.length ?? 0, icon: Clock, color: "text-blue-600", bg: "bg-blue-50" },
               { label: "Pending Leave", value: pendingLeaveCount, icon: Plane, color: "text-amber-600", bg: "bg-amber-50" },
@@ -143,12 +143,12 @@ export default function TeacherHomePage() {
 
           {/* Today's Classes */}
           <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
                 {t("myClassesToday")}
               </h2>
-              <Link href="/routine" className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1">
+              <Link href="/routine" className="shrink-0 text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1">
                 View Full Routine <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
@@ -164,12 +164,12 @@ export default function TeacherHomePage() {
                   const status = computeSlotStatus(s, new Date());
                   return (
                     <div key={s.id} className="group flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm">
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4">
                         <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500 group-hover:bg-primary group-hover:text-white transition-colors">
-                          <span className="text-xs font-bold uppercase">Period</span>
+                          <span className="text-[10px] sm:text-xs font-bold uppercase">Period</span>
                           <span className="text-lg font-black leading-none">{s.period_no}</span>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-bold text-slate-800 text-base">{s.subject?.name_en ?? t("classFallback")}</p>
                           <p className="text-sm font-medium text-slate-500 mt-0.5">
                             {s.class.name_en}{s.section ? ` • ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
@@ -182,13 +182,20 @@ export default function TeacherHomePage() {
                           )}
                         </div>
                       </div>
-                      <div className="mt-3 sm:mt-0 flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
+                      <div className="mt-3 sm:mt-0 flex items-center gap-3 sm:gap-0 sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
                         <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
                           <Clock className="h-3.5 w-3.5 text-slate-400" />
                           {s.start_time} - {s.end_time}
                         </div>
+                        {/* Was hidden below sm: entirely — the one action a
+                            teacher most needs from this card on a phone. A
+                            proper tap-sized button there; the original small
+                            text link from sm: up. */}
                         {status !== "completed" && (
-                          <Link href={`/attendance/subject?routine_slot_id=${s.id}&date=${todayLocalDateString()}`} className="text-xs font-bold text-primary hover:underline mt-2 hidden sm:block">
+                          <Link
+                            href={`/attendance/subject?routine_slot_id=${s.id}&date=${todayLocalDateString()}`}
+                            className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground sm:mt-2 sm:block sm:h-auto sm:rounded-none sm:bg-transparent sm:px-0 sm:text-primary sm:hover:underline"
+                          >
                             Mark Attendance
                           </Link>
                         )}

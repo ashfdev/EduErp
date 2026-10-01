@@ -45,4 +45,33 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* iOS Safari auto-zooms the whole page when a focused form field's text is
+     under 16px — every Input/select here is text-sm (14px), so tapping a mark
+     box or the date picker on a phone zoomed the layout off-screen mid-entry.
+     Phone widths only (below Tailwind's sm:); desktop keeps the denser 14px.
+     !important because the fields' own text-sm utility class would otherwise
+     win on specificity. */
+  @media (max-width: 639px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* When the browser scrolls a focused field into view (e.g. the phone
+     keyboard's "next" between mark boxes), keep it clear of the fixed mobile
+     header (below lg:) and of the sticky Save/Submit bars (below sm:) instead
+     of parking it right underneath them. */
+  @media (max-width: 1023px) {
+    html {
+      scroll-padding-top: 4.5rem;
+    }
+  }
+  @media (max-width: 639px) {
+    html {
+      scroll-padding-bottom: 6rem;
+    }
+  }
 }

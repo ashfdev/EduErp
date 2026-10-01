@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { ChevronLeft, Menu, X } from "lucide-react";
+import { ChevronLeft, Menu } from "lucide-react";
 import { ProtectedRoute } from "./protected-route";
 import { TeacherNav } from "./teacher-nav";
 import { useInstitution } from "@/hooks/use-institution";
@@ -28,8 +28,14 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.body.style.overflow = isMenuOpen ? "hidden" : "";
+    if (!isMenuOpen) return () => { document.body.style.overflow = ""; };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsMenuOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [isMenuOpen]);
 
@@ -63,42 +69,42 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
           onClick={() => setIsMenuOpen(false)}
           aria-hidden={!isMenuOpen}
         />
+        {/* invisible (not just translated off-screen) while closed, so the
+            hidden drawer's links aren't reachable by Tab or a screen reader;
+            visibility stays "visible" for the whole slide-out transition. */}
         <aside
-          className={`lg:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-slate-900 shadow-2xl transition-transform duration-200 ${
-            isMenuOpen ? "translate-x-0" : "-translate-x-full"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+          className={`lg:hidden fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-slate-900 shadow-2xl transition-[transform,visibility] duration-200 ${
+            isMenuOpen ? "visible translate-x-0" : "invisible -translate-x-full"
           }`}
         >
-          <button
-            onClick={() => setIsMenuOpen(false)}
-            aria-label="Close menu"
-            className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <TeacherNav />
+          <TeacherNav onClose={() => setIsMenuOpen(false)} />
         </aside>
 
-        <main className="flex-1 w-full relative pt-14 lg:pt-0">
-          {/* Mobile Top Header */}
-          <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-4 shadow-sm">
-            <div className="flex items-center gap-2">
+        <main className="flex-1 w-full min-w-0 relative pt-14 lg:pt-0">
+          {/* Mobile Top Header — 40px tap targets (was 32px) */}
+          <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-slate-200 z-40 flex items-center justify-between gap-2 px-2 shadow-sm">
+            <div className="flex min-w-0 items-center gap-1">
               <button
                 onClick={() => setIsMenuOpen(true)}
                 aria-label="Open menu"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
+                aria-expanded={isMenuOpen}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
               >
                 <Menu className="h-5 w-5" />
               </button>
               {pathname !== "/" ? (
                 <button
                   onClick={() => router.back()}
-                  className="flex items-center text-slate-600 hover:text-slate-900 font-bold transition-colors"
+                  className="flex h-10 items-center rounded-lg pl-1 pr-3 text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-bold transition-colors"
                 >
                   <ChevronLeft className="w-5 h-5 mr-1" />
                   Back
                 </button>
               ) : (
-                <span className="font-bold text-slate-800">{institutionName ?? "Teacher Portal"}</span>
+                <span className="truncate pl-1 font-bold text-slate-800">{institutionName ?? "Teacher Portal"}</span>
               )}
             </div>
             <NotificationBell

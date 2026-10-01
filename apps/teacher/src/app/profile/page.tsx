@@ -88,12 +88,12 @@ export default function TeacherProfilePage() {
 
   return (
     <TeacherShell>
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
         <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
         
-        <div className="relative z-10 flex items-center gap-5">
-          <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-bold text-white border border-white/10 shadow-sm">
+        <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+          <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-bold text-white border border-white/10 shadow-sm">
             {user?.name_en?.charAt(0) ?? "U"}
           </div>
           <div>
@@ -134,13 +134,13 @@ export default function TeacherProfilePage() {
 
         <div className="md:col-span-8 space-y-6">
           <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
               <h2 className="text-base font-bold text-slate-800">
                 {t("myDocuments")}
               </h2>
               <button 
                 onClick={() => setUploadOpen(true)}
-                className="text-xs font-bold bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-2 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
               >
                 {t("uploadDocument")}
               </button>
@@ -153,15 +153,15 @@ export default function TeacherProfilePage() {
                 {documents?.map((d) => (
                   <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
                     <div>
-                      <p className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                      <p className="font-bold text-slate-800 text-sm flex flex-wrap items-center gap-2 break-words">
                         {d.title}
                         <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{d.doc_type}</span>
                       </p>
                       <p className="text-xs font-medium text-slate-500 mt-1">{d.original_filename} • {new Date(d.uploaded_at).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-4 mt-3 sm:mt-0">
-                      <button onClick={() => download(d.id)} className="text-xs font-bold text-primary hover:underline">{t("download")}</button>
-                      <button onClick={() => deleteMutation.mutate(d.id)} className="text-xs font-bold text-red-500 hover:underline">{t("delete")}</button>
+                      <button onClick={() => download(d.id)} className="py-1 text-xs font-bold text-primary hover:underline">{t("download")}</button>
+                      <button onClick={() => deleteMutation.mutate(d.id)} className="py-1 text-xs font-bold text-red-500 hover:underline">{t("delete")}</button>
                     </div>
                   </div>
                 ))}
@@ -170,7 +170,7 @@ export default function TeacherProfilePage() {
           </div>
 
           <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-slate-50 bg-slate-50/50 px-6 py-4">
+            <div className="border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
               <h2 className="text-base font-bold text-slate-800">{t("myReviews")}</h2>
             </div>
             <div className="p-4">
@@ -180,7 +180,7 @@ export default function TeacherProfilePage() {
               <div className="space-y-3">
                 {reviews?.map((r) => (
                   <div key={r.id} className="rounded-2xl border border-slate-100 p-4 hover:border-primary/20 hover:bg-slate-50 transition-all">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="font-bold text-slate-800 text-sm">{r.template.name} <span className="text-slate-400 font-medium mx-1">•</span> {r.review_period}</p>
                       <Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"} className={r.status === "ACKNOWLEDGED" ? "bg-emerald-500" : ""}>{r.status}</Badge>
                     </div>

@@ -180,7 +180,8 @@
     "correctionRequestFailed": "Failed to submit correction request",
     "componentAutoTitle": "{label}, auto-fetched (out of {max}) — edit to override",
     "componentTitle": "{label}, out of {max}",
-    "componentTotalLabel": "={total}/{subjectTotal}"
+    "componentTotalLabel": "={total}/{subjectTotal}",
+    "notEnrolled": "Not enrolled in this subject"
   },
   "ptm": {
     "title": "Parent-Teacher Meetings",

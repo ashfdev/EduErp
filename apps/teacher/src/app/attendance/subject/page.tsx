@@ -68,6 +68,7 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 // not a single subject period.
 const STATUSES = ["PRESENT", "ABSENT", "LATE"] as const;
 const STATUS_LABEL: Record<string, string> = { PRESENT: "P", ABSENT: "A", LATE: "L" };
+const STATUS_NAME: Record<string, string> = { PRESENT: "Present", ABSENT: "Absent", LATE: "Late" };
 const STATUS_COLOR: Record<string, string> = {
   PRESENT: "bg-emerald-100 border-emerald-400",
   ABSENT: "bg-red-100 border-red-400",
@@ -137,22 +138,24 @@ function SubjectAttendanceContent() {
 
     return (
       <TeacherShell>
-        <PageWrapper>
+        {/* p-0 on phones: the shell already pads the page, and PageWrapper's
+            own p-6 on top of it left a ~280px-wide column on a 360px screen. */}
+        <PageWrapper className="p-0 sm:p-6">
           <PageHeader
             title="Subject Attendance"
             subtitle="Pick a date to see your periods that day, then mark attendance for any of them — including a period you missed on a past date."
           />
           <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
+            <div className="w-full space-y-1 sm:w-auto">
               <label className="text-xs font-medium text-muted-foreground">Date</label>
               <Input
                 type="date"
                 value={pickerDate}
                 onChange={(e) => { setPickerDate(e.target.value); setPickerDayOverride(null); }}
-                className="w-48"
+                className="h-11 w-full sm:h-9 sm:w-48"
               />
             </div>
-            <div className="space-y-1">
+            <div className="w-full space-y-1 sm:w-auto">
               <label className="text-xs font-medium text-muted-foreground">
                 Routine day <span className="font-normal">(change only for a makeup/rescheduled class)</span>
               </label>
@@ -162,7 +165,7 @@ function SubjectAttendanceContent() {
                   const v = Number(e.target.value);
                   setPickerDayOverride(v === naturalDayOfWeek ? null : v);
                 }}
-                className="h-9 w-56 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                className="block h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm sm:h-9 sm:w-56"
               >
                 {DAY_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>{name}{idx === naturalDayOfWeek ? " (this date's day)" : ""}</option>
@@ -190,21 +193,21 @@ function SubjectAttendanceContent() {
                 <Link
                   key={s.id}
                   href={`/attendance/subject?routine_slot_id=${s.id}&date=${pickerDate}`}
-                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500">
                       <span className="text-[10px] font-bold uppercase">Period</span>
                       <span className="text-base font-black leading-none">{s.period_no}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-bold text-slate-800">{s.subject?.name_en}</p>
                       <p className="text-sm text-slate-500">
                         {s.class.name_en}{s.section ? ` • Section ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold text-slate-500">{s.start_time}–{s.end_time}</span>
+                  <span className="shrink-0 text-xs font-semibold text-slate-500">{s.start_time}–{s.end_time}</span>
                 </Link>
               ))}
             </div>
@@ -216,7 +219,7 @@ function SubjectAttendanceContent() {
 
   return (
     <TeacherShell>
-      <PageWrapper>
+      <PageWrapper className="p-0 sm:p-6">
         {isError && <p className="text-sm text-red-600">{extractErrorMessage(error) ?? "Failed to load roster"}</p>}
         {data && (
           <>
@@ -244,10 +247,10 @@ function SubjectAttendanceContent() {
                 <Badge variant="outline" className="bg-amber-50 text-amber-700">{unmarked} unmarked</Badge>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries(data.students.map((s) => [s.id, "PRESENT"])))}>
+                <Button size="sm" variant="outline" className="h-10 sm:h-8" onClick={() => setMarks(Object.fromEntries(data.students.map((s) => [s.id, "PRESENT"])))}>
                   Mark All Present
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setMarks({})}>Clear</Button>
+                <Button size="sm" variant="outline" className="h-10 sm:h-8" onClick={() => setMarks({})}>Clear</Button>
               </div>
             </div>
 
@@ -257,8 +260,38 @@ function SubjectAttendanceContent() {
               </p>
             )}
 
+            {/* Phone: one compact row per student (only 3 statuses, so the
+                buttons fit beside the name) instead of the sideways-scrolling
+                table below. */}
             {!!data.students.length && (
-              <div className="overflow-hidden overflow-x-auto rounded-2xl border">
+              <ul className="divide-y overflow-hidden rounded-2xl border bg-white sm:hidden">
+                {data.students.map((s) => (
+                  <li key={s.id} className="flex items-center gap-3 p-3">
+                    <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
+                      {s.current_roll_no ?? "—"}
+                    </span>
+                    <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug">{s.name_en}</p>
+                    <div className="flex shrink-0 gap-1.5">
+                      {STATUSES.map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          aria-label={`${s.name_en}: ${STATUS_NAME[status]}`}
+                          aria-pressed={effectiveMarks[s.id] === status}
+                          onClick={() => setMarks((prev) => ({ ...prev, [s.id]: status }))}
+                          className={`h-10 w-10 rounded-full border-2 text-xs font-bold transition-all active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-slate-200 bg-white text-slate-400"}`}
+                        >
+                          {STATUS_LABEL[status]}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!!data.students.length && (
+              <div className="hidden overflow-hidden overflow-x-auto rounded-2xl border sm:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50 text-left text-xs font-bold uppercase text-muted-foreground">
@@ -276,6 +309,8 @@ function SubjectAttendanceContent() {
                           <td key={status} className="px-3 py-2.5 text-center">
                             <button
                               type="button"
+                              aria-label={`${s.name_en}: ${STATUS_NAME[status]}`}
+                              aria-pressed={effectiveMarks[s.id] === status}
                               onClick={() => setMarks((prev) => ({ ...prev, [s.id]: status }))}
                               className={`h-8 w-8 rounded-full border-2 text-xs font-bold transition-all hover:scale-110 active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"}`}
                             >
@@ -290,9 +325,12 @@ function SubjectAttendanceContent() {
               </div>
             )}
 
+            {/* Pinned to the bottom of the screen on a phone, plain
+                right-aligned button from sm: up — same as Daily Attendance. */}
             {!!data.students.length && (
-              <div className="flex justify-end">
-                <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+              <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+                <p className="min-w-0 text-xs font-bold text-amber-700 sm:hidden">{unmarked} unmarked</p>
+                <Button className="h-11 min-w-0 flex-1 sm:h-9 sm:flex-none" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? "Saving..." : alreadyMarked ? "Update Attendance" : "Save Attendance"}
                 </Button>
               </div>

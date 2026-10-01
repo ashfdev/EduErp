@@ -48,7 +48,7 @@ function ChangePasswordForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center p-4 sm:p-6">
       <Card className="w-full max-w-sm">
         <CardContent className="space-y-4 pt-6">
           <div>

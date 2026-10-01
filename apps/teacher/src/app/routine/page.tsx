@@ -37,7 +37,8 @@ export default function TeacherRoutinePage() {
 
   return (
     <TeacherShell>
-      <PageWrapper>
+      {/* p-0 on phones — the shell already pads the page. */}
+      <PageWrapper className="p-0 sm:p-6">
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
 
         {!slots?.length && (
@@ -60,12 +61,12 @@ export default function TeacherRoutinePage() {
                   {daySlots.map((s) => (
                     <Card key={s.id}>
                       <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-3 sm:gap-4">
                           <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500">
                             <span className="text-[10px] font-bold uppercase">{t("periodShort")}</span>
                             <span className="text-base font-black leading-none">{s.period_no}</span>
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-bold text-slate-800">{s.subject?.name_en ?? t("classFallback")}</p>
                             <p className="text-sm font-medium text-slate-500 mt-0.5">
                               {s.class.name_en}

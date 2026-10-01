@@ -89,7 +89,7 @@ export default function MarksPickerPage() {
 
   return (
     <TeacherShell>
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-8 text-white shadow-xl shadow-indigo-200">
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
         <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
         
@@ -103,11 +103,11 @@ export default function MarksPickerPage() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-100 bg-white p-6 sm:p-8 shadow-sm">
+      <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-8 shadow-sm">
         {!isAdminTier && mySections && mySections.length === 0 && (
           <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">{t("noOwnSections")}</p>
         )}
-        <div className={`grid grid-cols-1 gap-6 ${isUniversity && isAdminTier ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
+        <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${isUniversity && isAdminTier ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase">{t("exam")}</Label>
             <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={examId} onChange={(e) => setExamId(e.target.value)}>
@@ -157,7 +157,7 @@ export default function MarksPickerPage() {
           </div>
         </div>
         
-        <div className="mt-8 flex justify-end pt-4 border-t border-slate-100">
+        <div className="mt-6 sm:mt-8 flex justify-end pt-4 border-t border-slate-100">
           <Button
             className="w-full sm:w-auto rounded-xl px-8 py-6 text-base font-bold shadow-md"
             disabled={!examId || !classId || !sectionId}

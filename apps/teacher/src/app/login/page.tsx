@@ -88,21 +88,21 @@ export default function TeacherLoginPage() {
         <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-transparent lg:bg-[#eef3fb] p-6 sm:p-12">
           
           {/* Mobile Branding - Only visible on small screens */}
-          <div className="w-full text-center mb-8 lg:hidden relative z-10">
+          <div className="w-full text-center mb-6 sm:mb-8 lg:hidden relative z-10">
             {institution?.logo_url ? (
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white p-3 shadow-xl ring-4 ring-white/60">
+              <div className="mx-auto mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-white p-3 shadow-xl ring-4 ring-white/60">
                 <img src={institution.logo_url} alt="Logo" className="h-full w-full object-contain" />
               </div>
             ) : (
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white text-4xl shadow-xl ring-4 ring-white/60">🏫</div>
+              <div className="mx-auto mb-4 flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-white text-4xl shadow-xl ring-4 ring-white/60">🏫</div>
             )}
             <h1 className="text-2xl font-black text-slate-900 tracking-tight px-2 [text-shadow:_0_0_15px_rgba(255,255,255,1),_0_0_25px_rgba(255,255,255,1)]">
               {institution?.name_en ?? "Education ERP"}
             </h1>
           </div>
 
-          <div className="mx-auto w-full max-w-md text-center mb-8">
-            <h2 className="text-3xl font-medium tracking-tight text-[#2d3748]">
+          <div className="mx-auto w-full max-w-md text-center mb-6 sm:mb-8">
+            <h2 className="text-2xl sm:text-3xl font-medium tracking-tight text-[#2d3748]">
               {t("title")}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
@@ -110,7 +110,7 @@ export default function TeacherLoginPage() {
             </p>
           </div>
 
-          <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-slate-100">
+          <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 sm:p-8 shadow-sm border border-slate-100">
             <form onSubmit={submit} className="space-y-6">
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-700">{t("idLabel")}</Label>
