@@ -26,3 +26,6 @@ token.env
 token.txt
 *-login.json
 *-token.json
+
+# Playwright MCP page snapshots/traces from browser-testing the live panel.
+.playwright-mcp/
