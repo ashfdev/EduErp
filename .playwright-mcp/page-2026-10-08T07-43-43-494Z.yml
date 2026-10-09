@@ -1,0 +1,274 @@
+- generic:
+  - generic [aria-hidden]:
+    - complementary:
+      - generic: Alhumaira Model School & College
+      - generic:
+        - navigation:
+          - link:
+            - /url: /dashboard
+            - generic: Dashboard
+          - generic:
+            - button:
+              - generic: Academic
+          - generic:
+            - button:
+              - generic: Students
+          - generic:
+            - button:
+              - generic:
+                - text: Admission
+                - generic: "1"
+          - generic:
+            - button:
+              - generic:
+                - text: Finance
+                - generic: "6"
+          - generic:
+            - button:
+              - generic: HR & Staff
+          - generic:
+            - button:
+              - generic: Campus
+          - generic:
+            - button:
+              - generic: Communication
+          - generic:
+            - button:
+              - generic: System
+      - generic:
+        - generic:
+          - generic: S
+          - generic:
+            - paragraph: System Admin
+            - paragraph: ADMIN
+          - button
+    - generic:
+      - banner:
+        - generic:
+          - button:
+            - generic: Search students, staff, settings...
+            - generic: Ctrl K
+        - generic:
+          - generic:
+            - button:
+              - generic: "1"
+          - button: বাংলা
+      - main:
+        - generic:
+          - generic:
+            - complementary:
+              - generic:
+                - paragraph: Institution
+                - navigation:
+                  - link:
+                    - /url: /settings/institution
+                    - text: Profile & Branding
+                  - link:
+                    - /url: /settings/academic
+                    - text: Academic Structure
+                  - link:
+                    - /url: /settings/departments
+                    - text: Departments
+                  - link:
+                    - /url: /settings/programs
+                    - text: Programs & Courses
+                  - link:
+                    - /url: /settings/subjects
+                    - text: Subjects
+                  - link:
+                    - /url: /settings/routine
+                    - text: Routine / Timetable
+                  - link:
+                    - /url: /settings/rooms
+                    - text: Rooms
+              - generic:
+                - paragraph: Customization
+                - navigation:
+                  - link:
+                    - /url: /settings/student-id
+                    - text: Student ID Format
+                  - link:
+                    - /url: /settings/grading
+                    - text: Grading System
+                  - link:
+                    - /url: /settings/mark-composition-templates
+                    - text: Mark Composition Templates
+                  - link:
+                    - /url: /settings/marksheet-display
+                    - text: Marksheet Display
+                  - link:
+                    - /url: /settings/fee-rules
+                    - text: Fee Rules
+                  - link:
+                    - /url: /settings/admission-payment-instructions
+                    - text: Admission Payment Instructions
+                  - link:
+                    - /url: /settings/attendance-rules
+                    - text: Attendance Rules
+                  - link:
+                    - /url: /settings/leave-types
+                    - text: Leave Types
+              - generic:
+                - paragraph: Documents & Signatures
+                - navigation:
+                  - link:
+                    - /url: /settings/signatures
+                    - text: Authority Signatures
+                  - link:
+                    - /url: /settings/signature-mapping
+                    - text: Signature Mapping
+                  - link:
+                    - /url: /settings/templates
+                    - text: Document Templates
+              - generic:
+                - paragraph: System
+                - navigation:
+                  - link:
+                    - /url: /settings/users
+                    - text: User Accounts
+                  - link:
+                    - /url: /settings/permissions
+                    - text: Roles & Permissions
+                  - link:
+                    - /url: /settings/notifications
+                    - text: Notifications
+                  - link:
+                    - /url: /settings/notifications/logs
+                    - text: Notification Logs
+                  - link:
+                    - /url: /notifications/bulk-sms
+                    - text: Bulk SMS
+                  - link:
+                    - /url: /settings/payment-gateways
+                    - text: Payment Gateways
+                  - link:
+                    - /url: /settings/sms-gateway
+                    - text: SMS Gateway
+                  - link:
+                    - /url: /settings/devices
+                    - text: Biometric Devices
+                  - link:
+                    - /url: /settings/audit-log
+                    - text: Audit Log
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - navigation:
+                      - generic: Settings
+                      - generic: /
+                      - generic: Academic
+                    - heading [level=1]: Academic Structure
+                    - paragraph: Academic years, shifts, classes, sections, and groups/streams (Science/Commerce/Arts) — add a class's groups from its card below
+                - generic:
+                  - generic:
+                    - heading [level=3]: Academic Years
+                    - button: + Add Academic Year
+                  - generic:
+                    - generic:
+                      - table:
+                        - rowgroup:
+                          - row:
+                            - cell: 2026-2027
+                            - cell: 01/01/2026 – 31/12/2026
+                            - cell:
+                              - generic: Active
+                            - cell
+                - generic:
+                  - generic:
+                    - heading [level=3]: Shifts
+                    - button: + Add Shift
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: Morning (07:30–12:30)
+                        - button: Periods
+                      - generic:
+                        - generic: Day (12:30–17:30)
+                        - button: Periods
+                - generic:
+                  - generic:
+                    - heading [level=3]: Classes & Sections
+                    - button: + Add Class
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph:
+                          - text: Class 6
+                          - generic: (1 students)
+                        - generic:
+                          - button: + Add Section
+                          - button: + Add Group
+                      - generic:
+                        - button:
+                          - generic: A (1/50) — Morning
+                        - button:
+                          - generic: B (0/50) — Morning
+                    - generic:
+                      - generic:
+                        - paragraph:
+                          - text: Class 7
+                          - generic: (0 students)
+                        - generic:
+                          - button: + Add Section
+                          - button: + Add Group
+                      - generic:
+                        - button:
+                          - generic: A (0/50) — Morning
+                        - button:
+                          - generic: B (0/50) — Morning
+                    - generic:
+                      - generic:
+                        - paragraph:
+                          - text: Class 8
+                          - generic: (0 students)
+                        - generic:
+                          - button: + Add Section
+                          - button: + Add Group
+                      - generic:
+                        - button:
+                          - generic: A (0/50) — Morning
+                        - button:
+                          - generic: B (0/50) — Morning
+                    - generic:
+                      - generic:
+                        - paragraph:
+                          - text: Class 9
+                          - generic: (6 students)
+                        - generic:
+                          - button: + Add Section
+                          - button: + Add Group
+                      - generic:
+                        - button:
+                          - generic: A (6/50) — Morning
+                        - button:
+                          - generic: B (0/50) — Morning
+                    - generic:
+                      - generic:
+                        - paragraph:
+                          - text: Class 10
+                          - generic: (1 students)
+                        - generic:
+                          - button: + Add Section
+                          - button: + Add Group
+                      - generic:
+                        - button:
+                          - generic: A (1/50) — Morning
+                        - button:
+                          - generic: B (0/50) — Morning
+  - region "Notifications alt+T"
+  - alert
+  - dialog [ref=f1e241]:
+    - heading "Add Academic Year" [level=2] [ref=f1e243]
+    - generic [ref=f1e244]:
+      - generic [ref=f1e245]:
+        - text: Label
+        - textbox "2026-2027" [active] [ref=f1e246]
+      - generic [ref=f1e247]:
+        - text: Start Date
+        - textbox [ref=f1e248]
+      - generic [ref=f1e249]:
+        - text: End Date
+        - textbox [ref=f1e250]
+    - button "Create" [ref=f1e252] [cursor=pointer]
+    - button "Close" [ref=f1e253] [cursor=pointer]

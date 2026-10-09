@@ -83,6 +83,13 @@ describe("loginSchema", () => {
     expect(loginSchema.safeParse({ identifier: "01700000000", password: "x", portal: "admin" }).success).toBe(true);
     expect(loginSchema.safeParse({ identifier: "01700000000", password: "x" }).success).toBe(false);
   });
+
+  it("trims the identifier but not the password", () => {
+    const parsed = loginSchema.parse({ identifier: " 01700000004 ", password: " Test@1234 ", portal: "admin" });
+    expect(parsed.identifier).toBe("01700000004");
+    expect(parsed.password).toBe(" Test@1234 ");
+    expect(loginSchema.safeParse({ identifier: "   ", password: "x", portal: "admin" }).success).toBe(false);
+  });
 });
 
 describe("forgotPasswordSchema", () => {

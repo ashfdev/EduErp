@@ -13,7 +13,11 @@ export const passwordSchema = z
   .regex(/[0-9]/, "Password must contain a number");
 
 export const loginSchema = z.object({
-  identifier: z.string().min(1, "Phone or email is required"),
+  // Trimmed: phone keyboards append a space after an autocomplete
+  // suggestion, and a pasted number often carries one — "01700000004 "
+  // matched no User and failed as "Invalid credentials". Password is
+  // deliberately NOT trimmed (a space there can be intentional).
+  identifier: z.string().trim().min(1, "Phone or email is required"),
   password: z.string().min(1, "Password is required"),
   portal: z.enum(["admin", "portal"]),
 });

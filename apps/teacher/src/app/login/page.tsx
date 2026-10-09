@@ -114,12 +114,14 @@ export default function TeacherLoginPage() {
             <form onSubmit={submit} className="space-y-6">
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-700">{t("idLabel")}</Label>
-                <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus placeholder="01XXXXXXXXX" />
+                {/* Phone keyboards otherwise capitalize/autocorrect the first
+                    letter of an email ("Farhana@…") and so fail the lookup. */}
+                <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus placeholder="01XXXXXXXXX" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
               </div>
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-700">{t("passwordLabel")}</Label>
-                <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+                <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" autoComplete="current-password" />
               </div>
 
               {error && (

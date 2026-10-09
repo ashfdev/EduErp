@@ -1,0 +1,202 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - img "Logo" [ref=f1e158]
+        - generic [ref=f1e6]: Alhumaira Model School & College
+      - navigation [ref=f1e8]:
+        - link "Dashboard" [ref=f1e9] [cursor=pointer]:
+          - /url: /dashboard
+        - button "Academic" [ref=f1e17] [cursor=pointer]
+        - button "Students" [ref=f1e22] [cursor=pointer]
+        - button "Admission 1" [ref=f1e159] [cursor=pointer]:
+          - generic [ref=f1e28]:
+            - text: Admission
+            - generic [ref=f1e160]: "1"
+        - button "Finance 6" [ref=f1e161] [cursor=pointer]:
+          - generic [ref=f1e33]:
+            - text: Finance
+            - generic [ref=f1e162]: "6"
+        - button "HR & Staff" [ref=f1e37] [cursor=pointer]
+        - button "Campus" [ref=f1e42] [cursor=pointer]
+        - button "Communication" [ref=f1e47] [cursor=pointer]
+        - button "System" [ref=f1e52] [cursor=pointer]
+      - generic [ref=f1e57]:
+        - generic [ref=f1e58]: S
+        - generic [ref=f1e59]:
+          - paragraph [ref=f1e60]: System Admin
+          - paragraph [ref=f1e61]: ADMIN
+        - button "Sign Out" [ref=f1e62] [cursor=pointer]
+    - generic [ref=f1e66]:
+      - banner [ref=f1e67]:
+        - button "Search students, staff, settings... Ctrl K" [ref=f1e69] [cursor=pointer]:
+          - generic [ref=f1e73]: Search students, staff, settings...
+          - generic [ref=f1e74]: Ctrl K
+        - generic [ref=f1e75]:
+          - button "Notifications" [ref=f1e77] [cursor=pointer]:
+            - generic [ref=f1e163]: "1"
+          - button "Switch language" [ref=f1e82] [cursor=pointer]: বাংলা
+      - main [ref=f1e83]:
+        - generic [ref=f1e85]:
+          - complementary [ref=f1e86]:
+            - generic [ref=f1e87]:
+              - paragraph [ref=f1e88]: Institution
+              - navigation [ref=f1e89]:
+                - link "Profile & Branding" [ref=f1e90] [cursor=pointer]:
+                  - /url: /settings/institution
+                - link "Academic Structure" [ref=f1e91] [cursor=pointer]:
+                  - /url: /settings/academic
+                - link "Departments" [ref=f1e92] [cursor=pointer]:
+                  - /url: /settings/departments
+                - link "Programs & Courses" [ref=f1e93] [cursor=pointer]:
+                  - /url: /settings/programs
+                - link "Subjects" [ref=f1e94] [cursor=pointer]:
+                  - /url: /settings/subjects
+                - link "Routine / Timetable" [ref=f1e95] [cursor=pointer]:
+                  - /url: /settings/routine
+                - link "Rooms" [ref=f1e96] [cursor=pointer]:
+                  - /url: /settings/rooms
+            - generic [ref=f1e97]:
+              - paragraph [ref=f1e98]: Customization
+              - navigation [ref=f1e99]:
+                - link "Student ID Format" [ref=f1e100] [cursor=pointer]:
+                  - /url: /settings/student-id
+                - link "Grading System" [ref=f1e101] [cursor=pointer]:
+                  - /url: /settings/grading
+                - link "Mark Composition Templates" [ref=f1e102] [cursor=pointer]:
+                  - /url: /settings/mark-composition-templates
+                - link "Marksheet Display" [ref=f1e103] [cursor=pointer]:
+                  - /url: /settings/marksheet-display
+                - link "Fee Rules" [ref=f1e104] [cursor=pointer]:
+                  - /url: /settings/fee-rules
+                - link "Admission Payment Instructions" [ref=f1e105] [cursor=pointer]:
+                  - /url: /settings/admission-payment-instructions
+                - link "Attendance Rules" [ref=f1e106] [cursor=pointer]:
+                  - /url: /settings/attendance-rules
+                - link "Leave Types" [ref=f1e107] [cursor=pointer]:
+                  - /url: /settings/leave-types
+            - generic [ref=f1e108]:
+              - paragraph [ref=f1e109]: Documents & Signatures
+              - navigation [ref=f1e110]:
+                - link "Authority Signatures" [ref=f1e111] [cursor=pointer]:
+                  - /url: /settings/signatures
+                - link "Signature Mapping" [ref=f1e112] [cursor=pointer]:
+                  - /url: /settings/signature-mapping
+                - link "Document Templates" [ref=f1e113] [cursor=pointer]:
+                  - /url: /settings/templates
+            - generic [ref=f1e114]:
+              - paragraph [ref=f1e115]: System
+              - navigation [ref=f1e116]:
+                - link "User Accounts" [ref=f1e117] [cursor=pointer]:
+                  - /url: /settings/users
+                - link "Roles & Permissions" [ref=f1e118] [cursor=pointer]:
+                  - /url: /settings/permissions
+                - link "Notifications" [ref=f1e119] [cursor=pointer]:
+                  - /url: /settings/notifications
+                - link "Notification Logs" [ref=f1e120] [cursor=pointer]:
+                  - /url: /settings/notifications/logs
+                - link "Bulk SMS" [ref=f1e121] [cursor=pointer]:
+                  - /url: /notifications/bulk-sms
+                - link "Payment Gateways" [ref=f1e122] [cursor=pointer]:
+                  - /url: /settings/payment-gateways
+                - link "SMS Gateway" [ref=f1e123] [cursor=pointer]:
+                  - /url: /settings/sms-gateway
+                - link "Biometric Devices" [ref=f1e124] [cursor=pointer]:
+                  - /url: /settings/devices
+                - link "Audit Log" [ref=f1e125] [cursor=pointer]:
+                  - /url: /settings/audit-log
+          - generic [ref=f1e127]:
+            - generic [ref=f1e129]:
+              - navigation [ref=f1e130]:
+                - generic [ref=f1e131]: Settings
+                - generic [ref=f1e132]: /
+                - generic [ref=f1e133]: Academic
+              - heading "Academic Structure" [level=1] [ref=f1e134]
+              - paragraph [ref=f1e135]: Academic years, shifts, classes, sections, and groups/streams (Science/Commerce/Arts) — add a class's groups from its card below
+            - generic [ref=f1e136]:
+              - generic [ref=f1e137]:
+                - heading "Academic Years" [level=3] [ref=f1e138]
+                - button "+ Add Academic Year" [ref=f1e139] [cursor=pointer]
+              - table [ref=f1e165]:
+                - rowgroup [ref=f1e166]:
+                  - row [ref=f1e167]:
+                    - cell "2026-2027" [ref=f1e168]
+                    - cell "01/01/2026 – 31/12/2026" [ref=f1e169]
+                    - cell "Active" [ref=f1e170]
+                    - cell [ref=f1e172]
+            - generic [ref=f1e143]:
+              - generic [ref=f1e144]:
+                - heading "Shifts" [level=3] [ref=f1e145]
+                - button "+ Add Shift" [ref=f1e146] [cursor=pointer]
+              - generic [ref=f1e173]:
+                - generic [ref=f1e174]:
+                  - generic [ref=f1e175]: Morning (07:30–12:30)
+                  - button "Periods" [ref=f1e176] [cursor=pointer]
+                - generic [ref=f1e177]:
+                  - generic [ref=f1e178]: Day (12:30–17:30)
+                  - button "Periods" [ref=f1e179] [cursor=pointer]
+            - generic [ref=f1e150]:
+              - generic [ref=f1e151]:
+                - heading "Classes & Sections" [level=3] [ref=f1e152]
+                - button "+ Add Class" [ref=f1e153] [cursor=pointer]
+              - generic [ref=f1e154]:
+                - generic [ref=f1e180]:
+                  - generic [ref=f1e181]:
+                    - paragraph [ref=f1e182]:
+                      - text: Class 6
+                      - generic [ref=f1e183]: (1 students)
+                    - generic [ref=f1e184]:
+                      - button "+ Add Section" [ref=f1e185] [cursor=pointer]
+                      - button "+ Add Group" [ref=f1e186] [cursor=pointer]
+                  - generic [ref=f1e187]:
+                    - button "A (1/50) — Morning" [ref=f1e188] [cursor=pointer]
+                    - button "B (0/50) — Morning" [ref=f1e190] [cursor=pointer]
+                - generic [ref=f1e192]:
+                  - generic [ref=f1e193]:
+                    - paragraph [ref=f1e194]:
+                      - text: Class 7
+                      - generic [ref=f1e195]: (0 students)
+                    - generic [ref=f1e196]:
+                      - button "+ Add Section" [ref=f1e197] [cursor=pointer]
+                      - button "+ Add Group" [ref=f1e198] [cursor=pointer]
+                  - generic [ref=f1e199]:
+                    - button "A (0/50) — Morning" [ref=f1e200] [cursor=pointer]
+                    - button "B (0/50) — Morning" [ref=f1e202] [cursor=pointer]
+                - generic [ref=f1e204]:
+                  - generic [ref=f1e205]:
+                    - paragraph [ref=f1e206]:
+                      - text: Class 8
+                      - generic [ref=f1e207]: (0 students)
+                    - generic [ref=f1e208]:
+                      - button "+ Add Section" [ref=f1e209] [cursor=pointer]
+                      - button "+ Add Group" [ref=f1e210] [cursor=pointer]
+                  - generic [ref=f1e211]:
+                    - button "A (0/50) — Morning" [ref=f1e212] [cursor=pointer]
+                    - button "B (0/50) — Morning" [ref=f1e214] [cursor=pointer]
+                - generic [ref=f1e216]:
+                  - generic [ref=f1e217]:
+                    - paragraph [ref=f1e218]:
+                      - text: Class 9
+                      - generic [ref=f1e219]: (6 students)
+                    - generic [ref=f1e220]:
+                      - button "+ Add Section" [ref=f1e221] [cursor=pointer]
+                      - button "+ Add Group" [ref=f1e222] [cursor=pointer]
+                  - generic [ref=f1e223]:
+                    - button "A (6/50) — Morning" [ref=f1e224] [cursor=pointer]
+                    - button "B (0/50) — Morning" [ref=f1e226] [cursor=pointer]
+                - generic [ref=f1e228]:
+                  - generic [ref=f1e229]:
+                    - paragraph [ref=f1e230]:
+                      - text: Class 10
+                      - generic [ref=f1e231]: (1 students)
+                    - generic [ref=f1e232]:
+                      - button "+ Add Section" [ref=f1e233] [cursor=pointer]
+                      - button "+ Add Group" [ref=f1e234] [cursor=pointer]
+                  - generic [ref=f1e235]:
+                    - button "A (1/50) — Morning" [ref=f1e236] [cursor=pointer]
+                    - button "B (0/50) — Morning" [ref=f1e238] [cursor=pointer]
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=f1e258]:
+        - generic [ref=f1e262]: Academic year created
+  - alert [ref=f1e157]

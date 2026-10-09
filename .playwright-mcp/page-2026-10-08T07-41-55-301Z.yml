@@ -1,0 +1,231 @@
+- generic [ref=e1]:
+  - generic [ref=e32]:
+    - complementary [ref=e33]:
+      - generic [ref=e34]:
+        - img "Logo" [ref=e35]
+        - generic [ref=e36]: Alhumaira Model School & College
+      - navigation [ref=e38]:
+        - link "Dashboard" [ref=e39] [cursor=pointer]:
+          - /url: /dashboard
+        - generic [ref=e46]:
+          - button "Academic" [ref=e47] [cursor=pointer]
+          - generic [ref=e491]:
+            - link "Attendance" [ref=e492] [cursor=pointer]:
+              - /url: /attendance/mark
+            - link "Student Entry/Exit" [ref=e498] [cursor=pointer]:
+              - /url: /attendance/entry-exit
+            - link "Examination" [ref=e509] [cursor=pointer]:
+              - /url: /examination
+            - link "Marks" [ref=e514] [cursor=pointer]:
+              - /url: /marks
+            - link "Results" [ref=e518] [cursor=pointer]:
+              - /url: /results
+            - link "Course Enrollment" [ref=e523] [cursor=pointer]:
+              - /url: /course-enrollment
+        - button "Students" [ref=e52] [cursor=pointer]
+        - button "Admission 1" [ref=e57] [cursor=pointer]:
+          - generic [ref=e58]:
+            - text: Admission
+            - generic [ref=e59]: "1"
+        - button "Finance 6" [ref=e63] [cursor=pointer]:
+          - generic [ref=e64]:
+            - text: Finance
+            - generic [ref=e65]: "6"
+        - button "HR & Staff" [ref=e69] [cursor=pointer]
+        - button "Campus" [ref=e74] [cursor=pointer]
+        - button "Communication" [ref=e79] [cursor=pointer]
+        - generic [ref=e83]:
+          - button "System" [active] [ref=e84] [cursor=pointer]
+          - generic [ref=e527]:
+            - link "Reports" [ref=e528] [cursor=pointer]:
+              - /url: /reports
+            - link "Settings" [ref=e532] [cursor=pointer]:
+              - /url: /settings/institution
+      - generic [ref=e89]:
+        - generic [ref=e90]: S
+        - generic [ref=e91]:
+          - paragraph [ref=e92]: System Admin
+          - paragraph [ref=e93]: ADMIN
+        - button "Sign Out" [ref=e94] [cursor=pointer]
+    - generic [ref=e98]:
+      - banner [ref=e99]:
+        - button "Search students, staff, settings... Ctrl K" [ref=e101] [cursor=pointer]:
+          - generic [ref=e105]: Search students, staff, settings...
+          - generic [ref=e106]: Ctrl K
+        - generic [ref=e107]:
+          - button "Notifications" [ref=e109] [cursor=pointer]:
+            - generic [ref=e113]: "1"
+          - button "Switch language" [ref=e115] [cursor=pointer]: বাংলা
+      - main [ref=e116]:
+        - generic [ref=e118]:
+          - generic [ref=e121]:
+            - heading "Dashboard" [level=1] [ref=e122]
+            - paragraph [ref=e123]: Institution Overview
+          - generic [ref=e124]:
+            - generic [ref=e126]:
+              - paragraph [ref=e128]: 🎓 Total Students
+              - paragraph [ref=e135]: "8"
+              - generic [ref=e136]:
+                - generic [ref=e137]: Present 0
+                - generic [ref=e141]: Absent 8
+            - generic [ref=e146]:
+              - paragraph [ref=e148]: 👨‍🏫 Staff
+              - paragraph [ref=e154]: "10"
+              - generic [ref=e155]:
+                - generic [ref=e156]: 0 on leave today
+                - generic [ref=e157]: 10 not yet marked
+            - generic [ref=e159]:
+              - paragraph [ref=e161]: 💰 Today's Collection
+              - paragraph [ref=e166]: ৳0
+              - generic [ref=e167]: "This month: ৳0"
+            - generic [ref=e170]:
+              - paragraph [ref=e172]: 💸 Today's Expense
+              - paragraph [ref=e177]: ৳0
+              - generic [ref=e178]: "This month: ৳0"
+            - generic [ref=e181]:
+              - paragraph [ref=e183]: 📊 Attendance Today
+              - paragraph [ref=e187]: 0%
+          - generic [ref=e190]:
+            - generic [ref=e192]:
+              - paragraph [ref=e194]: Attendance Trend (last 8 weeks)
+              - img [ref=e197]:
+                - generic [ref=e201]:
+                  - generic [ref=e202]: Week 2
+                  - generic [ref=e204]: Week 4
+                  - generic [ref=e206]: Week 6
+                  - generic [ref=e208]: Week 8
+                - generic [ref=e211]:
+                  - generic [ref=e212]: "0"
+                  - generic [ref=e214]: "25"
+                  - generic [ref=e216]: "50"
+                  - generic [ref=e218]: "75"
+                  - generic [ref=e220]: "100"
+            - generic [ref=e234]:
+              - generic [ref=e235]:
+                - paragraph [ref=e236]: Latest Notices
+                - link "View All" [ref=e237] [cursor=pointer]:
+                  - /url: /website/notices
+              - generic [ref=e238]:
+                - generic [ref=e244]:
+                  - paragraph [ref=e245]: Annual Sports Day 2026 — Save the Date
+                  - generic [ref=e246]:
+                    - generic [ref=e247]: PUBLIC
+                    - generic [ref=e248]: 16/09/2026
+                - generic [ref=e254]:
+                  - paragraph [ref=e255]: Half-Yearly Examination Routine Published
+                  - generic [ref=e256]:
+                    - generic [ref=e257]: STUDENTS
+                    - generic [ref=e258]: 16/09/2026
+                - generic [ref=e264]:
+                  - paragraph [ref=e265]: Admission for 2026-2027 Academic Year Now Open
+                  - generic [ref=e266]:
+                    - generic [ref=e267]: PUBLIC
+                    - generic [ref=e268]: 16/09/2026
+                - generic [ref=e274]:
+                  - paragraph [ref=e275]: Eid-ul-Adha Holiday Notice
+                  - generic [ref=e276]:
+                    - generic [ref=e277]: PUBLIC
+                    - generic [ref=e278]: 16/09/2026
+                - generic [ref=e284]:
+                  - paragraph [ref=e285]: Revised Library Hours for Exam Season
+                  - generic [ref=e286]:
+                    - generic [ref=e287]: STUDENTS
+                    - generic [ref=e288]: 16/09/2026
+          - generic [ref=e289]:
+            - generic [ref=e291]:
+              - paragraph [ref=e292]: "0"
+              - paragraph [ref=e293]: Staff Present Today
+            - generic [ref=e295]:
+              - paragraph [ref=e296]: "0"
+              - paragraph [ref=e297]: Staff Absent Today
+            - generic [ref=e299]:
+              - paragraph [ref=e300]: "0"
+              - paragraph [ref=e301]: Staff Late Today
+            - generic [ref=e303]:
+              - paragraph [ref=e304]: "10"
+              - paragraph [ref=e305]: Staff Not Yet Marked
+            - generic [ref=e307]:
+              - paragraph [ref=e308]: "0"
+              - paragraph [ref=e309]: Students Late Today
+            - generic [ref=e311]:
+              - paragraph [ref=e312]: "0"
+              - paragraph [ref=e313]: Students On Leave Today
+            - generic [ref=e315]:
+              - paragraph [ref=e316]: "0"
+              - paragraph [ref=e317]: Students Not Yet Marked
+            - generic [ref=e319]:
+              - paragraph [ref=e320]: ৳-4,700
+              - paragraph [ref=e321]: Current Fund Balance
+            - generic [ref=e323]:
+              - paragraph [ref=e324]: ৳0
+              - paragraph [ref=e325]: Net Position (Today)
+            - generic [ref=e327]:
+              - paragraph [ref=e328]: ৳0
+              - paragraph [ref=e329]: Net Position (This Month)
+          - generic [ref=e330]:
+            - paragraph [ref=e333]: Student Gender Split
+            - paragraph [ref=e344]: Admission Applications
+          - generic [ref=e351]:
+            - generic [ref=e353]:
+              - paragraph [ref=e354]: Fee Collection (last 30 days)
+              - img [ref=e357]:
+                - generic [ref=e360]: 09-23
+                - generic [ref=e365]:
+                  - generic [ref=e366]: "0"
+                  - generic [ref=e368]: "75"
+                  - generic [ref=e370]: "150"
+                  - generic [ref=e372]: "225"
+                  - generic [ref=e374]: "300"
+            - generic [ref=e381]:
+              - paragraph [ref=e382]: Subject Performance (latest published exam)
+              - img [ref=e385]:
+                - generic [ref=e403]:
+                  - generic [ref=e404]: Bangla 1st Paper
+                  - generic [ref=e406]: Bangla 2nd Paper
+                  - generic [ref=e409]: Bangladesh & Global Studies
+                  - generic [ref=e412]: Chemistry
+                  - generic [ref=e415]: English 1st Paper
+                  - generic [ref=e418]: English 2nd Paper
+                  - generic [ref=e420]: ICT
+                  - generic [ref=e423]: Mathematics
+                  - generic [ref=e426]: Physics
+                  - generic [ref=e429]: Religion
+                - generic [ref=e433]:
+                  - generic [ref=e434]: "0"
+                  - generic [ref=e436]: "20"
+                  - generic [ref=e438]: "40"
+                  - generic [ref=e440]: "60"
+                  - generic [ref=e442]: "80"
+          - generic [ref=e447]:
+            - generic [ref=e449]:
+              - paragraph [ref=e451]: Upcoming Events
+              - paragraph [ref=e453]: No upcoming events
+            - generic [ref=e455]:
+              - paragraph [ref=e456]: Quick Actions
+              - generic [ref=e457]:
+                - link "Mark Attendance" [ref=e458] [cursor=pointer]:
+                  - /url: /attendance/mark
+                - link "Collect Fee" [ref=e463] [cursor=pointer]:
+                  - /url: /fees/collect
+                - link "Post Notice" [ref=e467] [cursor=pointer]:
+                  - /url: /website/notices
+                - link "View At-Risk Students" [ref=e471] [cursor=pointer]:
+                  - /url: /students/at-risk
+            - generic [ref=e475]:
+              - paragraph [ref=e476]: System Status
+              - generic [ref=e477]:
+                - generic [ref=e478]:
+                  - generic [ref=e479]: "Active Exams:"
+                  - generic [ref=e480]: "1"
+                - generic [ref=e481]:
+                  - generic [ref=e482]: "Published Results:"
+                  - generic [ref=e483]: "1"
+                - generic [ref=e484]:
+                  - generic [ref=e485]: "Overdue Invoices:"
+                  - generic [ref=e486]: "12"
+                - generic [ref=e487]:
+                  - generic [ref=e488]: "Overdue Library Books:"
+                  - generic [ref=e489]: "1"
+  - region "Notifications alt+T"
+  - alert [ref=e26]
+  - generic [aria-hidden] [ref=e490]: "8"

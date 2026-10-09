@@ -1,0 +1,25 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e6]:
+        - img "Logo" [ref=e27]
+        - heading "Alhumaira Model School & College" [level=1] [ref=e28]
+      - paragraph [ref=e9]: Powered by AshDevs
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - heading "Staff Login" [level=2] [ref=e29]
+        - paragraph [ref=e13]: Hey enter your details to sign in to your account
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - text: Phone or Email
+          - textbox "e.g. admin@school.com" [ref=e17]: "01700000000"
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - generic [ref=e20]: Password
+            - button "Forgot Password?" [ref=e30] [cursor=pointer]
+          - generic [ref=e22]:
+            - textbox "••••••••" [ref=e23]: ErpAdmin#2026!
+            - button "Show" [ref=e31] [cursor=pointer]
+        - button "Login" [ref=e25] [cursor=pointer]
+  - region "Notifications alt+T"
+  - alert [ref=e26]

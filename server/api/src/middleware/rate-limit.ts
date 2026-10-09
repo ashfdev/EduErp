@@ -87,9 +87,12 @@ export const loginAccountLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: redisStore("rl:login-account:"),
+  // Trimmed exactly like loginSchema trims it — otherwise "01700000004",
+  // "01700000004 ", "01700000004  " … would each get their own 8-attempt
+  // bucket while all resolving to the same account.
   keyGenerator: (req) => {
-    const identifier = req.body?.identifier;
-    return typeof identifier === "string" && identifier ? identifier : "unknown";
+    const identifier = typeof req.body?.identifier === "string" ? req.body.identifier.trim() : "";
+    return identifier || "unknown";
   },
   message: RATE_LIMITED_ERROR,
 });
