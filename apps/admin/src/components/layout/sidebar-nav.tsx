@@ -9,7 +9,7 @@ import {
   ClipboardCheck, FileSpreadsheet, Edit3, Award, BookOpen,
   Wallet, Calculator, Package, UserPlus, Printer, Globe,
   Briefcase, Library, Bus, Home, BarChart3, MessageSquare,
-  Settings, ChevronDown, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
+  Settings, ChevronDown, School, Building2, Backpack, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
   ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, ArrowLeftRight, Network, Fingerprint, type LucideIcon,
 } from "lucide-react";
 import { usePendingCounts, type PendingCounts } from "@/hooks/use-pending-counts";
@@ -27,6 +27,8 @@ interface NavItem {
 
 interface NavGroup {
   key: string;
+  // Shown on the group heading so a collapsed menu is still scannable by icon.
+  icon: LucideIcon;
   items: NavItem[];
 }
 
@@ -43,6 +45,7 @@ export const DASHBOARD_ITEM: NavItem = { href: "/dashboard", key: "dashboard", i
 export const NAV_GROUPS: NavGroup[] = [
   {
     key: "academic",
+    icon: School,
     items: [
       { href: "/attendance/mark", key: "attendance", icon: ClipboardCheck },
       { href: "/attendance/entry-exit", key: "attendanceEntryExit", icon: Fingerprint },
@@ -55,6 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "students",
+    icon: Backpack,
     items: [
       { href: "/students", key: "students", icon: Users },
       { href: "/students/sibling-groups", key: "siblingGroups", icon: Users },
@@ -66,6 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "admission",
+    icon: UserPlus,
     items: [
       { href: "/admission", key: "admission", icon: UserPlus },
       { href: "/admission/payments", key: "admissionPayments", icon: Receipt, countKey: "admissionPayments" },
@@ -73,6 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "finance",
+    icon: Wallet,
     items: [
       { href: "/fees", key: "fees", icon: Wallet },
       { href: "/finance/all-invoices", key: "allInvoices", icon: FileText },
@@ -88,6 +94,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "hrStaff",
+    icon: Briefcase,
     items: [
       { href: "/hr", key: "hr", icon: Briefcase },
       { href: "/hr/staff/new", key: "addStaff", icon: UserRoundPlus },
@@ -108,6 +115,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "campus",
+    icon: Building2,
     items: [
       { href: "/inventory", key: "inventory", icon: Package },
       { href: "/inventory/item-categories", key: "itemCategories", icon: FolderTree },
@@ -122,6 +130,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "communication",
+    icon: MessageSquare,
     items: [
       { href: "/website", key: "website", icon: Globe },
       { href: "/documents/print", key: "documents", icon: Printer },
@@ -130,6 +139,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     key: "system",
+    icon: Settings,
     items: [
       { href: "/reports", key: "reports", icon: BarChart3 },
       { href: "/settings/institution", key: "settings", icon: Settings },
@@ -230,16 +240,17 @@ export function SidebarNav() {
         // notification alone: a glance at the collapsed nav is enough.
         const groupPendingTotal = group.items.reduce((sum, item) => sum + (item.countKey ? pendingCounts[item.countKey] : 0), 0);
         return (
-          <div key={group.key} className="mt-3">
+          <div key={group.key} className="mt-1">
             <button
               type="button"
               onClick={() => toggleGroup(group.key)}
               aria-expanded={isOpen}
-              className={`flex min-h-[36px] w-full items-center justify-between rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
-                groupHasActive ? "text-lime" : "text-white/50 hover:text-white/80"
+              className={`flex min-h-[40px] w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
+                groupHasActive ? "text-lime" : "text-white/85 hover:bg-white/[0.06] hover:text-white"
               }`}
             >
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-3">
+                <group.icon className="h-[18px] w-[18px] shrink-0" />
                 {tGroups(group.key)}
                 {!isOpen && groupPendingTotal > 0 && (
                   <span className="min-w-[18px] rounded-full bg-ember px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-white tabular-nums">
@@ -250,7 +261,7 @@ export function SidebarNav() {
               <ChevronDown className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${isOpen ? "rotate-180" : ""}`} />
             </button>
             {isOpen && (
-              <div className="mt-0.5 flex flex-col gap-0.5">
+              <div className="mb-1 ml-[21px] mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-2">
                 {group.items.map((item) => (
                   <NavLink
                     key={item.href}
