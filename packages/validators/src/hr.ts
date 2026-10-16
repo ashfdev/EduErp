@@ -44,8 +44,8 @@ export const createStaffSchema = z.object({
   public_contact_email: z.string().email().optional().nullable(),
   public_office_location: z.string().optional().nullable(),
   create_login: z.boolean().default(false),
-  // Optional — leave blank to auto-generate a memorable name+phone-derived
-  // temp password when create_login is true; set explicitly to choose it
+  // Optional — leave blank to auto-generate a random temp
+  // password when create_login is true; set explicitly to choose it
   // instead. Ignored when create_login is false.
   login_password: passwordSchema.optional(),
   salary_structure_id: z.string().optional().nullable(),

@@ -31,11 +31,17 @@ function ChangePasswordForm() {
     }
     setLoading(true);
     try {
-      await api.post("/api/auth/change-password", {
+      const res = await api.post("/api/auth/change-password", {
         old_password: oldPassword,
         new_password: newPassword,
         confirm_password: confirmPassword,
       });
+      // The server revokes every older session on a password change and
+      // hands this one fresh tokens; keep them or the next refresh logs out.
+      const tokens = res.data.data as { access_token?: string; refresh_token?: string } | undefined;
+      if (tokens?.access_token && tokens.refresh_token) {
+        useAuthStore.setState({ accessToken: tokens.access_token, refreshToken: tokens.refresh_token });
+      }
       clearMustChangePassword();
       toast.success("Password changed");
       router.replace("/");

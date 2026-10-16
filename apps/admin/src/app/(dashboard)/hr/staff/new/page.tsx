@@ -403,7 +403,7 @@ export default function NewStaffPage() {
                     type="text"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Leave blank to auto-generate a memorable password"
+                    placeholder="Leave blank to generate a random password"
                     className="max-w-sm font-mono"
                   />
                   <p className="text-xs text-muted-foreground">If set, min 8 characters with an uppercase letter, a lowercase letter, and a number. The staff member must still change it on first login.</p>

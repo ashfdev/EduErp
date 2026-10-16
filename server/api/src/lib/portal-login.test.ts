@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@education-erp/db";
 import { prisma } from "./prisma";
-import { createOrLinkPortalLogin } from "./portal-login";
+import { passwordSchema } from "@education-erp/validators";
+import { createOrLinkPortalLogin, generateTempPassword } from "./portal-login";
 
-// Digit-only fake BD phone numbers — generateMemorablePassword strips
-// non-digits before taking the last 4 characters, so (unlike the old
-// random-hex password scheme) tests need real numeric phone strings, not
-// hex-derived ones that could contain a-f letters in the final 4 chars.
+// One capital, six lowercase, a hyphen, four digits, from the unambiguous sets.
+const TEMP_PASSWORD_FORMAT = /^[A-HJ-NP-Z][a-hjkmnp-z]{6}-[2-9]{4}$/;
+
+// Digit-only fake BD phone numbers, unique per test run.
 function randomPhone(prefix: string): string {
   return prefix + Math.floor(10000000 + Math.random() * 89999999).toString();
 }
@@ -32,27 +33,21 @@ async function inRollbackTx<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>)
 }
 
 describe("createOrLinkPortalLogin", () => {
-  it("creates a new user with a memorable, name+phone-derived temp password when the phone is unused", async () => {
+  it("creates a new user with a random temp password when the phone is unused", async () => {
     const phone = randomPhone("017");
     const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "STUDENT", phone, name: "Test Student" }));
 
     expect(result.created).toBe(true);
-    expect(result.tempPassword).not.toBeNull();
-    expect(result.tempPassword).toBe(`Test${phone.slice(-4)}!1`);
+    expect(result.tempPassword).toMatch(TEMP_PASSWORD_FORMAT);
+    expect(passwordSchema.safeParse(result.tempPassword).success).toBe(true);
     expect(result.userId).toBeTruthy();
   });
 
-  it("derives the password from the caller's own first name, regardless of role", async () => {
+  it("does not derive the password from the person's name or phone number", async () => {
     const phone = randomPhone("018");
     const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "GUARDIAN", phone, name: "Karim Guardian" }));
-    expect(result.tempPassword).toBe(`Karim${phone.slice(-4)}!1`);
-  });
-
-  it("pads a very short first name so the password still satisfies the minimum-length policy", async () => {
-    const phone = randomPhone("019");
-    const result = await inRollbackTx((tx) => createOrLinkPortalLogin(tx, { role: "CLASS_TEACHER", phone, name: "Li Teacher" }));
-    expect(result.tempPassword).toBe(`Lix${phone.slice(-4)}!1`);
-    expect(result.tempPassword!.length).toBeGreaterThanOrEqual(8);
+    expect(result.tempPassword).not.toBe(`Karim${phone.slice(-4)}!1`);
+    expect(result.tempPassword).not.toContain("Karim");
   });
 
   it("uses an explicit password_override instead of generating one, when provided", async () => {
@@ -118,5 +113,15 @@ describe("createOrLinkPortalLogin", () => {
     });
 
     expect(r1.tempPassword).not.toBe(r2.tempPassword);
+  });
+});
+
+describe("generateTempPassword", () => {
+  it("always satisfies the password policy and avoids look-alike characters", () => {
+    for (let i = 0; i < 500; i++) {
+      const pw = generateTempPassword();
+      expect(pw).toMatch(TEMP_PASSWORD_FORMAT);
+      expect(passwordSchema.safeParse(pw).success).toBe(true);
+    }
   });
 });

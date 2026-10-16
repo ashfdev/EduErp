@@ -1,20 +1,28 @@
+import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import type { Prisma, PrismaClient, UserRole } from "@education-erp/db";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
-// Name+phone-derived temp password, replacing the earlier opaque random-hex
-// scheme — a guardian/teacher/student who never memorized a random string
-// can reconstruct this one from their own name and phone number. Still
-// satisfies passwordSchema (min 8, lower+upper+digit) and is never the
-// account's permanent password: must_change_password forces a real,
-// self-chosen password on first login.
-export function generateMemorablePassword(name: string, phone: string): string {
-  const firstNameRaw = (name.trim().split(/\s+/)[0] ?? "").replace(/[^a-zA-Z]/g, "");
-  const base = firstNameRaw.length > 0 ? firstNameRaw.charAt(0).toUpperCase() + firstNameRaw.slice(1).toLowerCase() : "User";
-  const namePart = base.length >= 3 ? base : (base + "xyz").slice(0, 3);
-  const digits = phone.replace(/\D/g, "").slice(-4).padStart(4, "0");
-  return `${namePart}${digits}!1`;
+// Characters that can't be confused when read off an SMS or a printed slip
+// (no 0/O/o, 1/l/I).
+const UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOWER = "abcdefghjkmnpqrstuvwxyz";
+const DIGITS = "23456789";
+
+function pick(chars: string, count: number): string {
+  let out = "";
+  for (let i = 0; i < count; i++) out += chars[randomInt(chars.length)];
+  return out;
+}
+
+// Random temporary password such as "Kmtrqa-4827": one capital, six
+// lowercase letters, a hyphen and four digits (about 44 bits). It replaced a
+// name + last-4-phone-digits scheme that anyone who knew a guardian's or
+// teacher's phone number could reproduce. Satisfies passwordSchema, and
+// must_change_password forces a self-chosen password on first login.
+export function generateTempPassword(): string {
+  return `${pick(UPPER, 1)}${pick(LOWER, 6)}-${pick(DIGITS, 4)}`;
 }
 
 // Single shared entry point for "give this phone number a portal login" —
@@ -39,7 +47,7 @@ export async function createOrLinkPortalLogin(
   tx: Tx,
   // password_override lets a direct, one-at-a-time admin flow (Staff
   // create, Settings->Users create, Reset Password) set an explicit
-  // password instead of the auto-generated memorable one — the caller is
+  // password instead of the auto-generated temporary one — the caller is
   // responsible for validating it against passwordSchema first.
   params: { role: UserRole; phone: string; name: string; password_override?: string },
 ): Promise<{
@@ -56,7 +64,7 @@ export async function createOrLinkPortalLogin(
     return { userId: existing.id, tempPassword: null, created: false };
   }
 
-  const tempPassword = params.password_override ?? generateMemorablePassword(params.name, params.phone);
+  const tempPassword = params.password_override ?? generateTempPassword();
   // Cost factor 12 (security audit, 2026-08-09: bumped from 10, below
   // current OWASP-recommended minimum).
   const password_hash = await bcrypt.hash(tempPassword, 12);

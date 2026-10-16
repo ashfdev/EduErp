@@ -13,6 +13,7 @@ import { loginLimiter, loginBanGuard, loginAccountLimiter, forgotPasswordLimiter
 import { logAudit } from "../../lib/audit-log";
 import { registerRefreshToken, unregisterRefreshToken, revokeAllRefreshTokensForUser } from "../../lib/refresh-session";
 import { PORTAL_ROLES } from "../../lib/roles";
+import type { UserRole } from "@education-erp/db";
 import {
   loginSchema,
   changePasswordSchema,
@@ -26,6 +27,21 @@ export const authRouter = Router();
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 const OTP_TTL_SECONDS = 600;
 const RESET_TOKEN_TTL_SECONDS = 300;
+
+// Access-token claims for a user. `pwc` marks an account still on its
+// temporary password, which authenticate() then limits to the
+// password-change endpoints until the user picks their own.
+function accessClaims(user: { id: string; role: UserRole; must_change_password: boolean }) {
+  const portal = PORTAL_ROLES.includes(user.role) ? ("portal" as const) : ("admin" as const);
+  return { sub: user.id, role: user.role, portal, ...(user.must_change_password ? { pwc: true as const } : {}) };
+}
+
+async function issueRefreshToken(userId: string): Promise<string> {
+  const refresh_token = signRefreshToken({ sub: userId });
+  await redis.set(`refresh:${refresh_token}`, userId, "EX", REFRESH_TTL_SECONDS);
+  await registerRefreshToken(userId, refresh_token);
+  return refresh_token;
+}
 
 function publicUser(user: {
   id: string;
@@ -87,11 +103,8 @@ authRouter.post(
     // STUDENT/GUARDIAN account can't get a portal:"admin" claim just by
     // requesting one. Same derivation /refresh uses below, so the two can
     // never disagree about what portal a given account belongs to.
-    const portal = PORTAL_ROLES.includes(user.role) ? "portal" : "admin";
-    const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
-    const refresh_token = signRefreshToken({ sub: user.id });
-    await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
-    await registerRefreshToken(user.id, refresh_token);
+    const access_token = signAccessToken(accessClaims(user));
+    const refresh_token = await issueRefreshToken(user.id);
 
     await prisma.user.update({ where: { id: user.id }, data: { last_login_at: new Date() } });
     await logAudit("LOGIN", { userId: user.id, req });
@@ -124,11 +137,8 @@ authRouter.post(
     // to "admin" regardless of which portal the session actually belonged
     // to, so a STUDENT/GUARDIAN session got re-minted with an admin-portal
     // claim on every token refresh.
-    const portal = PORTAL_ROLES.includes(user.role) ? "portal" : "admin";
-    const access_token = signAccessToken({ sub: user.id, role: user.role, portal });
-    const refresh_token = signRefreshToken({ sub: user.id });
-    await redis.set(`refresh:${refresh_token}`, user.id, "EX", REFRESH_TTL_SECONDS);
-    await registerRefreshToken(user.id, refresh_token);
+    const access_token = signAccessToken(accessClaims(user));
+    const refresh_token = await issueRefreshToken(user.id);
 
     res.json({ success: true, data: { access_token, refresh_token } });
   }),
@@ -169,7 +179,13 @@ authRouter.post(
     // active sessions are now force-logged-out too, not just this one.
     await revokeAllRefreshTokensForUser(userId);
 
-    res.json({ success: true, message: "Password changed successfully" });
+    // This session continues with fresh tokens: the old access token may
+    // still carry the temporary-password claim, and its refresh token was
+    // just revoked with the rest.
+    const access_token = signAccessToken(accessClaims({ ...user, must_change_password: false }));
+    const refresh_token = await issueRefreshToken(userId);
+
+    res.json({ success: true, data: { access_token, refresh_token }, message: "Password changed successfully" });
   }),
 );
 

@@ -9,7 +9,7 @@ import { authorize } from "../../middleware/authorize";
 import { SETTINGS_USERS_ROLES } from "../../lib/roles";
 import { createUserSchema, adminResetPasswordSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
-import { createOrLinkPortalLogin, generateMemorablePassword } from "../../lib/portal-login";
+import { createOrLinkPortalLogin, generateTempPassword } from "../../lib/portal-login";
 import { logAudit } from "../../lib/audit-log";
 import { badRequest, conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
@@ -122,7 +122,7 @@ usersRouter.post(
   asyncHandler(async (req, res) => {
     const body = adminResetPasswordSchema.parse(req.body ?? {});
     const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { name_en: true, phone: true } });
-    const tempPassword = body.login_password ?? generateMemorablePassword(target.name_en, target.phone);
+    const tempPassword = body.login_password ?? generateTempPassword();
     const password_hash = await bcrypt.hash(tempPassword, 12);
     const user = await prisma.user.update({
       where: { id: reqParam(req, "id") },

@@ -181,7 +181,7 @@ export default function UsersPage() {
                 type="text"
                 value={form.login_password}
                 onChange={(e) => setForm({ ...form, login_password: e.target.value })}
-                placeholder="Leave blank to auto-generate a memorable password"
+                placeholder="Leave blank to generate a random password"
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">If set, min 8 characters with an uppercase letter, a lowercase letter, and a number. The user must still change it on first login.</p>
@@ -201,7 +201,7 @@ export default function UsersPage() {
                 type="text"
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
-                placeholder="Leave blank to auto-generate a memorable password"
+                placeholder="Leave blank to generate a random password"
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">If set, min 8 characters with an uppercase letter, a lowercase letter, and a number. The user must still change it on first login.</p>

@@ -30,7 +30,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       setStudents(res.data.data.students as PortalStudent[]);
       return res.data.data;
     },
-    enabled: isAuthenticated && !forcedPasswordChange,
+    // Not while the account is still on its temporary password: the API
+    // answers 403 to everything but the password change until then.
+    enabled: isAuthenticated && !user?.must_change_password,
     retry: 1,
   });
 
@@ -58,7 +60,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (meQuery.isPending) {
+  // A disabled query stays pending, so skip this while the password change is due.
+  if (meQuery.isPending && !user?.must_change_password) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <LoadingSpinner />

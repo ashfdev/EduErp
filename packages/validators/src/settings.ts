@@ -295,8 +295,8 @@ export const createUserSchema = z.object({
   role: z.nativeEnum(UserRole),
   designation: z.string().optional().nullable(),
   department_id: z.string().optional().nullable(),
-  // Optional — leave blank to auto-generate a memorable name+phone-derived
-  // temp password; set explicitly to choose the account's initial password
+  // Optional — leave blank to auto-generate a random temp
+  // password; set explicitly to choose the account's initial password
   // instead. Either way must_change_password still forces a real,
   // self-chosen password on first login.
   login_password: passwordSchema.optional(),

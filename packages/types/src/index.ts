@@ -45,4 +45,7 @@ export interface JwtAccessPayload {
   sub: string;
   role: string;
   portal: "admin" | "portal";
+  // Set while the account still has its temporary password. authenticate()
+  // then only lets the request through to the password-change endpoints.
+  pwc?: true;
 }

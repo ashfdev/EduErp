@@ -57,6 +57,14 @@ api.interceptors.response.use(
       if (typeof window !== "undefined") window.location.href = "/login";
     }
 
+    // The account is back on a temporary password (an admin reset it): the
+    // API now allows only the password change, and the route guard sends the
+    // user there once the flag is set.
+    if (error.response?.status === 403 && (error.response.data as { error?: { code?: string } } | undefined)?.error?.code === "PASSWORD_CHANGE_REQUIRED") {
+      const { user } = useAuthStore.getState();
+      if (user && !user.must_change_password) useAuthStore.setState({ user: { ...user, must_change_password: true } });
+    }
+
     return Promise.reject(error);
   },
 );
