@@ -75,7 +75,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
-    environment:
+    # Anchored: the worker service below runs with exactly this environment.
+    environment: &api_environment
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/education_erp?schema=public
       REDIS_URL: redis://redis:6379
       PORT: 4000
@@ -108,6 +109,36 @@ services:
       - api_local_uploads:/app/local-uploads
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Background jobs: monthly invoice generation, nightly fee reconciliation,
+  # exam reminders, and the queued bulk PDF/Excel exports and "generate
+  # invoices" requests. Same image as the API. Jobs moved out of index.ts
+  # into worker.ts (commit 282a1ce) but nothing started worker.js in
+  # production, so all of these sat in Redis unprocessed.
+  worker:
+    build:
+      context: .
+      dockerfile: server/api/Dockerfile
+    command: ["node", "server/api/dist/worker.js"]
+    restart: always
+    networks:
+      - default
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    environment: *api_environment
+    volumes:
+      # Bulk exports are written here and served by the API.
+      - api_local_uploads:/app/local-uploads
+    depends_on:
+      # The API container runs the database migrations before it reports
+      # healthy, so the worker never starts against an old schema.
+      api:
         condition: service_healthy
       redis:
         condition: service_healthy
