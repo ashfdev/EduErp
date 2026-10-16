@@ -46,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/attendance/mark", key: "attendance", icon: ClipboardCheck },
       { href: "/attendance/entry-exit", key: "attendanceEntryExit", icon: Fingerprint },
+      { href: "/attendance/reports", key: "attendanceReports", icon: BarChart3 },
       { href: "/examination", key: "examination", icon: FileSpreadsheet },
       { href: "/marks", key: "marks", icon: Edit3 },
       { href: "/results", key: "results", icon: Award },

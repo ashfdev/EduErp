@@ -92,6 +92,8 @@ export function createApp(): Express {
       // enforced by the boot-time check above.
       origin: ALLOWED_ORIGINS.length > 0 ? ALLOWED_ORIGINS : true,
       credentials: true,
+      // Lets report downloads keep the server's file name (e.g. "Student List - Class 8.pdf").
+      exposedHeaders: ["Content-Disposition"],
     }),
   );
   app.use(express.json({ limit: "10mb" }));

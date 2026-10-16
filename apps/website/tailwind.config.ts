@@ -8,6 +8,10 @@ const config: Config = {
     ...tailwindBase.theme,
     extend: {
       ...tailwindBase.theme?.extend,
+      // The public website keeps its own fonts (loaded in app/[locale]/layout.tsx).
+      fontFamily: {
+        sans: ["var(--font-inter)", "var(--font-noto-bengali)", "sans-serif"],
+      },
       colors: {
         ...tailwindBase.theme?.extend?.colors,
         green: {

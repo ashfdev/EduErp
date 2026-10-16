@@ -1,13 +1,13 @@
 <html>
 <head>
 <meta charset="utf-8" />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=Great+Vibes&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Great+Vibes&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* Puppeteer's own 10mm page margin (set in renderHtmlToPdf for A4) already
      provides page padding — no additional body padding, or the two stack
      and push the frame past 297mm onto a second, mostly-blank page. */
-  body { font-family: 'Noto Sans Bengali', Arial, sans-serif; }
+  body { font-family: 'ERP Digits', 'Hind Siliguri', 'Noto Sans Bengali', Arial, sans-serif; }
   .frame { border: 3px double {{institution.primary_color}}; height: 269mm; padding: 12mm; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   .frame img { height: 20mm; margin-bottom: 6mm; }
   .institution-name { font-family: 'Playfair Display', serif; font-size: 28px; color: {{institution.primary_color}}; margin-bottom: 2mm; }

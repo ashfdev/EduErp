@@ -10,11 +10,12 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-  ErrorState, LoadingSpinner, extractErrorMessage, handleBatchDownloadResponse,
+  ErrorState, LoadingSpinner, extractErrorMessage,
 } from "@education-erp/ui";
 import { MoreHorizontal } from "lucide-react";
 import { api } from "@/lib/api";
 import { useInstitution } from "@/hooks/use-institution";
+import { ReportDownloadMenu } from "@/components/reports/report-download-menu";
 
 interface StudentRow {
   id: string;
@@ -131,17 +132,6 @@ export default function StudentsPage() {
   const students: StudentRow[] = data?.data ?? [];
   const meta = data?.meta;
 
-  async function downloadExcel() {
-    const res = await api.get("/api/students/export", { params: filterParams, responseType: "blob" });
-    if (await handleBatchDownloadResponse(res, router)) return;
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Students.xlsx";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <PageWrapper>
       <PageHeader
@@ -150,7 +140,7 @@ export default function StudentsPage() {
         breadcrumbs={[{ label: t("title") }]}
         action={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={downloadExcel}>{t("exportExcel")}</Button>
+            <ReportDownloadMenu endpoint="/api/students/export" params={filterParams} fileName="Student List" />
             <Link href="/students/bulk-import">
               <Button variant="outline">{t("bulkImport")}</Button>
             </Link>

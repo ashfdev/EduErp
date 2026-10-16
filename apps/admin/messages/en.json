@@ -62,7 +62,8 @@
     "gatePass": "Gate Pass",
     "reports": "Reports",
     "bulkSms": "Bulk SMS",
-    "settings": "Settings"
+    "settings": "Settings",
+    "attendanceReports": "Attendance Reports"
   },
   "navGroups": {
     "academic": "Academic",
@@ -260,5 +261,13 @@
     "verifyBankTransfers": "Verify Bank Transfers →",
     "manageWaivers": "Manage Waivers →",
     "waiverHint": "Set up reusable discount/scholarship types and assign them to students"
+  },
+  "reports": {
+    "download": "Download",
+    "excel": "Excel (.xlsx)",
+    "pdf": "PDF (print-ready)",
+    "preparing": "Preparing…",
+    "failed": "Could not create the report",
+    "queued": "Large report — it is being prepared in the background"
   }
 }

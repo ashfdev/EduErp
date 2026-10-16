@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { z } from "zod";
-import ExcelJS from "exceljs";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
@@ -10,11 +9,12 @@ import { ATTENDANCE_MARK_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { markAttendanceSchema, markStaffAttendanceSchema } from "@education-erp/validators";
 import { sendNotification } from "../../services/notification.service";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
-import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeOvertime } from "../../utils/overtime";
 import { resolveStaffShiftTimes } from "../../lib/staff-shift";
 import { dateOnlyFrom } from "../../lib/date-only";
-import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
+import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD } from "../../lib/batch-job-registry";
+import { reportFormatSchema, sendReport, type ReportFormat } from "../../lib/report";
+import { buildDailyRegisterReport, buildDefaultersReport, buildMonthlySheetReport, buildMonthlySummaryReport, findDefaulters, loadDailyRegister, loadMonthlySheet } from "./attendance-reports";
 import { emitToUser } from "../../realtime/socket";
 
 // CLASS_TEACHER/SUBJECT_TEACHER may only mark attendance for a section they're
@@ -618,46 +618,33 @@ attendanceRouter.get(
   }),
 );
 
+const defaultersQuery = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), threshold: z.coerce.number().optional() });
+
+async function assertDefaultersAccess(req: { user?: { sub: string; role: string } }, query: z.infer<typeof defaultersQuery>) {
+  const role = req.user!.role;
+  const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
+  if (!isAdminTier && !query.section_id && !query.class_id) {
+    throw forbidden("section_id or class_id is required for this role");
+  }
+  if (query.section_id) await assertSectionReadAccess(req.user!.sub, role, query.section_id);
+  else if (query.class_id) await assertClassReadAccess(req.user!.sub, role, query.class_id);
+}
+
 attendanceRouter.get(
   "/defaulters",
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().optional(), section_id: z.string().optional(), threshold: z.coerce.number().optional() }).parse(req.query);
-    const role = req.user!.role;
-    const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
-    if (!isAdminTier && !query.section_id && !query.class_id) {
-      throw forbidden("section_id or class_id is required for this role");
-    }
-    if (query.section_id) await assertSectionReadAccess(req.user!.sub, role, query.section_id);
-    else if (query.class_id) await assertClassReadAccess(req.user!.sub, role, query.class_id);
-    const rules = await prisma.attendanceRules.findUnique({ where: { id: "singleton" } });
-    const threshold = query.threshold ?? rules?.min_attendance_percentage ?? 75;
+    const query = defaultersQuery.parse(req.query);
+    await assertDefaultersAccess(req, query);
+    res.json({ success: true, data: (await findDefaulters(query)).rows });
+  }),
+);
 
-    const students = await prisma.student.findMany({
-      where: {
-        deleted_at: null,
-        status: "ACTIVE",
-        ...(query.class_id && { current_class_id: query.class_id }),
-        ...(query.section_id && { current_section_id: query.section_id }),
-      },
-      select: { id: true, name_en: true, student_uid: true, father_phone: true, current_class: { select: { name_en: true } }, current_section: { select: { name: true } } },
-    });
-
-    // Real subject-wise attendance (Plan Twelve), one batched query for the
-    // whole roster instead of a per-student findMany().filter() loop —
-    // subject-wise data is ~7x the row volume the old blanket
-    // AttendanceRecord had, so the old pattern would only get worse here.
-    const attendanceByStudent = await computeSubjectWiseAttendance(prisma, students.map((s) => s.id));
-
-    const results = [];
-    for (const s of students) {
-      const summary = attendanceByStudent.get(s.id)!;
-      if (!summary.overall.total) continue;
-      if (summary.overall.percentage < threshold) {
-        results.push({ ...s, attendance_percentage: summary.overall.percentage, total_days: summary.overall.total, present_days: summary.overall.present });
-      }
-    }
-
-    res.json({ success: true, data: results });
+attendanceRouter.get(
+  "/defaulters/export",
+  asyncHandler(async (req, res) => {
+    const query = defaultersQuery.extend({ format: reportFormatSchema }).parse(req.query);
+    await assertDefaultersAccess(req, query);
+    sendReport(res, await buildDefaultersReport({ ...query, generated_by_id: req.user!.sub }));
   }),
 );
 
@@ -703,57 +690,48 @@ attendanceRouter.get(
 // Structured JSON now; PDF rendering is added on top of these in
 // Phase 10 once the shared pdf.service.ts exists.
 
+const dailyRegisterQuery = z.object({ date: z.coerce.date(), class_id: z.string().min(1), section_id: z.string().min(1) });
+
 attendanceRouter.get(
   "/reports/daily-register",
   asyncHandler(async (req, res) => {
-    const query = z.object({ date: z.coerce.date(), class_id: z.string().min(1), section_id: z.string().min(1) }).parse(req.query);
+    const query = dailyRegisterQuery.parse(req.query);
     await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
-    const date = startOfDay(query.date);
-
-    const [klass, section, students] = await Promise.all([
-      prisma.class.findUnique({ where: { id: query.class_id } }),
-      prisma.section.findUnique({ where: { id: query.section_id }, include: { shift: true, class_teacher: true } }),
-      prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } }),
-    ]);
-
-    const records = await prisma.attendanceRecord.findMany({ where: { section_id: query.section_id, date } });
-    const byStudent = new Map(records.map((r) => [r.student_id, r.status]));
-
-    res.json({
-      success: true,
-      data: {
-        class: klass?.name_en,
-        section: section?.name,
-        shift: section?.shift?.name,
-        teacher: section?.class_teacher?.name_en,
-        date,
-        rows: students.map((s) => ({ roll_no: s.current_roll_no, name_en: s.name_en, status: byStudent.get(s.id) ?? "UNMARKED" })),
-      },
-    });
+    res.json({ success: true, data: await loadDailyRegister(query) });
   }),
 );
 
 attendanceRouter.get(
+  "/reports/daily-register/export",
+  asyncHandler(async (req, res) => {
+    const query = dailyRegisterQuery.extend({ format: reportFormatSchema }).parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
+    sendReport(res, await buildDailyRegisterReport({ ...query, generated_by_id: req.user!.sub }));
+  }),
+);
+
+const monthlySheetQuery = z.object({
+  class_id: z.string().min(1),
+  section_id: z.string().min(1),
+  month: z.coerce.number().int().min(1).max(12),
+  year: z.coerce.number().int().min(2000).max(2100),
+});
+
+attendanceRouter.get(
   "/reports/monthly-sheet",
   asyncHandler(async (req, res) => {
-    const query = z.object({ class_id: z.string().min(1), section_id: z.string().min(1), month: z.coerce.number(), year: z.coerce.number() }).parse(req.query);
+    const query = monthlySheetQuery.parse(req.query);
     await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
-    const start = new Date(query.year, query.month - 1, 1);
-    const end = new Date(query.year, query.month, 1);
-    const daysInMonth = new Date(query.year, query.month, 0).getDate();
+    res.json({ success: true, data: await loadMonthlySheet(query) });
+  }),
+);
 
-    const students = await prisma.student.findMany({ where: { current_section_id: query.section_id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
-    const records = await prisma.attendanceRecord.findMany({ where: { section_id: query.section_id, date: { gte: start, lt: end } } });
-
-    const grid = students.map((s) => {
-      const days: Record<number, string> = {};
-      for (const r of records.filter((rec) => rec.student_id === s.id)) {
-        days[r.date.getDate()] = r.status;
-      }
-      return { roll_no: s.current_roll_no, name_en: s.name_en, days };
-    });
-
-    res.json({ success: true, data: { days_in_month: daysInMonth, students: grid } });
+attendanceRouter.get(
+  "/reports/monthly-sheet/export",
+  asyncHandler(async (req, res) => {
+    const query = monthlySheetQuery.extend({ format: reportFormatSchema }).parse(req.query);
+    await assertSectionReadAccess(req.user!.sub, req.user!.role, query.section_id);
+    sendReport(res, await buildMonthlySheetReport({ ...query, generated_by_id: req.user!.sub }));
   }),
 );
 
@@ -773,75 +751,32 @@ attendanceRouter.get(
   }),
 );
 
-// Plan Twenty (large-batch background jobs), extended to this Excel export
-// -- the heaviest of the 14 export routes to genuinely rebuild threshold-
-// aware, since it's not one query but a whole class->section->student->
-// attendance-record tree walk. Below EXCEL_EXPORT_BATCH_THRESHOLD (measured
-// by total matched student count, the actual per-row cost driver here), the
-// route below still builds and streams back synchronously exactly as
-// before; a genuinely large academic-year-wide export goes through the
-// shared documentQueue worker, calling this exact same builder.
-async function buildAttendanceBulkExportJob(params: {
+interface MonthlySummaryParams {
   academic_year_id: string;
   month: number;
   year: number;
   class_id?: string;
-}): Promise<BatchJobResult> {
-  const start = new Date(params.year, params.month - 1, 1);
-  const end = new Date(params.year, params.month, 1);
-
-  const classes = await prisma.class.findMany({
-    where: { academic_year_id: params.academic_year_id, ...(params.class_id && { id: params.class_id }) },
-    include: { sections: true },
-  });
-  if (!classes.length) throw badRequest("No classes found for this academic year");
-
-  const workbook = new ExcelJS.Workbook();
-
-  for (const klass of classes) {
-    const sheet = workbook.addWorksheet(klass.name_en.slice(0, 31));
-    sheet.columns = [
-      { header: "Roll", key: "roll", width: 10 },
-      { header: "Name", key: "name", width: 30 },
-      { header: "Section", key: "section", width: 12 },
-      { header: "Present", key: "present", width: 10 },
-      { header: "Absent", key: "absent", width: 10 },
-      { header: "Late", key: "late", width: 10 },
-      { header: "%", key: "pct", width: 10 },
-    ];
-
-    for (const section of klass.sections) {
-      const students = await prisma.student.findMany({ where: { current_section_id: section.id, deleted_at: null, status: "ACTIVE" }, orderBy: { current_roll_no: "asc" } });
-      for (const s of students) {
-        const records = await prisma.attendanceRecord.findMany({ where: { student_id: s.id, date: { gte: start, lt: end } } });
-        const present = records.filter((r) => r.status === "PRESENT").length;
-        const absent = records.filter((r) => r.status === "ABSENT").length;
-        const late = records.filter((r) => r.status === "LATE").length;
-        sheet.addRow({
-          roll: s.current_roll_no,
-          name: s.name_en,
-          section: section.name,
-          present,
-          absent,
-          late,
-          pct: records.length ? Math.round((present / records.length) * 1000) / 10 : "",
-        });
-      }
-    }
-  }
-
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  const filename = `Attendance_${params.month}_${params.year}.xlsx`;
-  return { buffer, filename, mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+  format?: ReportFormat;
+  generated_by_id?: string;
 }
-registerBatchJobKind("ATTENDANCE_BULK_EXPORT", "ATTENDANCE_BULK_EXPORT", (params) =>
-  buildAttendanceBulkExportJob(params as { academic_year_id: string; month: number; year: number; class_id?: string }),
-);
+// Large academic-year-wide exports go through the shared documentQueue worker (Plan Twenty).
+registerBatchJobKind("ATTENDANCE_BULK_EXPORT", "ATTENDANCE_BULK_EXPORT", (params) => {
+  const p = params as unknown as MonthlySummaryParams;
+  return buildMonthlySummaryReport({ ...p, format: p.format ?? "xlsx" });
+});
 
 attendanceRouter.get(
   "/reports/bulk-export",
   asyncHandler(async (req, res) => {
-    const query = z.object({ academic_year_id: z.string().min(1), month: z.coerce.number(), year: z.coerce.number(), class_id: z.string().optional() }).parse(req.query);
+    const query = z
+      .object({
+        academic_year_id: z.string().min(1),
+        month: z.coerce.number().int().min(1).max(12),
+        year: z.coerce.number().int().min(2000).max(2100),
+        class_id: z.string().optional(),
+        format: reportFormatSchema,
+      })
+      .parse(req.query);
     const role = req.user!.role;
     const isAdminTier = role === "ADMIN" || role === "SUPER_ADMIN" || role === "PRINCIPAL";
     if (!isAdminTier && !query.class_id) throw forbidden("class_id is required for this role");
@@ -856,12 +791,9 @@ attendanceRouter.get(
     if (!sectionIds.length) throw badRequest("No classes found for this academic year");
     const count = await prisma.student.count({ where: { current_section_id: { in: sectionIds }, deleted_at: null, status: "ACTIVE" } });
 
-    const params = { academic_year_id: query.academic_year_id, month: query.month, year: query.year, class_id: query.class_id };
+    const params: MonthlySummaryParams = { ...query, generated_by_id: req.user!.sub };
     if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
-      const { buffer, filename, mimeType } = await buildAttendanceBulkExportJob(params);
-      res.setHeader("Content-Type", mimeType!);
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.send(buffer);
+      sendReport(res, await buildMonthlySummaryReport({ ...params, format: query.format }));
       return;
     }
     const job = await enqueueBatchJob("ATTENDANCE_BULK_EXPORT", params, req.user!.sub);

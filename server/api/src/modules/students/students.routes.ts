@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { z } from "zod";
-import ExcelJS from "exceljs";
 import { parse } from "csv-parse/sync";
 import type { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
@@ -28,6 +27,7 @@ import { env } from "../../lib/env";
 import { logAudit } from "../../lib/audit-log";
 import { registerBatchJobKind, enqueueBatchJob, EXCEL_EXPORT_BATCH_THRESHOLD, type BatchJobResult } from "../../lib/batch-job-registry";
 import { badRequest, notFound, conflict } from "../../lib/errors";
+import { renderReport, sendReport, reportAuthor, reportFileName, reportFormatSchema, toReportDate, type ReportColumn, type ReportFormat } from "../../lib/report";
 
 export const studentsRouter = Router();
 // Full 360-degree profiles (incl. fees/results/attendance) for any given id
@@ -324,43 +324,104 @@ function buildStudentsExportWhere(params: StudentsExportParams) {
   };
 }
 
-// Plan Twenty (large-batch background jobs) -- the route that originally
-// surfaced this whole gap: a real class-9-sized unfiltered export (~4,400
-// students institution-wide) built its whole workbook inside the request/
-// response cycle with no size limit at all. Below EXCEL_EXPORT_BATCH_
-// THRESHOLD, still built and streamed back synchronously exactly as before;
-// a genuinely large/unfiltered export is instead routed through the shared
-// documentQueue worker, which calls this exact same builder.
-async function buildStudentsExportJob(params: StudentsExportParams): Promise<BatchJobResult> {
-  const students = await prisma.student.findMany({ where: buildStudentsExportWhere(params), select: STUDENT_LIST_SELECT, orderBy: { created_at: "desc" } });
+const STUDENT_REPORT_SELECT = {
+  ...STUDENT_LIST_SELECT,
+  gender: true,
+  father_name: true,
+  admission_date: true,
+  current_class: { select: { id: true, name_en: true, numeric_level: true } },
+} as const;
+type StudentReportRow = Prisma.StudentGetPayload<{ select: typeof STUDENT_REPORT_SELECT }>;
 
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Students");
-  sheet.columns = [
-    { header: "Student ID", key: "student_uid", width: 18 },
-    { header: "Name", key: "name_en", width: 24 },
-    { header: "Roll No", key: "roll_no", width: 12 },
-    { header: "Class", key: "class_name", width: 16 },
-    { header: "Section", key: "section_name", width: 12 },
-    { header: "Status", key: "status", width: 12 },
-    { header: "Guardian Phone", key: "guardian_phone", width: 16 },
-  ];
-  for (const s of students) {
-    sheet.addRow({
-      student_uid: s.student_uid,
-      name_en: s.name_en,
-      roll_no: s.current_roll_no ?? "",
-      class_name: s.current_class?.name_en ?? "",
-      section_name: s.current_section?.name ?? "",
-      status: s.status,
-      guardian_phone: s.guardian?.phone ?? s.father_phone ?? "",
-    });
-  }
+const STUDENT_STATUS_LABEL: Record<string, string> = { ACTIVE: "Active", INACTIVE: "Inactive", TRANSFERRED: "Transferred", GRADUATED: "Graduated", EXPELLED: "Expelled" };
+const GENDER_LABEL: Record<string, string> = { MALE: "Male", FEMALE: "Female", OTHER: "Other" };
 
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-  return { buffer, filename: "Students.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+async function studentReportFilters(params: StudentsExportParams) {
+  const [klass, section, group, program, department] = await Promise.all([
+    params.class_id ? prisma.class.findUnique({ where: { id: params.class_id }, select: { name_en: true } }) : null,
+    params.section_id ? prisma.section.findUnique({ where: { id: params.section_id }, select: { name: true } }) : null,
+    params.group_id ? prisma.group.findUnique({ where: { id: params.group_id }, select: { name_en: true } }) : null,
+    params.program_id ? prisma.program.findUnique({ where: { id: params.program_id }, select: { name_en: true } }) : null,
+    params.department_id ? prisma.department.findUnique({ where: { id: params.department_id }, select: { name_en: true } }) : null,
+  ]);
+  const filters = [
+    department && { label: "Department", value: department.name_en },
+    program && { label: "Program", value: program.name_en },
+    { label: "Class", value: klass?.name_en ?? "All classes" },
+    { label: "Section", value: section?.name ?? "All sections" },
+    group && { label: "Group", value: group.name_en },
+    { label: "Status", value: params.status ? (STUDENT_STATUS_LABEL[params.status] ?? params.status) : "All" },
+    params.gender && { label: "Gender", value: GENDER_LABEL[params.gender] ?? params.gender },
+    params.search && { label: "Search", value: params.search },
+  ].filter((f): f is { label: string; value: string } => !!f);
+  return { filters, className: klass?.name_en, sectionName: section?.name };
 }
-registerBatchJobKind("STUDENTS_EXPORT", "STUDENTS_EXPORT", (params) => buildStudentsExportJob(params as StudentsExportParams));
+
+// Same builder serves the sync route and the documentQueue worker (large exports, Plan Twenty).
+async function buildStudentsReport(params: StudentsExportParams & { format?: ReportFormat; generated_by_id?: string }): Promise<BatchJobResult> {
+  const [students, { filters, className, sectionName }, generatedBy] = await Promise.all([
+    prisma.student.findMany({ where: buildStudentsExportWhere(params), select: STUDENT_REPORT_SELECT }),
+    studentReportFilters(params),
+    reportAuthor(params.generated_by_id),
+  ]);
+  const byNumber = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+  students.sort(
+    (a, b) =>
+      (a.current_class?.numeric_level ?? 999) - (b.current_class?.numeric_level ?? 999) ||
+      byNumber.compare(a.current_section?.name ?? "~", b.current_section?.name ?? "~") ||
+      byNumber.compare(a.current_roll_no ?? "~", b.current_roll_no ?? "~") ||
+      byNumber.compare(a.name_en, b.name_en),
+  );
+
+  const count = (gender: string) => students.filter((s) => s.gender === gender).length;
+  const columns: ReportColumn<StudentReportRow>[] = [
+    { header: "#", value: (_, i) => i + 1, type: "number", width: 5 },
+    { header: "Student ID", value: (s) => s.student_uid, type: "code", width: 17 },
+    { header: "Name", value: (s) => s.name_en, width: 26 },
+    ...(students.some((s) => s.name_bn) ? [{ header: "Name (Bangla)", value: (s: StudentReportRow) => s.name_bn, width: 22 }] : []),
+    { header: "Class", value: (s) => s.current_class?.name_en, width: 12 },
+    { header: "Section", value: (s) => s.current_section?.name, type: "code", width: 9 },
+    ...(students.some((s) => s.group) ? [{ header: "Group", value: (s: StudentReportRow) => s.group?.name_en, width: 12 }] : []),
+    { header: "Roll", value: (s) => s.current_roll_no, type: "code", width: 7 },
+    { header: "Gender", value: (s) => GENDER_LABEL[s.gender] ?? s.gender, type: "code", width: 9 },
+    { header: "Father's Name", value: (s) => s.father_name, width: 22 },
+    { header: "Guardian Phone", value: (s) => s.guardian?.phone ?? s.father_phone, type: "code", width: 15 },
+    { header: "Admitted", value: (s) => toReportDate(s.admission_date), type: "dateOnly", width: 12 },
+    {
+      header: "Status",
+      value: (s) => STUDENT_STATUS_LABEL[s.status] ?? s.status,
+      type: "code",
+      width: 11,
+      tone: (s) => (s.status === "INACTIVE" || s.status === "EXPELLED" ? "bad" : s.status === "ACTIVE" ? undefined : "muted"),
+    },
+  ];
+
+  return renderReport(
+    {
+      title: "Student List",
+      fileName: reportFileName("Student List", className, sectionName && `Section ${sectionName}`),
+      filters,
+      orientation: "landscape",
+      generatedBy,
+      sections: [
+        {
+          title: className ? `${className}${sectionName ? ` · Section ${sectionName}` : ""}` : "All students",
+          columns,
+          rows: students,
+          stats: [
+            { label: "Total students", value: students.length },
+            { label: "Male", value: count("MALE") },
+            { label: "Female", value: count("FEMALE") },
+            ...(count("OTHER") ? [{ label: "Other", value: count("OTHER") }] : []),
+            ...(params.status ? [] : [{ label: "Active", value: students.filter((s) => s.status === "ACTIVE").length, tone: "good" as const }]),
+          ],
+        },
+      ],
+    },
+    params.format ?? "xlsx",
+  );
+}
+registerBatchJobKind("STUDENTS_EXPORT", "STUDENTS_EXPORT", (params) => buildStudentsReport(params as StudentsExportParams));
 
 // Registered before "/:id" — otherwise Express would match "export" as an id.
 studentsRouter.get(
@@ -380,18 +441,17 @@ studentsRouter.get(
         // Department/Program filter (Plan Thirteen, Phase D fix).
         program_id: z.string().optional(),
         department_id: z.string().optional(),
+        format: reportFormatSchema,
       })
       .parse(req.query);
+    const params = { ...query, generated_by_id: req.user!.sub };
 
     const count = await prisma.student.count({ where: buildStudentsExportWhere(query) });
     if (count <= EXCEL_EXPORT_BATCH_THRESHOLD) {
-      const { buffer, filename, mimeType } = await buildStudentsExportJob(query);
-      res.setHeader("Content-Type", mimeType!);
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.send(buffer);
+      sendReport(res, await buildStudentsReport(params));
       return;
     }
-    const job = await enqueueBatchJob("STUDENTS_EXPORT", query, req.user!.sub);
+    const job = await enqueueBatchJob("STUDENTS_EXPORT", params, req.user!.sub);
     res.status(202).json({ success: true, data: { job_id: job.id, status: job.status } });
   }),
 );

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { prisma } from "../lib/prisma";
 import type { DocumentType } from "@education-erp/types";
 import { cardDesignSchema, SIZE_PRESETS, FIELD_CATALOG, type CardDesign } from "@education-erp/validators";
+import { DOCUMENT_FONT_STACK, getDocumentFontCss } from "./document-fonts";
 
 const DEFAULT_TEMPLATES_DIR = join(__dirname, "..", "templates", "defaults");
 const PARTIALS_DIR = join(__dirname, "..", "templates", "partials");
@@ -226,7 +227,7 @@ interface SignatureSlot {
   seal_url: string | null;
 }
 
-async function getInstitutionBranding() {
+export async function getInstitutionBranding() {
   const profile = await prisma.institutionProfile.findUnique({ where: { id: "singleton" } });
   const config = await prisma.institutionConfig.findUnique({ where: { id: "singleton" } });
   return {
@@ -365,6 +366,8 @@ export async function generateQrDataUrl(text: string): Promise<string> {
 export interface RenderOptions {
   pageSize?: "A4" | "A5" | "A3" | "ID_CARD" | "ID_CARD_PORTRAIT" | "BADGE" | "LETTER";
   orientation?: "portrait" | "landscape";
+  // Adds a "label · Page X of Y" footer to every page. Must already be HTML-escaped.
+  footerLabel?: string;
 }
 
 const PAGE_SIZE_TO_PUPPETEER: Record<string, { format?: "A4" | "A5" | "A3"; width?: string; height?: string }> = {
@@ -423,7 +426,8 @@ export async function renderDocumentBatch(docType: DocumentType, dataList: Recor
   // concatenating N renders of the same template produces N identical style
   // blocks (harmless — same content) followed by N bodies in order.
   const pageBreak = `<div style="page-break-after: always;"></div>`;
-  const overrideStyle = template.css_content ? `<style>${template.css_content}</style>` : "";
+  const fontStyle = `<style>${await getDocumentFontCss()}</style>`;
+  const overrideStyle = fontStyle + (template.css_content ? `<style>${template.css_content}</style>` : "");
   const buildHtml = (records: Record<string, unknown>[]) =>
     overrideStyle + records.map((data) => compiled({ ...data, institution, signatures })).join(pageBreak);
 
@@ -480,11 +484,18 @@ export async function renderHtmlToPdf(html: string, options?: RenderOptions): Pr
     // finishes in seconds is completely unaffected either way.
     page.setDefaultTimeout(120_000);
     await page.setContent(html, { waitUntil: "load" });
+    const footer = options?.footerLabel !== undefined;
     const pdf = await page.pdf({
       ...size,
       printBackground: true,
       landscape: options?.orientation === "landscape",
-      margin: size.format ? { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" } : undefined,
+      margin: size.format ? { top: "10mm", right: "10mm", bottom: footer ? "14mm" : "10mm", left: "10mm" } : undefined,
+      ...(footer && {
+        displayHeaderFooter: true,
+        headerTemplate: "<span></span>",
+        // Header/footer templates get no page styles; font-size must be set inline or it renders at 0.
+        footerTemplate: `<div style="width:100%;padding:0 10mm;font-family:Arial,sans-serif;font-size:8px;color:#64748b;display:flex;justify-content:space-between;"><span>${options?.footerLabel}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`,
+      }),
     });
     return Buffer.from(pdf);
   } finally {
@@ -499,9 +510,9 @@ export async function renderSimpleReport(title: string, bodyHtml: string, option
   const institution = await getInstitutionBranding();
   const html = `
     <html><head><meta charset="utf-8" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>${await getDocumentFontCss()}</style>
     <style>
-      * { font-family: 'Noto Sans Bengali', Arial, sans-serif; box-sizing: border-box; }
+      * { font-family: ${DOCUMENT_FONT_STACK}; box-sizing: border-box; }
       body { margin: 0; padding: 16px; font-size: 12px; }
       .report-header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid ${institution.primary_color}; padding-bottom: 8px; margin-bottom: 12px; }
       .report-header img { height: 48px; }
