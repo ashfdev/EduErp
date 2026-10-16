@@ -9,7 +9,8 @@ import { reqParam } from "../../lib/req-param";
 import { SETTINGS_USERS_ROLES } from "../../lib/roles";
 import { refreshPermissions } from "../../lib/permissions";
 import { logAudit } from "../../lib/audit-log";
-import { badRequest, notFound } from "../../lib/errors";
+import { badRequest, forbidden, notFound } from "../../lib/errors";
+import { isAdminRole } from "../../lib/role-hierarchy";
 
 export const permissionsRouter = Router();
 permissionsRouter.use(authenticate, authorize(SETTINGS_USERS_ROLES));
@@ -49,6 +50,9 @@ permissionsRouter.get(
 permissionsRouter.put(
   "/:key",
   asyncHandler(async (req, res) => {
+    // Fixed check, not a permission: whoever may edit the permission matrix
+    // could otherwise grant themselves anything, this route included.
+    if (!isAdminRole(req.user!.role as UserRole)) throw forbidden("Only an admin can change role permissions");
     const key = reqParam(req, "key");
     const body = updatePermissionSchema.parse(req.body);
 

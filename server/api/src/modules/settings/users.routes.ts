@@ -15,6 +15,7 @@ import { badRequest, conflict } from "../../lib/errors";
 import { UserRole } from "@education-erp/types";
 import { env } from "../../lib/env";
 import { generateStaffUid } from "../../utils/staff-id.generator";
+import { assertCanAssignRole, assertCanManageUser, assertNotLastAdmin, isAdminRole } from "../../lib/role-hierarchy";
 
 export const usersRouter = Router();
 usersRouter.use(authenticate);
@@ -48,6 +49,7 @@ usersRouter.post(
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
     const body = createUserSchema.parse(req.body);
+    assertCanAssignRole(req.user!.role as UserRole, body.role);
     const existing = await prisma.user.findUnique({ where: { phone: body.phone } });
     if (existing) throw conflict("A user with this phone number already exists");
 
@@ -96,16 +98,14 @@ usersRouter.put(
     const targetId = reqParam(req, "id");
     const body = z.object({ role: z.nativeEnum(UserRole).optional(), is_active: z.boolean().optional() }).parse(req.body);
 
-    if (body.role && targetId === req.user!.sub) {
-      throw badRequest("You cannot change your own role — ask another admin to do this");
+    const actorRole = req.user!.role as UserRole;
+    if (targetId === req.user!.sub && (body.role || body.is_active === false)) {
+      throw badRequest("You cannot change your own role or deactivate your own account — ask another admin to do this");
     }
-    if (body.role && body.role !== "SUPER_ADMIN") {
-      const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { role: true } });
-      if (target.role === "SUPER_ADMIN") {
-        const otherActiveSuperAdmins = await prisma.user.count({ where: { role: "SUPER_ADMIN", is_active: true, id: { not: targetId } } });
-        if (otherActiveSuperAdmins === 0) throw badRequest("Cannot change the last active SUPER_ADMIN's role — promote another user first");
-      }
-    }
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { role: true } });
+    assertCanManageUser(actorRole, target.role);
+    if (body.role) assertCanAssignRole(actorRole, body.role);
+    if ((body.role && !isAdminRole(body.role)) || body.is_active === false) await assertNotLastAdmin(targetId, target.role);
 
     const user = await prisma.user.update({
       where: { id: targetId },
@@ -121,7 +121,8 @@ usersRouter.post(
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
     const body = adminResetPasswordSchema.parse(req.body ?? {});
-    const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { name_en: true, phone: true } });
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { role: true } });
+    assertCanManageUser(req.user!.role as UserRole, target.role);
     const tempPassword = body.login_password ?? generateTempPassword();
     const password_hash = await bcrypt.hash(tempPassword, 12);
     const user = await prisma.user.update({
@@ -142,8 +143,14 @@ usersRouter.put(
   "/:id/toggle",
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
-    const target = await prisma.user.findUniqueOrThrow({ where: { id: reqParam(req, "id") }, select: { is_active: true } });
-    const user = await prisma.user.update({ where: { id: reqParam(req, "id") }, data: { is_active: !target.is_active } });
+    const targetId = reqParam(req, "id");
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { is_active: true, role: true } });
+    assertCanManageUser(req.user!.role as UserRole, target.role);
+    if (target.is_active) {
+      if (targetId === req.user!.sub) throw badRequest("You cannot deactivate your own account");
+      await assertNotLastAdmin(targetId, target.role);
+    }
+    const user = await prisma.user.update({ where: { id: targetId }, data: { is_active: !target.is_active } });
     res.json({ success: true, data: user });
   }),
 );
@@ -152,7 +159,12 @@ usersRouter.delete(
   "/:id",
   authorize(SETTINGS_USERS_ROLES),
   asyncHandler(async (req, res) => {
-    await prisma.user.update({ where: { id: reqParam(req, "id") }, data: { is_active: false } });
+    const targetId = reqParam(req, "id");
+    if (targetId === req.user!.sub) throw badRequest("You cannot deactivate your own account");
+    const target = await prisma.user.findUniqueOrThrow({ where: { id: targetId }, select: { role: true } });
+    assertCanManageUser(req.user!.role as UserRole, target.role);
+    await assertNotLastAdmin(targetId, target.role);
+    await prisma.user.update({ where: { id: targetId }, data: { is_active: false } });
     res.status(204).send();
   }),
 );

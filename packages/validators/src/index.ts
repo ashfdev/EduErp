@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./roles";
 export * from "./settings";
 export * from "./students";
 export * from "./subjects";

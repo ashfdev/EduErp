@@ -11,10 +11,15 @@ import { logger } from "../lib/logger";
 // NotificationLog row created here. "sent: true" now means "queued
 // successfully", not "gateway confirmed delivery" — callers only ever
 // surfaced this as an informational response field, never branched on it.
-export async function sendSms(phone: string, message: string): Promise<{ sent: boolean }> {
+//
+// For a message that carries a secret (an OTP), pass `logMessage`: that
+// masked text is what NotificationLog keeps (staff can browse those logs),
+// and the queued job is deleted from Redis as soon as it finishes.
+export async function sendSms(phone: string, message: string, opts: { logMessage?: string } = {}): Promise<{ sent: boolean }> {
   try {
-    const log = await prisma.notificationLog.create({ data: { channel: "SMS", recipient: phone, status: "QUEUED", message } });
-    await smsQueue.add("send", { log_id: log.id, phone, message }, DEFAULT_JOB_OPTS);
+    const log = await prisma.notificationLog.create({ data: { channel: "SMS", recipient: phone, status: "QUEUED", message: opts.logMessage ?? message } });
+    const jobOpts = opts.logMessage ? { ...DEFAULT_JOB_OPTS, removeOnComplete: true, removeOnFail: true } : DEFAULT_JOB_OPTS;
+    await smsQueue.add("send", { log_id: log.id, phone, message }, jobOpts);
     return { sent: true };
   } catch (err) {
     logger.error({ err, phone }, "failed to enqueue SMS");

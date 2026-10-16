@@ -22,6 +22,7 @@ import { sendNotification } from "../../services/notification.service";
 import { notifyRoles } from "../../services/in-app-notification.service";
 import { env } from "../../lib/env";
 import { resolveOwnStaffId } from "../../lib/own-staff";
+import { assertCanAssignRole, assertCanManageUser, canAssignRole } from "../../lib/role-hierarchy";
 import { badRequest, conflict, forbidden, notFound } from "../../lib/errors";
 import type { UserRole } from "@education-erp/types";
 import type { Prisma } from "@education-erp/db";
@@ -244,6 +245,7 @@ hrStaffRouter.post(
   asyncHandler(async (req, res) => {
     const body = createStaffSchema.parse(req.body);
     if (body.create_login && !body.phone) throw badRequest("phone is required to create a login account");
+    assertCanAssignRole(req.user!.role as UserRole, body.role as UserRole);
 
     if (body.phone) {
       const existingUser = await prisma.user.findUnique({ where: { phone: body.phone } });
@@ -438,6 +440,10 @@ hrStaffRouter.post(
     // tens to low hundreds of rows, not built to guarantee no timeout on a
     // multi-thousand-row CSV against this synchronous endpoint).
     for (const [index, row] of body.rows.entries()) {
+      if (!canAssignRole(req.user!.role as UserRole, row.role as UserRole)) {
+        failed.push({ row: index + 1, reason: `Your role can't give anyone the ${row.role} role` });
+        continue;
+      }
       try {
         const existingUser = await prisma.user.findUnique({ where: { phone: row.phone } });
         if (existingUser) throw new Error("a user with this phone number already exists");
@@ -536,6 +542,9 @@ hrStaffRouter.delete(
   authorize(HR_MANAGE_ROLES),
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
+    const existing = await prisma.staff.findUnique({ where: { id }, select: { user: { select: { role: true } } } });
+    if (!existing) throw notFound("Staff member not found");
+    assertCanManageUser(req.user!.role as UserRole, existing.user.role);
     const staff = await prisma.staff.update({ where: { id }, data: { deleted_at: new Date(), is_active: false } });
     await prisma.user.update({ where: { id: staff.user_id }, data: { is_active: false } });
     res.status(204).send();
@@ -555,8 +564,9 @@ hrStaffRouter.post(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = staffResignSchema.parse(req.body);
-    const staff = await prisma.staff.findUnique({ where: { id } });
+    const staff = await prisma.staff.findUnique({ where: { id }, include: { user: { select: { role: true } } } });
     if (!staff) throw notFound("Staff member not found");
+    assertCanManageUser(req.user!.role as UserRole, staff.user.role);
 
     const updated = await prisma.staff.update({
       where: { id },
@@ -582,8 +592,9 @@ hrStaffRouter.post(
   asyncHandler(async (req, res) => {
     const id = reqParam(req, "id");
     const body = staffRejoinSchema.parse(req.body);
-    const staff = await prisma.staff.findUnique({ where: { id } });
+    const staff = await prisma.staff.findUnique({ where: { id }, include: { user: { select: { role: true } } } });
     if (!staff) throw notFound("Staff member not found");
+    assertCanManageUser(req.user!.role as UserRole, staff.user.role);
 
     // The prior resignation cycle isn't retained beyond this point (a full
     // history log is a natural follow-on if repeat cycles ever need

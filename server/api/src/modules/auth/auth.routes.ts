@@ -201,7 +201,9 @@ authRouter.post(
     const hashedOtp = await bcrypt.hash(otp, 12);
     await redis.set(`otp:${body.phone}`, hashedOtp, "EX", OTP_TTL_SECONDS);
 
-    await sendSms(body.phone, `Your Education ERP OTP is ${otp}. It expires in 10 minutes.`);
+    await sendSms(body.phone, `Your Education ERP OTP is ${otp}. It expires in 10 minutes.`, {
+      logMessage: "Your Education ERP OTP is ******. It expires in 10 minutes.",
+    });
 
     res.json({ success: true, data: { message: "OTP sent", expires_in: OTP_TTL_SECONDS } });
   }),

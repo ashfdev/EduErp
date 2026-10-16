@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, Input, Label, PageHeader, PageWrapper, SearchInput, StatusBadge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage, ErrorState, LoadingSpinner } from "@education-erp/ui";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { canAssignRole } from "@education-erp/validators";
 
 const ROLES = [
   "SUPER_ADMIN", "ADMIN", "PRINCIPAL", "VICE_PRINCIPAL", "EXAM_CONTROLLER", "HEAD_OF_DEPT",
@@ -24,6 +26,8 @@ interface UserRow {
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const actorRole = useAuthStore((s) => s.user?.role);
+  const assignableRoles = ROLES.filter((r) => canAssignRole(actorRole, r));
   const { data: users, isLoading, isError, error, refetch } = useQuery<UserRow[]>({
     queryKey: ["settings", "users"],
     queryFn: async () => (await api.get("/api/settings/users")).data.data,
@@ -172,7 +176,7 @@ export default function UsersPage() {
             <div className="space-y-1.5">
               <Label>Role</Label>
               <select className="w-full rounded-md border px-3 py-2 text-sm" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+                {assignableRoles.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">

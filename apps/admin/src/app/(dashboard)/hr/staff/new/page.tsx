@@ -10,6 +10,8 @@ import {
   Input, Label, PageHeader, PageWrapper, extractErrorMessage,
 } from "@education-erp/ui";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { canAssignRole } from "@education-erp/validators";
 
 interface Department {
   id: string;
@@ -88,6 +90,7 @@ export default function NewStaffPage() {
 
   const [departmentId, setDepartmentId] = useState("");
   const [programId, setProgramId] = useState("");
+  const actorRole = useAuthStore((st) => st.user?.role);
   const [role, setRole] = useState(category === "STAFF" ? NON_TEACHING_ROLES[0]! : "SUBJECT_TEACHER");
   const [employmentType, setEmploymentType] = useState("PERMANENT");
   // null = not yet touched by the user — falls back to whichever structure
@@ -351,7 +354,7 @@ export default function NewStaffPage() {
                       {TEACHING_ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
                     </optgroup>
                     <optgroup label="Non-Teaching">
-                      {NON_TEACHING_ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+                      {NON_TEACHING_ROLES.filter((r) => canAssignRole(actorRole, r)).map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
                     </optgroup>
                   </select>
                 </div>
