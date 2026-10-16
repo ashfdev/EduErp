@@ -66,8 +66,10 @@ describe("sslcommerzAdapter", () => {
       expect(params.get("store_passwd")).toBe("test_pass");
       expect(params.get("total_amount")).toBe("1500.00");
       expect(params.get("tran_id")).toBe("TXN_1");
-      expect(params.get("success_url")).toBe("https://erpapi.example.com/api/fees/gateway-redirect/sslcommerz/success");
-      expect(params.get("ipn_url")).toBe("https://erpapi.example.com/api/fees/callback/sslcommerz");
+      expect(params.get("success_url")).toBe("https://erpapi.example.com/api/payments/gateway-redirect/sslcommerz/success");
+      expect(params.get("fail_url")).toBe("https://erpapi.example.com/api/payments/gateway-redirect/sslcommerz/fail");
+      expect(params.get("cancel_url")).toBe("https://erpapi.example.com/api/payments/gateway-redirect/sslcommerz/cancel");
+      expect(params.get("ipn_url")).toBe("https://erpapi.example.com/api/payments/callback/sslcommerz");
       expect(params.get("cus_name")).toBe("Rakib Hasan");
       expect(params.get("cus_phone")).toBe("01711111111");
     });
@@ -138,5 +140,19 @@ describe("sslcommerzAdapter", () => {
       expect(await sslcommerzAdapter.verifyCallback({})).toEqual({ transaction_id: "", success: false });
       expect(mockedAxios.get).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("SSLCommerz callback URLs reach a public route", () => {
+  it("the IPN and redirect paths the adapter sends are served without a login", async () => {
+    const { default: request } = await import("supertest");
+    const { createApp } = await import("../../app");
+    const app = createApp();
+    // An unknown transaction is fine here: the point is that the request
+    // reaches the handler (404 payment not found), not a 401 login wall.
+    const ipn = await request(app).post("/api/payments/callback/sslcommerz").send({ tran_id: "does-not-exist", val_id: "x" });
+    expect(ipn.status).not.toBe(401);
+    const cancel = await request(app).post("/api/payments/gateway-redirect/sslcommerz/cancel").send({ tran_id: "does-not-exist" });
+    expect(cancel.status).toBe(302);
   });
 });

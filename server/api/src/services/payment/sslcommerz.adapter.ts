@@ -66,10 +66,13 @@ export const sslcommerzAdapter: PaymentGatewayAdapter = {
       total_amount: input.amount.toFixed(2),
       currency: "BDT",
       tran_id: input.transaction_id,
-      success_url: `${apiBase}/api/fees/gateway-redirect/sslcommerz/success`,
-      fail_url: `${apiBase}/api/fees/gateway-redirect/sslcommerz/fail`,
-      cancel_url: `${apiBase}/api/fees/gateway-redirect/sslcommerz/cancel`,
-      ipn_url: `${apiBase}/api/fees/callback/sslcommerz`,
+      // Handled by payments.routes.ts, mounted at /api/payments. These used
+      // to point at /api/fees, which needs a login, so SSLCommerz's IPN and
+      // the payer's redirect got 401 and payments never completed.
+      success_url: `${apiBase}/api/payments/gateway-redirect/sslcommerz/success`,
+      fail_url: `${apiBase}/api/payments/gateway-redirect/sslcommerz/fail`,
+      cancel_url: `${apiBase}/api/payments/gateway-redirect/sslcommerz/cancel`,
+      ipn_url: `${apiBase}/api/payments/callback/sslcommerz`,
       cus_name: customer.name,
       cus_email: customer.email,
       cus_add1: "Dhaka",
