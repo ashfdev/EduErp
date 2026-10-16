@@ -213,7 +213,10 @@
     "edit": "সম্পাদনা",
     "previous": "পূর্ববর্তী",
     "next": "পরবর্তী",
-    "pageOf": "পৃষ্ঠা {page} এর মধ্যে {totalPages}"
+    "pageOf": "পৃষ্ঠা {page} এর মধ্যে {totalPages}",
+    "allProfiles": "সকল প্রোফাইল",
+    "incompleteProfiles": "অসম্পূর্ণ প্রোফাইল",
+    "incompleteBadge": "{count}টি তথ্য নেই"
   },
   "attendanceMark": {
     "title": "উপস্থিতি নিন",

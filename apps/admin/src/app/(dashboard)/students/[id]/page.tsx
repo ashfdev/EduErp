@@ -40,6 +40,19 @@ interface StudentProfile {
     blood_group?: string | null;
     phone?: string | null;
     address_permanent?: string | null;
+    address_current?: string | null;
+    present_house_name?: string | null;
+    present_village?: string | null;
+    present_post_code?: string | null;
+    present_district?: string | null;
+    present_division?: string | null;
+    permanent_house_name?: string | null;
+    permanent_village?: string | null;
+    permanent_post_code?: string | null;
+    permanent_district?: string | null;
+    permanent_division?: string | null;
+    father_nid?: string | null;
+    mother_nid?: string | null;
     father_name?: string | null;
     father_phone?: string | null;
     father_photo_url?: string | null;
@@ -47,6 +60,7 @@ interface StudentProfile {
     mother_phone?: string | null;
     mother_photo_url?: string | null;
     documents_count: number;
+    missing_profile_fields: string[];
     guardian?: { id: string; name_en: string; relation: string; phone: string; user_id?: string | null } | null;
   };
   academic: {
@@ -374,6 +388,16 @@ export default function StudentProfilePage() {
 
   return (
     <PageWrapper>
+      {personal.missing_profile_fields.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>
+            <span className="font-semibold">Profile incomplete.</span> Missing: {personal.missing_profile_fields.join(", ")}.
+          </p>
+          <Link href={`/students/${id}/edit`}>
+            <Button size="sm" variant="outline" className="border-amber-400 bg-white">Complete profile</Button>
+          </Link>
+        </div>
+      )}
       <div className="flex items-start gap-4">
         <div className="flex h-24 w-20 items-center justify-center rounded-md border bg-muted text-2xl">
           {personal.photo_url ? <img src={personal.photo_url} alt="" className="h-full w-full rounded-md object-cover" /> : "👤"}
@@ -581,7 +605,14 @@ export default function StudentProfilePage() {
               <div><span className="text-muted-foreground">Religion:</span> {personal.religion ?? "—"}</div>
               <div><span className="text-muted-foreground">Blood Group:</span> {personal.blood_group ?? "—"}</div>
               <div><span className="text-muted-foreground">Phone:</span> {personal.phone ?? "—"}</div>
-              <div><span className="text-muted-foreground">Address:</span> {personal.address_permanent ?? "—"}</div>
+              <div>
+                <span className="text-muted-foreground">Present address:</span>{" "}
+                {[personal.present_house_name, personal.present_village, personal.address_current, personal.present_post_code, personal.present_district, personal.present_division].filter(Boolean).join(", ") || "—"}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Permanent address:</span>{" "}
+                {[personal.permanent_house_name, personal.permanent_village, personal.address_permanent, personal.permanent_post_code, personal.permanent_district, personal.permanent_division].filter(Boolean).join(", ") || "—"}
+              </div>
               <div className="flex items-center gap-2">
                 {personal.father_photo_url && (
                   // eslint-disable-next-line @next/next/no-img-element

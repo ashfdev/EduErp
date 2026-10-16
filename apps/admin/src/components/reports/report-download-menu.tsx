@@ -33,6 +33,25 @@ function fileNameFrom(header: unknown, fallback: string): string {
   return /filename="([^"]+)"/i.exec(header)?.[1] ?? fallback;
 }
 
+// Downloads a file from the API, keeping the server's file name. Returns false
+// when the server queued it as a background job (the caller is redirected).
+export async function downloadFromApi(
+  endpoint: string,
+  params: Params,
+  fallbackName: string,
+  router: { push: (href: string) => void },
+): Promise<boolean> {
+  const res = await api.get(endpoint, { params, responseType: "blob" });
+  if (await handleBatchDownloadResponse(res, router)) return false;
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileNameFrom(res.headers["content-disposition"], fallbackName);
+  a.click();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
 export function ReportDownloadMenu({
   endpoint,
   params,
@@ -55,17 +74,7 @@ export function ReportDownloadMenu({
   async function download(format: ReportFormat) {
     setBusy(format);
     try {
-      const res = await api.get(endpoint, { params: { ...params, format }, responseType: "blob" });
-      if (await handleBatchDownloadResponse(res, router)) {
-        toast.info(t("queued"));
-        return;
-      }
-      const url = URL.createObjectURL(res.data as Blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileNameFrom(res.headers["content-disposition"], `${fileName}.${format}`);
-      a.click();
-      URL.revokeObjectURL(url);
+      if (!(await downloadFromApi(endpoint, { ...params, format }, `${fileName}.${format}`, router))) toast.info(t("queued"));
     } catch (err) {
       toast.error((await extractBlobErrorMessage(err)) ?? t("failed"));
     } finally {

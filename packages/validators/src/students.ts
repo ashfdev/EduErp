@@ -87,6 +87,34 @@ export const createStudentSchema = z.object({
 });
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 
+// What the single Add Student form makes mandatory. Students created another way
+// (bulk import) may lack some of these and are shown as "incomplete" until filled in.
+export const STUDENT_PROFILE_REQUIRED_FIELDS = [
+  { key: "photo_url", label: "Photo" },
+  { key: "father_name", label: "Father's name" },
+  { key: "father_nid", label: "Father's NID" },
+  { key: "father_occupation", label: "Father's occupation" },
+  { key: "mother_name", label: "Mother's name" },
+  { key: "mother_phone", label: "Mother's phone" },
+  { key: "mother_nid", label: "Mother's NID" },
+  { key: "mother_occupation", label: "Mother's occupation" },
+  { key: "present_house_name", label: "Present address: house" },
+  { key: "present_village", label: "Present address: village" },
+  { key: "present_post_code", label: "Present address: post code" },
+  { key: "present_district", label: "Present address: district" },
+  { key: "present_division", label: "Present address: division" },
+  { key: "permanent_house_name", label: "Permanent address: house" },
+  { key: "permanent_village", label: "Permanent address: village" },
+  { key: "permanent_post_code", label: "Permanent address: post code" },
+  { key: "permanent_district", label: "Permanent address: district" },
+  { key: "permanent_division", label: "Permanent address: division" },
+] as const;
+export type StudentProfileField = (typeof STUDENT_PROFILE_REQUIRED_FIELDS)[number]["key"];
+
+export function missingStudentProfileFields(student: Partial<Record<StudentProfileField, string | null>>): string[] {
+  return STUDENT_PROFILE_REQUIRED_FIELDS.filter((f) => !student[f.key]?.trim()).map((f) => f.label);
+}
+
 export const updateStudentSchema = createStudentSchema.partial().omit({ academic_year_id: true });
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 

@@ -30,6 +30,7 @@ interface StudentRow {
   group?: { name_en: string } | null;
   guardian?: { phone: string } | null;
   _count: { documents: number };
+  missing_profile_fields?: string[];
   is_historical?: boolean;
   historical_year_label?: string;
 }
@@ -80,6 +81,7 @@ export default function StudentsPage() {
   // Status" (and each individual status) stays one click away.
   const [status, setStatus] = useState<string>("ACTIVE");
   const [gender, setGender] = useState<string>("");
+  const [incomplete, setIncomplete] = useState(() => searchParams.get("incomplete") === "1");
   const [programId, setProgramId] = useState<string>("");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [academicYearId, setAcademicYearId] = useState<string>("");
@@ -122,6 +124,7 @@ export default function StudentsPage() {
     program_id: isUniversity ? programId || undefined : undefined,
     department_id: isUniversity ? departmentId || undefined : undefined,
     academic_year_id: academicYearId || undefined,
+    incomplete: incomplete ? "true" : undefined,
   };
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -234,6 +237,14 @@ export default function StudentsPage() {
             <SelectItem value="OTHER">{t("genderOther")}</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={incomplete ? "incomplete" : "all"} onValueChange={(v) => { setIncomplete(v === "incomplete"); setPage(1); }}>
+          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("allProfiles")}</SelectItem>
+            <SelectItem value="incomplete">{t("incompleteProfiles")}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -283,6 +294,11 @@ export default function StudentsPage() {
                         <div className="font-medium">
                           {s.name_en}
                           {s._count.documents === 0 && <Badge variant="warning" className="ml-2">No documents</Badge>}
+                          {!!s.missing_profile_fields?.length && (
+                            <Badge variant="outline" className="ml-2 border-amber-400 text-amber-700" title={s.missing_profile_fields.join(", ")}>
+                              {t("incompleteBadge", { count: s.missing_profile_fields.length })}
+                            </Badge>
+                          )}
                         </div>
                         {s.name_bn && <div className="text-[11px] text-muted-foreground">{s.name_bn}</div>}
                       </TableCell>

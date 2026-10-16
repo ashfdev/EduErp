@@ -213,7 +213,10 @@
     "edit": "Edit",
     "previous": "Previous",
     "next": "Next",
-    "pageOf": "Page {page} of {totalPages}"
+    "pageOf": "Page {page} of {totalPages}",
+    "allProfiles": "All profiles",
+    "incompleteProfiles": "Incomplete profiles",
+    "incompleteBadge": "{count} missing"
   },
   "attendanceMark": {
     "title": "Mark Attendance",

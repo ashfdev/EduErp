@@ -98,6 +98,26 @@ export const csvUpload = multer({
   },
 });
 
+// Student bulk import: an .xlsx (the generated template) or a .csv.
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+export const spreadsheetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = file.originalname.toLowerCase();
+    cb(null, name.endsWith(".xlsx") || name.endsWith(".csv") || file.mimetype === XLSX_MIME || file.mimetype === "text/csv");
+  },
+});
+
+// An .xlsx is a zip archive; anything else with that extension is rejected before ExcelJS sees it.
+export function verifySpreadsheet(req: Request, _res: Response, next: NextFunction) {
+  const file = req.file;
+  if (file && file.originalname.toLowerCase().endsWith(".xlsx") && file.buffer.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
+    return next(badRequest("This .xlsx file is damaged or not really an Excel file"));
+  }
+  next();
+}
+
 // Document templates (HTML/CSS, read as text and stored directly in
 // DocumentTemplate columns — never blob-stored, so no magic-byte check
 // applies) get the spec's tighter 500KB cap, gated behind

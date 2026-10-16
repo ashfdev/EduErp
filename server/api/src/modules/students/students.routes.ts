@@ -1,18 +1,19 @@
 import { Router } from "express";
 import { z } from "zod";
-import { parse } from "csv-parse/sync";
 import type { Prisma } from "@education-erp/db";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../middleware/async-handler";
 import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
-import { csvUpload, documentUpload, verifyDocumentMagicBytes, imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
+import { documentUpload, verifyDocumentMagicBytes, imageUpload, verifyImageMagicBytes, spreadsheetUpload, verifySpreadsheet } from "../../middleware/upload";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
 import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
-import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema, createStudentLoginSchema } from "@education-erp/validators";
+import { missingStudentProfileFields, STUDENT_PROFILE_REQUIRED_FIELDS, type StudentProfileField, createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema, createStudentLoginSchema } from "@education-erp/validators";
 import { createWithUniqueStudentUid } from "../../utils/student-id.generator";
-import { resolveClassRef, resolveSectionRef, type ClassRef } from "../../utils/class-ref.resolver";
+import { type ClassRef } from "../../utils/class-ref.resolver";
+import { buildImportTemplate, normalizeRow, parseStudentSheet, type ImportContext } from "./student-import";
+import { getInstitutionBranding } from "../../services/pdf.service";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
 import { invoiceReadmissionFeeIfConfigured, formatFeePeriod, createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
@@ -54,6 +55,23 @@ const STUDENT_LIST_SELECT = {
   // Staff/Faculty (Plan Eight).
   _count: { select: { documents: true } },
 } as const;
+
+// Read only to work out what's missing; never sent to the list page as-is.
+const PROFILE_CHECK_SELECT = STUDENT_PROFILE_REQUIRED_FIELDS.reduce(
+  (acc, f) => ({ ...acc, [f.key]: true }),
+  {} as { [K in StudentProfileField]: true },
+);
+const STUDENT_LIST_WITH_PROFILE_SELECT = { ...STUDENT_LIST_SELECT, ...PROFILE_CHECK_SELECT };
+const INCOMPLETE_PROFILE_WHERE = {
+  OR: STUDENT_PROFILE_REQUIRED_FIELDS.flatMap((f) => [{ [f.key]: null }, { [f.key]: "" }]),
+} as Prisma.StudentWhereInput;
+
+function withProfileStatus<T extends Record<StudentProfileField, string | null>>(student: T) {
+  const missing = missingStudentProfileFields(student);
+  const listed: Partial<T> = { ...student };
+  for (const f of STUDENT_PROFILE_REQUIRED_FIELDS) delete listed[f.key];
+  return { ...(listed as Omit<T, StudentProfileField>), missing_profile_fields: missing };
+}
 
 // Historical-session lookup (Plan Fifteen, Phase B): when the caller selects
 // a past Academic Year (not the currently active one), resolve via
@@ -160,6 +178,7 @@ studentsRouter.get(
         // own academic_year_id, same relation-hop pattern already used for
         // program_id/department_id above.
         academic_year_id: z.string().optional(),
+        incomplete: z.enum(["true"]).optional(),
         page: z.coerce.number().int().min(1).default(1),
         limit: z.coerce.number().int().min(1).max(100).default(20),
       })
@@ -201,6 +220,7 @@ studentsRouter.get(
       ...(query.status && { status: query.status as never }),
       ...(query.gender && { gender: query.gender as never }),
       ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
+      AND: query.incomplete ? [INCOMPLETE_PROFILE_WHERE] : [],
     };
 
     if (query.search) {
@@ -228,7 +248,7 @@ studentsRouter.get(
       // Second tier = matches the broader "contains" net but NOT already
       // captured by the prefix tier, so nothing is ever double-counted
       // across the two fetches.
-      const restWhere = { ...baseWhere, AND: [{ OR: containsOr }, { NOT: { OR: prefixOr } }] };
+      const restWhere = { ...baseWhere, AND: [...baseWhere.AND, { OR: containsOr }, { NOT: { OR: prefixOr } }] };
 
       const [prefixTotal, restTotal] = await Promise.all([
         prisma.student.count({ where: prefixWhere }),
@@ -237,31 +257,31 @@ studentsRouter.get(
       const total = prefixTotal + restTotal;
       const skip = (query.page - 1) * query.limit;
 
-      let items: Prisma.StudentGetPayload<{ select: typeof STUDENT_LIST_SELECT }>[] = [];
+      let items: Prisma.StudentGetPayload<{ select: typeof STUDENT_LIST_WITH_PROFILE_SELECT }>[] = [];
       if (skip < prefixTotal) {
         const fromPrefix = await prisma.student.findMany({
-          where: prefixWhere, select: STUDENT_LIST_SELECT,
+          where: prefixWhere, select: STUDENT_LIST_WITH_PROFILE_SELECT,
           skip, take: query.limit, orderBy: { name_en: "asc" },
         });
         items = fromPrefix;
         const remaining = query.limit - fromPrefix.length;
         if (remaining > 0) {
           const fromRest = await prisma.student.findMany({
-            where: restWhere, select: STUDENT_LIST_SELECT,
+            where: restWhere, select: STUDENT_LIST_WITH_PROFILE_SELECT,
             skip: 0, take: remaining, orderBy: { name_en: "asc" },
           });
           items = [...items, ...fromRest];
         }
       } else {
         items = await prisma.student.findMany({
-          where: restWhere, select: STUDENT_LIST_SELECT,
+          where: restWhere, select: STUDENT_LIST_WITH_PROFILE_SELECT,
           skip: skip - prefixTotal, take: query.limit, orderBy: { name_en: "asc" },
         });
       }
 
       res.json({
         success: true,
-        data: items,
+        data: items.map(withProfileStatus),
         meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
       });
       return;
@@ -270,7 +290,7 @@ studentsRouter.get(
     const [items, total] = await Promise.all([
       prisma.student.findMany({
         where: baseWhere,
-        select: STUDENT_LIST_SELECT,
+        select: STUDENT_LIST_WITH_PROFILE_SELECT,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { created_at: "desc" },
@@ -280,7 +300,7 @@ studentsRouter.get(
 
     res.json({
       success: true,
-      data: items,
+      data: items.map(withProfileStatus),
       meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
     });
   }),
@@ -295,6 +315,7 @@ interface StudentsExportParams {
   gender?: string;
   program_id?: string;
   department_id?: string;
+  incomplete?: "true";
 }
 
 function buildStudentsExportWhere(params: StudentsExportParams) {
@@ -313,6 +334,7 @@ function buildStudentsExportWhere(params: StudentsExportParams) {
     ...(params.status && { status: params.status as never }),
     ...(params.gender && { gender: params.gender as never }),
     ...(Object.keys(currentClassFilter).length > 0 && { current_class: currentClassFilter }),
+    ...(params.incomplete && { AND: [INCOMPLETE_PROFILE_WHERE] }),
     ...(params.search && {
       OR: [
         { name_en: { contains: params.search, mode: "insensitive" as const } },
@@ -326,6 +348,7 @@ function buildStudentsExportWhere(params: StudentsExportParams) {
 
 const STUDENT_REPORT_SELECT = {
   ...STUDENT_LIST_SELECT,
+  ...PROFILE_CHECK_SELECT,
   gender: true,
   father_name: true,
   admission_date: true,
@@ -353,6 +376,7 @@ async function studentReportFilters(params: StudentsExportParams) {
     { label: "Status", value: params.status ? (STUDENT_STATUS_LABEL[params.status] ?? params.status) : "All" },
     params.gender && { label: "Gender", value: GENDER_LABEL[params.gender] ?? params.gender },
     params.search && { label: "Search", value: params.search },
+    params.incomplete && { label: "Profile", value: "Incomplete only" },
   ].filter((f): f is { label: string; value: string } => !!f);
   return { filters, className: klass?.name_en, sectionName: section?.name };
 }
@@ -394,6 +418,9 @@ async function buildStudentsReport(params: StudentsExportParams & { format?: Rep
       width: 11,
       tone: (s) => (s.status === "INACTIVE" || s.status === "EXPELLED" ? "bad" : s.status === "ACTIVE" ? undefined : "muted"),
     },
+    ...(params.incomplete
+      ? [{ header: "Missing details", value: (s: StudentReportRow) => missingStudentProfileFields(s).join(", "), width: 40, tone: () => "warn" as const }]
+      : []),
   ];
 
   return renderReport(
@@ -441,6 +468,7 @@ studentsRouter.get(
         // Department/Program filter (Plan Thirteen, Phase D fix).
         program_id: z.string().optional(),
         department_id: z.string().optional(),
+        incomplete: z.enum(["true"]).optional(),
         format: reportFormatSchema,
       })
       .parse(req.query);
@@ -707,6 +735,7 @@ studentsRouter.get(
       prisma.hostelAllocation.findFirst({ where: { student_id: student.id, is_active: true }, include: { room: { select: { room_no: true, block: { select: { name: true } } } } } }),
     ]);
 
+    const canEditStudents = (STUDENT_CRUD_ROLES as string[]).includes(req.user!.role);
     res.json({
       success: true,
       data: {
@@ -732,6 +761,22 @@ studentsRouter.get(
           address_permanent: student.address_permanent,
           address_current: student.address_current,
           district: student.district,
+          present_house_name: student.present_house_name,
+          present_village: student.present_village,
+          present_post_code: student.present_post_code,
+          present_district: student.present_district,
+          present_division: student.present_division,
+          permanent_house_name: student.permanent_house_name,
+          permanent_village: student.permanent_village,
+          permanent_post_code: student.permanent_post_code,
+          permanent_district: student.permanent_district,
+          permanent_division: student.permanent_division,
+          // NIDs are sensitive; only roles that can edit the student see them.
+          ...(canEditStudents && {
+            nid_or_birth_reg: student.nid_or_birth_reg,
+            father_nid: student.father_nid,
+            mother_nid: student.mother_nid,
+          }),
           has_disability: student.has_disability,
           disability_note: student.disability_note,
           status: student.status,
@@ -747,6 +792,7 @@ studentsRouter.get(
           // Powers the "No documents on file" warning badge (Plan Thirteen,
           // Phase N), mirroring Staff/Faculty's identical pattern (Plan Eight).
           documents_count: student._count.documents,
+          missing_profile_fields: missingStudentProfileFields(student),
         },
         academic: {
           current: {
@@ -1527,109 +1573,146 @@ function loadImportClassRefs(academicYearId: string): Promise<ClassRef[]> {
   });
 }
 
-studentsRouter.post(
-  "/bulk-import",
+async function loadImportContext(academicYearId: string): Promise<ImportContext> {
+  const classes = await loadImportClassRefs(academicYearId);
+  const groups = await prisma.group.findMany({ where: { class_id: { in: classes.map((c) => c.id) }, is_active: true }, select: { class_id: true, code: true } });
+  const groupsByClass = new Map<string, Set<string>>();
+  for (const g of groups) groupsByClass.set(g.class_id, (groupsByClass.get(g.class_id) ?? new Set()).add(g.code));
+  return { classes, groupsByClass };
+}
+
+const MAX_IMPORT_ROWS = 2000;
+
+studentsRouter.get(
+  "/bulk-import/template",
   authorize(STUDENT_CRUD_ROLES),
-  csvUpload.single("file"),
   asyncHandler(async (req, res) => {
-    if (!req.file) throw badRequest("A CSV file is required");
-    const academicYearId = typeof req.body?.academic_year_id === "string" ? req.body.academic_year_id : "";
-    if (!academicYearId) throw badRequest("Select an academic year before previewing");
-    const records: Record<string, string>[] = parse(req.file.buffer.toString("utf-8"), {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    });
-
-    const classes = await loadImportClassRefs(academicYearId);
-    const groupsByClass = await prisma.group.findMany({ where: { class_id: { in: classes.map((c) => c.id) }, is_active: true } });
-    const groupLookup = new Map(groupsByClass.map((g) => [`${g.class_id}:${g.code}`, g]));
-    const classesWithGroups = new Set(groupsByClass.map((g) => g.class_id));
-
-    const preview = records.map((row, index) => {
-      const errors: string[] = [];
-      const gender = (row.gender ?? "").toUpperCase();
-      if (!row.name_en) errors.push("name_en is required");
-      if (!["MALE", "FEMALE", "OTHER"].includes(gender)) errors.push("gender must be MALE/FEMALE/OTHER");
-      if (!row.father_phone || !/^01\d{9}$/.test(row.father_phone)) errors.push("father_phone must be 11 digits starting with 01");
-      // phone is optional (a row without it still imports fine — the
-      // student just won't get their own portal login, only the guardian's,
-      // same as leaving it blank on the manual Add Student form) but must be
-      // valid if present.
-      if (row.phone && !/^01\d{9}$/.test(row.phone)) errors.push("phone must be 11 digits starting with 01");
-
-      // `class`/`section` hold names; the older id columns are still accepted.
-      const classRaw = row.class || row.current_class_id;
-      const sectionRaw = row.section || row.current_section_id;
-      const cls = resolveClassRef(classes, classRaw);
-      const section = cls.match ? resolveSectionRef(cls.match, sectionRaw) : undefined;
-      if (cls.error) errors.push(cls.error);
-      if (section?.error) errors.push(section.error);
-      if (cls.match && classesWithGroups.has(cls.match.id)) {
-        if (!row.group_code) errors.push("this class has Groups/Streams defined — group_code is required");
-        else if (!groupLookup.has(`${cls.match.id}:${row.group_code}`)) errors.push(`group_code "${row.group_code}" not found for this class`);
-      }
-
-      return {
-        row: index + 1,
-        data: {
-          name_en: row.name_en,
-          name_bn: row.name_bn || undefined,
-          gender,
-          phone: row.phone || undefined,
-          father_name: row.father_name || undefined,
-          father_phone: row.father_phone,
-          current_class_id: cls.match?.id,
-          current_section_id: section?.match?.id,
-          group_code: row.group_code || undefined,
-          class_label: cls.match?.name_en ?? classRaw ?? "",
-          section_label: section?.match?.name ?? sectionRaw ?? "",
-        },
-        valid: errors.length === 0,
-        errors,
-      };
-    });
-
-    res.json({
-      success: true,
-      data: { total: preview.length, valid: preview.filter((p) => p.valid).length, preview },
+    const { academic_year_id } = z.object({ academic_year_id: z.string().min(1) }).parse(req.query);
+    const [ctx, year, branding] = await Promise.all([
+      loadImportContext(academic_year_id),
+      prisma.academicYear.findUnique({ where: { id: academic_year_id }, select: { label: true } }),
+      getInstitutionBranding(),
+    ]);
+    if (!year) throw notFound("Academic year not found");
+    const buffer = await buildImportTemplate({ ...ctx, yearLabel: year.label, institutionName: branding.name_en });
+    sendReport(res, {
+      buffer,
+      filename: reportFileName("Student Import Template", year.label) + ".xlsx",
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
   }),
 );
 
 studentsRouter.post(
+  "/bulk-import",
+  authorize(STUDENT_CRUD_ROLES),
+  spreadsheetUpload.single("file"),
+  verifySpreadsheet,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest("Choose an Excel (.xlsx) or CSV file");
+    const academicYearId = typeof req.body?.academic_year_id === "string" ? req.body.academic_year_id : "";
+    if (!academicYearId) throw badRequest("Select an academic year before previewing");
+
+    const records = await parseStudentSheet(req.file.buffer, req.file.originalname);
+    if (!records.length) throw badRequest("The file has no student rows — fill in the Students sheet of the template");
+    if (records.length > MAX_IMPORT_ROWS) throw badRequest(`Up to ${MAX_IMPORT_ROWS} students per file — split it into smaller files`);
+
+    const ctx = await loadImportContext(academicYearId);
+    // Row 1 is the header, so spreadsheet row numbers start at 2.
+    const preview = records.map((record, index) => normalizeRow(record, index + 2, ctx));
+
+    // Same student twice in the file, or already in the system (same name + father's phone).
+    const keyOf = (name?: string, phone?: string | null) => (name && phone ? `${name.trim().toLowerCase()}|${phone}` : null);
+    const phones = [...new Set(preview.map((p) => p.data.father_phone).filter((p): p is string => !!p))];
+    const existing = await prisma.student.findMany({
+      where: { deleted_at: null, father_phone: { in: phones } },
+      select: { name_en: true, father_phone: true, student_uid: true, current_class: { select: { name_en: true } } },
+    });
+    const existingByKey = new Map(existing.map((s) => [keyOf(s.name_en, s.father_phone), s]));
+    const firstRowByKey = new Map<string, number>();
+    for (const p of preview) {
+      const key = keyOf(p.data.name_en, p.data.father_phone);
+      if (!key) continue;
+      const already = existingByKey.get(key);
+      if (already) p.errors.push(`Already in the system as ${already.student_uid}${already.current_class ? ` (${already.current_class.name_en})` : ""}`);
+      const firstRow = firstRowByKey.get(key);
+      if (firstRow) p.errors.push(`Same student as row ${firstRow}`);
+      else firstRowByKey.set(key, p.row);
+    }
+
+    // Section capacity is a soft limit (see assertSectionCapacity), so this only warns.
+    const sectionIds = [...new Set(preview.map((p) => p.data.current_section_id).filter((id): id is string => !!id))];
+    const [sections, counts] = await Promise.all([
+      prisma.section.findMany({ where: { id: { in: sectionIds } }, select: { id: true, name: true, capacity: true, class: { select: { name_en: true } } } }),
+      prisma.student.groupBy({ by: ["current_section_id"], where: { current_section_id: { in: sectionIds }, deleted_at: null, status: "ACTIVE" }, _count: { _all: true } }),
+    ]);
+    const running = new Map(counts.map((c) => [c.current_section_id, c._count._all]));
+    const sectionById = new Map(sections.map((sec) => [sec.id, sec]));
+    for (const p of preview) {
+      const section = p.data.current_section_id ? sectionById.get(p.data.current_section_id) : undefined;
+      if (!section || p.errors.length) continue;
+      const next = (running.get(section.id) ?? 0) + 1;
+      running.set(section.id, next);
+      if (next > section.capacity) p.warnings.push(`${section.class.name_en} section ${section.name} will have ${next} students (capacity ${section.capacity})`);
+    }
+
+    for (const p of preview) p.valid = p.errors.length === 0;
+    res.json({
+      success: true,
+      data: {
+        total: preview.length,
+        valid: preview.filter((p) => p.valid).length,
+        incomplete: preview.filter((p) => p.valid && p.missing.length).length,
+        preview,
+      },
+    });
+  }),
+);
+
+const optionalText = z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().trim().max(300).optional());
+const optionalPhone = z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().regex(/^01\d{9}$/).optional());
+const optionalIsoDate = z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional());
+
+const importRowSchema = z.object({
+  name_en: z.string().trim().min(1),
+  name_bn: optionalText,
+  gender: z.enum(["MALE", "FEMALE", "OTHER"]),
+  current_class_id: z.string().min(1),
+  current_section_id: optionalText,
+  group_code: optionalText,
+  current_roll_no: optionalText,
+  date_of_birth: optionalIsoDate,
+  religion: optionalText,
+  blood_group: optionalText,
+  nid_or_birth_reg: optionalText,
+  phone: optionalPhone,
+  father_name: optionalText,
+  father_phone: z.string().regex(/^01\d{9}$/),
+  father_nid: optionalText,
+  father_occupation: optionalText,
+  mother_name: optionalText,
+  mother_phone: optionalPhone,
+  mother_nid: optionalText,
+  mother_occupation: optionalText,
+  present_house_name: optionalText,
+  present_village: optionalText,
+  present_post_code: optionalText,
+  present_district: optionalText,
+  present_division: optionalText,
+  permanent_house_name: optionalText,
+  permanent_village: optionalText,
+  permanent_post_code: optionalText,
+  permanent_district: optionalText,
+  permanent_division: optionalText,
+  admission_date: optionalIsoDate,
+  previous_institution: optionalText,
+});
+
+studentsRouter.post(
   "/bulk-import/confirm",
   authorize(STUDENT_CRUD_ROLES),
   asyncHandler(async (req, res) => {
-    const body = z
-      .object({
-        academic_year_id: z.string().min(1),
-        rows: z.array(
-          z.object({
-            name_en: z.string().min(1),
-            name_bn: z.string().optional(),
-            gender: z.enum(["MALE", "FEMALE", "OTHER"]),
-            // Optional, and deliberately conditional below — mirrors
-            // admission-enroll's own "only create a student login if a
-            // student phone was actually supplied" behavior exactly.
-            // Previously there was no column for this at all, meaning a
-            // CSV-imported student could NEVER get their own login (only
-            // the guardian's), unlike every other student-creation path.
-            // A blank CSV cell parses as "" (csv-parse never produces
-            // undefined), which would otherwise fail this field's own
-            // regex check even though it's meant to be optional —
-            // normalize "" to undefined first, live-caught while testing
-            // the identical pattern in the new staff bulk-import.
-            phone: z.preprocess((v) => (v === "" ? undefined : v), z.string().regex(/^01\d{9}$/).optional()),
-            father_name: z.string().optional(),
-            father_phone: z.string().regex(/^01\d{9}$/),
-            current_class_id: z.string().min(1),
-            current_section_id: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
-            group_code: z.string().optional(),
-          }),
-        ),
-      })
-      .parse(req.body);
+    const body = z.object({ academic_year_id: z.string().min(1), rows: z.array(importRowSchema).min(1).max(MAX_IMPORT_ROWS) }).parse(req.body);
 
     // Re-checked so a stale preview fails with a readable reason, not a raw Prisma foreign-key error.
     const classById = new Map((await loadImportClassRefs(body.academic_year_id)).map((c) => [c.id, c]));
@@ -1638,12 +1721,12 @@ studentsRouter.post(
     const failed: { row: number; reason: string }[] = [];
     const loginConflicts: { row: number; message: string }[] = [];
     let noOwnLoginCount = 0;
+    let incompleteCount = 0;
 
     // Sequential per-row loop with a bcrypt hash + a queued SMS added per
     // row (for the new guardian login) — fine for a realistic school import
     // (tens to low hundreds of rows), not built to guarantee no timeout on
-    // a multi-thousand-row CSV against this synchronous endpoint. Accepted
-    // as a known limit rather than building an async bulk-job system here.
+    // a multi-thousand-row file against this synchronous endpoint.
     for (const [index, row] of body.rows.entries()) {
       try {
         const cls = classById.get(row.current_class_id);
@@ -1662,6 +1745,7 @@ studentsRouter.post(
           if (hasGroups) throw new Error("this class has Groups/Streams defined — group_code is required");
         }
 
+        const { group_code: _groupCode, date_of_birth, admission_date, ...fields } = row;
         const { student, guardianLogin, studentLogin } = await createWithUniqueStudentUid(row.current_class_id, (student_uid) =>
           prisma.$transaction(async (tx) => {
           // Same guardian-dedup shape as the manual single-add path: reuse
@@ -1680,28 +1764,20 @@ studentsRouter.post(
             guardianId = guardian.id;
           }
 
-          // Same conditional-on-phone shape as admission-enroll — a CSV row
-          // with no phone column filled in still creates the student (guardian
-          // access still works), it just has no own login, same as today; a
-          // row that DOES supply a phone now gets one, closing the gap where
-          // this path could never create a student-role login at all.
+          // Same conditional-on-phone shape as admission-enroll — a row with
+          // no student phone still creates the student (guardian access still
+          // works), it just has no own login.
           const studentLoginResult = row.phone ? await createOrLinkPortalLogin(tx, { role: "STUDENT", phone: row.phone, name: row.name_en }) : null;
 
           const s = await tx.student.create({
             data: {
+              ...fields,
               user_id: studentLoginResult?.userId,
               student_uid,
-              name_en: row.name_en,
-              name_bn: row.name_bn,
-              gender: row.gender,
-              phone: row.phone,
               guardian_id: guardianId,
-              father_name: row.father_name,
-              father_phone: row.father_phone,
-              current_class_id: row.current_class_id,
-              current_section_id: row.current_section_id,
               group_id: groupId,
-              admission_date: new Date(),
+              date_of_birth: date_of_birth ? new Date(date_of_birth) : undefined,
+              admission_date: admission_date ? new Date(admission_date) : new Date(),
             },
           });
           await inheritSubjectsForClass(tx, s.id, row.current_class_id, body.academic_year_id, [], groupId);
@@ -1738,6 +1814,7 @@ studentsRouter.post(
 
         created.push(student.student_uid);
         if (!row.phone) noOwnLoginCount++;
+        if (missingStudentProfileFields(student).length) incompleteCount++;
       } catch (err) {
         failed.push({ row: index + 1, reason: err instanceof Error ? err.message : "Unknown error" });
       }
@@ -1748,15 +1825,14 @@ studentsRouter.post(
       data: {
         created: created.length,
         failed,
-        // Surfaced explicitly rather than left silent — a row with no phone
-        // column filled in still imports fine, but that student can only be
-        // reached via their guardian's login, not their own, until a phone
-        // is added later (e.g. via Edit Student).
+        // A row with no student phone still imports fine, but that student
+        // can only be reached via their guardian's login until a phone is added.
         no_own_login_count: noOwnLoginCount,
+        // Missing details the single Add Student form would have required (photo always, for bulk).
+        incomplete_count: incompleteCount,
         // A role-incompatible phone match (e.g. a staff account reused as a
-        // guardian's phone) never silently links -- the student/guardian row
-        // still imports, just with no working login, surfaced here instead
-        // of vanishing with no trace.
+        // guardian's phone) never silently links -- the row still imports,
+        // just with no working login, surfaced here instead of vanishing.
         login_conflicts: loginConflicts,
       },
     });

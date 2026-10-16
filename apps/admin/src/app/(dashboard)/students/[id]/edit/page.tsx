@@ -52,6 +52,19 @@ interface StudentProfile {
     address_permanent: string | null;
     address_current: string | null;
     district: string | null;
+    present_house_name: string | null;
+    present_village: string | null;
+    present_post_code: string | null;
+    present_district: string | null;
+    present_division: string | null;
+    permanent_house_name: string | null;
+    permanent_village: string | null;
+    permanent_post_code: string | null;
+    permanent_district: string | null;
+    permanent_division: string | null;
+    nid_or_birth_reg?: string | null;
+    father_nid?: string | null;
+    mother_nid?: string | null;
     has_disability: boolean;
     disability_note: string | null;
     father_name: string | null;
@@ -93,6 +106,19 @@ const emptyForm = {
   address_current: "",
   address_permanent: "",
   district: "",
+  present_house_name: "",
+  present_village: "",
+  present_post_code: "",
+  present_district: "",
+  present_division: "",
+  permanent_house_name: "",
+  permanent_village: "",
+  permanent_post_code: "",
+  permanent_district: "",
+  permanent_division: "",
+  nid_or_birth_reg: "",
+  father_nid: "",
+  mother_nid: "",
   has_disability: false,
   disability_note: "",
   father_name: "",
@@ -152,6 +178,19 @@ export default function EditStudentPage() {
       address_current: p.address_current ?? "",
       address_permanent: p.address_permanent ?? "",
       district: p.district ?? "",
+      present_house_name: p.present_house_name ?? "",
+      present_village: p.present_village ?? "",
+      present_post_code: p.present_post_code ?? "",
+      present_district: p.present_district ?? "",
+      present_division: p.present_division ?? "",
+      permanent_house_name: p.permanent_house_name ?? "",
+      permanent_village: p.permanent_village ?? "",
+      permanent_post_code: p.permanent_post_code ?? "",
+      permanent_district: p.permanent_district ?? "",
+      permanent_division: p.permanent_division ?? "",
+      nid_or_birth_reg: p.nid_or_birth_reg ?? "",
+      father_nid: p.father_nid ?? "",
+      mother_nid: p.mother_nid ?? "",
       has_disability: p.has_disability,
       disability_note: p.disability_note ?? "",
       father_name: p.father_name ?? "",
@@ -196,6 +235,18 @@ export default function EditStudentPage() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function copyPresentAddress() {
+    setForm((f) => ({
+      ...f,
+      address_permanent: f.address_current,
+      permanent_house_name: f.present_house_name,
+      permanent_village: f.present_village,
+      permanent_post_code: f.present_post_code,
+      permanent_district: f.present_district,
+      permanent_division: f.present_division,
+    }));
+  }
+
   const saveMutation = useMutation({
     mutationFn: (override?: boolean) =>
       api.put(`/api/students/${id}`, {
@@ -227,6 +278,19 @@ export default function EditStudentPage() {
         group_id: form.group_id || undefined,
         current_roll_no: form.current_roll_no || undefined,
         registration_no: form.registration_no || undefined,
+        present_house_name: form.present_house_name || undefined,
+        present_village: form.present_village || undefined,
+        present_post_code: form.present_post_code || undefined,
+        present_district: form.present_district || undefined,
+        present_division: form.present_division || undefined,
+        permanent_house_name: form.permanent_house_name || undefined,
+        permanent_village: form.permanent_village || undefined,
+        permanent_post_code: form.permanent_post_code || undefined,
+        permanent_district: form.permanent_district || undefined,
+        permanent_division: form.permanent_division || undefined,
+        nid_or_birth_reg: form.nid_or_birth_reg || undefined,
+        father_nid: form.father_nid || undefined,
+        mother_nid: form.mother_nid || undefined,
       }),
     onSuccess: () => {
       toast.success(classChanged ? `Student promoted to ${selectedClass?.name_en ?? "the new class"}` : "Student updated");
@@ -330,22 +394,21 @@ export default function EditStudentPage() {
               <div className="space-y-1.5"><Label>Student Phone (optional)</Label><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Other Phone</Label><Input value={form.other_phone} onChange={(e) => set("other_phone", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Passport No</Label><Input value={form.passport_no} onChange={(e) => set("passport_no", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Birth Registration / NID</Label><Input value={form.nid_or_birth_reg} onChange={(e) => set("nid_or_birth_reg", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>District</Label><Input value={form.district} onChange={(e) => set("district", e.target.value)} /></div>
-              <div />
-              <div className="col-span-2 space-y-1.5"><Label>Present Address</Label><Input value={form.address_current} onChange={(e) => set("address_current", e.target.value)} /></div>
-              <div className="col-span-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label>Permanent Address</Label>
-                  <button
-                    type="button"
-                    className="text-xs text-primary hover:underline"
-                    onClick={() => set("address_permanent", form.address_current)}
-                  >
+              <AddressFields title="Present Address" prefix="present" lineKey="address_current" form={form} set={set} />
+              <AddressFields
+                title="Permanent Address"
+                prefix="permanent"
+                lineKey="address_permanent"
+                form={form}
+                set={set}
+                action={
+                  <button type="button" className="text-xs text-primary hover:underline" onClick={copyPresentAddress}>
                     Same as Present Address
                   </button>
-                </div>
-                <Input value={form.address_permanent} onChange={(e) => set("address_permanent", e.target.value)} />
-              </div>
+                }
+              />
               <div className="col-span-2 flex items-center justify-between">
                 <Label>Has disability</Label>
                 <Switch checked={form.has_disability} onCheckedChange={(v) => set("has_disability", v)} />
@@ -362,6 +425,7 @@ export default function EditStudentPage() {
               <div className="space-y-1.5"><Label>Father&apos;s Name</Label><Input value={form.father_name} onChange={(e) => set("father_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Phone *</Label><Input value={form.father_phone} onChange={(e) => set("father_phone", e.target.value)} placeholder="01XXXXXXXXX" /></div>
               <div className="space-y-1.5"><Label>Father&apos;s Occupation</Label><Input value={form.father_occupation} onChange={(e) => set("father_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Father&apos;s NID</Label><Input value={form.father_nid} onChange={(e) => set("father_nid", e.target.value)} /></div>
               <div className="flex items-center gap-3">
                 {fatherPhotoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -381,6 +445,7 @@ export default function EditStudentPage() {
               <div className="space-y-1.5"><Label>Mother&apos;s Name</Label><Input value={form.mother_name} onChange={(e) => set("mother_name", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Phone</Label><Input value={form.mother_phone} onChange={(e) => set("mother_phone", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Mother&apos;s Occupation</Label><Input value={form.mother_occupation} onChange={(e) => set("mother_occupation", e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Mother&apos;s NID</Label><Input value={form.mother_nid} onChange={(e) => set("mother_nid", e.target.value)} /></div>
               <div className="flex items-center gap-3">
                 {motherPhotoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -473,5 +538,52 @@ export default function EditStudentPage() {
         }}
       />
     </PageWrapper>
+  );
+}
+
+type EditForm = typeof emptyForm;
+
+function AddressFields({
+  title,
+  prefix,
+  lineKey,
+  form,
+  set,
+  action,
+}: {
+  title: string;
+  prefix: "present" | "permanent";
+  lineKey: "address_current" | "address_permanent";
+  form: EditForm;
+  set: <K extends keyof EditForm>(key: K, value: EditForm[K]) => void;
+  action?: React.ReactNode;
+}) {
+  const field = (part: "house_name" | "village" | "post_code" | "district" | "division", label: string) => {
+    const key = `${prefix}_${part}` as const;
+    return (
+      <div className="space-y-1.5">
+        <Label>{label}</Label>
+        <Input value={form[key]} onChange={(e) => set(key, e.target.value)} />
+      </div>
+    );
+  };
+  return (
+    <div className="col-span-2 space-y-3 rounded-lg border p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">{title}</p>
+        {action}
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {field("house_name", "House / Road")}
+        {field("village", "Village / Area")}
+        <div className="col-span-2 space-y-1.5">
+          <Label>Additional address line</Label>
+          <Input value={form[lineKey]} onChange={(e) => set(lineKey, e.target.value)} />
+        </div>
+        {field("post_code", "Post Code")}
+        {field("district", "District")}
+        {field("division", "Division")}
+      </div>
+    </div>
   );
 }
