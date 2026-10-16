@@ -116,7 +116,7 @@ export const forgotPasswordLimiter = rateLimit({
 // Real gap found during a full-system security audit (2026-08-09) — the OTP
 // itself is only a 6-digit code (900,000 possible values) valid for 10
 // minutes (see auth.routes.ts's RESET_TOKEN_TTL / OTP flow), but /verify-otp
-// had no dedicated limiter of its own — only the generic 60/min-per-IP
+// had no dedicated limiter of its own — only the generic per-user default
 // default applied, leaving it realistically brute-forceable within its own
 // validity window by an attacker rotating IPs. Keyed by phone, same
 // resource-not-caller pattern as forgotPasswordLimiter just above (which
@@ -141,9 +141,11 @@ export const otpVerifyLimiter = rateLimit({
 // claim directly (unverified — this is only a rate-limit bucketing key, not
 // an authorization decision; authenticate() still does the real signature
 // verification downstream) and falls back to IP for anonymous requests.
+// 300/min: one admin page load fires ~10 API calls, so the old 60/min
+// throttled staff who simply clicked through a few pages quickly.
 export const defaultApiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 60,
+  limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
   store: redisStore("rl:default:"),
