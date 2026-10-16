@@ -82,12 +82,12 @@ function HostelContent() {
       <FacilitiesSubNav />
 
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-violet-100 p-2.5 text-violet-600">
+        <div className="rounded-lg bg-lime/40 p-2.5 text-forest">
           <BedDouble className="h-6 w-6" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("title")}</h1>
-          <p className="text-sm text-slate-500">{t("subtitle")}</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
         </div>
       </div>
 
@@ -98,22 +98,22 @@ function HostelContent() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <Building className="h-5 w-5 text-slate-400" /> {t("availableRooms")}
+            <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <Building className="h-5 w-5 text-muted-foreground" /> {t("availableRooms")}
             </h2>
             {!rooms?.length && (
-              <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
-                <p className="text-sm font-medium text-slate-500">{t("noRooms")}</p>
+              <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">{t("noRooms")}</p>
               </div>
             )}
             {rooms?.map((r) => (
-              <Card key={r.id} className="border-slate-200 shadow-sm">
+              <Card key={r.id} className="border-border">
                 <CardContent className="p-5 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="font-bold text-slate-800">{r.block_name} — {r.room_no}</p>
+                    <p className="font-bold text-foreground">{r.block_name} — {r.room_no}</p>
                     <Badge variant="outline">{t("bedsFree", { count: r.beds_free })}</Badge>
                   </div>
-                  <p className="text-xs text-slate-400">{t("floor", { floor: r.floor })}{r.type ? ` · ${r.type}` : ""}</p>
+                  <p className="text-xs text-muted-foreground">{t("floor", { floor: r.floor })}{r.type ? ` · ${r.type}` : ""}</p>
                   <Button size="sm" disabled={hasPendingOrApproved} onClick={() => setSelectedRoom(r)}>
                     {t("requestButton")}
                   </Button>
@@ -123,20 +123,20 @@ function HostelContent() {
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-800">{t("myRequests")}</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("myRequests")}</h2>
             {!requests?.length && (
-              <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
-                <p className="text-sm font-medium text-slate-500">{t("noRequests")}</p>
+              <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">{t("noRequests")}</p>
               </div>
             )}
             {requests?.map((r) => (
-              <Card key={r.id} className="shadow-sm">
+              <Card key={r.id} className="">
                 <CardContent className="space-y-1.5 p-5">
                   <div className="flex items-center justify-between">
                     <Badge variant={statusVariant(r.status)}>{t(STATUS_KEY[r.status])}</Badge>
-                    <p className="text-xs text-slate-400">{t("requestedOn", { date: new Date(r.created_at).toLocaleDateString() })}</p>
+                    <p className="text-xs text-muted-foreground">{t("requestedOn", { date: new Date(r.created_at).toLocaleDateString() })}</p>
                   </div>
-                  <p className="text-sm font-semibold text-slate-700">{r.room.block.name} — {r.room.room_no}</p>
+                  <p className="text-sm font-semibold text-foreground">{r.room.block.name} — {r.room.room_no}</p>
                   {r.status === "REJECTED" && r.rejection_reason && (
                     <p className="text-sm text-rose-600">{t("rejectionReason", { reason: r.rejection_reason })}</p>
                   )}

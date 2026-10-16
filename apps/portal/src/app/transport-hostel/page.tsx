@@ -42,14 +42,14 @@ function TransportHostelContent() {
         <CardContent className="pt-6">
           <p className="mb-2 font-medium">{t("transport")}</p>
           {data?.transport ? (
-            <div className="text-sm text-gray-700">
+            <div className="text-sm text-foreground">
               <p>{t("route", { name: data.transport.route_name })}</p>
               <p>{t("pickupStop", { stop: data.transport.pickup_stop ?? t("notAvailable") })}</p>
               <p>{t("fare", { amount: data.transport.fare })}</p>
               <Link href="/bus-tracker" className="mt-1 inline-block text-xs text-[var(--primary,#1a3c4a)]">{t("trackBus")}</Link>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">{t("notAvailable")}</p>
+            <p className="text-sm text-muted-foreground">{t("notAvailable")}</p>
           )}
         </CardContent>
       </Card>
@@ -58,13 +58,13 @@ function TransportHostelContent() {
         <CardContent className="pt-6">
           <p className="mb-2 font-medium">{t("hostel")}</p>
           {data?.hostel ? (
-            <div className="text-sm text-gray-700">
+            <div className="text-sm text-foreground">
               <p>{t("block", { name: data.hostel.block_name })}</p>
               <p>{t("room", { room: data.hostel.room_no })} {data.hostel.bed_no && t("bed", { bed: data.hostel.bed_no })}</p>
               <p>{t("since", { date: new Date(data.hostel.from_date).toLocaleDateString() })}</p>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">{t("notAvailable")}</p>
+            <p className="text-sm text-muted-foreground">{t("notAvailable")}</p>
           )}
         </CardContent>
       </Card>

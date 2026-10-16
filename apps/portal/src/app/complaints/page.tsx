@@ -98,7 +98,7 @@ function ComplaintsContent() {
             </div>
             <p className="text-sm">{c.description}</p>
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</p>
               <Button size="sm" variant="outline" onClick={() => { setThreadId(c.id); setReply(""); }}>{t("viewThread")}</Button>
             </div>
           </CardContent>
@@ -139,15 +139,15 @@ function ComplaintsContent() {
               </div>
               <div className="max-h-64 space-y-2 overflow-y-auto">
                 {thread.messages.map((m) => (
-                  <div key={m.id} className="rounded-md bg-gray-50 p-2 text-sm">
-                    <div className="flex items-center justify-between text-xs text-gray-400">
-                      <span className="font-medium text-gray-700">{m.sender_name ?? "-"}</span>
+                  <div key={m.id} className="rounded-md bg-muted/50 p-2 text-sm">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{m.sender_name ?? "-"}</span>
                       <span>{new Date(m.created_at).toLocaleString()}</span>
                     </div>
                     <p className="mt-1">{m.message}</p>
                   </div>
                 ))}
-                {!thread.messages.length && <p className="text-sm text-gray-500">{t("noReplies")}</p>}
+                {!thread.messages.length && <p className="text-sm text-muted-foreground">{t("noReplies")}</p>}
               </div>
               {thread.status !== "CLOSED" ? (
                 <div className="space-y-1.5">
@@ -155,7 +155,7 @@ function ComplaintsContent() {
                   <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} />
                 </div>
               ) : (
-                <p className="text-xs text-gray-500">{t("closedNotice")}</p>
+                <p className="text-xs text-muted-foreground">{t("closedNotice")}</p>
               )}
             </div>
           )}

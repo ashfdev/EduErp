@@ -88,19 +88,16 @@ export default function TeacherProfilePage() {
 
   return (
     <TeacherShell>
-      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
-        
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-lg bg-forest p-6 sm:p-8 text-white">
         <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-          <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-bold text-white border border-white/10 shadow-sm">
+          <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-lg bg-white/20 flex items-center justify-center text-2xl font-bold text-white border border-white/10">
             {user?.name_en?.charAt(0) ?? "U"}
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               {t("title")}
             </h1>
-            <p className="mt-1 text-indigo-100 font-medium opacity-90">
+            <p className="mt-1 text-white/75 font-medium opacity-90">
               {user?.name_en}
             </p>
           </div>
@@ -109,22 +106,22 @@ export default function TeacherProfilePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <div className="md:col-span-4 space-y-6">
-          <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 uppercase tracking-wider">
+          <div className="rounded-lg border border-border bg-white p-6">
+            <h3 className="mb-4 text-sm font-bold text-foreground">
               Profile Details
             </h3>
             <div className="space-y-4">
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-400 uppercase">{t("name")}</span>
-                <span className="text-sm font-medium text-slate-800 mt-0.5">{user?.name_en}</span>
+                <span className="text-xs font-bold text-muted-foreground">{t("name")}</span>
+                <span className="text-sm font-medium text-foreground mt-0.5">{user?.name_en}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-400 uppercase">{t("phone")}</span>
-                <span className="text-sm font-medium text-slate-800 mt-0.5">{user?.phone}</span>
+                <span className="text-xs font-bold text-muted-foreground">{t("phone")}</span>
+                <span className="text-sm font-medium text-foreground mt-0.5">{user?.phone}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-400 uppercase">{t("role")}</span>
-                <span className="inline-flex mt-1 items-center rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 w-fit capitalize">
+                <span className="text-xs font-bold text-muted-foreground">{t("role")}</span>
+                <span className="inline-flex mt-1 items-center rounded-lg bg-forest/5 px-2.5 py-1 text-xs font-bold text-forest w-fit capitalize">
                   {user?.role?.replace(/_/g, " ").toLowerCase()}
                 </span>
               </div>
@@ -133,14 +130,14 @@ export default function TeacherProfilePage() {
         </div>
 
         <div className="md:col-span-8 space-y-6">
-          <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
-              <h2 className="text-base font-bold text-slate-800">
+          <div className="rounded-lg border border-border bg-white overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 sm:px-6 py-4">
+              <h2 className="text-base font-bold text-foreground">
                 {t("myDocuments")}
               </h2>
               <button 
                 onClick={() => setUploadOpen(true)}
-                className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-2 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+                className="flex min-h-[40px] shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-bold text-white transition-colors hover:bg-primary/90"
               >
                 {t("uploadDocument")}
               </button>
@@ -151,13 +148,13 @@ export default function TeacherProfilePage() {
               )}
               <div className="space-y-3">
                 {documents?.map((d) => (
-                  <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
+                  <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-all hover:border-primary/20 hover:bg-muted/50">
                     <div>
-                      <p className="font-bold text-slate-800 text-sm flex flex-wrap items-center gap-2 break-words">
+                      <p className="font-bold text-foreground text-sm flex flex-wrap items-center gap-2 break-words">
                         {d.title}
-                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{d.doc_type}</span>
+                        <span className="text-[10px] font-bold text-forest bg-forest/5 px-2 py-0.5 rounded-md">{d.doc_type}</span>
                       </p>
-                      <p className="text-xs font-medium text-slate-500 mt-1">{d.original_filename} • {new Date(d.uploaded_at).toLocaleDateString()}</p>
+                      <p className="text-xs font-medium text-muted-foreground mt-1">{d.original_filename} • {new Date(d.uploaded_at).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-4 mt-3 sm:mt-0">
                       <button onClick={() => download(d.id)} className="py-1 text-xs font-bold text-primary hover:underline">{t("download")}</button>
@@ -169,9 +166,9 @@ export default function TeacherProfilePage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
-              <h2 className="text-base font-bold text-slate-800">{t("myReviews")}</h2>
+          <div className="rounded-lg border border-border bg-white overflow-hidden">
+            <div className="border-b border-border bg-muted/50 px-4 sm:px-6 py-4">
+              <h2 className="text-base font-bold text-foreground">{t("myReviews")}</h2>
             </div>
             <div className="p-4">
               {!reviews?.length && (
@@ -179,19 +176,19 @@ export default function TeacherProfilePage() {
               )}
               <div className="space-y-3">
                 {reviews?.map((r) => (
-                  <div key={r.id} className="rounded-2xl border border-slate-100 p-4 hover:border-primary/20 hover:bg-slate-50 transition-all">
+                  <div key={r.id} className="rounded-lg border border-border p-4 hover:border-primary/20 hover:bg-muted/50 transition-all">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-slate-800 text-sm">{r.template.name} <span className="text-slate-400 font-medium mx-1">•</span> {r.review_period}</p>
+                      <p className="font-bold text-foreground text-sm">{r.template.name} <span className="text-muted-foreground font-medium mx-1">•</span> {r.review_period}</p>
                       <Badge variant={r.status === "ACKNOWLEDGED" ? "default" : "outline"} className={r.status === "ACKNOWLEDGED" ? "bg-emerald-500" : ""}>{r.status}</Badge>
                     </div>
                     {r.status !== "DRAFT" && (
                       <div className="mt-3">
-                        <p className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg inline-block mb-2">
+                        <p className="text-xs font-bold text-muted-foreground bg-muted px-3 py-1.5 rounded-lg inline-block mb-2">
                           {t("overallScore", { score: r.overall_score ?? 0 })}
                         </p>
-                        {r.overall_comments && <p className="text-sm text-slate-600 mt-1 italic">&ldquo;{r.overall_comments}&rdquo;</p>}
+                        {r.overall_comments && <p className="text-sm text-muted-foreground mt-1 italic">&ldquo;{r.overall_comments}&rdquo;</p>}
                         {r.status === "SUBMITTED" && (
-                          <Button size="sm" className="mt-4 rounded-xl font-bold" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
+                          <Button size="sm" className="mt-4 rounded-lg font-bold" onClick={() => acknowledgeMutation.mutate(r.id)} disabled={acknowledgeMutation.isPending}>
                             {t("acknowledge")}
                           </Button>
                         )}
@@ -206,12 +203,12 @@ export default function TeacherProfilePage() {
       </div>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-md rounded-3xl p-6">
-          <DialogHeader><DialogTitle className="text-xl font-bold text-slate-800">{t("uploadDocumentTitle")}</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-md rounded-lg p-6">
+          <DialogHeader><DialogTitle className="text-xl font-bold text-foreground">{t("uploadDocumentTitle")}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">{t("documentType")}</Label>
-              <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={docType} onChange={(e) => setDocType(e.target.value)}>
+              <Label className="text-xs font-bold text-muted-foreground">{t("documentType")}</Label>
+              <select className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" value={docType} onChange={(e) => setDocType(e.target.value)}>
                 <option value="CERTIFICATE">{t("docCertificate")}</option>
                 <option value="NID">{t("docNid")}</option>
                 <option value="TIN">{t("docTin")}</option>
@@ -220,16 +217,16 @@ export default function TeacherProfilePage() {
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">{t("titleLabel")}</Label>
-              <Input className="rounded-xl border-slate-200 bg-slate-50 font-medium px-4 py-2.5" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("titlePlaceholder")} />
+              <Label className="text-xs font-bold text-muted-foreground">{t("titleLabel")}</Label>
+              <Input className="rounded-lg border-border bg-muted/50 font-medium px-4 py-2.5" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("titlePlaceholder")} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-500 uppercase">{t("file")}</Label>
-              <Input className="rounded-xl border-slate-200 bg-slate-50 cursor-pointer file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-bold file:text-white" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <Label className="text-xs font-bold text-muted-foreground">{t("file")}</Label>
+              <Input className="rounded-lg border-border bg-muted/50 cursor-pointer file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-bold file:text-white" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </div>
           </div>
           <DialogFooter className="mt-6">
-            <Button className="w-full rounded-xl font-bold py-6 text-base" onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !title || !file}>
+            <Button className="w-full rounded-lg font-bold py-6 text-base" onClick={() => uploadMutation.mutate()} disabled={uploadMutation.isPending || !title || !file}>
               {uploadMutation.isPending ? t("uploading") : t("upload")}
             </Button>
           </DialogFooter>

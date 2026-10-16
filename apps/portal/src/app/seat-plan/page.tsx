@@ -54,27 +54,27 @@ function SeatPlanContent() {
               {s.exam.status === "PUBLISHED" && <Badge variant="outline">{t("resultPublished")}</Badge>}
             </div>
             {s.session && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {s.session.label} — {new Date(s.session.date).toLocaleDateString()} · {s.session.start_time}–{s.session.end_time}
               </p>
             )}
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3 text-sm">
               <div>
-                <p className="text-xs uppercase text-gray-500">{t("hall")}</p>
+                <p className="text-xs uppercase text-muted-foreground">{t("hall")}</p>
                 <p className="font-semibold">{s.hall?.name ?? s.hall_name ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs uppercase text-gray-500">{t("roomFloor")}</p>
+                <p className="text-xs uppercase text-muted-foreground">{t("roomFloor")}</p>
                 <p className="font-semibold">
                   {[s.hall?.room_number && `${t("room")} ${s.hall.room_number}`, s.hall?.floor].filter(Boolean).join(", ") || "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase text-gray-500">{t("row")}</p>
+                <p className="text-xs uppercase text-muted-foreground">{t("row")}</p>
                 <p className="font-semibold">{s.row_number ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs uppercase text-gray-500">{t("seat")}</p>
+                <p className="text-xs uppercase text-muted-foreground">{t("seat")}</p>
                 <p className="font-semibold">{s.seat_in_row ?? s.seat_number ?? "—"}</p>
               </div>
             </div>

@@ -4,7 +4,9 @@
     "language": "Language",
     "logout": "Log out",
     "save": "Save",
-    "logOut": "Log out"
+    "logOut": "Log out",
+    "back": "Back",
+    "portalName": "Teacher Portal"
   },
   "nav": {
     "home": "Home",
@@ -27,7 +29,10 @@
     "signingIn": "Signing in...",
     "signIn": "Sign In",
     "invalidCredentials": "Invalid phone/email or password.",
-    "poweredBy": "Powered by AshDevs"
+    "poweredBy": "Powered by AshDevs",
+    "show": "Show password",
+    "hide": "Hide password",
+    "help": "Trouble signing in? Contact the institution office."
   },
   "home": {
     "welcome": "Welcome, {name}",

@@ -519,7 +519,7 @@ export default function TeacherMarkEntryGridPage() {
                         onClick={() => setMobileSubjectId(s.id)}
                         className={`relative shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
                           hasOverCap ? "ring-2 ring-red-500 ring-offset-1 " : ""
-                        }${active ? "border-primary bg-primary text-primary-foreground" : "border-slate-200 bg-white text-slate-600"}`}
+                        }${active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-white text-muted-foreground"}`}
                       >
                         {s.name_en}
                         {hasOverCap && (
@@ -530,14 +530,14 @@ export default function TeacherMarkEntryGridPage() {
                   })}
                 </div>
               )}
-              <div className="rounded-xl border bg-card p-3 text-sm font-bold text-muted-foreground">
+              <div className="rounded-lg border bg-card p-3 text-sm font-bold text-muted-foreground">
                 {renderSubjectHeading(mobileSubject)}
               </div>
-              <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+              <ul className="divide-y overflow-hidden rounded-lg border bg-card">
                 {data.students.map((st) => (
                   <li key={st.id} className="p-3">
                     <div className="mb-1.5 flex items-start gap-3">
-                      <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
+                      <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-muted px-1.5 text-xs font-bold text-muted-foreground">
                         {st.current_roll_no ?? "—"}
                       </span>
                       <p className="min-w-0 flex-1 break-words pt-0.5 text-sm font-medium leading-snug">{st.name_en}</p>
@@ -600,7 +600,7 @@ export default function TeacherMarkEntryGridPage() {
         {data && data.subjects.length > 0 && data.students.length > 0 && data.subjects.some(effectiveEditable) && (
           // Pinned to the bottom of the screen on a phone (button full-width
           // under the status badges); the original inline row from sm: up.
-          <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+          <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center gap-2 border-t border-border bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:gap-3 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
             <Button className="order-last h-11 w-full sm:order-none sm:h-9 sm:w-auto" onClick={handleSubmit} disabled={submitMutation.isPending || !Object.keys(edits).length || overCapCells.size > 0}>
               {submitMutation.isPending ? t("submitting") : t("submitMarks")}
             </Button>

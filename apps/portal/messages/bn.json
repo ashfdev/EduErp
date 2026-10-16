@@ -8,7 +8,9 @@
     "resultNotFound": "ফলাফল পাওয়া যায়নি।",
     "loadError": "লোড করা যায়নি",
     "loadErrorDetail": "এই পেজ লোড করতে সমস্যা হয়েছে। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।",
-    "retry": "আবার চেষ্টা করুন"
+    "retry": "আবার চেষ্টা করুন",
+    "switchStudent": "শিক্ষার্থী বদলান",
+    "portalName": "স্টুডেন্ট পোর্টাল"
   },
   "nav": {
     "home": "হোম",
@@ -33,7 +35,10 @@
     "signingIn": "সাইন ইন হচ্ছে...",
     "signIn": "সাইন ইন",
     "invalidCredentials": "স্টুডেন্ট আইডি / ফোন অথবা পাসওয়ার্ড সঠিক নয়।",
-    "poweredBy": "Powered by AshDevs"
+    "poweredBy": "Powered by AshDevs",
+    "show": "পাসওয়ার্ড দেখান",
+    "hide": "পাসওয়ার্ড লুকান",
+    "help": "লগইনে সমস্যা হলে প্রতিষ্ঠানের অফিসে যোগাযোগ করুন।"
   },
   "home": {
     "goodMorning": "শুভ সকাল",

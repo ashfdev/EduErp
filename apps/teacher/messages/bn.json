@@ -4,7 +4,9 @@
     "language": "ভাষা",
     "logout": "লগ আউট",
     "save": "সংরক্ষণ করুন",
-    "logOut": "লগ আউট"
+    "logOut": "লগ আউট",
+    "back": "পেছনে",
+    "portalName": "টিচার পোর্টাল"
   },
   "nav": {
     "home": "হোম",
@@ -27,7 +29,10 @@
     "signingIn": "সাইন ইন হচ্ছে...",
     "signIn": "সাইন ইন",
     "invalidCredentials": "ফোন/ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।",
-    "poweredBy": "Powered by AshDevs"
+    "poweredBy": "Powered by AshDevs",
+    "show": "পাসওয়ার্ড দেখান",
+    "hide": "পাসওয়ার্ড লুকান",
+    "help": "লগইনে সমস্যা হলে প্রতিষ্ঠানের অফিসে যোগাযোগ করুন।"
   },
   "home": {
     "welcome": "স্বাগতম, {name}",

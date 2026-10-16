@@ -108,20 +108,20 @@ function AttendanceContent() {
     <div className="space-y-6 lg:space-y-8 max-w-5xl mx-auto w-full lg:px-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-purple-100 p-2.5 text-purple-600">
+          <div className="rounded-lg bg-lime/40 p-2.5 text-forest">
             <CalendarDays className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("title")}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
         </div>
         
-        <div className="flex bg-slate-100 p-1 rounded-full w-max">
-          <button onClick={() => setTab("monthly")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "monthly" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+        <div className="flex bg-muted p-1 rounded-full w-max">
+          <button onClick={() => setTab("monthly")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "monthly" ? "bg-white text-primary" : "text-muted-foreground hover:text-foreground"}`}>
             {t("monthly")}
           </button>
-          <button onClick={() => setTab("yearly")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "yearly" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+          <button onClick={() => setTab("yearly")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "yearly" ? "bg-white text-primary" : "text-muted-foreground hover:text-foreground"}`}>
             {t("yearly")}
           </button>
-          <button onClick={() => setTab("subjects")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "subjects" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+          <button onClick={() => setTab("subjects")} className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${tab === "subjects" ? "bg-white text-primary" : "text-muted-foreground hover:text-foreground"}`}>
             By Subject
           </button>
         </div>
@@ -130,7 +130,7 @@ function AttendanceContent() {
       {tab === "monthly" && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
           <div className="lg:col-span-3 space-y-6">
-            <Card className="border-0 shadow-sm overflow-hidden">
+            <Card className="border-0 overflow-hidden">
               <CardContent className="p-0">
                 <div className="flex items-center justify-between bg-primary p-4 sm:p-6 text-primary-foreground">
                   <button onClick={() => { if (month === 0) { setMonth(11); setYear((y) => y - 1); } else setMonth((m) => m - 1); }} className="p-2 rounded-full hover:bg-white/10 transition-colors">
@@ -145,7 +145,7 @@ function AttendanceContent() {
                 <div className="p-4 sm:p-6 bg-white">
                   <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center mb-2">
                     {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-                      <div key={d} className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider py-2">{d}</div>
+                      <div key={d} className="text-[10px] sm:text-xs font-bold text-muted-foreground py-2">{d}</div>
                     ))}
                   </div>
                   
@@ -163,12 +163,12 @@ function AttendanceContent() {
                       
                       return (
                         <div key={day} className="aspect-square relative p-0.5 sm:p-1">
-                          <div className={`w-full h-full flex flex-col items-center justify-center rounded-xl transition-all ${
-                            style ? style.bg : "bg-slate-50 text-slate-400"
+                          <div className={`w-full h-full flex flex-col items-center justify-center rounded-lg transition-all ${
+                            style ? style.bg : "bg-muted/50 text-muted-foreground"
                           } ${isToday ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
                             <span className={`text-sm sm:text-lg font-bold ${style ? style.text : ''}`}>{day}</span>
                             {style && (
-                              <div className="block absolute bottom-1 text-[8px] font-bold uppercase tracking-wider opacity-70">
+                              <div className="block absolute bottom-1 text-[8px] font-bold opacity-70">
                                 {style.label.substring(0,3)}
                               </div>
                             )}
@@ -183,54 +183,54 @@ function AttendanceContent() {
           </div>
           
           <div className="lg:col-span-2 space-y-4">
-            <h3 className="font-bold text-slate-800 text-lg">Monthly Summary</h3>
+            <h3 className="font-bold text-foreground text-lg">Monthly Summary</h3>
             
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+            <Card className="border-0 bg-lime text-forest">
               <CardContent className="p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-emerald-100 font-medium text-sm">Attendance Rate</p>
+                  <p className="text-forest/75 font-semibold text-sm">Attendance Rate</p>
                   <p className="text-4xl font-bold mt-1">{percentage}%</p>
                 </div>
-                <div className="h-16 w-16 rounded-full bg-emerald-400/30 flex items-center justify-center">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-100" />
+                <div className="h-16 w-16 rounded-full bg-forest flex items-center justify-center">
+                  <CheckCircle2 className="h-8 w-8 text-lime" />
                 </div>
               </CardContent>
             </Card>
 
             <div className="grid grid-cols-2 gap-3">
-              <Card className="border-0 shadow-sm bg-emerald-50">
+              <Card className="border-0 bg-emerald-50">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-emerald-700">{summary.P}</p>
-                  <p className="text-xs font-bold text-emerald-600/70 uppercase tracking-wider mt-1">{t("present")}</p>
+                  <p className="text-xs font-bold text-emerald-600/70 mt-1">{t("present")}</p>
                 </CardContent>
               </Card>
-              <Card className="border-0 shadow-sm bg-rose-50">
+              <Card className="border-0 bg-rose-50">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-rose-700">{summary.A}</p>
-                  <p className="text-xs font-bold text-rose-600/70 uppercase tracking-wider mt-1">{t("absent")}</p>
+                  <p className="text-xs font-bold text-rose-600/70 mt-1">{t("absent")}</p>
                 </CardContent>
               </Card>
-              <Card className="border-0 shadow-sm bg-amber-50">
+              <Card className="border-0 bg-amber-50">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-amber-700">{summary.L}</p>
-                  <p className="text-xs font-bold text-amber-600/70 uppercase tracking-wider mt-1">{t("late")}</p>
+                  <p className="text-xs font-bold text-amber-600/70 mt-1">{t("late")}</p>
                 </CardContent>
               </Card>
-              <Card className="border-0 shadow-sm bg-slate-50">
+              <Card className="border-0 bg-muted/50">
                 <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold text-slate-700">{summary.total}</p>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1">{t("total")}</p>
+                  <p className="text-2xl font-bold text-foreground">{summary.total}</p>
+                  <p className="text-xs font-bold text-muted-foreground mt-1">{t("total")}</p>
                 </CardContent>
               </Card>
             </div>
             
-            <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-white">
-               <p className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-wider">Legend</p>
+            <div className="mt-4 p-4 rounded-lg border border-border bg-white">
+               <p className="text-xs font-bold text-muted-foreground uppercase mb-3 tracking-wider">Legend</p>
                <div className="flex flex-wrap gap-x-2 gap-y-1.5 sm:gap-x-3 sm:gap-y-2">
                  {Object.values(STATUS_STYLES).map(s => (
                    <div key={s.label} className="flex items-center gap-1.5">
                      <div className={`h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full ${s.bg}`}></div>
-                     <span className="text-[10px] sm:text-xs font-medium text-slate-600 whitespace-nowrap">{s.label}</span>
+                     <span className="text-[10px] sm:text-xs font-medium text-muted-foreground whitespace-nowrap">{s.label}</span>
                    </div>
                  ))}
                </div>
@@ -241,22 +241,22 @@ function AttendanceContent() {
 
       {tab === "yearly" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {!monthlyStats.length && <p className="col-span-full text-slate-500 p-8 text-center bg-slate-50 rounded-2xl border border-dashed">No data available for this year.</p>}
+          {!monthlyStats.length && <p className="col-span-full text-muted-foreground p-8 text-center bg-muted/50 rounded-lg border border-dashed">No data available for this year.</p>}
           {monthlyStats.map(([key, stat]) => {
             const [y, m] = key.split("-").map(Number);
             const rate = stat.total ? Math.round((stat.present / stat.total) * 100) : 0;
             return (
-              <Card key={key} className="border-0 shadow-sm">
+              <Card key={key} className="border-0">
                 <CardContent className="p-5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                     <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
+                     <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase">
                         {new Date(y!, m!).toLocaleDateString("en-US", { month: "short" })}
                      </div>
-                     <span className="font-bold text-slate-700">{y}</span>
+                     <span className="font-bold text-foreground">{y}</span>
                   </div>
                   <div className="text-right">
                     <span className={`text-xl font-bold ${rate >= 90 ? 'text-emerald-600' : rate >= 75 ? 'text-amber-500' : 'text-rose-500'}`}>{rate}%</span>
-                    <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mt-0.5">Rate</p>
+                    <p className="text-[10px] text-muted-foreground font-medium mt-0.5">Rate</p>
                   </div>
                 </CardContent>
               </Card>
@@ -269,13 +269,13 @@ function AttendanceContent() {
         <div className="space-y-4">
           {!subjectSummary && <div className="flex justify-center p-8"><LoadingSpinner /></div>}
           {subjectSummary && !subjectSummary.subjects.length && (
-            <p className="rounded-2xl border border-dashed bg-slate-50 p-8 text-center text-slate-500">
+            <p className="rounded-lg border border-dashed bg-muted/50 p-8 text-center text-muted-foreground">
               No subjects found for this student this year.
             </p>
           )}
           {subjectSummary && !!subjectSummary.subjects.length && (
             <>
-              <Card className="border-0 shadow-sm bg-gradient-to-br from-primary to-indigo-600 text-white">
+              <Card className="border-0 bg-forest text-white">
                 <CardContent className="flex items-center justify-between p-6">
                   <div>
                     <p className="text-sm font-medium text-white/80">Overall (this year, all subjects)</p>
@@ -288,32 +288,32 @@ function AttendanceContent() {
                 {subjectSummary.subjects.map((s) => {
                   const isOpen = expandedSubjectId === s.subject_id;
                   return (
-                    <Card key={s.subject_id} className="border-0 shadow-sm overflow-hidden">
+                    <Card key={s.subject_id} className="border-0 overflow-hidden">
                       <button
                         type="button"
                         onClick={() => setExpandedSubjectId(isOpen ? null : s.subject_id)}
                         className="flex w-full items-center justify-between p-4 text-left"
                       >
                         <div>
-                          <p className="font-bold text-slate-800">{s.subject_name_en}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="font-bold text-foreground">{s.subject_name_en}</p>
+                          <p className="text-xs text-muted-foreground">
                             {s.percentage === null ? "No attendance recorded yet" : `${s.present} / ${s.total} sessions`}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           {s.percentage === null ? (
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">No data</span>
+                            <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">No data</span>
                           ) : (
                             <span className={`text-xl font-bold ${s.percentage >= 90 ? "text-emerald-600" : s.percentage >= 75 ? "text-amber-500" : "text-rose-500"}`}>{s.percentage}%</span>
                           )}
-                          <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`} />
                         </div>
                       </button>
                       {isOpen && (
-                        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+                        <div className="border-t border-border bg-muted/50 px-4 py-3">
                           {historyLoading && <div className="flex justify-center py-4"><LoadingSpinner /></div>}
                           {!historyLoading && !subjectHistory?.length && (
-                            <p className="py-2 text-center text-xs text-slate-500">No sessions recorded yet.</p>
+                            <p className="py-2 text-center text-xs text-muted-foreground">No sessions recorded yet.</p>
                           )}
                           {!historyLoading && !!subjectHistory?.length && (
                             <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
@@ -321,10 +321,10 @@ function AttendanceContent() {
                                 const style = STATUS_STYLES[h.status];
                                 return (
                                   <div key={`${h.date}-${h.period_no}-${i}`} className="flex items-center justify-between rounded-lg bg-white px-3 py-1.5 text-xs">
-                                    <span className="font-medium text-slate-600">
+                                    <span className="font-medium text-muted-foreground">
                                       {new Date(h.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} · Period {h.period_no}
                                     </span>
-                                    <span className={`rounded-full px-2 py-0.5 font-bold ${style ? `${style.bg} ${style.text}` : "bg-slate-100 text-slate-600"}`}>
+                                    <span className={`rounded-full px-2 py-0.5 font-bold ${style ? `${style.bg} ${style.text}` : "bg-muted text-muted-foreground"}`}>
                                       {style?.label ?? h.status}
                                     </span>
                                   </div>

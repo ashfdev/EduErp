@@ -96,7 +96,7 @@ function DocumentRequestsContent() {
             {r.status === "REJECTED" && r.rejection_reason && (
               <p className="text-sm text-red-600">{t("rejectionReason", { reason: r.rejection_reason })}</p>
             )}
-            <p className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString()}</p>
+            <p className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString()}</p>
             {r.status === "APPROVED" && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => preview(r.id, r.doc_type)}>{t("view")}</Button>

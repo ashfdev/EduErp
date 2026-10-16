@@ -165,7 +165,7 @@ function SubjectAttendanceContent() {
                   const v = Number(e.target.value);
                   setPickerDayOverride(v === naturalDayOfWeek ? null : v);
                 }}
-                className="block h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm sm:h-9 sm:w-56"
+                className="block h-11 w-full rounded-lg border border-border bg-white px-3 text-sm sm:h-9 sm:w-56"
               >
                 {DAY_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>{name}{idx === naturalDayOfWeek ? " (this date's day)" : ""}</option>
@@ -175,14 +175,14 @@ function SubjectAttendanceContent() {
           </div>
 
           {isBrowsingMakeup && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
               Showing {DAY_NAMES[pickerDayOfWeek]}&apos;s periods for a makeup class on {pickerDate}. Marking attendance
               here will be flagged as a makeup class.
             </div>
           )}
 
           {!daySlots.length && (
-            <p className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-lg border border-border bg-white p-8 text-center text-sm text-muted-foreground">
               You have no scheduled periods on this {isBrowsingMakeup ? DAY_NAMES[pickerDayOfWeek] : "date"}.
             </p>
           )}
@@ -193,21 +193,21 @@ function SubjectAttendanceContent() {
                 <Link
                   key={s.id}
                   href={`/attendance/subject?routine_slot_id=${s.id}&date=${pickerDate}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white p-4 transition-all hover:border-primary/20 hover:bg-forest/5"
                 >
                   <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                    <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                    <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-muted/50 text-muted-foreground">
                       <span className="text-[10px] font-bold uppercase">Period</span>
-                      <span className="text-base font-black leading-none">{s.period_no}</span>
+                      <span className="text-base font-bold leading-none">{s.period_no}</span>
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-slate-800">{s.subject?.name_en}</p>
-                      <p className="text-sm text-slate-500">
+                      <p className="font-bold text-foreground">{s.subject?.name_en}</p>
+                      <p className="text-sm text-muted-foreground">
                         {s.class.name_en}{s.section ? ` • Section ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
                       </p>
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs font-semibold text-slate-500">{s.start_time}–{s.end_time}</span>
+                  <span className="shrink-0 text-xs font-semibold text-muted-foreground">{s.start_time}–{s.end_time}</span>
                 </Link>
               ))}
             </div>
@@ -229,14 +229,14 @@ function SubjectAttendanceContent() {
             />
 
             {isMakeupClass && (
-              <div className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                 <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">Makeup Class</Badge>
                 This period is normally scheduled on {DAY_NAMES[data.slot.day_of_week]}, being marked here for {date}.
               </div>
             )}
 
             {alreadyMarked && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+              <div className="rounded-lg border border-forest/25 bg-forest/5 px-4 py-3 text-sm font-semibold text-forest">
                 Attendance already recorded for this period — saving again will update it.
               </div>
             )}
@@ -255,7 +255,7 @@ function SubjectAttendanceContent() {
             </div>
 
             {!data.students.length && (
-              <p className="rounded-2xl border border-slate-100 bg-white p-8 text-center text-sm text-muted-foreground">
+              <p className="rounded-lg border border-border bg-white p-8 text-center text-sm text-muted-foreground">
                 No students are enrolled in this subject for this section.
               </p>
             )}
@@ -264,10 +264,10 @@ function SubjectAttendanceContent() {
                 buttons fit beside the name) instead of the sideways-scrolling
                 table below. */}
             {!!data.students.length && (
-              <ul className="divide-y overflow-hidden rounded-2xl border bg-white sm:hidden">
+              <ul className="divide-y overflow-hidden rounded-lg border bg-white sm:hidden">
                 {data.students.map((s) => (
                   <li key={s.id} className="flex items-center gap-3 p-3">
-                    <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
+                    <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-muted px-1.5 text-xs font-bold text-muted-foreground">
                       {s.current_roll_no ?? "—"}
                     </span>
                     <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug">{s.name_en}</p>
@@ -279,7 +279,7 @@ function SubjectAttendanceContent() {
                           aria-label={`${s.name_en}: ${STATUS_NAME[status]}`}
                           aria-pressed={effectiveMarks[s.id] === status}
                           onClick={() => setMarks((prev) => ({ ...prev, [s.id]: status }))}
-                          className={`h-10 w-10 rounded-full border-2 text-xs font-bold transition-all active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-slate-200 bg-white text-slate-400"}`}
+                          className={`h-10 w-10 rounded-full border-2 text-xs font-bold transition-all active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-border bg-white text-muted-foreground"}`}
                         >
                           {STATUS_LABEL[status]}
                         </button>
@@ -291,7 +291,7 @@ function SubjectAttendanceContent() {
             )}
 
             {!!data.students.length && (
-              <div className="hidden overflow-hidden overflow-x-auto rounded-2xl border sm:block">
+              <div className="hidden overflow-hidden overflow-x-auto rounded-lg border sm:block">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50 text-left text-xs font-bold uppercase text-muted-foreground">
@@ -312,7 +312,7 @@ function SubjectAttendanceContent() {
                               aria-label={`${s.name_en}: ${STATUS_NAME[status]}`}
                               aria-pressed={effectiveMarks[s.id] === status}
                               onClick={() => setMarks((prev) => ({ ...prev, [s.id]: status }))}
-                              className={`h-8 w-8 rounded-full border-2 text-xs font-bold transition-all hover:scale-110 active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"}`}
+                              className={`h-8 w-8 rounded-full border-2 text-xs font-bold transition-all hover:scale-110 active:scale-95 ${effectiveMarks[s.id] === status ? STATUS_COLOR[status] : "border-border bg-white text-muted-foreground hover:border-border"}`}
                             >
                               {STATUS_LABEL[status]}
                             </button>
@@ -328,7 +328,7 @@ function SubjectAttendanceContent() {
             {/* Pinned to the bottom of the screen on a phone, plain
                 right-aligned button from sm: up — same as Daily Attendance. */}
             {!!data.students.length && (
-              <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+              <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-border bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
                 <p className="min-w-0 text-xs font-bold text-amber-700 sm:hidden">{unmarked} unmarked</p>
                 <Button className="h-11 min-w-0 flex-1 sm:h-9 sm:flex-none" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? "Saving..." : alreadyMarked ? "Update Attendance" : "Save Attendance"}

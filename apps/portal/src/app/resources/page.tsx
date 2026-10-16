@@ -63,18 +63,18 @@ function AssignmentSubmissionBlock({ resourceId, studentId }: { resourceId: stri
 
   return (
     <div className="mt-3 rounded-md border border-dashed p-3">
-      {submissionLoading && <p className="text-xs text-gray-400">{t("checkingSubmissionStatus")}</p>}
+      {submissionLoading && <p className="text-xs text-muted-foreground">{t("checkingSubmissionStatus")}</p>}
       {submissionError && <p className="text-xs text-destructive">{t("submissionStatusUnavailable")}</p>}
       {!submissionLoading && !submissionError && submission && (
         <div className="text-sm">
           <p>{t("submitted", { filename: submission.original_filename })} <Badge variant={submission.status === "GRADED" ? "default" : "outline"}>{submission.status}</Badge></p>
           {submission.status === "GRADED" && (
-            <p className="mt-1 text-xs text-gray-600">{t("grade", { grade: submission.grade ?? 0 })} {submission.feedback && `· ${submission.feedback}`}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t("grade", { grade: submission.grade ?? 0 })} {submission.feedback && `· ${submission.feedback}`}</p>
           )}
         </div>
       )}
       {!submissionLoading && !submissionError && !submission && (
-        <p className="text-xs text-gray-500">{t("notSubmitted")}</p>
+        <p className="text-xs text-muted-foreground">{t("notSubmitted")}</p>
       )}
       <div className="mt-2 flex items-center gap-2">
         <input ref={fileRef} type="file" className="text-xs" />
@@ -122,8 +122,8 @@ function ResourcesContent() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-medium">{r.title}</p>
-                {r.description && <p className="text-xs text-gray-500">{r.description}</p>}
-                <p className="mt-1 text-xs text-gray-400">
+                {r.description && <p className="text-xs text-muted-foreground">{r.description}</p>}
+                <p className="mt-1 text-xs text-muted-foreground">
                   {r.subject ? `${r.subject.name_en} · ` : ""}{r.teacher ? `${r.teacher.name_en} · ` : ""}
                   {new Date(r.created_at).toLocaleDateString()}
                   {r.due_date && ` · ${t("due", { date: new Date(r.due_date).toLocaleDateString() })}`}

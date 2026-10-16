@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { sideNavStyles } from "@education-erp/ui";
 import { Home, ClipboardList, CalendarDays, CalendarClock, CreditCard, Bell, ChevronDown, Building2, type LucideIcon } from "lucide-react";
 
 type NavLeaf = { href: string; icon: LucideIcon; key: string };
@@ -46,95 +47,58 @@ const ITEMS: NavEntry[] = [
   { href: "/notices", icon: Bell, key: "notices" },
 ];
 
-export function PortalNav({ isMobile }: { isMobile?: boolean }) {
+// Rendered inside the shared AppShell, both as the desktop sidebar and the phone drawer.
+export function PortalNav() {
   const pathname = usePathname();
   const t = useTranslations("nav");
-  const [manualExpand, setManualExpand] = useState(false);
-
-  if (!isMobile) {
-    return (
-      <nav className="flex-1 space-y-1 mt-6 px-3">
-        <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Main Menu</p>
-        {ITEMS.map((item) => {
-          if (isGroup(item)) {
-            const isChildActive = item.children.some((c) => pathname === c.href);
-            const expanded = manualExpand || isChildActive;
-            const Icon = item.icon;
-            return (
-              <div key={item.key}>
-                <button
-                  type="button"
-                  onClick={() => setManualExpand((v) => !v)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                    isChildActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                  }`}
-                >
-                  <Icon className={`h-5 w-5 ${isChildActive ? "text-primary" : "text-slate-500"}`} />
-                  <span className="flex-1 text-left">{t(item.key)}</span>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                </button>
-                {expanded && (
-                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-800 pl-3">
-                    {item.children.map((c) => {
-                      const isActive = pathname === c.href;
-                      return (
-                        <Link
-                          key={c.href}
-                          href={c.href}
-                          className={`block rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                            isActive ? "bg-primary text-white shadow-md shadow-primary/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"
-                          }`}
-                        >
-                          {t(c.key)}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                isActive
-                  ? "bg-primary text-white shadow-md shadow-primary/20"
-                  : "text-slate-400 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <Icon className={`h-5 w-5 ${isActive ? "text-white" : "text-slate-500"}`} />
-              {t(item.key)}
-            </Link>
-          );
-        })}
-      </nav>
-    );
-  }
+  // Per group, so opening one doesn't open the other.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   return (
-    <div className="flex w-full items-center justify-between px-2 py-2">
+    <nav className="flex flex-col gap-0.5">
       {ITEMS.map((item) => {
-        const href = isGroup(item) ? item.children[0]!.href : item.href;
-        const active = isGroup(item) ? item.children.some((c) => pathname === c.href) : pathname === item.href;
         const Icon = item.icon;
+        if (isGroup(item)) {
+          const hasActive = item.children.some((c) => pathname === c.href);
+          const open = expanded[item.key] ?? hasActive;
+          return (
+            <div key={item.key}>
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => ({ ...prev, [item.key]: !open }))}
+                aria-expanded={open}
+                className={sideNavStyles.group(hasActive)}
+              >
+                <span className="flex items-center gap-3">
+                  <Icon className={sideNavStyles.groupIcon(hasActive)} />
+                  {t(item.key)}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+              </button>
+              {open && (
+                <div className={sideNavStyles.children}>
+                  {item.children.map((c) => {
+                    const isActive = pathname === c.href;
+                    return (
+                      <Link key={c.href} href={c.href} aria-current={isActive ? "page" : undefined} className={sideNavStyles.link(isActive)}>
+                        {t(c.key)}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        const isActive = pathname === item.href;
         return (
-          <Link
-            key={isGroup(item) ? item.key : item.href}
-            href={href}
-            className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-xl py-2 text-[10px] transition-all ${
-              active ? "text-white font-bold bg-slate-800" : "text-slate-400 hover:bg-slate-800 hover:text-slate-300"
-            }`}
-          >
-            <Icon className={`h-5 w-5 ${active ? "text-primary" : ""}`} strokeWidth={active ? 2.5 : 2} />
+          <Link key={item.href} href={item.href} aria-current={isActive ? "page" : undefined} className={sideNavStyles.link(isActive)}>
+            <Icon className={sideNavStyles.icon(isActive)} />
             {t(item.key)}
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }

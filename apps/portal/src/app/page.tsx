@@ -83,22 +83,22 @@ function HomeContent() {
   const greeting = now.getHours() < 12 ? t("goodMorning") : now.getHours() < 17 ? t("goodAfternoon") : t("goodEvening");
 
   const quickLinks = [
-    { href: "/subjects", icon: BookOpen, label: t("mySubjects", { className: terms.term_class }), color: "text-blue-600", bg: "bg-blue-50" },
-    { href: "/routine", icon: CalendarClock, label: t("routine"), color: "text-violet-600", bg: "bg-violet-50" },
-    { href: "/seat-plan", icon: Armchair, label: t("seatPlan"), color: "text-cyan-600", bg: "bg-cyan-50" },
-    { href: "/transport-hostel", icon: Bus, label: t("transportHostel"), color: "text-amber-600", bg: "bg-amber-50" },
-    { href: "/resources", icon: FolderOpen, label: t("resources"), color: "text-emerald-600", bg: "bg-emerald-50" },
-    { href: "/ptm", icon: Users, label: t("ptm"), color: "text-purple-600", bg: "bg-purple-50" },
-    { href: "/quizzes", icon: HelpCircle, label: t("quizzes"), color: "text-pink-600", bg: "bg-pink-50" },
-    { href: "/document-requests", icon: FileText, label: t("documentRequests"), color: "text-indigo-600", bg: "bg-indigo-50" },
-    { href: "/complaints", icon: AlertCircle, label: t("complaints"), color: "text-rose-600", bg: "bg-rose-50" },
+    { href: "/subjects", icon: BookOpen, label: t("mySubjects", { className: terms.term_class }) },
+    { href: "/routine", icon: CalendarClock, label: t("routine") },
+    { href: "/seat-plan", icon: Armchair, label: t("seatPlan") },
+    { href: "/transport-hostel", icon: Bus, label: t("transportHostel") },
+    { href: "/resources", icon: FolderOpen, label: t("resources") },
+    { href: "/ptm", icon: Users, label: t("ptm") },
+    { href: "/quizzes", icon: HelpCircle, label: t("quizzes") },
+    { href: "/document-requests", icon: FileText, label: t("documentRequests") },
+    { href: "/complaints", icon: AlertCircle, label: t("complaints") },
   ];
 
   return (
     <div className="space-y-6 lg:space-y-8 pb-8 lg:pb-0">
       {/* Profile Header */}
       <div className="flex items-center gap-4">
-        <div className="h-14 w-14 overflow-hidden rounded-2xl bg-slate-100 shadow-sm ring-1 ring-slate-200">
+        <div className="h-14 w-14 overflow-hidden rounded-lg bg-muted ring-1 ring-border">
           {data.student.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={data.student.photo} alt="" className="h-full w-full object-cover" />
@@ -112,13 +112,13 @@ function HomeContent() {
           <p className="text-sm font-medium text-muted-foreground">{greeting},</p>
           <p className="text-xl font-bold tracking-tight text-foreground line-clamp-2 leading-tight">{data.student.name}</p>
         </div>
-        <Link href="/profile" className="flex h-9 items-center rounded-full bg-slate-100 px-4 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200">
+        <Link href="/profile" className="flex h-9 items-center rounded-full bg-muted px-4 text-xs font-semibold text-foreground transition-colors hover:bg-secondary">
           {t("viewProfile")}
         </Link>
       </div>
 
       {/* Class Info & Today's Attendance */}
-      <Card className="border-0 bg-gradient-to-br from-primary to-indigo-700 text-white shadow-md">
+      <Card className="border-0 bg-forest text-white">
         <CardContent className="flex items-center justify-between p-5">
           <div className="space-y-1">
             <p className="font-semibold">{data.student.class} {data.student.section && `· ${terms.term_section} ${data.student.section}`}</p>
@@ -126,9 +126,9 @@ function HomeContent() {
           </div>
           <div className="text-right">
             <p className="mb-1 text-xs font-medium text-white/80">{t("today")}</p>
-            <div className="inline-flex rounded-full bg-white/20 px-2.5 py-1 backdrop-blur-sm">
+            <div className="inline-flex rounded-full bg-white/20 px-2.5 py-1">
               {data.attendance.today_status === "NOT_MARKED" ? (
-                <Badge variant="outline">{t("attendanceNotMarked")}</Badge>
+                <Badge variant="outline" className="border-white/40 text-white">{t("attendanceNotMarked")}</Badge>
               ) : (
                 <StatusBadge status={data.attendance.today_status} />
               )}
@@ -145,68 +145,54 @@ function HomeContent() {
       </Card>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 lg:gap-4">
-        <Card className="border-0 bg-emerald-50 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <div className="mb-2 rounded-full bg-emerald-100 p-2 text-emerald-600">
-              <CalendarCheck2 className="h-4 w-4" />
-            </div>
-            <p className="text-xl font-bold text-emerald-700">{data.attendance.this_month_percentage ?? "-"}%</p>
-            <p className="text-[10px] font-medium text-emerald-600/80 uppercase tracking-wider">{t("thisMonth")}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-0 bg-rose-50 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <div className="mb-2 rounded-full bg-rose-100 p-2 text-rose-600">
-              <Wallet className="h-4 w-4" />
-            </div>
-            <p className="text-xl font-bold text-rose-700">৳{data.fee_dues.total_outstanding}</p>
-            <p className="text-[10px] font-medium text-rose-600/80 uppercase tracking-wider">{t("outstanding")}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-amber-50 shadow-sm">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <div className="mb-2 rounded-full bg-amber-100 p-2 text-amber-600">
-              <Award className="h-4 w-4" />
-            </div>
-            <p className="text-xl font-bold text-amber-700">{data.recent_results.length}</p>
-            <p className="text-[10px] font-medium text-amber-600/80 uppercase tracking-wider">{t("results")}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-3 gap-3 lg:gap-4">
+        {[
+          { icon: CalendarCheck2, label: t("thisMonth"), value: `${data.attendance.this_month_percentage ?? "-"}%`, alert: false },
+          { icon: Wallet, label: t("outstanding"), value: `৳${data.fee_dues.total_outstanding}`, alert: data.fee_dues.total_outstanding > 0 },
+          { icon: Award, label: t("results"), value: String(data.recent_results.length), alert: false },
+        ].map((stat) => (
+          <Card key={stat.label}>
+            <CardContent className="flex flex-col gap-2 p-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <stat.icon className="h-4 w-4 shrink-0" />
+                <p className="truncate text-xs font-semibold">{stat.label}</p>
+              </div>
+              <p className={`text-xl font-bold lg:text-2xl ${stat.alert ? "text-ember" : "text-forest"}`}>{stat.value}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Payment Overview */}
       {data.payment_overview.total_paid > 0 && (
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="border-border">
           <CardContent className="p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("paymentOverview")}</h3>
-                <p className="text-xs text-slate-400">{t("paymentOverviewHint")}</p>
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">{t("paymentOverview")}</h3>
+                <p className="text-xs text-muted-foreground">{t("paymentOverviewHint")}</p>
               </div>
               <p className="text-right">
-                <span className="block text-lg font-bold text-slate-800">৳{data.payment_overview.total_paid}</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("totalPaid")}</span>
+                <span className="block text-lg font-bold text-foreground">৳{data.payment_overview.total_paid}</span>
+                <span className="text-[10px] font-medium text-muted-foreground">{t("totalPaid")}</span>
               </p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="rounded-xl bg-slate-50 p-3">
-                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.tuition_paid}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("tuitionPaid")}</p>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-base font-bold text-foreground">৳{data.payment_overview.tuition_paid}</p>
+                <p className="text-[10px] font-medium text-muted-foreground">{t("tuitionPaid")}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
-                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.exam_paid}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("examPaid")}</p>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-base font-bold text-foreground">৳{data.payment_overview.exam_paid}</p>
+                <p className="text-[10px] font-medium text-muted-foreground">{t("examPaid")}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
-                <p className="text-base font-bold text-slate-700">৳{data.payment_overview.other_paid}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("otherPaid")}</p>
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-base font-bold text-foreground">৳{data.payment_overview.other_paid}</p>
+                <p className="text-[10px] font-medium text-muted-foreground">{t("otherPaid")}</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
+              <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-base font-bold text-rose-600">৳{data.payment_overview.fines_paid}</p>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{t("finesPaid")}</p>
+                <p className="text-[10px] font-medium text-muted-foreground">{t("finesPaid")}</p>
               </div>
             </div>
           </CardContent>
@@ -215,16 +201,16 @@ function HomeContent() {
 
       {/* Quick Links Grid (Full Width) */}
       <div>
-        <h3 className="mb-3 px-1 text-sm font-semibold tracking-tight text-slate-800">Quick Actions</h3>
+        <h3 className="mb-3 px-1 text-sm font-semibold tracking-tight text-foreground">Quick Actions</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-3 lg:gap-4">
           {quickLinks.map((link) => (
             <Link key={link.href} href={link.href}>
-              <Card className="border-0 shadow-sm transition-shadow hover:shadow-md h-full">
+              <Card className="h-full transition-colors hover:border-forest/30 hover:bg-accent">
                 <CardContent className="flex flex-col items-start gap-3 p-4">
-                  <div className={`rounded-xl p-2.5 ${link.bg} ${link.color}`}>
+                  <div className="rounded-lg bg-lime/40 p-2.5 text-forest">
                     <link.icon className="h-5 w-5" />
                   </div>
-                  <span className="text-sm font-semibold text-slate-700 leading-tight">{link.label}</span>
+                  <span className="text-sm font-semibold text-foreground leading-tight">{link.label}</span>
                 </CardContent>
               </Card>
             </Link>
@@ -238,25 +224,25 @@ function HomeContent() {
           {/* Today's Classes */}
           <div>
             <div className="mb-3 flex items-center justify-between px-1">
-              <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("todaysClasses")}</h3>
-              <Link href="/routine" className="flex items-center text-xs font-medium text-primary">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">{t("todaysClasses")}</h3>
+              <Link href="/routine" className="-mr-2 flex min-h-[40px] items-center rounded-md px-2 text-xs font-medium text-primary hover:bg-accent">
                 {t("viewFullRoutine")}
               </Link>
             </div>
-            <Card className="border-0 shadow-sm">
+            <Card className="border-0">
               <CardContent className="p-0">
                 {!todaysClasses.length && <p className="p-5 text-sm text-muted-foreground">{tRoutine("noClasses")}</p>}
                 {todaysClasses.map((s, i) => (
                   <div
                     key={s.id}
-                    className={`flex items-center justify-between p-4 ${i !== todaysClasses.length - 1 ? "border-b border-slate-100" : ""}`}
+                    className={`flex items-center justify-between p-4 ${i !== todaysClasses.length - 1 ? "border-b border-border" : ""}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-lime/25 text-forest">
                         <CalendarClock className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-800">{s.subject?.name_en ?? tRoutine("freePeriod")}</p>
+                        <p className="text-sm font-semibold text-foreground">{s.subject?.name_en ?? tRoutine("freePeriod")}</p>
                         <p className="text-xs text-muted-foreground">{tRoutine("period", { no: s.period_no })}</p>
                       </div>
                     </div>
@@ -271,29 +257,29 @@ function HomeContent() {
           {!!data.upcoming_exams.length && (
         <div>
           <div className="mb-3 flex items-center justify-between px-1">
-            <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("upcomingExams")}</h3>
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">{t("upcomingExams")}</h3>
           </div>
           <div className="space-y-3">
             {data.upcoming_exams.map((e) => {
               const days = e.start_date ? Math.ceil((new Date(e.start_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
               return (
-                <Card key={e.id} className="border-0 shadow-sm">
+                <Card key={e.id} className="border-0">
                   <CardContent className="flex items-center justify-between p-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-primary/10 text-primary">
                         <span className="text-[10px] font-bold uppercase">{e.start_date ? new Date(e.start_date).toLocaleString('default', { month: 'short' }) : '-'}</span>
                         <span className="text-sm font-bold leading-none">{e.start_date ? new Date(e.start_date).getDate() : '-'}</span>
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-800">{e.name}</p>
+                        <p className="font-semibold text-foreground">{e.name}</p>
                         {days !== null && <p className="text-xs text-muted-foreground">{days > 0 ? t("inDays", { days }) : t("todayLabel")}</p>}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-2">
-                      <Link href={`/admit-card/${e.id}`} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-slate-200">
+                      <Link href={`/admit-card/${e.id}`} className="rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary">
                         {t("admitCard")}
                       </Link>
-                      <Link href="/seat-plan" className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-slate-200">
+                      <Link href="/seat-plan" className="rounded-full bg-muted px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-secondary">
                         {t("seatPlanLink")}
                       </Link>
                     </div>
@@ -306,14 +292,14 @@ function HomeContent() {
       )}
 
       {/* Homework Due */}
-      <Card className="border-0 shadow-sm overflow-hidden relative">
+      <Card className="border-0 overflow-hidden relative">
         <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
           <BookMarked className="w-24 h-24" />
         </div>
         <CardContent className="p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="font-semibold tracking-tight text-slate-800">{t("homeworkDue")}</h3>
-            <Link href="/homework" className="flex items-center text-xs font-medium text-primary">
+            <h3 className="font-semibold tracking-tight text-foreground">{t("homeworkDue")}</h3>
+            <Link href="/homework" className="-mr-2 flex min-h-[40px] items-center rounded-md px-2 text-xs font-medium text-primary hover:bg-accent">
               {t("view")} <ChevronRight className="ml-1 h-3 w-3" />
             </Link>
           </div>
@@ -331,25 +317,25 @@ function HomeContent() {
       {/* Recent Notices */}
       <div>
         <div className="mb-3 flex items-center justify-between px-1">
-          <h3 className="text-sm font-semibold tracking-tight text-slate-800">{t("recentNotices")}</h3>
-          <Link href="/notices" className="flex items-center text-xs font-medium text-primary">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground">{t("recentNotices")}</h3>
+          <Link href="/notices" className="-mr-2 flex min-h-[40px] items-center rounded-md px-2 text-xs font-medium text-primary hover:bg-accent">
             {t("viewAll")} <ChevronRight className="ml-1 h-3 w-3" />
           </Link>
         </div>
-        <Card className="border-0 shadow-sm">
+        <Card className="border-0">
           <CardContent className="p-0">
             {!data.recent_notices.length && <p className="p-5 text-sm text-muted-foreground">{t("noNotices")}</p>}
             {data.recent_notices.map((n, i) => (
               <Link
                 key={n.id}
                 href={`/notices/${n.id}`}
-                className={`flex gap-3 p-4 transition-colors hover:bg-slate-50 ${i !== data.recent_notices.length - 1 ? 'border-b border-slate-100' : ''}`}
+                className={`flex gap-3 p-4 transition-colors hover:bg-muted/50 ${i !== data.recent_notices.length - 1 ? 'border-b border-border' : ''}`}
               >
-                <div className="mt-0.5 rounded-full bg-blue-50 p-1.5 text-blue-500">
+                <div className="mt-0.5 rounded-full bg-forest/5 p-1.5 text-forest">
                   <BellRing className="h-4 w-4" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-800 leading-snug">{n.title}</p>
+                  <p className="text-sm font-medium text-foreground leading-snug">{n.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</p>
                 </div>
               </Link>

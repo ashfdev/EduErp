@@ -1,142 +1,109 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { LogOut } from "lucide-react";
+import { AppShell, NotificationBell, cn } from "@education-erp/ui";
 import { ProtectedRoute } from "./protected-route";
 import { PortalNav } from "./portal-nav";
 import { LanguageToggle } from "./language-toggle";
 import { useAuthStore } from "@/stores/auth-store";
 import { useInstitution } from "@/hooks/use-institution";
 import { useNotifications } from "@/hooks/use-notifications";
-import { NotificationBell } from "@education-erp/ui";
-import { UserCircle2, LogOut } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
-  const { students, activeStudentId, setActiveStudent, logout } = useAuthStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { user, students, activeStudentId, setActiveStudent, logout } = useAuthStore();
   const { institutionName, logoUrl } = useInstitution();
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
-  const router = useRouter();
+  const tCommon = useTranslations("common");
+  const activeStudent = students.find((s) => s.id === activeStudentId) ?? students[0];
 
   function handleNotificationClick(n: { id: string; link?: string | null }) {
     markRead(n.id);
     if (n.link) router.push(n.link);
   }
 
-  const handleLogout = () => {
+  function handleLogout() {
     logout();
     router.replace("/login");
-  };
+  }
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen bg-slate-50/50">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex flex-col w-72 border-r border-slate-800 bg-slate-900 shrink-0 h-screen sticky top-0 text-slate-300">
-          <div className="flex shrink-0 items-center gap-3 px-6 py-5">
-            {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-8 w-8 rounded object-contain" />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-sm font-bold text-white">E</div>
-            )}
-            <span className="line-clamp-2 leading-tight flex-1 text-base font-bold tracking-tight text-white">{institutionName ?? "Education ERP"}</span>
-            <LanguageToggle className="border-slate-700 text-slate-300 hover:bg-slate-800" />
-            <NotificationBell
-              notifications={notifications}
-              unreadCount={unreadCount}
-              onMarkAllRead={markAllRead}
-              onNotificationClick={handleNotificationClick}
-              className="text-slate-300"
-            />
-          </div>
-          
-          {students.length > 1 && (
-            <div className="px-6 py-4 border-y border-slate-800 bg-slate-900/50 space-y-2">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Switch Student</p>
-              {students.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActiveStudent(s.id)}
-                  className={`w-full text-left rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    s.id === activeStudentId 
-                      ? "bg-primary/20 text-white border border-primary/50" 
-                      : "bg-slate-800 text-slate-400 hover:bg-slate-700 border border-transparent"
-                  }`}
-                >
-                  {s.name_en}
-                </button>
-              ))}
+      <AppShell
+        pathname={pathname}
+        brand={{ name: institutionName ?? "Education ERP", logoUrl, subtitle: tCommon("portalName") }}
+        sidebar={<PortalNav />}
+        sidebarTop={
+          students.length > 1 && (
+            <div className="border-b px-3 py-3">
+              <p className="mb-2 px-1 text-xs font-semibold text-muted-foreground">{tCommon("switchStudent")}</p>
+              <div className="flex flex-col gap-1">
+                {students.map((s) => {
+                  const active = s.id === activeStudent?.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setActiveStudent(s.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "flex min-h-[40px] items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active ? "border-forest bg-forest/5 font-semibold text-forest" : "border-transparent text-foreground/80 hover:bg-accent",
+                      )}
+                    >
+                      <span className={cn("h-2 w-2 shrink-0 rounded-full", active ? "bg-lime ring-2 ring-forest/20" : "bg-border")} />
+                      <span className="truncate">{s.name_en}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto">
-            <PortalNav isMobile={false} />
-          </div>
-
-          <div className="mt-auto p-4 border-t border-slate-800">
+          )
+        }
+        sidebarFooter={
+          <div className="flex items-center gap-3 px-1">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-forest text-sm font-bold text-lime">
+              {(activeStudent?.name_en ?? user?.name_en)?.charAt(0) ?? "U"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{activeStudent?.name_en ?? user?.name_en}</p>
+              <p className="truncate text-xs text-muted-foreground">{activeStudent?.student_uid ?? user?.phone}</p>
+            </div>
             <button
+              type="button"
               onClick={handleLogout}
-              className="flex w-full items-center gap-2 text-sm font-medium text-slate-400 hover:text-red-400 transition-colors p-3 rounded-xl hover:bg-red-500/10"
+              title={tCommon("logout")}
+              aria-label={tCommon("logout")}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <LogOut className="h-4 w-4" />
-              Log Out
             </button>
           </div>
-        </aside>
-
-        <main className="flex-1 flex flex-col w-full relative pb-20 lg:pb-0">
-          {/* Mobile Top Header */}
-          <header className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="h-7 w-7 rounded object-contain" />
-                ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded bg-primary text-xs font-bold text-white">E</div>
-                )}
-                <span className="line-clamp-2 leading-tight text-sm font-semibold tracking-tight text-foreground">{institutionName ?? "Education ERP"}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <LanguageToggle />
-                <NotificationBell
-                  notifications={notifications}
-                  unreadCount={unreadCount}
-                  onMarkAllRead={markAllRead}
-                  onNotificationClick={handleNotificationClick}
-                />
-                <button onClick={handleLogout} className="text-slate-400 hover:text-red-500">
-                  <LogOut className="h-5 w-5" />
-                </button>
-              </div>
+        }
+        headerStart={
+          activeStudent && (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-forest">{activeStudent.name_en}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {[activeStudent.current_class?.name_en, activeStudent.current_section?.name].filter(Boolean).join(", ")}
+              </p>
             </div>
-            
-            {students.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto px-4 py-2 border-t border-slate-100 bg-white/50 no-scrollbar">
-                {students.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveStudent(s.id)}
-                    className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-                      s.id === activeStudentId 
-                        ? "bg-primary text-primary-foreground shadow-sm shadow-primary/20" 
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {s.name_en}
-                  </button>
-                ))}
-              </div>
-            )}
-          </header>
-
-          <div className="mx-auto max-w-7xl w-full p-4 sm:p-6 lg:p-8">
-            {children}
-          </div>
-        </main>
-        
-        {/* Mobile Bottom Nav */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-slate-900 pb-safe">
-          <PortalNav isMobile={true} />
-        </div>
-      </div>
+          )
+        }
+        headerEnd={
+          <>
+            <div className="flex h-10 w-10 items-center justify-center rounded-md border">
+              <NotificationBell notifications={notifications} unreadCount={unreadCount} onMarkAllRead={markAllRead} onNotificationClick={handleNotificationClick} />
+            </div>
+            <LanguageToggle />
+          </>
+        }
+      >
+        {children}
+      </AppShell>
     </ProtectedRoute>
   );
 }

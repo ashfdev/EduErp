@@ -118,25 +118,22 @@ export default function TeacherQuizzesPage() {
 
   return (
     <TeacherShell>
-      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
-        
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-lg bg-forest p-6 sm:p-8 text-white">
         <div className="relative z-10 flex flex-col">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             {t("title")}
           </h1>
-          <p className="mt-1 text-indigo-100 font-medium opacity-90">
+          <p className="mt-1 text-white/75 font-medium opacity-90">
             {t("subtitle")}
           </p>
         </div>
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <Label className="text-sm font-bold text-slate-500 uppercase">{t("subject")}</Label>
-            <select className="w-full sm:w-auto sm:flex-1 max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+            <Label className="text-sm font-bold text-muted-foreground uppercase">{t("subject")}</Label>
+            <select className="w-full sm:w-auto sm:flex-1 max-w-sm rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
               <option value="">{t("selectSubject")}</option>
               {subjects?.map((s) => <option key={s.id} value={s.id}>{s.name_en}</option>)}
             </select>
@@ -147,14 +144,14 @@ export default function TeacherQuizzesPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Questions Bank */}
-            <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
-                <h2 className="text-base font-bold text-slate-800">
+            <div className="rounded-lg border border-border bg-white overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 sm:px-6 py-4">
+                <h2 className="text-base font-bold text-foreground">
                   {t("questionBank", { count: questions?.length ?? 0 })}
                 </h2>
                 <button 
                   onClick={() => setQOpen(true)}
-                  className="shrink-0 text-xs font-bold bg-white border border-slate-200 text-slate-700 px-3 py-2 sm:py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                  className="shrink-0 text-xs font-bold bg-white border border-border text-foreground px-3 py-2 sm:py-1.5 rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   {t("addQuestion")}
                 </button>
@@ -165,11 +162,11 @@ export default function TeacherQuizzesPage() {
                 )}
                 <div className="space-y-3">
                   {questions?.map((q) => (
-                    <div key={q.id} className="rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
-                      <p className="font-bold text-slate-800 text-sm">
-                        {q.question_text} <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md ml-1">{q.marks} marks</span>
+                    <div key={q.id} className="rounded-lg border border-border p-4 transition-all hover:border-primary/20 hover:bg-muted/50">
+                      <p className="font-bold text-foreground text-sm">
+                        {q.question_text} <span className="text-[10px] font-bold text-forest bg-forest/5 px-2 py-0.5 rounded-md ml-1">{q.marks} marks</span>
                       </p>
-                      <p className="text-xs font-medium text-slate-500 mt-2">
+                      <p className="text-xs font-medium text-muted-foreground mt-2">
                         {q.options.map((o) => `${o.key}) ${o.text}`).join(" • ")}
                       </p>
                       <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md inline-block mt-2">
@@ -182,15 +179,15 @@ export default function TeacherQuizzesPage() {
             </div>
 
             {/* Quizzes */}
-            <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
-                <h2 className="text-base font-bold text-slate-800">
+            <div className="rounded-lg border border-border bg-white overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 sm:px-6 py-4">
+                <h2 className="text-base font-bold text-foreground">
                   {t("quizzesLabel")}
                 </h2>
                 <button 
                   onClick={() => setQuizOpen(true)}
                   disabled={!questions?.length}
-                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-2 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 text-xs font-bold bg-primary text-white px-3 py-2 sm:py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {t("createQuiz")}
                 </button>
@@ -201,15 +198,15 @@ export default function TeacherQuizzesPage() {
                 )}
                 <div className="space-y-3">
                   {quizzes?.map((q) => (
-                    <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-slate-50">
+                    <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-all hover:border-primary/20 hover:bg-muted/50">
                       <div>
-                        <p className="font-bold text-slate-800 text-sm">{q.title}</p>
-                        <p className="text-xs font-medium text-slate-500 mt-1">
+                        <p className="font-bold text-foreground text-sm">{q.title}</p>
+                        <p className="text-xs font-medium text-muted-foreground mt-1">
                           {t("questionsMinAttempts", { questions: q._count.questions, minutes: q.duration_minutes, attempts: q._count.attempts })}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 mt-3 sm:mt-0">
-                        <Badge variant={q.is_published ? "default" : "outline"} className={q.is_published ? "bg-emerald-500" : "bg-slate-100 text-slate-500"}>
+                        <Badge variant={q.is_published ? "default" : "outline"} className={q.is_published ? "bg-emerald-500" : "bg-muted text-muted-foreground"}>
                           {q.is_published ? t("published") : t("draft")}
                         </Badge>
                         {!q.is_published && (
@@ -217,7 +214,7 @@ export default function TeacherQuizzesPage() {
                             {t("publish")}
                           </button>
                         )}
-                        <button onClick={() => setResultsQuizId(q.id)} className="text-xs font-bold bg-white border border-slate-200 text-slate-600 px-3 py-2 sm:py-1.5 rounded-lg hover:bg-slate-50">
+                        <button onClick={() => setResultsQuizId(q.id)} className="text-xs font-bold bg-white border border-border text-muted-foreground px-3 py-2 sm:py-1.5 rounded-lg hover:bg-muted/50">
                           {t("results")}
                         </button>
                       </div>

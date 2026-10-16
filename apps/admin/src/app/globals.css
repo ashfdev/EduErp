@@ -29,8 +29,7 @@
     --border: 0 0% 93%;
     --input: 120 3% 87%;
     --ring: var(--forest);
-    /* Tighter than the other 3 apps — the admin panel is the dense,
-       data-heavy, all-day staff surface. */
+    /* Shared by the admin, teacher and portal apps; the public website keeps its own. */
     --radius: 0.375rem;
   }
 }

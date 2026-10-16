@@ -8,7 +8,9 @@
     "resultNotFound": "Result not found.",
     "loadError": "Couldn't load this",
     "loadErrorDetail": "Something went wrong loading this page. Check your connection and try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "switchStudent": "Switch student",
+    "portalName": "Student Portal"
   },
   "nav": {
     "home": "Home",
@@ -33,7 +35,10 @@
     "signingIn": "Signing in...",
     "signIn": "Sign In",
     "invalidCredentials": "Invalid Student ID / phone or password.",
-    "poweredBy": "Powered by AshDevs"
+    "poweredBy": "Powered by AshDevs",
+    "show": "Show password",
+    "hide": "Hide password",
+    "help": "Trouble signing in? Contact the institution office."
   },
   "home": {
     "goodMorning": "Good morning",

@@ -45,14 +45,14 @@ function SubjectsContent() {
           <CardContent className="flex items-center justify-between pt-6">
             <div>
               <p className="font-medium">{row.subject.name_en}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {row.subject.code} {row.is_inherited ? t("compulsory") : t("elective")}
               </p>
             </div>
-            <div className="text-right text-xs text-gray-500">
+            <div className="text-right text-xs text-muted-foreground">
               {row.teacher ? (
                 <>
-                  <p className="font-medium text-gray-700">{row.teacher.name_en}</p>
+                  <p className="font-medium text-foreground">{row.teacher.name_en}</p>
                   <p>{row.teacher.designation}</p>
                 </>
               ) : (

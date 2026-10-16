@@ -12,6 +12,7 @@ import {
   Settings, ChevronDown, School, Building2, Backpack, DoorOpen, CalendarClock, DollarSign, Contact, IdCard,
   ClipboardList, Newspaper, CalendarOff, UserRoundPlus, Repeat, Tags, Percent, FolderTree, Boxes, Layers, Receipt, ShieldCheck, CreditCard, ArrowLeftRight, Network, Fingerprint, type LucideIcon,
 } from "lucide-react";
+import { sideNavStyles } from "@education-erp/ui";
 import { usePendingCounts, type PendingCounts } from "@/hooks/use-pending-counts";
 
 interface NavItem {
@@ -170,24 +171,10 @@ function NavLink({ item, isActive, count }: { item: NavItem; isActive: boolean; 
   const t = useTranslations("nav");
   const Icon = item.icon;
   return (
-    <Link
-      href={item.href}
-      aria-current={isActive ? "page" : undefined}
-      className={`flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
-        isActive ? "bg-lime font-semibold text-forest" : "text-white/75 hover:bg-white/[0.06] hover:text-white"
-      }`}
-    >
-      <Icon className="h-[18px] w-[18px] shrink-0" />
+    <Link href={item.href} aria-current={isActive ? "page" : undefined} className={sideNavStyles.link(isActive)}>
+      <Icon className={sideNavStyles.icon(isActive)} />
       <span className="flex-1">{t(item.key)}</span>
-      {!!count && count > 0 && (
-        <span
-          className={`min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none tabular-nums ${
-            isActive ? "bg-forest text-lime" : "bg-ember text-white"
-          }`}
-        >
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
+      {!!count && count > 0 && <span className={sideNavStyles.count(isActive)}>{count > 99 ? "99+" : count}</span>}
     </Link>
   );
 }
@@ -241,27 +228,16 @@ export function SidebarNav() {
         const groupPendingTotal = group.items.reduce((sum, item) => sum + (item.countKey ? pendingCounts[item.countKey] : 0), 0);
         return (
           <div key={group.key} className="mt-1">
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.key)}
-              aria-expanded={isOpen}
-              className={`flex min-h-[40px] w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
-                groupHasActive ? "text-lime" : "text-white/85 hover:bg-white/[0.06] hover:text-white"
-              }`}
-            >
+            <button type="button" onClick={() => toggleGroup(group.key)} aria-expanded={isOpen} className={sideNavStyles.group(groupHasActive)}>
               <span className="flex items-center gap-3">
-                <group.icon className="h-[18px] w-[18px] shrink-0" />
+                <group.icon className={sideNavStyles.groupIcon(groupHasActive)} />
                 {tGroups(group.key)}
-                {!isOpen && groupPendingTotal > 0 && (
-                  <span className="min-w-[18px] rounded-full bg-ember px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-white tabular-nums">
-                    {groupPendingTotal > 99 ? "99+" : groupPendingTotal}
-                  </span>
-                )}
+                {!isOpen && groupPendingTotal > 0 && <span className={sideNavStyles.count(false)}>{groupPendingTotal > 99 ? "99+" : groupPendingTotal}</span>}
               </span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${isOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform motion-reduce:transition-none ${isOpen ? "rotate-180" : ""}`} />
             </button>
             {isOpen && (
-              <div className="mb-1 ml-[21px] mt-0.5 flex flex-col gap-0.5 border-l border-white/10 pl-2">
+              <div className={sideNavStyles.children}>
                 {group.items.map((item) => (
                   <NavLink
                     key={item.href}

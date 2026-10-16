@@ -94,24 +94,21 @@ export default function TeacherHomePage() {
   return (
     <TeacherShell>
       {/* Header Section */}
-      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
-        
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4 relative overflow-hidden rounded-lg bg-forest p-6 sm:p-8 text-white">
         <div className="relative z-10">
-          <p className="text-indigo-100 font-medium mb-1">
+          <p className="text-white/75 font-medium mb-1">
             {new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
           </p>
-          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">
             {t("welcome", { name: user?.name_en?.split(" ")[0] ?? "" })} 👋
           </h1>
-          <p className="mt-2 text-indigo-50 max-w-md text-sm leading-relaxed opacity-90">
+          <p className="mt-2 text-white/80 max-w-md text-sm leading-relaxed opacity-90">
             You have {schedule?.length ?? 0} classes scheduled for today. Have a great day ahead!
           </p>
         </div>
         
         <div className="relative z-10 flex gap-3">
-          <Link href="/attendance/subject" className="flex items-center gap-2 rounded-xl bg-white/20 backdrop-blur-md px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/30 transition-all border border-white/10">
+          <Link href="/attendance/subject" className="flex items-center gap-2 rounded-lg bg-white/20 px-4 py-2.5 text-sm font-semibold text-white hover:bg-white/30 transition-all border border-white/10">
             <ClipboardList className="h-4 w-4" />
             Subject Attendance
           </Link>
@@ -126,29 +123,29 @@ export default function TeacherHomePage() {
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             {[
-              { label: "Classes Today", value: schedule?.length ?? 0, icon: Clock, color: "text-blue-600", bg: "bg-blue-50" },
-              { label: "Pending Leave", value: pendingLeaveCount, icon: Plane, color: "text-amber-600", bg: "bg-amber-50" },
-              { label: "Active Quizzes", value: publishedQuizzes.length, icon: Target, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Marked Today", value: `${attendanceMarkedCount}/${schedule?.length ?? 0}`, icon: Activity, color: "text-purple-600", bg: "bg-purple-50" },
+              { label: "Classes Today", value: schedule?.length ?? 0, icon: Clock },
+              { label: "Pending Leave", value: pendingLeaveCount, icon: Plane },
+              { label: "Active Quizzes", value: publishedQuizzes.length, icon: Target },
+              { label: "Marked Today", value: `${attendanceMarkedCount}/${schedule?.length ?? 0}`, icon: Activity },
             ].map((stat, i) => (
-              <div key={i} className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 shadow-sm border border-slate-100/50 hover:shadow-md transition-all">
-                <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-full ${stat.bg} ${stat.color}`}>
-                  <stat.icon className="h-5 w-5" />
+              <div key={i} className="flex flex-col gap-2 rounded-lg border bg-white p-4">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <stat.icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate text-xs font-semibold">{stat.label}</span>
                 </div>
-                <span className="text-2xl font-black text-slate-800">{stat.value}</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1 text-center">{stat.label}</span>
+                <span className="text-2xl font-bold text-forest">{stat.value}</span>
               </div>
             ))}
           </div>
 
           {/* Today's Classes */}
-          <div className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-50 bg-slate-50/50 px-4 sm:px-6 py-4">
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+          <div className="rounded-lg border border-border bg-white overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 sm:px-6 py-4">
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Clock className="h-4 w-4 text-primary" />
                 {t("myClassesToday")}
               </h2>
-              <Link href="/routine" className="shrink-0 text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1">
+              <Link href="/routine" className="-mr-2 flex min-h-[40px] shrink-0 items-center gap-1 rounded-md px-2 text-xs font-semibold text-primary hover:bg-accent">
                 View Full Routine <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
@@ -163,15 +160,15 @@ export default function TeacherHomePage() {
                 {schedule?.map((s) => {
                   const status = computeSlotStatus(s, new Date());
                   return (
-                    <div key={s.id} className="group flex flex-col sm:flex-row sm:items-center justify-between rounded-2xl border border-slate-100 p-4 transition-all hover:border-primary/20 hover:bg-indigo-50/30 hover:shadow-sm">
+                    <div key={s.id} className="group flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border border-border p-4 transition-all hover:border-primary/20 hover:bg-forest/5">
                       <div className="flex items-start gap-3 sm:gap-4">
-                        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500 group-hover:bg-primary group-hover:text-white transition-colors">
+                        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-muted/50 text-muted-foreground group-hover:bg-primary group-hover:text-white transition-colors">
                           <span className="text-[10px] sm:text-xs font-bold uppercase">Period</span>
-                          <span className="text-lg font-black leading-none">{s.period_no}</span>
+                          <span className="text-lg font-bold leading-none">{s.period_no}</span>
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-slate-800 text-base">{s.subject?.name_en ?? t("classFallback")}</p>
-                          <p className="text-sm font-medium text-slate-500 mt-0.5">
+                          <p className="font-bold text-foreground text-base">{s.subject?.name_en ?? t("classFallback")}</p>
+                          <p className="text-sm font-medium text-muted-foreground mt-0.5">
                             {s.class.name_en}{s.section ? ` • ${s.section.name}` : ""}{s.group ? ` • ${s.group.name_en}` : ""}
                           </p>
                           <Badge variant={STATUS_BADGE_VARIANT[status]} className="mt-1.5">
@@ -182,9 +179,9 @@ export default function TeacherHomePage() {
                           )}
                         </div>
                       </div>
-                      <div className="mt-3 sm:mt-0 flex items-center gap-3 sm:gap-0 sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-100 pt-3 sm:pt-0">
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      <div className="mt-3 sm:mt-0 flex items-center gap-3 sm:gap-0 sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-border pt-3 sm:pt-0">
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-muted px-3 py-1 rounded-lg">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                           {s.start_time} - {s.end_time}
                         </div>
                         {/* Was hidden below sm: entirely — the one action a
@@ -194,7 +191,7 @@ export default function TeacherHomePage() {
                         {status !== "completed" && (
                           <Link
                             href={`/attendance/subject?routine_slot_id=${s.id}&date=${todayLocalDateString()}`}
-                            className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground sm:mt-2 sm:block sm:h-auto sm:rounded-none sm:bg-transparent sm:px-0 sm:text-primary sm:hover:underline"
+                            className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-xs font-bold text-primary-foreground sm:mt-2 sm:block sm:h-auto sm:rounded-none sm:bg-transparent sm:px-0 sm:text-primary sm:hover:underline"
                           >
                             Mark Attendance
                           </Link>
@@ -212,47 +209,45 @@ export default function TeacherHomePage() {
         <div className="md:col-span-4 space-y-6">
           
           {/* Quick Actions */}
-          <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              ⚡ Quick Actions
-            </h3>
+          <div className="rounded-lg border border-border bg-white p-5">
+            <h3 className="mb-4 text-base font-semibold text-foreground">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { href: "/attendance/subject", icon: ClipboardList, label: "Subject Attendance", color: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100" },
-                { href: "/attendance", icon: CalendarCheck, label: "Daily Attendance", color: "bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-100" },
-                { href: "/marks", icon: BookOpen, label: "Marks Entry", color: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100" },
-                { href: "/quizzes", icon: Target, label: "New Quiz", color: "bg-purple-50 text-purple-600 hover:bg-purple-100 border-purple-100" },
-                { href: "/leave", icon: Plane, label: "Apply Leave", color: "bg-amber-50 text-amber-600 hover:bg-amber-100 border-amber-100" },
+                { href: "/attendance/subject", icon: ClipboardList, label: "Subject Attendance" },
+                { href: "/attendance", icon: CalendarCheck, label: "Daily Attendance" },
+                { href: "/marks", icon: BookOpen, label: "Marks Entry" },
+                { href: "/quizzes", icon: Target, label: "New Quiz" },
+                { href: "/leave", icon: Plane, label: "Apply Leave" },
               ].map((action, i) => (
-                <Link key={i} href={action.href} className={`flex flex-col items-center justify-center p-4 rounded-2xl border transition-all ${action.color}`}>
-                  <action.icon className="h-6 w-6 mb-2" />
-                  <span className="text-xs font-bold">{action.label}</span>
+                <Link key={i} href={action.href} className="flex flex-col items-start gap-2 rounded-lg border p-3 text-forest transition-colors hover:border-forest/30 hover:bg-accent">
+                  <span className="rounded-md bg-lime/40 p-2"><action.icon className="h-5 w-5" /></span>
+                  <span className="text-xs font-semibold leading-snug">{action.label}</span>
                 </Link>
               ))}
             </div>
           </div>
 
           {/* Upcoming Quizzes */}
-          <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-border bg-white p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Target className="h-4 w-4 text-purple-500" /> Quizzes
+              <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <Target className="h-4 w-4 text-forest" /> Quizzes
               </h3>
             </div>
             <div className="space-y-3">
               {!publishedQuizzes.length && (
-                <p className="text-xs text-slate-400 text-center py-2">No published quizzes yet.</p>
+                <p className="text-xs text-muted-foreground text-center py-2">No published quizzes yet.</p>
               )}
               {publishedQuizzes.slice(0, 3).map((q) => (
-                <div key={q.id} className="rounded-xl border border-slate-100 p-3 hover:border-purple-200 transition-colors bg-slate-50/50">
-                  <p className="font-bold text-slate-800 text-sm">{q.title}</p>
-                  <p className="text-xs text-slate-500 font-medium mt-1">{q.subject?.name_en ?? ""}</p>
-                  <p className="text-[10px] font-bold text-purple-600 mt-2 bg-purple-100 px-2 py-0.5 rounded-md inline-block">
+                <div key={q.id} className="rounded-lg border border-border p-3 hover:border-lime transition-colors bg-muted/50">
+                  <p className="font-bold text-foreground text-sm">{q.title}</p>
+                  <p className="text-xs text-muted-foreground font-medium mt-1">{q.subject?.name_en ?? ""}</p>
+                  <p className="text-[10px] font-bold text-forest mt-2 bg-lime/40 px-2 py-0.5 rounded-md inline-block">
                     {q._count.questions} question{q._count.questions === 1 ? "" : "s"} · {q._count.attempts} attempt{q._count.attempts === 1 ? "" : "s"}
                   </p>
                 </div>
               ))}
-              <Link href="/quizzes" className="block text-center text-xs font-bold text-slate-400 hover:text-primary mt-4 transition-colors">
+              <Link href="/quizzes" className="mt-2 flex min-h-[40px] items-center justify-center rounded-md text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-primary">
                 View All Quizzes
               </Link>
             </div>

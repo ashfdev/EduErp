@@ -51,7 +51,7 @@ function ChangePasswordForm() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Set a New Password</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           {user?.name_en ? `Welcome, ${user.name_en}. ` : ""}
           For security, you must set your own password before continuing.
         </p>
@@ -64,7 +64,7 @@ function ChangePasswordForm() {
         <div className="space-y-1.5">
           <Label>New password</Label>
           <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
-          <p className="text-xs text-gray-500">{PASSWORD_REQUIREMENTS_HINT}</p>
+          <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_HINT}</p>
         </div>
         <div className="space-y-1.5">
           <Label>Confirm new password</Label>

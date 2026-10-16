@@ -21,7 +21,7 @@ export function LanguageToggle({ className }: { className?: string }) {
   }
 
   return (
-    <button onClick={toggle} className={cn("rounded-md border px-2.5 py-1 text-xs", className)} aria-label="Switch language">
+    <button onClick={toggle} className={cn("flex h-10 items-center rounded-md border px-3 text-xs font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className)} aria-label="Switch language">
       {next === "BN" ? "বাংলা" : "English"}
     </button>
   );

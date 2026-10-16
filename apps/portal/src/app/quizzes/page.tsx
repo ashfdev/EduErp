@@ -46,7 +46,7 @@ function QuizzesContent() {
           <Card className="hover:border-primary">
             <CardContent className="pt-6">
               <p className="font-medium">{q.title}</p>
-              <p className="text-xs text-gray-500">{q.subject.name_en} · {t("questionsCount", { count: q._count.questions })} · {t("durationMin", { minutes: q.duration_minutes })}</p>
+              <p className="text-xs text-muted-foreground">{q.subject.name_en} · {t("questionsCount", { count: q._count.questions })} · {t("durationMin", { minutes: q.duration_minutes })}</p>
             </CardContent>
           </Card>
         </Link>

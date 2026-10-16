@@ -22,7 +22,7 @@ function ClearanceRow({ label, clear, detail }: { label: string; clear: boolean;
     <div className="flex items-center justify-between border-b py-2 text-sm last:border-0">
       <div>
         <p>{label}</p>
-        {detail && <p className="text-xs text-gray-500">{detail}</p>}
+        {detail && <p className="text-xs text-muted-foreground">{detail}</p>}
       </div>
       <span className={clear ? "text-emerald-600" : "text-red-600"}>{clear ? t("clear") : t("pending")}</span>
     </div>
@@ -93,7 +93,7 @@ function AdmitCardContent() {
           <Button className="flex-1" onClick={download}>{t("download")}</Button>
         </div>
       ) : (
-        <p className="text-center text-sm text-gray-500">{t("clearPending")}</p>
+        <p className="text-center text-sm text-muted-foreground">{t("clearPending")}</p>
       )}
 
       <PdfPreviewModal

@@ -60,7 +60,7 @@ const GATEWAYS = [
   { key: "BANK_TRANSFER", label: "Bank Transfer" },
 ];
 
-import { Receipt, Wallet, Banknote, CalendarClock, History, UploadCloud, CheckCircle2 } from "lucide-react";
+import { Receipt, Banknote, CalendarClock, History, UploadCloud, CheckCircle2 } from "lucide-react";
 
 // (Skipping boilerplate above FeesContent - we'll just rewrite FeesContent)
 function FeesContent() {
@@ -146,28 +146,26 @@ function FeesContent() {
     <div className="space-y-6 lg:space-y-8">
       <FinancialSubNav />
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-emerald-100 p-2.5 text-emerald-600">
+        <div className="rounded-lg bg-emerald-100 p-2.5 text-emerald-600">
           <Banknote className="h-6 w-6" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("title")}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {totalOutstanding > 0 && (
-          <Card className="border-0 bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-md shadow-rose-200">
-            <CardContent className="p-6 relative overflow-hidden">
-              <Wallet className="absolute -right-4 -bottom-4 h-24 w-24 opacity-10" />
-              <p className="text-sm font-medium text-rose-100 uppercase tracking-wider">{t("totalOutstanding")}</p>
+          <Card className="border-0 bg-ember text-white">
+            <CardContent className="p-6">
+              <p className="text-sm font-semibold text-white/85">{t("totalOutstanding")}</p>
               <p className="text-4xl font-bold mt-2 tracking-tight">৳{totalOutstanding}</p>
             </CardContent>
           </Card>
         )}
 
         {!!feesData?.credit_balance && feesData.credit_balance > 0 && (
-          <Card className="border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-md shadow-emerald-200">
-            <CardContent className="p-6 relative overflow-hidden">
-              <CheckCircle2 className="absolute -right-4 -bottom-4 h-24 w-24 opacity-10" />
-              <p className="text-sm font-medium text-emerald-100 uppercase tracking-wider">{t("creditBalance")}</p>
+          <Card className="border-0 bg-lime text-forest">
+            <CardContent className="p-6">
+              <p className="text-sm font-semibold text-forest/75">{t("creditBalance")}</p>
               <p className="text-4xl font-bold mt-2 tracking-tight">৳{feesData.credit_balance}</p>
             </CardContent>
           </Card>
@@ -195,34 +193,34 @@ function FeesContent() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
         {/* Unpaid Invoices */}
         <div className="space-y-4">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-            <Receipt className="h-5 w-5 text-slate-400" /> Current Invoices
+          <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+            <Receipt className="h-5 w-5 text-muted-foreground" /> Current Invoices
           </h2>
           {!unpaid.length && (
-            <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border bg-muted/50">
               <CheckCircle2 className="h-10 w-10 text-emerald-400 mb-3" />
-              <p className="text-sm font-medium text-slate-500">{t("noOutstanding")}</p>
+              <p className="text-sm font-medium text-muted-foreground">{t("noOutstanding")}</p>
             </div>
           )}
           {unpaid.map((inv) => (
-            <Card key={inv.id} className="border-slate-200 shadow-sm transition-all hover:shadow-md">
+            <Card key={inv.id} className="border-border transition-all">
               <CardContent className="p-5 flex flex-col sm:flex-row gap-5 items-start justify-between">
                 <div className="space-y-1 w-full">
                   <div className="flex items-center gap-2">
                     <StatusBadge status={inv.status} />
-                    <span className="text-xs font-semibold text-slate-400 tracking-wider uppercase">{CATEGORY_LABEL[inv.category] ?? inv.category}</span>
+                    <span className="text-xs font-semibold text-muted-foreground ">{CATEGORY_LABEL[inv.category] ?? inv.category}</span>
                   </div>
-                  <p className="font-bold text-slate-800 text-lg leading-tight mt-1">
+                  <p className="font-bold text-foreground text-lg leading-tight mt-1">
                     {inv.description}
-                    {inv.month != null && <span className="font-medium text-slate-500"> — {inv.period}</span>}
+                    {inv.month != null && <span className="font-medium text-muted-foreground"> — {inv.period}</span>}
                   </p>
-                  <div className="flex items-center gap-3 text-sm text-slate-500 mt-2">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground mt-2">
                     <span className="flex items-center gap-1"><CalendarClock className="h-4 w-4" /> {t("due", { date: new Date(inv.due_date).toLocaleDateString() })}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => pdfPreview.openPreview(`/api/portal/fees/invoices/${inv.id}/pdf`, inv.description)}
-                    className="text-xs font-semibold text-primary hover:underline"
+                    className="-mx-2 inline-flex min-h-[40px] items-center rounded-md px-2 text-xs font-semibold text-primary hover:underline"
                   >
                     {t("viewInvoice")}
                   </button>
@@ -230,7 +228,7 @@ function FeesContent() {
                 
                 <div className="flex flex-col items-end shrink-0 w-full sm:w-auto">
                   <div className="text-right mb-3">
-                    <p className="text-2xl font-bold tracking-tight text-slate-900">৳{inv.amount_due}</p>
+                    <p className="text-2xl font-bold tracking-tight text-foreground">৳{inv.amount_due}</p>
                     {inv.fine_amount > 0 && <p className="text-xs font-medium text-rose-500 mt-0.5">{t("fine", { amount: inv.fine_amount })}</p>}
                   </div>
                   
@@ -255,19 +253,19 @@ function FeesContent() {
         <div className="space-y-6">
           {!!upcoming?.length && (
             <div className="space-y-4">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-                <CalendarClock className="h-5 w-5 text-slate-400" /> {t("upcomingProjected")}
+              <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <CalendarClock className="h-5 w-5 text-muted-foreground" /> {t("upcomingProjected")}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {upcoming.map((u, i) => (
-                  <div key={i} className="flex flex-col rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
-                    <p className="font-semibold text-slate-700">{u.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                  <div key={i} className="flex flex-col rounded-lg border border-dashed border-border bg-muted/50 p-4">
+                    <p className="font-semibold text-foreground">{u.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {u.due_date ? `Last date: ${new Date(u.due_date).toLocaleDateString()}` : "Last date not set yet"}
                     </p>
                     <div className="flex items-center justify-between mt-auto pt-3">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{u.frequency}</p>
-                      <p className="font-bold text-slate-600">৳{u.amount}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground">{u.frequency}</p>
+                      <p className="font-bold text-muted-foreground">৳{u.amount}</p>
                     </div>
                   </div>
                 ))}
@@ -277,10 +275,10 @@ function FeesContent() {
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-                <History className="h-5 w-5 text-slate-400" /> Payment History
+              <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <History className="h-5 w-5 text-muted-foreground" /> Payment History
               </h2>
-              <button onClick={() => setShowHistory((s) => !s)} className="text-xs font-bold text-primary hover:underline">
+              <button onClick={() => setShowHistory((s) => !s)} className="-mr-2 inline-flex min-h-[40px] items-center rounded-md px-2 text-xs font-bold text-primary hover:underline">
                 {showHistory ? t("hideHistory") : t("showHistory")}
               </button>
             </div>
@@ -288,17 +286,17 @@ function FeesContent() {
             {showHistory && (
               <div className="space-y-3">
                 {!allPayments.length && (
-                  <p className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-dashed text-center">{t("noPayments")}</p>
+                  <p className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg border border-dashed text-center">{t("noPayments")}</p>
                 )}
                 {allPayments.map((p) => (
-                  <Card key={p.id} className="shadow-sm">
+                  <Card key={p.id} className="">
                     <CardContent className="flex items-center justify-between p-4">
                       <div>
-                        <p className="font-bold text-slate-800 text-sm">
+                        <p className="font-bold text-foreground text-sm">
                           {p.description}
-                          {p.period && <span className="font-medium text-slate-500"> — {p.period}</span>}
+                          {p.period && <span className="font-medium text-muted-foreground"> — {p.period}</span>}
                         </p>
-                        <p className="text-xs font-medium text-slate-500 mt-1">{p.gateway} · {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "-"}</p>
+                        <p className="text-xs font-medium text-muted-foreground mt-1">{p.gateway} · {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : "-"}</p>
                         <button
                           type="button"
                           onClick={() => pdfPreview.openPreview(`/api/portal/fees/receipts/${p.id}`, p.description)}

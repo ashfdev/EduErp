@@ -41,12 +41,12 @@ function NoticeDetailContent() {
   }
 
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><LoadingSpinner /></div>;
-  if (!notice) return <p className="p-4 text-sm text-gray-500">{tCommon("noticeNotFound")}</p>;
+  if (!notice) return <p className="p-4 text-sm text-muted-foreground">{tCommon("noticeNotFound")}</p>;
 
   return (
     <div className="space-y-3 p-4">
       <h1 className="text-lg font-semibold">{notice.title}</h1>
-      <p className="text-xs text-gray-400">{new Date(notice.publish_at ?? notice.created_at).toLocaleDateString()}</p>
+      <p className="text-xs text-muted-foreground">{new Date(notice.publish_at ?? notice.created_at).toLocaleDateString()}</p>
       <Card>
         <CardContent className="pt-6">
           <div className="prose text-sm" dangerouslySetInnerHTML={{ __html: notice.body }} />

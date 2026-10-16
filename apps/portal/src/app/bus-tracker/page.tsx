@@ -52,11 +52,11 @@ function BusTrackerContent() {
       <h1 className="text-lg font-semibold">{t("title")}</h1>
       {!data?.route_name && <EmptyState title={t("noRoute")} />}
       {!!data?.route_name && !points.length && (
-        <Card><CardContent className="pt-6"><p className="text-sm text-gray-500">{t("noSignal", { name: data.route_name })}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">{t("noSignal", { name: data.route_name })}</p></CardContent></Card>
       )}
       {!!points.length && (
         <>
-          <p className="text-sm text-gray-500">{t("route", { name: data!.route_name! })}</p>
+          <p className="text-sm text-muted-foreground">{t("route", { name: data!.route_name! })}</p>
           <BusTrackerMap points={points} />
         </>
       )}

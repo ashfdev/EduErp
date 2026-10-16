@@ -79,12 +79,12 @@ function WaiversContent() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-amber-100 p-2.5 text-amber-600">
+          <div className="rounded-lg bg-amber-100 p-2.5 text-amber-600">
             <GraduationCap className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("title")}</h1>
-            <p className="text-sm text-slate-500">{t("subtitle")}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
+            <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
           </div>
         </div>
         <Button onClick={() => setOpen(true)}>{t("requestButton")}</Button>
@@ -97,42 +97,42 @@ function WaiversContent() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
           <div className="space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
-              <HandCoins className="h-5 w-5 text-slate-400" /> {t("myWaivers")}
+            <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <HandCoins className="h-5 w-5 text-muted-foreground" /> {t("myWaivers")}
             </h2>
             {!waivers?.length && (
-              <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
-                <p className="text-sm font-medium text-slate-500">{t("noWaivers")}</p>
+              <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">{t("noWaivers")}</p>
               </div>
             )}
             {waivers?.map((w) => (
-              <Card key={w.id} className="border-slate-200 shadow-sm">
+              <Card key={w.id} className="border-border">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
-                    <p className="font-bold text-slate-800">{w.waiver_type.name}</p>
+                    <p className="font-bold text-foreground">{w.waiver_type.name}</p>
                     <Badge>{w.waiver_type.discount_type === "PERCENTAGE" ? `${w.waiver_type.discount_value}%` : `৳${w.waiver_type.discount_value}`}</Badge>
                   </div>
-                  <p className="mt-1 text-xs text-slate-400">{w.academic_year?.label ?? t("everyYear")}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{w.academic_year?.label ?? t("everyYear")}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-800">{t("myRequests")}</h2>
+            <h2 className="text-lg font-bold text-foreground">{t("myRequests")}</h2>
             {!requests?.length && (
-              <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
-                <p className="text-sm font-medium text-slate-500">{t("noRequests")}</p>
+              <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">{t("noRequests")}</p>
               </div>
             )}
             {requests?.map((r) => (
-              <Card key={r.id} className="shadow-sm">
+              <Card key={r.id} className="">
                 <CardContent className="space-y-1.5 p-5">
                   <div className="flex items-center justify-between">
                     <Badge variant={statusVariant(r.status)}>{t(STATUS_KEY[r.status])}</Badge>
-                    <p className="text-xs text-slate-400">{t("requestedOn", { date: new Date(r.created_at).toLocaleDateString() })}</p>
+                    <p className="text-xs text-muted-foreground">{t("requestedOn", { date: new Date(r.created_at).toLocaleDateString() })}</p>
                   </div>
-                  <p className="text-sm text-slate-700">{r.reason}</p>
+                  <p className="text-sm text-foreground">{r.reason}</p>
                   {r.status === "APPROVED" && r.student_waiver && (
                     <p className="text-sm font-semibold text-emerald-600">
                       {r.student_waiver.waiver_type.name} (

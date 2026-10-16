@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${digits.variable} ${hind.variable}`}>
+    <html lang="en" data-ui="flat" className={`${digits.variable} ${hind.variable}`}>
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
       </body>

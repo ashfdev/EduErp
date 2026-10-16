@@ -87,14 +87,14 @@ function RoutineContent() {
           <button
             key={i}
             onClick={() => setDay(i)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${i === day ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-gray-100"} ${i === today ? "ring-2 ring-[var(--primary,#1a3c4a)]" : ""}`}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs ${i === day ? "bg-[var(--primary,#1a3c4a)] text-white" : "bg-muted"} ${i === today ? "ring-2 ring-[var(--primary,#1a3c4a)]" : ""}`}
           >
             {t(key)}
           </button>
         ))}
       </div>
 
-      {!daySlots.length && <p className="text-sm text-gray-500">{t("noClasses")}</p>}
+      {!daySlots.length && <p className="text-sm text-muted-foreground">{t("noClasses")}</p>}
       {daySlots.map((s) => {
         const isToday = day === today;
         const status = isToday ? computeSlotStatus(s, now.toTimeString().slice(0, 5)) : null;
@@ -103,7 +103,7 @@ function RoutineContent() {
             <CardContent className="flex items-center justify-between pt-6 text-sm">
               <div>
                 <p className="font-medium">{s.subject?.name_en ?? t("freePeriod")}</p>
-                <p className="text-xs text-gray-500">{t("period", { no: s.period_no })}</p>
+                <p className="text-xs text-muted-foreground">{t("period", { no: s.period_no })}</p>
                 {status && (
                   <Badge variant={STATUS_BADGE_VARIANT[status]} className="mt-1.5">
                     {t(`status${status.charAt(0).toUpperCase()}${status.slice(1)}`)}
@@ -115,7 +115,7 @@ function RoutineContent() {
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-gray-500">{s.start_time} – {s.end_time}</p>
+              <p className="text-xs text-muted-foreground">{s.start_time} – {s.end_time}</p>
             </CardContent>
           </Card>
         );
@@ -143,16 +143,16 @@ function RoutineViewToggle({
 
   return (
     <div className="flex items-center justify-between">
-      <div className="flex gap-1 rounded-full bg-gray-100 p-0.5">
+      <div className="flex gap-1 rounded-full bg-muted p-0.5">
         <button
           onClick={() => setViewMode("day")}
-          className={`rounded-full px-3 py-1 text-xs ${viewMode === "day" ? "bg-white shadow-sm" : "text-gray-500"}`}
+          className={`rounded-full px-3 py-1 text-xs ${viewMode === "day" ? "bg-white" : "text-muted-foreground"}`}
         >
           Day
         </button>
         <button
           onClick={() => setViewMode("grid")}
-          className={`rounded-full px-3 py-1 text-xs ${viewMode === "grid" ? "bg-white shadow-sm" : "text-gray-500"}`}
+          className={`rounded-full px-3 py-1 text-xs ${viewMode === "grid" ? "bg-white" : "text-muted-foreground"}`}
         >
           Week Grid
         </button>

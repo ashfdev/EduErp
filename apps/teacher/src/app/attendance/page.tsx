@@ -91,25 +91,22 @@ export default function TeacherAttendancePage() {
 
   return (
     <TeacherShell>
-      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
-        
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-lg bg-forest p-6 sm:p-8 text-white">
         <div className="relative z-10 flex flex-col">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             {t("title")}
           </h1>
-          <p className="mt-1 text-indigo-100 font-medium opacity-90">
+          <p className="mt-1 text-white/75 font-medium opacity-90">
             {t("subtitle")}
           </p>
         </div>
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm">
+        <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 sm:gap-4 items-center">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 w-full sm:h-9 sm:w-40 rounded-xl border-slate-200 bg-slate-50 font-medium" />
-            <select className="flex-1 min-w-[200px] max-w-sm rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 w-full sm:h-9 sm:w-40 rounded-lg border-border bg-muted/50 font-medium" />
+            <select className="flex-1 min-w-[200px] max-w-sm rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" value={sectionId} onChange={(e) => setSectionId(e.target.value)}>
               <option value="">{t("selectClassSection")}</option>
               {mySections?.map((s) => <option key={s.section_id} value={s.section_id}>{s.class_name} — {s.section_name}</option>)}
             </select>
@@ -117,42 +114,42 @@ export default function TeacherAttendancePage() {
         </div>
 
         {mySections && !mySections.length && (
-          <div className="rounded-3xl border border-slate-100 bg-white p-8 text-center shadow-sm">
-            <p className="text-sm font-medium text-slate-500">{t("notAssigned")}</p>
+          <div className="rounded-lg border border-border bg-white p-8 text-center">
+            <p className="text-sm font-medium text-muted-foreground">{t("notAssigned")}</p>
           </div>
         )}
 
         {rows && (
           <div className="space-y-6">
             {alreadyMarked && (
-              <div className="flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+              <div className="flex items-center gap-2 rounded-lg border border-forest/25 bg-forest/5 px-4 py-3 text-sm font-semibold text-forest">
                 {t("alreadyMarkedNotice", { date })}
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex gap-2">
-                <Badge variant="outline" className="bg-white px-3 py-1.5 rounded-lg border-slate-200 shadow-sm font-bold">{t("total", { count: rows.length })}</Badge>
-                <Badge variant="outline" className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border-amber-200 shadow-sm font-bold">{t("unmarked", { count: unmarked })}</Badge>
+                <Badge variant="outline" className="bg-white px-3 py-1.5 rounded-lg border-border font-bold">{t("total", { count: rows.length })}</Badge>
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border-amber-200 font-bold">{t("unmarked", { count: unmarked })}</Badge>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="h-10 sm:h-8 rounded-xl font-bold bg-white" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
+                <Button size="sm" variant="outline" className="h-10 sm:h-8 rounded-lg font-bold bg-white" onClick={() => setMarks(Object.fromEntries((rows ?? []).map((r) => [r.id, "PRESENT"])))}>
                   {t("markAllPresent")}
                 </Button>
-                <Button size="sm" variant="outline" className="h-10 sm:h-8 rounded-xl font-bold bg-white text-slate-500" onClick={() => setMarks({})}>{t("clear")}</Button>
+                <Button size="sm" variant="outline" className="h-10 sm:h-8 rounded-lg font-bold bg-white text-muted-foreground" onClick={() => setMarks({})}>{t("clear")}</Button>
               </div>
             </div>
 
             {/* Phone: one card per student with full-width status buttons —
                 the 7-column table below needed sideways scrolling for every
                 single student at phone width. */}
-            <ul className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:hidden">
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-white sm:hidden">
               {rows.map((r) => (
                 <li key={r.id} className="p-3">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-xs font-bold text-slate-600">
+                    <span className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-lg bg-muted px-1.5 text-xs font-bold text-muted-foreground">
                       {r.current_roll_no ?? "—"}
                     </span>
-                    <p className="min-w-0 flex-1 break-words pt-0.5 font-medium leading-snug text-slate-800">{r.name_en}</p>
+                    <p className="min-w-0 flex-1 break-words pt-0.5 font-medium leading-snug text-foreground">{r.name_en}</p>
                   </div>
                   <div className="mt-2.5 grid grid-cols-5 gap-1.5">
                     {STATUSES.map((s) => (
@@ -162,7 +159,7 @@ export default function TeacherAttendancePage() {
                         aria-label={`${r.name_en}: ${STATUS_NAME[s]}`}
                         aria-pressed={effectiveMarks[r.id] === s}
                         onClick={() => setMarks((prev) => ({ ...prev, [r.id]: s }))}
-                        className={`h-10 rounded-xl border-2 text-xs font-bold transition-all active:scale-95 ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-slate-200 bg-white text-slate-400"}`}
+                        className={`h-10 rounded-lg border-2 text-xs font-bold transition-all active:scale-95 ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-border bg-white text-muted-foreground"}`}
                       >
                         {STATUS_LABEL[s]}
                       </button>
@@ -172,20 +169,20 @@ export default function TeacherAttendancePage() {
               ))}
             </ul>
 
-            <div className="hidden sm:block rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden overflow-x-auto">
+            <div className="hidden sm:block rounded-lg border border-border bg-white overflow-hidden overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <tr className="border-b border-border bg-muted/50 text-left text-xs font-bold text-muted-foreground">
                     <th className="px-6 py-4">{t("colRoll")}</th>
                     <th className="px-6 py-4">{t("colName")}</th>
                     {STATUSES.map((s) => <th key={s} className="px-3 py-4 text-center">{STATUS_LABEL[s]}</th>)}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-border">
                   {rows.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-3 font-bold text-slate-700">{r.current_roll_no ?? "—"}</td>
-                      <td className="px-6 py-3 font-medium text-slate-800">{r.name_en}</td>
+                    <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-3 font-bold text-foreground">{r.current_roll_no ?? "—"}</td>
+                      <td className="px-6 py-3 font-medium text-foreground">{r.name_en}</td>
                       {STATUSES.map((s) => (
                         <td key={s} className="px-3 py-3 text-center">
                           <button
@@ -193,7 +190,7 @@ export default function TeacherAttendancePage() {
                             aria-label={`${r.name_en}: ${STATUS_NAME[s]}`}
                             aria-pressed={effectiveMarks[r.id] === s}
                             onClick={() => setMarks((prev) => ({ ...prev, [r.id]: s }))}
-                            className={`h-8 w-8 rounded-full border-2 text-xs font-bold shadow-sm transition-all hover:scale-110 active:scale-95 ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-slate-200 bg-white text-slate-400 hover:border-slate-300"}`}
+                            className={`h-8 w-8 rounded-full border-2 text-xs font-bold transition-all hover:scale-110 active:scale-95 ${effectiveMarks[r.id] === s ? STATUS_COLOR[s] : "border-border bg-white text-muted-foreground hover:border-border"}`}
                           >
                             {STATUS_LABEL[s]}
                           </button>
@@ -208,9 +205,9 @@ export default function TeacherAttendancePage() {
             {/* Pinned to the bottom of the screen on a phone so Save is always
                 one tap away while scrolling a 40+ student roster; back to a
                 plain right-aligned button from sm: up. */}
-            <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:pt-2 sm:backdrop-blur-none">
+            <div className="sticky bottom-0 z-20 -mx-4 flex items-center gap-3 border-t border-border bg-white/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:static sm:mx-0 sm:justify-end sm:border-0 sm:bg-transparent sm:p-0 sm:pt-2 sm:backdrop-blur-none">
               <p className="min-w-0 text-xs font-bold text-amber-700 sm:hidden">{t("unmarked", { count: unmarked })}</p>
-              <Button className="min-w-0 flex-1 sm:flex-none rounded-xl px-4 sm:px-8 py-6 text-sm sm:text-base font-bold shadow-md" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+              <Button className="min-w-0 flex-1 sm:flex-none rounded-lg px-4 sm:px-8 py-6 text-sm sm:text-base font-bold" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? t("saving") : alreadyMarked ? t("updateAttendance") : t("saveAttendance")}
               </Button>
             </div>

@@ -34,7 +34,7 @@ export function BusTrackerMap({ points }: { points: VehiclePoint[] }) {
         <Marker key={p.vehicle_id} position={[p.lat, p.lng]} icon={busIcon}>
           <Popup>
             <p className="font-medium">{p.vehicle_no}</p>
-            <p className="text-xs text-gray-500">Updated {new Date(p.recorded_at).toLocaleTimeString()}</p>
+            <p className="text-xs text-muted-foreground">Updated {new Date(p.recorded_at).toLocaleTimeString()}</p>
           </Popup>
         </Marker>
       ))}

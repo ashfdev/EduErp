@@ -54,7 +54,7 @@ export default function TeacherRoutinePage() {
             const isToday = dayIndex === todayDayOfWeek;
             return (
               <div key={dayKey}>
-                <h2 className={`mb-3 text-sm font-bold uppercase tracking-wider ${isToday ? "text-primary" : "text-slate-500"}`}>
+                <h2 className={`mb-3 text-sm font-bold ${isToday ? "text-primary" : "text-muted-foreground"}`}>
                   {t(`days.${dayKey}`)} {isToday && <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] normal-case text-primary">{t("todayBadge")}</span>}
                 </h2>
                 <div className="space-y-2">
@@ -62,21 +62,21 @@ export default function TeacherRoutinePage() {
                     <Card key={s.id}>
                       <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
                         <div className="flex items-start gap-3 sm:gap-4">
-                          <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+                          <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-muted/50 text-muted-foreground">
                             <span className="text-[10px] font-bold uppercase">{t("periodShort")}</span>
-                            <span className="text-base font-black leading-none">{s.period_no}</span>
+                            <span className="text-base font-bold leading-none">{s.period_no}</span>
                           </div>
                           <div className="min-w-0">
-                            <p className="font-bold text-slate-800">{s.subject?.name_en ?? t("classFallback")}</p>
-                            <p className="text-sm font-medium text-slate-500 mt-0.5">
+                            <p className="font-bold text-foreground">{s.subject?.name_en ?? t("classFallback")}</p>
+                            <p className="text-sm font-medium text-muted-foreground mt-0.5">
                               {s.class.name_en}
                               {s.section ? ` · ${s.section.name}` : ""}
                               {s.group ? ` · ${s.group.name_en}` : ""}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg w-fit">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground bg-muted px-3 py-1 rounded-lg w-fit">
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                           {s.start_time} - {s.end_time}
                         </div>
                       </CardContent>

@@ -62,7 +62,7 @@ function LeaveContent() {
   return (
     <div className="space-y-6 lg:space-y-8 max-w-3xl mx-auto w-full lg:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Leave Requests</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Leave Requests</h1>
         <Button onClick={() => setOpen(true)}>+ Request Leave</Button>
       </div>
 
@@ -70,14 +70,14 @@ function LeaveContent() {
 
       <div className="space-y-3">
         {data?.map((r) => (
-          <Card key={r.id} className="border-0 shadow-sm">
+          <Card key={r.id} className="border-0">
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-bold text-slate-800">
+                  <p className="font-bold text-foreground">
                     {new Date(r.from_date).toLocaleDateString()} – {new Date(r.to_date).toLocaleDateString()}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">{r.reason}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{r.reason}</p>
                 </div>
                 <StatusBadge status={r.status} />
               </div>
@@ -86,7 +86,7 @@ function LeaveContent() {
               )}
               {!!r.approvals.length && (
                 <div className="mt-3 border-t pt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {r.approvals.filter((a) => a.status === "APPROVED").length} of {r.approvals.length} teachers approved
                   </p>
                   <div className="flex flex-wrap gap-2">

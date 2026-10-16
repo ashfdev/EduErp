@@ -51,6 +51,10 @@ export const tailwindBase: Partial<Config> = {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
+        // The fixed forest/lime brand palette, defined in each app's globals.css.
+        forest: "hsl(var(--forest))",
+        lime: "hsl(var(--lime))",
+        ember: "hsl(var(--ember))",
       },
       borderRadius: {
         lg: "var(--radius)",

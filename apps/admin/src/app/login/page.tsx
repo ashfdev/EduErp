@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Button, Input, Label, Card, CardContent, extractErrorMessage, PASSWORD_REQUIREMENTS_HINT, validatePasswordClientSide } from "@education-erp/ui";
+import { Check } from "lucide-react";
+import { Button, Input, Label, LoginLayout, LoginPasswordInput, loginStyles, extractErrorMessage, PASSWORD_REQUIREMENTS_HINT, validatePasswordClientSide, cn, type LoginInstitution } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -33,14 +34,13 @@ export default function LoginPage() {
     if (isAuthenticated) router.replace("/dashboard");
   }, [isAuthenticated, router]);
 
-  const { data: institution } = useQuery({
+  const { data: institution } = useQuery<LoginInstitution>({
     queryKey: ["public", "institution"],
     queryFn: async () => (await api.get("/api/settings/institution")).data.data,
   });
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ type: "invalid" | "disabled" | "network"; message: string } | null>(null);
 
@@ -128,172 +128,107 @@ export default function LoginPage() {
     }
   }
 
+  const heading =
+    forgotState === "hidden" ? t("staffLogin") : forgotState === "phone" ? t("resetPassword") : forgotState === "otp" ? t("enterOtp") : forgotState === "reset" ? t("setNewPassword") : null;
+  const subheading =
+    forgotState === "hidden" ? t("subtitle") : forgotState === "phone" ? t("resetSubtitle") : forgotState === "otp" ? t("otpSentTo", { phone: forgotPhone }) : forgotState === "reset" ? PASSWORD_REQUIREMENTS_HINT : null;
+
   return (
-    <div className="relative flex min-h-screen w-full bg-white">
-      
-      {/* Mobile Full Background Illustration */}
-      <div 
-        className="absolute inset-0 z-0 bg-cover bg-center lg:hidden"
-        style={{
-          backgroundImage: "url('/assets/login-illustration.png')",
-        }}
-      />
-      <div className="absolute inset-0 z-0 bg-white/60 lg:hidden backdrop-blur-sm" /> {/* Mobile readability overlay */}
-
-      <div className="relative z-10 flex w-full">
-        
-        {/* Left Side - Full Background Illustration (Desktop) */}
-        <div className="relative hidden w-1/2 flex-col items-center justify-start p-10 lg:flex overflow-hidden">
-          
-          {/* Background Image with Zoom to hide white borders */}
-          <div 
-            className="absolute inset-0 z-0 bg-cover bg-center"
-            style={{
-              backgroundImage: "url('/assets/login-illustration.png')",
-              transform: "scale(1.25)",
-            }}
-          />
-          
-          {/* Stronger gradient at the top for text readability without drawing a box */}
-          <div className="absolute top-0 left-0 right-0 z-0 bg-gradient-to-b from-white via-white/70 to-transparent h-[350px] pointer-events-none"></div>
-          
-          {/* Branding at the top */}
-          <div className="relative z-10 flex flex-col items-center text-center mt-6">
-            {institution?.logo_url ? (
-              <div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full bg-white p-4 shadow-xl ring-4 ring-white/60">
-                <img src={institution.logo_url} alt="Logo" className="h-full w-full object-contain" />
-              </div>
-            ) : (
-              <div className="mx-auto mb-5 flex h-28 w-28 items-center justify-center rounded-full bg-white text-5xl shadow-xl ring-4 ring-white/60">🏫</div>
-            )}
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight px-2 [text-shadow:_0_0_20px_rgba(255,255,255,1),_0_0_30px_rgba(255,255,255,1),_0_0_40px_rgba(255,255,255,1)]">
-              {institution?.name_en ?? "Education ERP"}
-            </h1>
+    <LoginLayout institution={institution} portalLabel={t("panelLabel")} footer={t("poweredBy")}>
+      <div className="flex flex-col gap-[18px] lg:gap-6">
+        {heading && (
+          <div className="flex flex-col gap-1.5 lg:gap-2">
+            <h1 className={loginStyles.title}>{heading}</h1>
+            {subheading && <p className={loginStyles.subtitle}>{subheading}</p>}
           </div>
-          
-          <p className="absolute bottom-6 w-full text-center text-xs font-bold text-slate-500 drop-shadow-sm z-10">{t("poweredBy")}</p>
-        </div>
+        )}
 
-        {/* Right Side - Form Container */}
-        <div className="flex w-full lg:w-1/2 flex-col items-center justify-center bg-transparent lg:bg-[#eef3fb] p-6 sm:p-12">
-          
-          {/* Mobile Branding - Only visible on small screens */}
-          <div className="w-full text-center mb-8 lg:hidden relative z-10">
-            {institution?.logo_url ? (
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white p-3 shadow-xl ring-4 ring-white/60">
-                <img src={institution.logo_url} alt="Logo" className="h-full w-full object-contain" />
-              </div>
-            ) : (
-              <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white text-4xl shadow-xl ring-4 ring-white/60">🏫</div>
-            )}
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight px-2 [text-shadow:_0_0_15px_rgba(255,255,255,1),_0_0_25px_rgba(255,255,255,1)]">
-              {institution?.name_en ?? "Education ERP"}
-            </h1>
-          </div>
+        {forgotState === "hidden" && (
+          <form onSubmit={handleLogin} className="flex flex-col gap-[18px] lg:gap-6">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="login-id" className={loginStyles.label}>{t("phoneOrEmail")}</Label>
+              <Input id="login-id" className={loginStyles.input} value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus placeholder={t("idPlaceholder")} autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            </div>
 
-          <div className="mx-auto w-full max-w-md text-center mb-8">
-            <h2 className="text-3xl font-medium tracking-tight text-[#2d3748]">
-              {forgotState === "hidden" ? t("staffLogin") : forgotState === "phone" ? t("resetPassword") : forgotState === "otp" ? t("enterOtp") : forgotState === "reset" ? t("setNewPassword") : ""}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              {forgotState === "hidden" ? "Hey enter your details to sign in to your account" : forgotState === "phone" ? "Enter your phone number to reset" : forgotState === "otp" ? t("otpSentTo", { phone: forgotPhone }) : ""}
-            </p>
-          </div>
-
-          <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-8 shadow-sm border border-slate-100">
-            {forgotState === "hidden" && (
-              <form onSubmit={handleLogin} className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-700">{t("phoneOrEmail")}</Label>
-                  <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required autoFocus placeholder="e.g. admin@school.com" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold text-slate-700">{t("password")}</Label>
-                    <button type="button" className="text-xs font-medium text-blue-500 hover:text-blue-600" onClick={() => setForgotState("phone")}>
-                      {t("forgotPassword")}
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm transition-all focus:bg-white pr-16" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
-                    <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600" onClick={() => setShowPassword((s) => !s)}>
-                      {showPassword ? t("hide") : t("show")}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className={`rounded-lg border p-4 text-sm ${error.type === "disabled" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-red-200 bg-red-50 text-red-700"}`}>
-                    <span className="font-semibold">{error.message}</span>
-                    {error.type === "disabled" && <p className="mt-1 text-xs">{t("contactAdmin")}</p>}
-                  </div>
-                )}
-
-                <Button type="submit" className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 transition-all text-white" disabled={loading}>
-                  {loading ? t("signingIn") : "Login"}
-                </Button>
-              </form>
-            )}
-
-            {forgotState === "phone" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-700">{t("phoneNumber")}</Label>
-                  <Input className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="01XXXXXXXXX" />
-                </div>
-                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={sendOtp} disabled={forgotLoading || !forgotPhone}>
-                  {t("sendOtp")}
-                </Button>
-                <button type="button" className="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-800" onClick={() => setForgotState("hidden")}>
-                  {t("backToLogin")}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <Label htmlFor="login-password" className={loginStyles.label}>{t("password")}</Label>
+                <button type="button" className={cn(loginStyles.link, "py-1.5")} onClick={() => setForgotState("phone")}>
+                  {t("forgotPassword")}
                 </button>
               </div>
-            )}
+              <LoginPasswordInput id="login-password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" showLabel={t("show")} hideLabel={t("hide")} />
+            </div>
 
-            {forgotState === "otp" && (
-              <div className="space-y-6">
-                <Input className="text-center tracking-widest text-xl rounded-lg bg-[#f8fafc] py-6" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} placeholder="000000" />
-                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={verifyOtp} disabled={forgotLoading || otp.length !== 6}>
-                  {t("verify")}
-                </Button>
-                <Button type="button" variant="outline" className="w-full rounded-lg py-6 text-base font-bold" disabled={resendTimer > 0} onClick={sendOtp}>
-                  {resendTimer > 0 ? t("resendIn", { seconds: resendTimer }) : t("resendOtp")}
-                </Button>
+            {error && (
+              <div role="alert" className={`rounded-lg border px-4 py-3 text-sm ${error.type === "disabled" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-red-200 bg-red-50 text-red-700"}`}>
+                <p className="font-semibold">{error.message}</p>
+                {error.type === "disabled" && <p className="mt-1 text-xs">{t("contactAdmin")}</p>}
               </div>
             )}
 
-            {forgotState === "reset" && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-700">{t("newPassword")}</Label>
-                  <Input type="password" className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-                  <p className="text-xs text-slate-500">{PASSWORD_REQUIREMENTS_HINT}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-700">{t("confirmPassword")}</Label>
-                  <Input type="password" className="rounded-lg bg-[#f8fafc] px-4 py-6 text-sm" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-                </div>
-                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={submitReset} disabled={forgotLoading || !newPassword}>
-                  {t("resetPasswordButton")}
-                </Button>
-              </div>
-            )}
+            <Button type="submit" className={loginStyles.button} disabled={loading}>
+              {loading ? t("signingIn") : t("signIn")}
+            </Button>
+            <p className={loginStyles.help}>{t("help")}</p>
+          </form>
+        )}
 
-            {forgotState === "done" && (
-              <div className="space-y-6 text-center">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                </div>
-                <p className="text-lg font-bold text-slate-800">{t("resetSuccess")}</p>
-                <Button className="w-full rounded-lg py-6 text-base font-bold bg-[#0066ff] hover:bg-blue-700 text-white" onClick={() => setForgotState("hidden")}>
-                  {t("backToLoginButton")}
-                </Button>
-              </div>
-            )}
+        {forgotState === "phone" && (
+          <>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="forgot-phone" className={loginStyles.label}>{t("phoneNumber")}</Label>
+              <Input id="forgot-phone" className={loginStyles.input} inputMode="tel" autoComplete="tel" value={forgotPhone} onChange={(e) => setForgotPhone(e.target.value)} placeholder="01XXXXXXXXX" />
+            </div>
+            <Button className={loginStyles.button} onClick={sendOtp} disabled={forgotLoading || !forgotPhone}>
+              {t("sendOtp")}
+            </Button>
+            <button type="button" className={cn(loginStyles.link, "self-center py-2")} onClick={() => setForgotState("hidden")}>
+              {t("backToLogin")}
+            </button>
+          </>
+        )}
+
+        {forgotState === "otp" && (
+          <>
+            <Input aria-label={t("enterOtp")} className={cn(loginStyles.input, "text-center text-xl tracking-[0.4em]")} inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value)} maxLength={6} placeholder="000000" />
+            <Button className={loginStyles.button} onClick={verifyOtp} disabled={forgotLoading || otp.length !== 6}>
+              {t("verify")}
+            </Button>
+            <Button type="button" variant="outline" className={loginStyles.secondaryButton} disabled={resendTimer > 0} onClick={sendOtp}>
+              {resendTimer > 0 ? t("resendIn", { seconds: resendTimer }) : t("resendOtp")}
+            </Button>
+          </>
+        )}
+
+        {forgotState === "reset" && (
+          <>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-password" className={loginStyles.label}>{t("newPassword")}</Label>
+              <LoginPasswordInput id="new-password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} showLabel={t("show")} hideLabel={t("hide")} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirm-password" className={loginStyles.label}>{t("confirmPassword")}</Label>
+              <LoginPasswordInput id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} showLabel={t("show")} hideLabel={t("hide")} />
+            </div>
+            <Button className={loginStyles.button} onClick={submitReset} disabled={forgotLoading || !newPassword}>
+              {t("resetPasswordButton")}
+            </Button>
+          </>
+        )}
+
+        {forgotState === "done" && (
+          <div className="flex flex-col items-center gap-[18px] text-center lg:gap-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-lime text-forest">
+              <Check className="h-8 w-8" />
+            </div>
+            <p className="text-lg font-bold text-forest">{t("resetSuccess")}</p>
+            <Button className={loginStyles.button} onClick={() => setForgotState("hidden")}>
+              {t("backToLoginButton")}
+            </Button>
           </div>
-        </div>
+        )}
       </div>
-    </div>
+    </LoginLayout>
   );
 }

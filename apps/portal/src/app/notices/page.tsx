@@ -42,25 +42,25 @@ function NoticesContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-blue-100 p-2.5 text-blue-600">
+        <div className="rounded-lg bg-forest/10 p-2.5 text-forest">
           <BellRing className="h-6 w-6" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("title")}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("title")}</h1>
       </div>
 
       {!data?.length && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="rounded-full bg-slate-100 p-6 text-slate-400 mb-4">
+          <div className="rounded-full bg-muted p-6 text-muted-foreground mb-4">
             <Inbox className="h-12 w-12" />
           </div>
-          <p className="text-lg font-medium text-slate-600">{t("noNotices")}</p>
+          <p className="text-lg font-medium text-muted-foreground">{t("noNotices")}</p>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {data?.map((n) => (
           <Link key={n.id} href={`/notices/${n.id}`} className="group block h-full">
-            <Card className={`h-full transition-all duration-200 hover:shadow-md hover:border-blue-200 ${n.is_pinned ? 'border-amber-200 bg-amber-50/30' : ''}`}>
+            <Card className={`h-full transition-all duration-200 hover:border-forest/25 ${n.is_pinned ? 'border-amber-200 bg-amber-50/30' : ''}`}>
               <CardContent className="p-5 flex flex-col h-full justify-between gap-4">
                 <div className="flex items-start gap-3">
                   {n.is_pinned ? (
@@ -68,25 +68,25 @@ function NoticesContent() {
                       <Pin className="h-4 w-4" />
                     </div>
                   ) : (
-                    <div className="shrink-0 rounded-full bg-blue-50 p-2 text-blue-500">
+                    <div className="shrink-0 rounded-full bg-forest/5 p-2 text-forest">
                       <BellRing className="h-4 w-4" />
                     </div>
                   )}
-                  <p className="font-semibold text-slate-800 leading-snug group-hover:text-blue-600 transition-colors line-clamp-2">
+                  <p className="font-semibold text-foreground leading-snug group-hover:text-forest transition-colors line-clamp-2">
                     {n.title}
                   </p>
                 </div>
                 
-                <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
+                <div className="flex items-center justify-between mt-auto pt-4 border-t border-border">
+                  <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground">
                     <span>{new Date(n.created_at).toLocaleDateString()}</span>
                     {n.attachment_url && (
-                      <span className="flex items-center gap-1 text-slate-400">
+                      <span className="flex items-center gap-1 text-muted-foreground">
                         <Paperclip className="h-3 w-3" />
                       </span>
                     )}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/60 group-hover:text-forest transition-colors" />
                 </div>
               </CardContent>
             </Card>

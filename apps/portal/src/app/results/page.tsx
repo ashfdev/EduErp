@@ -127,21 +127,21 @@ function ResultsContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <div className="rounded-xl bg-amber-100 p-2.5 text-amber-600">
+        <div className="rounded-lg bg-amber-100 p-2.5 text-amber-600">
           <Award className="h-6 w-6" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Academic Result</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Academic Result</h1>
       </div>
 
       <Card>
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-end gap-3">
             <div className="flex-1 space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">{t("selectSession")}</label>
+              <label className="text-xs font-bold text-muted-foreground pl-1">{t("selectSession")}</label>
               <select
                 value={academicYearId}
                 onChange={(e) => setAcademicYearId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all"
+                className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all"
               >
                 <option value="">{t("selectSessionPlaceholder")}</option>
                 {academicYears?.map((y) => (
@@ -153,12 +153,12 @@ function ResultsContent() {
               </select>
             </div>
             <div className="flex-1 space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-1">{t("selectExam")}</label>
+              <label className="text-xs font-bold text-muted-foreground pl-1">{t("selectExam")}</label>
               <select
                 value={selectedExamId}
                 onChange={(e) => setSelectedExamId(e.target.value)}
                 disabled={!academicYearId || isLoading}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all disabled:opacity-50"
+                className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all disabled:opacity-50"
               >
                 <option value="">{academicYearId ? t("selectExamPlaceholder") : t("selectSessionFirst")}</option>
                 {examOptions.map((e) => (
@@ -182,10 +182,10 @@ function ResultsContent() {
 
       {!searchedExamId && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-slate-100 p-6 text-slate-400 mb-4">
+          <div className="rounded-full bg-muted p-6 text-muted-foreground mb-4">
             <FileSearch className="h-12 w-12" />
           </div>
-          <p className="text-base font-medium text-slate-600">{t("searchPrompt")}</p>
+          <p className="text-base font-medium text-muted-foreground">{t("searchPrompt")}</p>
         </div>
       )}
 
@@ -201,10 +201,10 @@ function ResultsContent() {
 
       {searchedExamId && !isLoading && !isError && !result && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-slate-100 p-6 text-slate-400 mb-4">
+          <div className="rounded-full bg-muted p-6 text-muted-foreground mb-4">
             <FileSearch className="h-12 w-12" />
           </div>
-          <p className="text-base font-medium text-slate-600">{t("noResultFound")}</p>
+          <p className="text-base font-medium text-muted-foreground">{t("noResultFound")}</p>
         </div>
       )}
 
@@ -212,39 +212,39 @@ function ResultsContent() {
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6 items-start">
           <Card>
             <CardContent className="p-5 space-y-5">
-              <div className="flex items-center gap-2 text-base font-bold text-slate-800">
+              <div className="flex items-center gap-2 text-base font-bold text-foreground">
                 <GraduationCap className="h-5 w-5 text-amber-600" />
                 {t("studentInformation")}
               </div>
 
               <div className="space-y-1.5 text-sm">
-                <p className="text-base font-bold text-indigo-700">{data.student.name_en}</p>
+                <p className="text-base font-bold text-forest">{data.student.name_en}</p>
                 {isUniversity && data.student.program_name && (
-                  <p className="flex items-center gap-2 text-slate-600">
-                    <BookOpen className="h-3.5 w-3.5 text-slate-400" /> {data.student.program_name}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> {data.student.program_name}
                   </p>
                 )}
                 {!isUniversity && data.student.class_name && (
-                  <p className="flex items-center gap-2 text-slate-600">
-                    <BookOpen className="h-3.5 w-3.5 text-slate-400" /> {terms.term_class}: {data.student.class_name}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5 text-muted-foreground" /> {terms.term_class}: {data.student.class_name}
                   </p>
                 )}
                 {data.student.section_name && (
-                  <p className="flex items-center gap-2 text-slate-600">
-                    <Users className="h-3.5 w-3.5 text-slate-400" /> {isUniversity ? t("batch") : terms.term_section}: {data.student.section_name}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" /> {isUniversity ? t("batch") : terms.term_section}: {data.student.section_name}
                   </p>
                 )}
-                <p className="flex items-center gap-2 text-slate-600">
-                  <IdCard className="h-3.5 w-3.5 text-slate-400" /> {t("studentId")}: {data.student.student_uid}
+                <p className="flex items-center gap-2 text-muted-foreground">
+                  <IdCard className="h-3.5 w-3.5 text-muted-foreground" /> {t("studentId")}: {data.student.student_uid}
                 </p>
                 {data.student.registration_no && (
-                  <p className="flex items-center gap-2 text-slate-600">
-                    <Hash className="h-3.5 w-3.5 text-slate-400" /> {terms.term_registration}: {data.student.registration_no}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <Hash className="h-3.5 w-3.5 text-muted-foreground" /> {terms.term_registration}: {data.student.registration_no}
                   </p>
                 )}
-                <p className="flex items-center gap-2 font-semibold text-slate-800 pt-1">
+                <p className="flex items-center gap-2 font-semibold text-foreground pt-1">
                   {result.total_gpa === null ? (
-                    <span className="text-slate-500 font-medium">{t("marksNotEntered")}</span>
+                    <span className="text-muted-foreground font-medium">{t("marksNotEntered")}</span>
                   ) : (
                     <>
                       {gpaLabel} {t("of")} {result.exam_name}: {result.has_failed ? "F" : result.total_gpa}
@@ -256,7 +256,7 @@ function ResultsContent() {
               <div className="overflow-x-auto -mx-5 px-5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-slate-50 text-left text-slate-500 text-xs uppercase tracking-wide">
+                    <tr className="border-b bg-muted/50 text-left text-muted-foreground text-xs uppercase tracking-wide">
                       <th className="p-2 font-semibold">{t("sl")}</th>
                       {hasAnyCode && <th className="p-2 font-semibold">{td("courseCode")}</th>}
                       <th className="p-2 font-semibold">{t("courseTitle")}</th>
@@ -267,12 +267,12 @@ function ResultsContent() {
                   </thead>
                   <tbody>
                     {result.subjects.map((s, i) => (
-                      <tr key={s.subject_id} className="border-b border-slate-100">
-                        <td className="p-2 text-slate-500">{i + 1}</td>
-                        {hasAnyCode && <td className="p-2 text-slate-500">{s.subject_code || "—"}</td>}
-                        <td className="p-2 font-medium text-slate-800">{s.subject_name}</td>
+                      <tr key={s.subject_id} className="border-b border-border">
+                        <td className="p-2 text-muted-foreground">{i + 1}</td>
+                        {hasAnyCode && <td className="p-2 text-muted-foreground">{s.subject_code || "—"}</td>}
+                        <td className="p-2 font-medium text-foreground">{s.subject_name}</td>
                         <td className="p-2 text-right">
-                          {s.not_conducted ? <span className="text-slate-400">{td("notConducted")}</span> : s.is_absent ? td("absent") : s.marks_total ?? "—"}
+                          {s.not_conducted ? <span className="text-muted-foreground">{td("notConducted")}</span> : s.is_absent ? td("absent") : s.marks_total ?? "—"}
                         </td>
                         <td className="p-2 text-center">{s.not_conducted ? "—" : s.grade_letter ?? "—"}</td>
                         <td className="p-2 text-right">{s.not_conducted || s.is_absent ? "—" : s.grade_point ?? "—"}</td>
@@ -280,7 +280,7 @@ function ResultsContent() {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="font-bold text-slate-800">
+                    <tr className="font-bold text-foreground">
                       <td className="p-2" colSpan={hasAnyCode ? 2 : 1}>
                         {t("total")}
                       </td>
@@ -301,14 +301,14 @@ function ResultsContent() {
 
           <Card>
             <CardContent className="p-5 space-y-3">
-              <h2 className="text-base font-bold text-slate-800">{t("gradingSystem")}</h2>
+              <h2 className="text-base font-bold text-foreground">{t("gradingSystem")}</h2>
               {!result.grading_legend.length ? (
-                <p className="text-sm text-slate-400">{t("noGradingScale")}</p>
+                <p className="text-sm text-muted-foreground">{t("noGradingScale")}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b text-left text-slate-500">
+                      <tr className="border-b text-left text-muted-foreground">
                         <th className="p-1.5 font-semibold">{t("marksPercent")}</th>
                         <th className="p-1.5 font-semibold">{td("grade")}</th>
                         <th className="p-1.5 font-semibold">{t("gradePoint")}</th>
@@ -317,11 +317,11 @@ function ResultsContent() {
                     </thead>
                     <tbody>
                       {result.grading_legend.map((g, i) => (
-                        <tr key={i} className="border-b border-slate-100">
-                          <td className="p-1.5 text-slate-600">{g.range}</td>
-                          <td className="p-1.5 font-medium text-slate-800">{g.grade_letter}</td>
-                          <td className="p-1.5 text-slate-600">{g.grade_point.toFixed(2)}</td>
-                          <td className="p-1.5 text-slate-500">{g.remarks ?? "—"}</td>
+                        <tr key={i} className="border-b border-border">
+                          <td className="p-1.5 text-muted-foreground">{g.range}</td>
+                          <td className="p-1.5 font-medium text-foreground">{g.grade_letter}</td>
+                          <td className="p-1.5 text-muted-foreground">{g.grade_point.toFixed(2)}</td>
+                          <td className="p-1.5 text-muted-foreground">{g.remarks ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>

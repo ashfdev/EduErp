@@ -60,7 +60,7 @@ function PtmContent() {
           <CardContent className="flex items-center justify-between pt-6">
             <div>
               <p className="font-medium">{s.teacher.name_en}</p>
-              <p className="text-sm text-gray-500">{new Date(s.date).toLocaleDateString()} · {s.start_time}-{s.end_time}{s.class ? ` · ${s.class.name_en}` : ""}</p>
+              <p className="text-sm text-muted-foreground">{new Date(s.date).toLocaleDateString()} · {s.start_time}-{s.end_time}{s.class ? ` · ${s.class.name_en}` : ""}</p>
             </div>
             <Button size="sm" onClick={() => bookMutation.mutate(s.id)} disabled={bookMutation.isPending}>{t("book")}</Button>
           </CardContent>

@@ -81,8 +81,8 @@
     "adminPortal": "Admin Portal",
     "phoneOrEmail": "Phone or Email",
     "password": "Password",
-    "hide": "Hide",
-    "show": "Show",
+    "hide": "Hide password",
+    "show": "Show password",
     "forgotPassword": "Forgot Password?",
     "contactAdmin": "Contact your administrator to reactivate this account.",
     "signingIn": "Signing in...",
@@ -108,7 +108,12 @@
     "passwordMismatch": "Passwords do not match",
     "resetFailed": "Could not reset password — the link may have expired",
     "invalidCredentials": "Invalid credentials",
-    "networkError": "Network error — please try again"
+    "networkError": "Network error — please try again",
+    "panelLabel": "Admin panel",
+    "subtitle": "Sign in to open the admin panel",
+    "idPlaceholder": "01XXXXXXXXX or email",
+    "resetSubtitle": "Enter your phone number and we'll text you a 6-digit code",
+    "help": "Trouble signing in? Contact the institution office."
   },
   "forbidden": {
     "title": "403 — Forbidden",

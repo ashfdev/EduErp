@@ -89,28 +89,25 @@ export default function MarksPickerPage() {
 
   return (
     <TeacherShell>
-      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-primary to-blue-500 p-6 sm:p-8 text-white shadow-xl shadow-indigo-200">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-        <div className="absolute bottom-0 left-10 -mb-10 h-32 w-32 rounded-full bg-blue-400/20 blur-2xl"></div>
-        
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden rounded-lg bg-forest p-6 sm:p-8 text-white">
         <div className="relative z-10 flex flex-col">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             {t("title")}
           </h1>
-          <p className="mt-1 text-indigo-100 font-medium opacity-90">
+          <p className="mt-1 text-white/75 font-medium opacity-90">
             {t("subtitle")}
           </p>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-slate-100 bg-white p-4 sm:p-8 shadow-sm">
+      <div className="rounded-lg border border-border bg-white p-4 sm:p-8">
         {!isAdminTier && mySections && mySections.length === 0 && (
-          <p className="mb-6 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">{t("noOwnSections")}</p>
+          <p className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">{t("noOwnSections")}</p>
         )}
         <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${isUniversity && isAdminTier ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase">{t("exam")}</Label>
-            <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={examId} onChange={(e) => setExamId(e.target.value)}>
+            <Label className="text-xs font-bold text-muted-foreground">{t("exam")}</Label>
+            <select className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" value={examId} onChange={(e) => setExamId(e.target.value)}>
               <option value="">{t("select")}</option>
               {exams?.map((ex) => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
             </select>
@@ -118,9 +115,9 @@ export default function MarksPickerPage() {
           {isUniversity && isAdminTier && (
             <>
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase">Department</Label>
+                <Label className="text-xs font-bold text-muted-foreground">Department</Label>
                 <select
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={departmentId}
                   onChange={(e) => { setDepartmentId(e.target.value); setProgramId(""); setClassId(""); setSectionId(""); }}
                 >
@@ -129,9 +126,9 @@ export default function MarksPickerPage() {
                 </select>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-500 uppercase">Program</Label>
+                <Label className="text-xs font-bold text-muted-foreground">Program</Label>
                 <select
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   value={programId}
                   onChange={(e) => { setProgramId(e.target.value); setClassId(""); setSectionId(""); }}
                 >
@@ -142,24 +139,24 @@ export default function MarksPickerPage() {
             </>
           )}
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase">{t("class")}</Label>
-            <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
+            <Label className="text-xs font-bold text-muted-foreground">{t("class")}</Label>
+            <select className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" value={classId} onChange={(e) => { setClassId(e.target.value); setSectionId(""); }}>
               <option value="">{t("select")}</option>
               {visibleClasses?.map((c) => <option key={c.id} value={c.id}>{c.name_en}</option>)}
             </select>
           </div>
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-500 uppercase">{t("section")}</Label>
-            <select className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
+            <Label className="text-xs font-bold text-muted-foreground">{t("section")}</Label>
+            <select className="w-full rounded-lg border border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!classId}>
               <option value="">{t("select")}</option>
               {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
         </div>
         
-        <div className="mt-6 sm:mt-8 flex justify-end pt-4 border-t border-slate-100">
+        <div className="mt-6 sm:mt-8 flex justify-end pt-4 border-t border-border">
           <Button
-            className="w-full sm:w-auto rounded-xl px-8 py-6 text-base font-bold shadow-md"
+            className="w-full sm:w-auto rounded-lg px-8 py-6 text-base font-bold"
             disabled={!examId || !classId || !sectionId}
             onClick={() => router.push(`/marks/${examId}/${classId}/${sectionId}`)}
           >
