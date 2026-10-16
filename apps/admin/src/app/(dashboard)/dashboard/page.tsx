@@ -378,18 +378,16 @@ const HERO_TONE = {
   forest: "bg-forest text-white",
 };
 
-// The four summary cards echo the Figma card row: dark, light, lime, forest.
 function HeroCard({ tone, label, value, icon: Icon, children }: { tone: keyof typeof HERO_TONE; label: string; value: string; icon: LucideIcon; children?: React.ReactNode }) {
   const onDark = tone === "dark" || tone === "forest";
   return (
-    <div className={`relative overflow-hidden rounded-lg p-5 ${HERO_TONE[tone]}`}>
-      <span aria-hidden className={`pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full border-[22px] ${onDark ? "border-white/[0.06]" : "border-forest/[0.06]"}`} />
-      <div className="relative flex items-start justify-between gap-3">
+    <div className={`rounded-lg p-5 ${HERO_TONE[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
         <p className={`text-sm font-medium ${onDark ? "text-white/75" : tone === "lime" ? "text-forest/75" : "text-muted-foreground"}`}>{label}</p>
         <Icon className={`h-5 w-5 shrink-0 ${onDark ? "text-lime" : "text-forest"}`} />
       </div>
-      <p className="relative mt-3 text-[32px] font-bold leading-none tabular-nums">{value}</p>
-      {children && <div className="relative mt-4 flex flex-wrap items-center gap-1.5">{children}</div>}
+      <p className="mt-3 text-[32px] font-bold leading-none tabular-nums">{value}</p>
+      {children && <div className="mt-4 flex flex-wrap items-center gap-1.5">{children}</div>}
     </div>
   );
 }
