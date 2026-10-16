@@ -13,6 +13,7 @@ import { reqParam } from "../../lib/req-param";
 import { STUDENT_CRUD_ROLES, STUDENT_PROMOTE_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { createStudentSchema, updateStudentSchema, promoteStudentSchema, bulkPromoteSchema, graduateStudentSchema, deactivateStudentSchema, studentDocumentSchema, createStudentLoginSchema } from "@education-erp/validators";
 import { createWithUniqueStudentUid } from "../../utils/student-id.generator";
+import { resolveClassRef, resolveSectionRef, type ClassRef } from "../../utils/class-ref.resolver";
 import { inheritSubjectsForClass, assertGroupSelectedIfRequired, setFourthSubject } from "../../utils/subject-inheritance";
 import { checkPromotionEligibility } from "../../utils/promotion-eligibility";
 import { invoiceReadmissionFeeIfConfigured, formatFeePeriod, createMonthlyInvoiceIfMissing, applyWaiversToInvoice } from "../fees/invoice-helpers";
@@ -1458,41 +1459,75 @@ studentsRouter.delete(
   }),
 );
 
+function loadImportClassRefs(academicYearId: string): Promise<ClassRef[]> {
+  return prisma.class.findMany({
+    where: { academic_year_id: academicYearId, is_active: true },
+    select: { id: true, name_en: true, name_bn: true, numeric_level: true, sections: { where: { is_active: true }, select: { id: true, name: true } } },
+    orderBy: { numeric_level: "asc" },
+  });
+}
+
 studentsRouter.post(
   "/bulk-import",
   authorize(STUDENT_CRUD_ROLES),
   csvUpload.single("file"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest("A CSV file is required");
+    const academicYearId = typeof req.body?.academic_year_id === "string" ? req.body.academic_year_id : "";
+    if (!academicYearId) throw badRequest("Select an academic year before previewing");
     const records: Record<string, string>[] = parse(req.file.buffer.toString("utf-8"), {
       columns: true,
       skip_empty_lines: true,
       trim: true,
     });
 
-    // Batched once for the whole file rather than per-row — every group in
-    // every class referenced by the CSV, looked up by (class_id, code).
-    const classIds = [...new Set(records.map((r) => r.current_class_id).filter((id): id is string => !!id))];
-    const groupsByClass = await prisma.group.findMany({ where: { class_id: { in: classIds }, is_active: true } });
+    const classes = await loadImportClassRefs(academicYearId);
+    const groupsByClass = await prisma.group.findMany({ where: { class_id: { in: classes.map((c) => c.id) }, is_active: true } });
     const groupLookup = new Map(groupsByClass.map((g) => [`${g.class_id}:${g.code}`, g]));
     const classesWithGroups = new Set(groupsByClass.map((g) => g.class_id));
 
     const preview = records.map((row, index) => {
       const errors: string[] = [];
+      const gender = (row.gender ?? "").toUpperCase();
       if (!row.name_en) errors.push("name_en is required");
-      if (!row.gender || !["MALE", "FEMALE", "OTHER"].includes(row.gender)) errors.push("gender must be MALE/FEMALE/OTHER");
+      if (!["MALE", "FEMALE", "OTHER"].includes(gender)) errors.push("gender must be MALE/FEMALE/OTHER");
       if (!row.father_phone || !/^01\d{9}$/.test(row.father_phone)) errors.push("father_phone must be 11 digits starting with 01");
       // phone is optional (a row without it still imports fine — the
       // student just won't get their own portal login, only the guardian's,
       // same as leaving it blank on the manual Add Student form) but must be
       // valid if present.
       if (row.phone && !/^01\d{9}$/.test(row.phone)) errors.push("phone must be 11 digits starting with 01");
-      if (!row.current_class_id) errors.push("current_class_id is required");
-      else if (classesWithGroups.has(row.current_class_id)) {
+
+      // `class`/`section` hold names; the older id columns are still accepted.
+      const classRaw = row.class || row.current_class_id;
+      const sectionRaw = row.section || row.current_section_id;
+      const cls = resolveClassRef(classes, classRaw);
+      const section = cls.match ? resolveSectionRef(cls.match, sectionRaw) : undefined;
+      if (cls.error) errors.push(cls.error);
+      if (section?.error) errors.push(section.error);
+      if (cls.match && classesWithGroups.has(cls.match.id)) {
         if (!row.group_code) errors.push("this class has Groups/Streams defined — group_code is required");
-        else if (!groupLookup.has(`${row.current_class_id}:${row.group_code}`)) errors.push(`group_code "${row.group_code}" not found for this class`);
+        else if (!groupLookup.has(`${cls.match.id}:${row.group_code}`)) errors.push(`group_code "${row.group_code}" not found for this class`);
       }
-      return { row: index + 1, data: row, valid: errors.length === 0, errors };
+
+      return {
+        row: index + 1,
+        data: {
+          name_en: row.name_en,
+          name_bn: row.name_bn || undefined,
+          gender,
+          phone: row.phone || undefined,
+          father_name: row.father_name || undefined,
+          father_phone: row.father_phone,
+          current_class_id: cls.match?.id,
+          current_section_id: section?.match?.id,
+          group_code: row.group_code || undefined,
+          class_label: cls.match?.name_en ?? classRaw ?? "",
+          section_label: section?.match?.name ?? sectionRaw ?? "",
+        },
+        valid: errors.length === 0,
+        errors,
+      };
     });
 
     res.json({
@@ -1529,12 +1564,15 @@ studentsRouter.post(
             father_name: z.string().optional(),
             father_phone: z.string().regex(/^01\d{9}$/),
             current_class_id: z.string().min(1),
-            current_section_id: z.string().optional(),
+            current_section_id: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
             group_code: z.string().optional(),
           }),
         ),
       })
       .parse(req.body);
+
+    // Re-checked so a stale preview fails with a readable reason, not a raw Prisma foreign-key error.
+    const classById = new Map((await loadImportClassRefs(body.academic_year_id)).map((c) => [c.id, c]));
 
     const created: string[] = [];
     const failed: { row: number; reason: string }[] = [];
@@ -1548,6 +1586,12 @@ studentsRouter.post(
     // as a known limit rather than building an async bulk-job system here.
     for (const [index, row] of body.rows.entries()) {
       try {
+        const cls = classById.get(row.current_class_id);
+        if (!cls) throw new Error("Class not found in the selected academic year — run Preview again");
+        if (row.current_section_id && !cls.sections.some((s) => s.id === row.current_section_id)) {
+          throw new Error(`Section not found in ${cls.name_en} — run Preview again`);
+        }
+
         let groupId: string | null = null;
         if (row.group_code) {
           const group = await prisma.group.findFirst({ where: { class_id: row.current_class_id, code: row.group_code, is_active: true } });
