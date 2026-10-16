@@ -118,6 +118,7 @@ services:
       dockerfile: apps/admin/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_WEBSITE_URL: ${WEBSITE_URL:-https://alhumaira.ashdevs.com}
     restart: always
     networks:
       - default
@@ -184,6 +185,9 @@ services:
       dockerfile: apps/website/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        # Defaults match the Host() rules below; override in Dokploy's env.
+        NEXT_PUBLIC_SITE_URL: ${WEBSITE_URL:-https://alhumaira.ashdevs.com}
+        NEXT_PUBLIC_PORTAL_URL: ${PORTAL_URL:-https://student.ashdevs.com}
     restart: always
     networks:
       - default

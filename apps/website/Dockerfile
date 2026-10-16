@@ -21,6 +21,12 @@ COPY apps/website apps/website
 # read at container startup — must be a build ARG, not a runtime ENV.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# The site's own public address (canonical URLs, sitemap, robots.txt) and the
+# student portal it links to. Without them the live site linked to localhost.
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3002
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_PORTAL_URL=http://localhost:3001
+ENV NEXT_PUBLIC_PORTAL_URL=$NEXT_PUBLIC_PORTAL_URL
 COPY packages/db packages/db
 RUN pnpm --filter=@education-erp/db exec prisma generate
 RUN pnpm --filter=@education-erp/types build

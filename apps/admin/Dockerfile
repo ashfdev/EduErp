@@ -23,6 +23,9 @@ COPY apps/admin apps/admin
 # read at container startup — must be a build ARG, not a runtime ENV.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Public website address, for the "View website" link in Website settings.
+ARG NEXT_PUBLIC_WEBSITE_URL=http://localhost:3002
+ENV NEXT_PUBLIC_WEBSITE_URL=$NEXT_PUBLIC_WEBSITE_URL
 COPY packages/db packages/db
 RUN pnpm --filter=@education-erp/db exec prisma generate
 RUN pnpm --filter=@education-erp/types build
