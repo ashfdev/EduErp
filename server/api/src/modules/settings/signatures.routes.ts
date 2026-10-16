@@ -7,7 +7,7 @@ import { authenticate } from "../../middleware/authenticate";
 import { authorize } from "../../middleware/authorize";
 import { imageUpload, verifyImageMagicBytes } from "../../middleware/upload";
 import { uploadBuffer } from "../../services/storage.service";
-import { SETTINGS_ACADEMIC_ROLES } from "../../lib/roles";
+import { SETTINGS_ACADEMIC_ROLES, STAFF_ONLY_ROLES } from "../../lib/roles";
 import { authoritySignatureSchema, authorityConfigSlotSchema } from "@education-erp/validators";
 import { hasSignatureSlot } from "../../services/pdf.service";
 import { logAudit } from "../../lib/audit-log";
@@ -21,6 +21,8 @@ authorityConfigRouter.use(authenticate);
 
 signaturesRouter.get(
   "/",
+  // Signature and seal images: staff only, never student or guardian tokens.
+  authorize(STAFF_ONLY_ROLES),
   asyncHandler(async (_req, res) => {
     const signatures = await prisma.authoritySignature.findMany({ orderBy: { created_at: "asc" } });
     res.json({ success: true, data: signatures });

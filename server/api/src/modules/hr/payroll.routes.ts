@@ -358,6 +358,9 @@ payrollRouter.post(
     for (const record of records) {
       try {
         const pdf = await renderDocument("PAYSLIP", buildPayslipData(record) as unknown as Record<string, unknown>);
+        // Archived copy. Its direct URL doesn't open (payslips aren't a
+        // direct-access category); payslips are viewed through the
+        // authenticated /documents/payroll/payslip/:id route.
         const { url } = await uploadBuffer("payslips", `${record.staff.staff_uid}-${record.month}-${record.year}.pdf`, pdf, "application/pdf");
 
         // PF contribution: if a non-zero pf_amount was computed during /calculate,
