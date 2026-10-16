@@ -146,7 +146,7 @@ export default function SalaryStructuresPage() {
               <div className="space-y-1.5"><Label>TDS %</Label><Input type="number" min={0} max={100} value={form.tds_percentage} onChange={(e) => setForm({ ...form, tds_percentage: Number(e.target.value) })} /></div>
             </div>
             <p className="text-xs font-medium text-muted-foreground">Payroll depth (optional — leave at 0 to opt out)</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Overtime Rate/hr</Label>
                 <Input type="number" min={0} value={form.overtime_rate_per_hour} onChange={(e) => setForm({ ...form, overtime_rate_per_hour: Number(e.target.value) })} />

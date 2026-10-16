@@ -271,7 +271,7 @@ export default function SubjectsSettingsPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="col-span-1 space-y-1">
           {classesLoading ? (
             <div className="flex justify-center py-8"><LoadingSpinner /></div>
@@ -290,7 +290,7 @@ export default function SubjectsSettingsPage() {
           )}
         </div>
 
-        <div className="col-span-3 space-y-4">
+        <div className="space-y-4 lg:col-span-3">
           {!selectedClassId && <EmptyState title="Select a class to manage its subjects" />}
 
           {selectedClassId && (

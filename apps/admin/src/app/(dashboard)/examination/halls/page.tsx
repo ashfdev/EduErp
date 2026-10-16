@@ -92,7 +92,7 @@ export default function ExamHallsPage() {
         <>
       {!halls?.length && <EmptyState title="No halls defined yet" description="Add one before generating a seat plan." />}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {halls?.map((h) => (
           <Card key={h.id}>
             <CardHeader><CardTitle className="text-base">{h.name}</CardTitle></CardHeader>

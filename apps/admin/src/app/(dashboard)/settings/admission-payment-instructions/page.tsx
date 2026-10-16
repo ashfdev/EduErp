@@ -49,7 +49,7 @@ export default function AdmissionPaymentInstructionsPage() {
         <Card>
           <CardContent className="space-y-4 pt-6">
             <p className="text-sm font-medium">Mobile Wallet (Send Money) Numbers</p>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label>bKash Number</Label>
                 <Input placeholder="e.g. 01712345678" {...register("bkash_number")} />

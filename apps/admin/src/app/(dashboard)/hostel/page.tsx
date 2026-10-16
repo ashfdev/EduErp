@@ -146,7 +146,7 @@ function RoomsTab() {
             <Card key={b.id}>
               <CardContent className="pt-6">
                 <p className="mb-2 font-medium">{b.name} {b.type && <span className="text-sm text-muted-foreground">({b.type})</span>}</p>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {b.rooms.map((r) => (
                     <div key={r.id} className="rounded-md border p-3 text-center">
                       <p className="font-medium">{r.room_no}</p>
@@ -352,7 +352,7 @@ function OccupancyTab() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{data.total_capacity}</p><p className="text-sm text-muted-foreground">Total Capacity</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{data.total_occupied}</p><p className="text-sm text-muted-foreground">Occupied</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{data.fill_rate}%</p><p className="text-sm text-muted-foreground">Fill Rate</p></CardContent></Card>

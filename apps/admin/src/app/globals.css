@@ -4,30 +4,34 @@
 
 @layer base {
   :root {
-    --background: 222 47% 98%;
-    --foreground: 222 47% 11%;
+    /* Fixed palette from the chosen Figma design (forest + lime), not from
+       Settings. Forest #183028, lime #C5E86C, ember #FF5D28, line #EEEEEE. */
+    --forest: 160 33% 14%;
+    --lime: 77 73% 67%;
+    --ember: 15 100% 58%;
+
+    --background: 0 0% 100%;
+    --foreground: 150 6% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 150 6% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 217 91% 43%;
+    --popover-foreground: 150 6% 15%;
+    --primary: var(--forest);
     --primary-foreground: 0 0% 100%;
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 214 32% 91%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --secondary: 120 2% 91%;
+    --secondary-foreground: 150 6% 15%;
+    --muted: 120 5% 96%;
+    --muted-foreground: 150 4% 40%;
+    --accent: 120 5% 95%;
+    --accent-foreground: 150 6% 15%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 43%;
-    /* Deliberately tighter than the other 3 apps (portal 1.25rem, teacher/
-       website ~1rem) — the admin panel is the dense, data-heavy, all-day
-       staff surface (Plan Thirteen, Phase B), while portal/website stay
-       softer/roomier for occasional, less-technical users. */
-    --radius: 0.5rem;
+    --border: 0 0% 93%;
+    --input: 120 3% 87%;
+    --ring: var(--forest);
+    /* Tighter than the other 3 apps — the admin panel is the dense,
+       data-heavy, all-day staff surface. */
+    --radius: 0.375rem;
   }
 }
 

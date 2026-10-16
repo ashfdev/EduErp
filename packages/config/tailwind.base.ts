@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 export const tailwindBase: Partial<Config> = {
   darkMode: "class",
@@ -58,6 +59,13 @@ export const tailwindBase: Partial<Config> = {
       },
     },
   },
+  plugins: [
+    // `flat:` styles apply only under <html data-ui="flat"> (the admin panel), so the
+    // shared components keep their current look in the teacher, portal and website apps.
+    plugin(({ addVariant }) => {
+      addVariant("flat", '[data-ui="flat"] &');
+    }),
+  ],
 };
 
 export default tailwindBase;

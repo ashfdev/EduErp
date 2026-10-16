@@ -110,11 +110,12 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden h-9 w-full max-w-sm items-center gap-2 rounded-full border border-input bg-muted/50 px-4 text-sm text-muted-foreground transition-all hover:bg-muted md:flex"
+        aria-label="Search students, staff, settings"
+        className="flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-md border border-input bg-background text-sm text-muted-foreground transition-colors hover:border-forest/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-full md:max-w-sm md:justify-start md:px-3"
       >
         <Search className="h-4 w-4 shrink-0" />
-        <span className="flex-1 text-left">Search students, staff, settings...</span>
-        <kbd className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Ctrl K</kbd>
+        <span className="hidden flex-1 text-left md:inline">Search students, staff, settings…</span>
+        <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline">Ctrl K</kbd>
       </button>
       <CommandPalette
         open={open}

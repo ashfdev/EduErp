@@ -70,7 +70,7 @@ export default function BulkSmsPage() {
 
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium">Audience</label>
               <Select value={audience} onValueChange={(v) => { setAudience(v); setPreview(null); }}>

@@ -464,20 +464,24 @@ export default function DocumentPrintCenterPage() {
   return (
     <PageWrapper>
       <PageHeader title="Document Print Center" breadcrumbs={[{ label: "Documents" }, { label: "Print" }]} />
-      <div className="flex gap-6">
-        <aside className="w-56 shrink-0 space-y-1">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* A scrolling row of chips on small screens, a side list from lg up. */}
+        <aside className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:block lg:w-56 lg:shrink-0 lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0">
           {DOC_TYPES.map((d) => (
             <button
               key={d.key}
               onClick={() => selectDoc(d.key)}
-              className={`block w-full rounded-md px-3 py-2 text-left text-sm ${d.key === selectedKey ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}
+              aria-pressed={d.key === selectedKey}
+              className={`shrink-0 whitespace-nowrap rounded-md border px-3 py-2 text-left text-sm transition-colors lg:block lg:w-full lg:whitespace-normal lg:border-transparent ${
+                d.key === selectedKey ? "border-lime bg-lime font-semibold text-forest" : "hover:bg-accent"
+              }`}
             >
               {d.title}
             </button>
           ))}
         </aside>
 
-        <div className="flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4">
           <Card>
             <CardContent className="space-y-4 pt-6">
               <div>

@@ -86,7 +86,7 @@ export default function NewAdmissionCyclePage() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             <div className="space-y-1.5"><Label>Open Date</Label><Input type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Close Date</Label><Input type="date" value={closeDate} min={openDate || undefined} onChange={(e) => setCloseDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Seat Count</Label><Input type="number" value={seatCount} onChange={(e) => setSeatCount(Number(e.target.value))} /></div>

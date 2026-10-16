@@ -122,7 +122,7 @@ export default function ComplaintsPage() {
           {!complaints?.length && <EmptyState title="No complaints" />}
 
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="overflow-x-auto pt-6">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">

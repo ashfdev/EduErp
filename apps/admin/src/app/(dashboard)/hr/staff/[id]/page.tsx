@@ -737,7 +737,7 @@ export default function StaffDetailPage() {
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div className="space-y-1.5"><Label>Date of Birth</Label><Input type="date" value={coreDraft.date_of_birth} onChange={(e) => setCoreDraft({ ...coreDraft, date_of_birth: e.target.value })} /></div>
                     <div className="space-y-1.5">
                       <Label>Gender</Label>
@@ -750,7 +750,7 @@ export default function StaffDetailPage() {
                     </div>
                     <div className="space-y-1.5"><Label>Blood Group</Label><Input value={coreDraft.blood_group} onChange={(e) => setCoreDraft({ ...coreDraft, blood_group: e.target.value })} placeholder="e.g. O+" /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div className="space-y-1.5"><Label>Religion</Label><Input value={coreDraft.religion} onChange={(e) => setCoreDraft({ ...coreDraft, religion: e.target.value })} /></div>
                     <div className="space-y-1.5"><Label>NID</Label><Input value={coreDraft.nid} onChange={(e) => setCoreDraft({ ...coreDraft, nid: e.target.value })} /></div>
                     <div className="space-y-1.5"><Label>TIN</Label><Input value={coreDraft.tin} onChange={(e) => setCoreDraft({ ...coreDraft, tin: e.target.value })} /></div>
@@ -1037,7 +1037,7 @@ export default function StaffDetailPage() {
 
         <TabsContent value="leave">
           <div className="mb-3 flex justify-end"><Button size="sm" onClick={() => setApplyOpen(true)}>Apply Leave</Button></div>
-          <div className="mb-4 grid grid-cols-4 gap-3">
+          <div className="mb-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             {balance?.map((b) => (
               <Card key={b.leave_type.id}><CardContent className="pt-6 text-center">
                 <p className="text-sm font-medium">{b.leave_type.name}</p>

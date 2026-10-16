@@ -177,7 +177,7 @@ export default function AssetCategoriesPage() {
               <div className="space-y-1.5"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Furniture" /></div>
               <div className="space-y-1.5"><Label>Name (Bangla, optional)</Label><Input value={form.name_bn} onChange={(e) => setForm((f) => ({ ...f, name_bn: e.target.value }))} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Depreciation Method</Label>
                 <Select value={form.depreciation_method} onValueChange={(v) => setForm((f) => ({ ...f, depreciation_method: v }))}>

@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
   LineChart, Line, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { PageWrapper, PageHeader, Card, CardContent, Button, EmptyState, StatusBadge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
+import { PageWrapper, PageHeader, Card, EmptyState, StatusBadge, ErrorState, LoadingSpinner, extractErrorMessage } from "@education-erp/ui";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
-import { Users, UserCheck, Wallet, Calendar, Bell, ArrowUpRight, ArrowDownRight, Activity, ClipboardCheck, AlertTriangle, TrendingDown } from "lucide-react";
+import { Users, UserCheck, Wallet, Bell, ArrowUpRight, Activity, ClipboardCheck, AlertTriangle, type LucideIcon } from "lucide-react";
 
 // Matches the backend's ANALYTICS_MESSAGE_ROLES gate on /api/analytics/
 // defaulters-risk — the at-risk page mixes financial due data with a
@@ -86,231 +86,124 @@ export default function DashboardPage() {
   const radarData = resultPerf?.subject_performance.map((s) => ({ subject: s.subject_name, marks: s.average_marks })) ?? [];
   const upcomingEvents = events?.filter((e) => new Date(e.date_from) >= new Date()).slice(0, 5) ?? [];
 
-  // Theme colors for charts
-  const CHART_PRIMARY = "#2563EB"; // Tailwind blue-600
-  const CHART_SECONDARY = "#60A5FA"; // Tailwind blue-400
-  const GENDER_COLORS = ["#2563EB", "#EC4899", "#94A3B8"]; // blue-600, pink-500, slate-400
-  const ADMISSION_COLORS = ["#94A3B8", "#F59E0B", "#FBBF24", "#EF4444", "#3B82F6", "#10B981"]; // slate/amber/red/blue/emerald
+  // Chart colours follow the fixed forest/lime palette (globals.css).
+  const FOREST = "#183028";
+  const LIME = "#C5E86C";
+  const GRID = "#EEEEEE";
+  const AXIS = "#6B726E";
+  const GENDER_COLORS = [FOREST, LIME, "#B9BDBA"];
+  const ADMISSION_COLORS = [FOREST, LIME, "#333333", "#FF5D28", "#B9BDBA", "#7A9A8C"];
+  const tooltipStyle = { borderRadius: 6, border: "1px solid #EEEEEE", boxShadow: "none", fontSize: 12 };
+
+  const s = overview?.students;
+  const f = overview?.finance;
+  const netToday = f ? f.today_collection - f.today_expense : null;
+  const netMonth = f ? f.this_month_collection - f.this_month_expense : null;
+  const taka = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n < 0 ? "−" : ""}৳${Math.abs(n).toLocaleString("en-US")}`);
+  // These strings were written as "Label: {count}" for inline use; drop the trailing colon in label slots.
+  const labelOf = (key: "overdueInvoices" | "activeExams" | "publishedResults" | "overdueLibraryBooks") => t(key, { count: "" }).replace(/[:：]\s*$/, "").trim();
+  const glance: { label: string; value: string; tone?: "good" | "bad" | "warn" | "muted" }[] = [
+    { label: t("staffPresentToday"), value: String(overview?.staff.present_today ?? "—"), tone: "good" },
+    { label: t("staffAbsentToday"), value: String(overview?.staff.today_absent ?? "—"), tone: overview?.staff.today_absent ? "bad" : undefined },
+    { label: t("staffLateToday"), value: String(overview?.staff.today_late ?? "—"), tone: overview?.staff.today_late ? "warn" : undefined },
+    { label: t("staffUnmarkedToday"), value: String(overview?.staff.today_unmarked ?? "—"), tone: "muted" },
+    { label: t("studentsLateToday"), value: String(s?.today_late ?? "—"), tone: s?.today_late ? "warn" : undefined },
+    { label: t("studentsOnLeaveToday"), value: String(s?.on_leave_today ?? "—") },
+    { label: t("studentsUnmarkedToday"), value: String(s?.today_unmarked ?? "—"), tone: "muted" },
+    { label: t("todaysExpense"), value: taka(f?.today_expense) },
+    { label: t("currentFundBalance"), value: taka(f?.current_fund_balance) },
+    { label: t("netPositionToday"), value: taka(netToday), tone: netToday === null ? undefined : netToday >= 0 ? "good" : "bad" },
+    { label: t("netPositionMonth"), value: taka(netMonth), tone: netMonth === null ? undefined : netMonth >= 0 ? "good" : "bad" },
+    { label: labelOf("overdueInvoices"), value: String(f?.overdue_invoices ?? "—"), tone: f?.overdue_invoices ? "bad" : undefined },
+  ];
+  const toneClass = { good: "text-emerald-700", bad: "text-red-700", warn: "text-amber-700", muted: "text-muted-foreground" };
 
   return (
     <PageWrapper>
-      <div className="mb-8">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <HeroCard tone="dark" label={t("totalStudents")} value={String(s?.total ?? "—")} icon={Users}>
+          <Pill tone="dark">{t("present", { count: s?.today_present ?? 0 })}</Pill>
+          <Pill tone="dark">{t("absent", { count: s?.today_absent ?? 0 })}</Pill>
+          {/* Present+Absent both 0 looks like a broken counter unless it's clear attendance hasn't been marked yet. */}
+          {!!s?.today_unmarked && <Pill tone="dark">{t("unmarked", { count: s.today_unmarked })}</Pill>}
+        </HeroCard>
+        <HeroCard tone="light" label={t("todaysCollection")} value={taka(f?.today_collection ?? 0)} icon={Wallet}>
+          <Pill tone="light">{t("thisMonth", { amount: (f?.this_month_collection ?? 0).toLocaleString("en-US") })}</Pill>
+        </HeroCard>
+        <HeroCard tone="lime" label={t("attendanceToday")} value={s?.today_percentage === null || s?.today_percentage === undefined ? "—" : `${s.today_percentage}%`} icon={Activity}>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-forest/15" role="progressbar" aria-valuenow={s?.today_percentage ?? 0} aria-valuemin={0} aria-valuemax={100}>
+            <div className="h-full rounded-full bg-forest" style={{ width: `${Math.min(100, s?.today_percentage ?? 0)}%` }} />
+          </div>
+        </HeroCard>
+        <HeroCard tone="forest" label={t("staff")} value={String(overview?.staff.total ?? "—")} icon={UserCheck}>
+          <Pill tone="dark">{t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}</Pill>
+          {!!overview?.staff.today_unmarked && <Pill tone="dark">{t("unmarked", { count: overview.staff.today_unmarked })}</Pill>}
+        </HeroCard>
       </div>
 
-      {/* Row 1 — Quick Stats */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 mb-4">
-        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">{t("totalStudents")}</p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <Users className="h-4 w-4" />
-              </div>
+      <Card className="overflow-hidden">
+        <PanelHeader title={t("todayAtAGlance")} />
+        <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          {glance.map((g) => (
+            <div key={g.label} className="bg-card px-4 py-3.5">
+              <p className="text-[13px] leading-snug text-muted-foreground">{g.label}</p>
+              <p className={`mt-1 text-lg font-semibold tabular-nums ${g.tone ? toneClass[g.tone] : ""}`}>{g.value}</p>
             </div>
-            <p className="text-2xl font-bold tracking-tight">{overview?.students.total ?? "-"}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium">
-              <span className="flex items-center text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                <ArrowUpRight className="mr-1 h-3 w-3" />
-                {t("present", { count: overview?.students.today_present ?? 0 })}
-              </span>
-              <span className="flex items-center text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-                <ArrowDownRight className="mr-1 h-3 w-3" />
-                {t("absent", { count: overview?.students.today_absent ?? 0 })}
-              </span>
-              {/* Present+Absent both reading 0 looks exactly like a broken
-                  counter unless it's clear attendance for today simply
-                  hasn't been marked yet -- this makes that state explicit
-                  instead of silently ambiguous. */}
-              {!!overview?.students.today_unmarked && (
-                <span className="flex items-center text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                  {t("unmarked", { count: overview.students.today_unmarked })}
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
+      </Card>
 
-        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">{t("staff")}</p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-                <UserCheck className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold tracking-tight">{overview?.staff.total ?? "-"}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium">
-              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
-                {t("onLeaveToday", { count: overview?.staff.on_leave_today ?? 0 })}
-              </span>
-              {!!overview?.staff.today_unmarked && (
-                <span className="flex items-center text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                  {t("unmarked", { count: overview.staff.today_unmarked })}
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">{t("todaysCollection")}</p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <Wallet className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold tracking-tight">৳{overview?.finance.today_collection ?? 0}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
-              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
-                {t("thisMonth", { amount: overview?.finance.this_month_collection ?? 0 })}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">{t("todaysExpense")}</p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-                <TrendingDown className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold tracking-tight">৳{overview?.finance.today_expense ?? 0}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
-              <span className="flex items-center text-muted-foreground bg-slate-100 px-2 py-0.5 rounded-full">
-                {t("thisMonthExpense", { amount: overview?.finance.this_month_expense ?? 0 })}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 shadow-sm transition-all hover:shadow-md">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-muted-foreground">{t("attendanceToday")}</p>
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                <Activity className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold tracking-tight">{overview?.students.today_percentage ?? "-"}%</p>
-            <div className="mt-2 flex items-center gap-2 text-xs font-medium">
-              <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2">
-                <div
-                  className="bg-amber-500 h-1.5 rounded-full"
-                  style={{ width: `${overview?.students.today_percentage ?? 0}%` }}
-                ></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Row 2 — Attendance Trend + Notices */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <p className="font-semibold text-foreground tracking-tight">{t("attendanceTrend")}</p>
-            </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("attendanceTrend")} href="/attendance/reports" />
+          <div className="p-5">
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} domain={[0, 100]} axisLine={false} tickLine={false} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="present" 
-                  stroke={CHART_PRIMARY} 
-                  strokeWidth={3} 
-                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                  activeDot={{ r: 6, strokeWidth: 0, fill: CHART_PRIMARY }}
-                  name={t("presentPercent")} 
-                />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: AXIS }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{ fontSize: 12, fill: AXIS }} domain={[0, 100]} axisLine={false} tickLine={false} dx={-10} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Line type="monotone" dataKey="present" stroke={FOREST} strokeWidth={2.5} dot={{ r: 3.5, strokeWidth: 2, fill: "#fff" }} activeDot={{ r: 5, strokeWidth: 0, fill: FOREST }} name={t("presentPercent")} />
               </LineChart>
             </ResponsiveContainer>
-          </CardContent>
+          </div>
         </Card>
-        
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <p className="font-semibold text-foreground tracking-tight">{t("latestNotices")}</p>
-              <Button variant="ghost" size="sm" asChild className="text-primary">
-                <Link href="/website/notices">View All</Link>
-              </Button>
-            </div>
-            {noticesLoading ? (
-              <div className="flex justify-center py-8"><LoadingSpinner /></div>
-            ) : noticesIsError ? (
-              <ErrorState title="Failed to load notices" description={extractErrorMessage(noticesError)} retryLabel="Retry" onRetry={() => refetchNotices()} />
-            ) : (
-              <>
-                {!notices?.length && <EmptyState title={t("noNotices")} />}
-                <div className="space-y-4">
-                  {notices?.map((n) => (
-                    <div key={n.id} className="group flex items-start gap-4 rounded-xl p-3 hover:bg-slate-50 transition-colors">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                        <Bell className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">{n.title}</p>
-                        <div className="flex items-center gap-2 pt-1">
-                          <StatusBadge status={n.audience} />
-                          <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
+
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("latestNotices")} href="/website/notices" />
+          {noticesLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : noticesIsError ? (
+            <div className="p-5"><ErrorState title="Failed to load notices" description={extractErrorMessage(noticesError)} retryLabel="Retry" onRetry={() => refetchNotices()} /></div>
+          ) : !notices?.length ? (
+            <div className="p-5"><EmptyState title={t("noNotices")} /></div>
+          ) : (
+            <ul className="divide-y">
+              {notices.map((n, i) => (
+                <li key={n.id} className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-accent">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${["bg-lime text-forest", "bg-secondary text-foreground", "bg-[#333333] text-white"][i % 3]}`}>
+                    <Bell className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug">{n.title}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <StatusBadge status={n.audience} />
+                      <span className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString("en-GB")}</span>
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
 
-      {/* Row 2.5 — Additional metrics (Plan Thirteen, Phase I) */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6 mb-6">
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-emerald-600">{overview?.staff.present_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffPresentToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-rose-600">{overview?.staff.today_absent ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffAbsentToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.staff.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffLateToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-slate-500">{overview?.staff.today_unmarked ?? "-"}</p><p className="text-xs text-muted-foreground">{t("staffUnmarkedToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-amber-600">{overview?.students.today_late ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsLateToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-blue-600">{overview?.students.on_leave_today ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsOnLeaveToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold text-slate-500">{overview?.students.today_unmarked ?? "-"}</p><p className="text-xs text-muted-foreground">{t("studentsUnmarkedToday")}</p></CardContent></Card>
-        <Card className="border-0 shadow-sm"><CardContent className="p-4 text-center"><p className="text-xl font-bold">৳{(overview?.finance.current_fund_balance ?? 0).toLocaleString()}</p><p className="text-xs text-muted-foreground">{t("currentFundBalance")}</p></CardContent></Card>
-        {overview && (() => {
-          const netToday = overview.finance.today_collection - overview.finance.today_expense;
-          const netMonth = overview.finance.this_month_collection - overview.finance.this_month_expense;
-          return (
-            <>
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4 text-center">
-                  <p className={`text-xl font-bold ${netToday >= 0 ? "text-emerald-600" : "text-rose-600"}`}>৳{netToday.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">{t("netPositionToday")}</p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4 text-center">
-                  <p className={`text-xl font-bold ${netMonth >= 0 ? "text-emerald-600" : "text-rose-600"}`}>৳{netMonth.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">{t("netPositionMonth")}</p>
-                </CardContent>
-              </Card>
-            </>
-          );
-        })()}
-      </div>
-
-      {/* Row 2.6 — Gender split + Admission status donuts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-4 font-semibold tracking-tight">{t("genderSplit")}</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("genderSplit")} href="/students" />
+          <div className="p-5">
             {overview && (overview.students.by_gender.MALE + overview.students.by_gender.FEMALE + overview.students.by_gender.OTHER) > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -328,18 +221,19 @@ export default function DashboardPage() {
                   >
                     {GENDER_COLORS.map((color, i) => <Cell key={i} fill={color} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-[220px] items-center justify-center"><EmptyState title={t("noData")} /></div>
             )}
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-4 font-semibold tracking-tight">{t("admissionStatus")}</p>
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("admissionStatus")} href="/admission" />
+          <div className="p-5">
             {overview && Object.values(overview.admission.by_status).some((v) => v > 0) ? (
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -353,145 +247,153 @@ export default function DashboardPage() {
                   >
                     {Object.keys(overview.admission.by_status).map((_, i) => <Cell key={i} fill={ADMISSION_COLORS[i % ADMISSION_COLORS.length]} />)}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-[220px] items-center justify-center"><EmptyState title={t("noData")} /></div>
             )}
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* Row 3 — Fee Collection + Result Performance */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-6">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-6 font-semibold tracking-tight">{t("feeCollection30")}</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("feeCollection30")} href="/fees" />
+          <div className="p-5">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={feeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} dx={-10} />
-                <Tooltip cursor={{ fill: '#F3F4F6' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="amount" fill={CHART_PRIMARY} radius={[4, 4, 0, 0]} name={t("collected")} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
+                <XAxis dataKey="date" tick={{ fontSize: 12, fill: AXIS }} axisLine={false} tickLine={false} dy={10} />
+                <YAxis tick={{ fontSize: 12, fill: AXIS }} axisLine={false} tickLine={false} dx={-10} />
+                <Tooltip cursor={{ fill: "#F1F2F2" }} contentStyle={tooltipStyle} />
+                <Bar dataKey="amount" fill={FOREST} radius={[3, 3, 0, 0]} name={t("collected")} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
+          </div>
         </Card>
-        
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-6 font-semibold tracking-tight">{t("subjectPerformance")}</p>
+
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("subjectPerformance")} href="/results" />
+          <div className="p-5">
             {!radarData.length ? (
-              <div className="flex h-[260px] items-center justify-center">
-                <EmptyState title={t("noPublishedResults")} />
-              </div>
+              <div className="flex h-[260px] items-center justify-center"><EmptyState title={t("noPublishedResults")} /></div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#E5E7EB" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: '#4B5563' }} />
+                  <PolarGrid stroke={GRID} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: AXIS }} />
                   <PolarRadiusAxis tick={{ fontSize: 10 }} axisLine={false} />
-                  <Radar dataKey="marks" stroke={CHART_PRIMARY} strokeWidth={2} fill={CHART_SECONDARY} fillOpacity={0.5} />
-                  <Tooltip />
+                  <Radar dataKey="marks" stroke={FOREST} strokeWidth={2} fill={LIME} fillOpacity={0.6} />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </RadarChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* Row 4 — Events + Quick Actions + System Status */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <p className="font-semibold tracking-tight">{t("upcomingEvents")}</p>
-            </div>
-            {eventsLoading ? (
-              <div className="flex justify-center py-8"><LoadingSpinner /></div>
-            ) : eventsIsError ? (
-              <ErrorState title="Failed to load events" description={extractErrorMessage(eventsError)} retryLabel="Retry" onRetry={() => refetchEvents()} />
-            ) : (
-              <>
-                {!upcomingEvents.length && <EmptyState title={t("noUpcomingEvents")} />}
-                <div className="space-y-4">
-                  {upcomingEvents.map((e) => (
-                    <div key={e.id} className="flex items-start gap-4">
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-                        <span className="text-[10px] font-bold uppercase">{new Date(e.date_from).toLocaleString('default', { month: 'short' })}</span>
-                        <span className="text-sm font-bold leading-none">{new Date(e.date_from).getDate()}</span>
-                      </div>
-                      <div className="flex flex-col justify-center py-1">
-                        <p className="text-sm font-medium leading-tight">{e.name}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </CardContent>
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("upcomingEvents")} href="/website/events" />
+          {eventsLoading ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : eventsIsError ? (
+            <div className="p-5"><ErrorState title="Failed to load events" description={extractErrorMessage(eventsError)} retryLabel="Retry" onRetry={() => refetchEvents()} /></div>
+          ) : !upcomingEvents.length ? (
+            <div className="p-5"><EmptyState title={t("noUpcomingEvents")} /></div>
+          ) : (
+            <ul className="divide-y">
+              {upcomingEvents.map((e) => (
+                <li key={e.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md bg-secondary leading-none">
+                    <span className="text-[10px] font-semibold text-muted-foreground">{new Date(e.date_from).toLocaleString("en-GB", { month: "short" })}</span>
+                    <span className="mt-0.5 text-base font-bold tabular-nums">{new Date(e.date_from).getDate()}</span>
+                  </span>
+                  <p className="text-sm font-medium leading-snug">{e.name}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
-        
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-6 font-semibold tracking-tight">{t("quickActions")}</p>
-            <div className="space-y-3">
-              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
-                <Link href="/attendance/mark">
-                  <ClipboardCheck className="mr-2 h-4 w-4 text-primary" />
-                  {t("markAttendance")}
+
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("quickActions")} />
+          <ul className="divide-y">
+            {[
+              { href: "/attendance/mark", label: t("markAttendance"), icon: ClipboardCheck },
+              { href: "/fees/collect", label: t("collectFee"), icon: Wallet },
+              { href: "/website/notices", label: t("postNotice"), icon: Bell },
+              ...(user?.role && AT_RISK_VISIBLE_ROLES.includes(user.role) ? [{ href: "/students/at-risk", label: t("viewAtRiskStudents"), icon: AlertTriangle }] : []),
+            ].map((a) => (
+              <li key={a.href}>
+                <Link href={a.href} className="flex min-h-[48px] items-center justify-between gap-3 px-5 py-3 text-sm font-medium transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none">
+                  {a.label}
+                  <a.icon className="h-4 w-4 text-muted-foreground" />
                 </Link>
-              </Button>
-              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
-                <Link href="/fees/collect">
-                  <Wallet className="mr-2 h-4 w-4 text-emerald-600" />
-                  {t("collectFee")}
-                </Link>
-              </Button>
-              <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
-                <Link href="/website/notices">
-                  <Bell className="mr-2 h-4 w-4 text-amber-500" />
-                  {t("postNotice")}
-                </Link>
-              </Button>
-              {user?.role && AT_RISK_VISIBLE_ROLES.includes(user.role) && (
-                <Button variant="outline" asChild className="w-full justify-start rounded-xl h-11">
-                  <Link href="/students/at-risk">
-                    <AlertTriangle className="mr-2 h-4 w-4 text-red-500" />
-                    {t("viewAtRiskStudents")}
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </CardContent>
+              </li>
+            ))}
+          </ul>
         </Card>
-        
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6">
-            <p className="mb-6 font-semibold tracking-tight">{t("systemStatus")}</p>
-            <div className="space-y-4 text-sm text-muted-foreground">
-              <div className="flex items-center justify-between border-b pb-3">
-                <span>{t("activeExams", { count: "" })}</span>
-                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.academic.active_exams ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span>{t("publishedResults", { count: "" })}</span>
-                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.academic.published_results ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-3">
-                <span>{t("overdueInvoices", { count: "" })}</span>
-                <span className="font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full">{overview?.finance.overdue_invoices ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>{t("overdueLibraryBooks", { count: "" })}</span>
-                <span className="font-bold text-foreground bg-slate-100 px-2.5 py-0.5 rounded-full">{overview?.library.overdue_issues ?? 0}</span>
-              </div>
-            </div>
-          </CardContent>
+
+        <Card className="overflow-hidden">
+          <PanelHeader title={t("systemStatus")} />
+          <ul className="divide-y text-sm">
+            {[
+              { label: labelOf("activeExams"), value: overview?.academic.active_exams ?? 0 },
+              { label: labelOf("publishedResults"), value: overview?.academic.published_results ?? 0 },
+              { label: labelOf("overdueInvoices"), value: overview?.finance.overdue_invoices ?? 0, alert: true },
+              { label: labelOf("overdueLibraryBooks"), value: overview?.library.overdue_issues ?? 0, alert: true },
+            ].map((row) => (
+              <li key={row.label} className="flex min-h-[48px] items-center justify-between gap-3 px-5 py-3">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className={`min-w-[2rem] rounded-full px-2.5 py-0.5 text-center font-semibold tabular-nums ${row.alert && row.value > 0 ? "bg-ember text-white" : "bg-secondary"}`}>{row.value}</span>
+              </li>
+            ))}
+          </ul>
         </Card>
       </div>
     </PageWrapper>
   );
+}
+
+function PanelHeader({ title, href }: { title: string; href?: string }) {
+  return (
+    <div className="flex min-h-[52px] items-center justify-between gap-3 border-b px-5 py-3">
+      <p className="text-base font-semibold">{title}</p>
+      {href && (
+        <Link href={href} aria-label={`Open ${title}`} className="-mr-2 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ArrowUpRight className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+const HERO_TONE = {
+  dark: "bg-[#333333] text-white",
+  light: "bg-secondary text-foreground",
+  lime: "bg-lime text-forest",
+  forest: "bg-forest text-white",
+};
+
+// The four summary cards echo the Figma card row: dark, light, lime, forest.
+function HeroCard({ tone, label, value, icon: Icon, children }: { tone: keyof typeof HERO_TONE; label: string; value: string; icon: LucideIcon; children?: React.ReactNode }) {
+  const onDark = tone === "dark" || tone === "forest";
+  return (
+    <div className={`relative overflow-hidden rounded-lg p-5 ${HERO_TONE[tone]}`}>
+      <span aria-hidden className={`pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full border-[22px] ${onDark ? "border-white/[0.06]" : "border-forest/[0.06]"}`} />
+      <div className="relative flex items-start justify-between gap-3">
+        <p className={`text-sm font-medium ${onDark ? "text-white/75" : tone === "lime" ? "text-forest/75" : "text-muted-foreground"}`}>{label}</p>
+        <Icon className={`h-5 w-5 shrink-0 ${onDark ? "text-lime" : "text-forest"}`} />
+      </div>
+      <p className="relative mt-3 text-[32px] font-bold leading-none tabular-nums">{value}</p>
+      {children && <div className="relative mt-4 flex flex-wrap items-center gap-1.5">{children}</div>}
+    </div>
+  );
+}
+
+function Pill({ tone, children }: { tone: "dark" | "light"; children: React.ReactNode }) {
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tone === "dark" ? "bg-white/10 text-white/85" : "bg-white/70 text-foreground"}`}>{children}</span>;
 }

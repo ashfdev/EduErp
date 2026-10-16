@@ -162,16 +162,17 @@ function NavLink({ item, isActive, count }: { item: NavItem; isActive: boolean; 
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-        isActive ? "bg-primary text-white shadow-md shadow-primary/25" : "text-slate-400 hover:bg-white/5 hover:text-white"
+      aria-current={isActive ? "page" : undefined}
+      className={`flex min-h-[40px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
+        isActive ? "bg-lime font-semibold text-forest" : "text-white/75 hover:bg-white/[0.06] hover:text-white"
       }`}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-[18px] w-[18px] shrink-0" />
       <span className="flex-1">{t(item.key)}</span>
       {!!count && count > 0 && (
         <span
-          className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none tabular-nums ${
-            isActive ? "bg-white/25 text-white" : "bg-amber-500/20 text-amber-400"
+          className={`min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-semibold leading-none tabular-nums ${
+            isActive ? "bg-forest text-lime" : "bg-ember text-white"
           }`}
         >
           {count > 99 ? "99+" : count}
@@ -216,7 +217,7 @@ export function SidebarNav() {
   }
 
   return (
-    <nav className="flex flex-col gap-1 text-sm font-medium">
+    <nav className="flex flex-col gap-0.5 text-sm font-medium">
       <NavLink item={DASHBOARD_ITEM} isActive={isItemActive(activeHref, DASHBOARD_ITEM.href)} />
 
       {NAV_GROUPS.map((group) => {
@@ -229,26 +230,27 @@ export function SidebarNav() {
         // notification alone: a glance at the collapsed nav is enough.
         const groupPendingTotal = group.items.reduce((sum, item) => sum + (item.countKey ? pendingCounts[item.countKey] : 0), 0);
         return (
-          <div key={group.key} className="mt-1">
+          <div key={group.key} className="mt-3">
             <button
               type="button"
               onClick={() => toggleGroup(group.key)}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors ${
-                groupHasActive ? "text-white" : "text-slate-500 hover:text-slate-300"
+              aria-expanded={isOpen}
+              className={`flex min-h-[36px] w-full items-center justify-between rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime ${
+                groupHasActive ? "text-lime" : "text-white/50 hover:text-white/80"
               }`}
             >
               <span className="flex items-center gap-1.5">
                 {tGroups(group.key)}
                 {!isOpen && groupPendingTotal > 0 && (
-                  <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-400 tabular-nums normal-case tracking-normal">
+                  <span className="min-w-[18px] rounded-full bg-ember px-1.5 py-0.5 text-center text-[10px] font-semibold leading-none text-white tabular-nums">
                     {groupPendingTotal > 99 ? "99+" : groupPendingTotal}
                   </span>
                 )}
               </span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${isOpen ? "rotate-180" : ""}`} />
             </button>
             {isOpen && (
-              <div className="flex flex-col gap-1 pl-1">
+              <div className="mt-0.5 flex flex-col gap-0.5">
                 {group.items.map((item) => (
                   <NavLink
                     key={item.href}

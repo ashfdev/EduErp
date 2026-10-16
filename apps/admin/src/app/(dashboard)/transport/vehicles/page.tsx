@@ -103,7 +103,7 @@ export default function VehiclesPage() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <p className="font-medium">Add Vehicle</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5"><Label>Vehicle No.</Label><Input value={form.vehicle_no} onChange={(e) => setForm((f) => ({ ...f, vehicle_no: e.target.value }))} placeholder="Dhaka Metro-Cha-12-3456" /></div>
             <div className="space-y-1.5"><Label>Type</Label><Input value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Capacity</Label><Input type="number" value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: Number(e.target.value) }))} /></div>

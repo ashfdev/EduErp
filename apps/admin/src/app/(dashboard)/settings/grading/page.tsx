@@ -183,7 +183,7 @@ export default function GradingSettingsPage() {
         <>
           {!scales?.length && <EmptyState title="No grading scales yet" description="Apply a preset above to get started." />}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {scales?.map((scale) => (
               <Card key={scale.id}>
                 <CardHeader>

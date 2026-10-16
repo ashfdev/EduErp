@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge, Button, Card, CardContent, ConfirmDialog, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, EmptyState, ErrorState, Input, Label, LoadingSpinner, PageWrapper, PdfPreviewModal, StatusBadge, Tabs, TabsContent, TabsList, TabsTrigger, Textarea, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, extractErrorMessage } from "@education-erp/ui";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePdfPreview } from "@/hooks/use-pdf-preview";
 
@@ -390,57 +390,65 @@ export default function StudentProfilePage() {
     <PageWrapper>
       {personal.missing_profile_fields.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>
-            <span className="font-semibold">Profile incomplete.</span> Missing: {personal.missing_profile_fields.join(", ")}.
+          <p title={personal.missing_profile_fields.join(", ")}>
+            <span className="font-semibold">Profile incomplete.</span> Missing: {groupMissingFields(personal.missing_profile_fields).join(", ")}.
           </p>
           <Link href={`/students/${id}/edit`}>
             <Button size="sm" variant="outline" className="border-amber-400 bg-white">Complete profile</Button>
           </Link>
         </div>
       )}
-      <div className="flex items-start gap-4">
-        <div className="flex h-24 w-20 items-center justify-center rounded-md border bg-muted text-2xl">
-          {personal.photo_url ? <img src={personal.photo_url} alt="" className="h-full w-full rounded-md object-cover" /> : "👤"}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">{personal.name_en}</h1>
-            <StatusBadge status={personal.status} />
-            {personal.documents_count === 0 && <Badge variant="warning">No documents on file</Badge>}
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+        <div className="flex min-w-[240px] flex-1 items-start gap-4">
+          <div className="flex h-24 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {personal.photo_url ? <img src={personal.photo_url} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-8 w-8" />}
           </div>
-          {personal.name_bn && <p className="text-muted-foreground">{personal.name_bn}</p>}
-          <p className="mt-1 font-mono text-sm text-muted-foreground">{personal.student_uid}</p>
-          <p className="text-sm text-muted-foreground">
-            {academic.current.class?.name_en} {academic.current.section && `· Section ${academic.current.section.name}`}{" "}
-            {academic.current.group && `· ${academic.current.group.name_en}`} {academic.current.roll_no && `· Roll ${academic.current.roll_no}`}
-          </p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold leading-tight">{personal.name_en}</h1>
+              <StatusBadge status={personal.status} />
+              {personal.documents_count === 0 && <Badge variant="warning">No documents on file</Badge>}
+            </div>
+            {personal.name_bn && <p className="mt-0.5 text-muted-foreground">{personal.name_bn}</p>}
+            <p className="mt-1 font-mono text-sm text-muted-foreground">{personal.student_uid}</p>
+            <p className="text-sm text-muted-foreground">
+              {[academic.current.class?.name_en, academic.current.section && `Section ${academic.current.section.name}`, academic.current.group?.name_en, academic.current.roll_no && `Roll ${academic.current.roll_no}`]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          </div>
         </div>
-        <Link href={`/students/${id}/edit`}>
-          <Button variant="outline">Edit</Button>
-        </Link>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/student/${id}/id-card`, `IDCard_${personal.student_uid}.pdf`)}>
-            Download ID Card
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/testimonial`, `Testimonial — ${personal.name_en}`)}>
-            Testimonial
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/transfer-cert`, `Transfer Certificate — ${personal.name_en}`)}>
-            Transfer Certificate
-          </Button>
-          {!personal.has_portal_login && (
-            <Button size="sm" variant="outline" onClick={() => { setLoginPhone(personal.phone ?? ""); setLoginDialogOpen(true); }}>
-              Create Portal Login
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button size="sm" asChild>
+              <Link href={`/students/${id}/edit`}>Edit</Link>
             </Button>
+            <Button size="sm" variant="outline" onClick={() => downloadPdf(`/api/documents/student/${id}/id-card`, `IDCard_${personal.student_uid}.pdf`)}>
+              Download ID Card
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/testimonial`, `Testimonial — ${personal.name_en}`)}>
+              Testimonial
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => pdfPreview.openPreview(`/api/documents/student/${id}/transfer-cert`, `Transfer Certificate — ${personal.name_en}`)}>
+              Transfer Certificate
+            </Button>
+            {!personal.has_portal_login && (
+              <Button size="sm" variant="outline" onClick={() => { setLoginPhone(personal.phone ?? ""); setLoginDialogOpen(true); }}>
+                Create Portal Login
+              </Button>
+            )}
+          </div>
+          {!["GRADUATED", "TRANSFERRED", "EXPELLED"].includes(personal.status) && (
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              <Button size="sm" variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>
+              <Button size="sm" variant="outline" onClick={() => setLeaveDialog("transfer")}>Mark as Transferred</Button>
+              <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800" onClick={() => setLeaveDialog("expel")}>
+                Mark as Expelled
+              </Button>
+            </div>
           )}
         </div>
-        {!["GRADUATED", "TRANSFERRED", "EXPELLED"].includes(personal.status) && (
-          <>
-            <Button variant="outline" onClick={() => setGraduateOpen(true)}>Mark as Graduated</Button>
-            <Button variant="outline" onClick={() => setLeaveDialog("transfer")}>Mark as Transferred</Button>
-            <Button variant="destructive" onClick={() => setLeaveDialog("expel")}>Mark as Expelled</Button>
-          </>
-        )}
       </div>
 
       <Dialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen}>
@@ -754,7 +762,7 @@ export default function StudentProfilePage() {
 
         <TabsContent value="attendance">
           <Card>
-            <CardContent className="grid grid-cols-4 gap-4 pt-6 text-center">
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 text-center">
               <div><p className="text-2xl font-semibold">{attendance.current_year_summary.total_days}</p><p className="text-xs text-muted-foreground">Total Days</p></div>
               <div><p className="text-2xl font-semibold text-emerald-600">{attendance.current_year_summary.present}</p><p className="text-xs text-muted-foreground">Present</p></div>
               <div><p className="text-2xl font-semibold text-red-600">{attendance.current_year_summary.absent}</p><p className="text-xs text-muted-foreground">Absent</p></div>
@@ -1380,4 +1388,22 @@ function StudentDisciplineTab({ studentId }: { studentId: string }) {
       </Dialog>
     </div>
   );
+}
+
+// "Father's NID", "Father's occupation" … → "Father's details (2)", so a student missing everything gets a short line.
+function groupMissingFields(labels: string[]): string[] {
+  const GROUPS: [string, string][] = [
+    ["Father's", "Father's details"],
+    ["Mother's", "Mother's details"],
+    ["Present address", "Present address"],
+    ["Permanent address", "Permanent address"],
+  ];
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    const name = GROUPS.find(([prefix]) => label.startsWith(prefix))?.[1] ?? label;
+    if (!counts.has(name)) order.push(name);
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return order.map((name) => (counts.get(name)! > 1 ? `${name} (${counts.get(name)})` : name));
 }

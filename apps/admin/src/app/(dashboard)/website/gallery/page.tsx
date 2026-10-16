@@ -46,7 +46,7 @@ export default function GalleryPage() {
       ) : (
         <>
           {!albums?.length && <EmptyState title="No albums yet" />}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {albums?.map((a) => (
               <Link key={a.id} href={`/website/gallery/${a.id}`}>
                 <Card className="transition hover:shadow-md">

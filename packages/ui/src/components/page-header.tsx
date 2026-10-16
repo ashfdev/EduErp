@@ -15,7 +15,7 @@ export interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, action, breadcrumbs }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4 flat:flex-wrap">
       <div className="flex flex-col gap-1">
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -33,10 +33,10 @@ export function PageHeader({ title, subtitle, action, breadcrumbs }: PageHeaderP
             ))}
           </nav>
         )}
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight flat:text-2xl">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className="flex shrink-0 items-center gap-2 flat:shrink flat:flex-wrap flat:[&>div]:flex-wrap">{action}</div>}
     </div>
   );
 }

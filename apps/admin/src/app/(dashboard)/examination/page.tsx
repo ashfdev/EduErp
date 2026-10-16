@@ -37,7 +37,7 @@ export default function ExaminationPage() {
         <>
           {!exams?.length && <EmptyState title="No exams yet" />}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {exams?.map((e) => (
               <Link key={e.id} href={`/examination/${e.id}`}>
                 <Card className="hover:border-primary">

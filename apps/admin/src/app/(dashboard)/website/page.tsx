@@ -42,7 +42,7 @@ export default function WebsiteDashboardPage() {
         action={<a href={websiteUrl} target="_blank" rel="noreferrer"><Button variant="outline">👁️ Preview Website</Button></a>}
       />
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {SECTIONS.map((s) => (
           <Link key={s.href} href={s.href}>
             <Card className="transition hover:shadow-md">

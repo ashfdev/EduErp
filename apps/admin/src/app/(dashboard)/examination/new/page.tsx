@@ -91,7 +91,7 @@ function CloneExamForm() {
           <Label>Name (leave blank to auto-generate from the source exam&apos;s name + new year)</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Auto-generated if left blank" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label>New Academic Year</Label>
             <select
@@ -201,7 +201,7 @@ function NewExamForm() {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
             <div className="space-y-1.5"><Label>Mark Entry Opens</Label><Input type="datetime-local" value={markOpen} onChange={(e) => setMarkOpen(e.target.value)} /></div>

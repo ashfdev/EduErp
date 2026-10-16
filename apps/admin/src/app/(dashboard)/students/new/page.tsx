@@ -592,7 +592,7 @@ export default function NewStudentPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-3 gap-3 items-end rounded-md border p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 items-end rounded-md border p-3">
                 <div className="space-y-1.5">
                   <Label>Type</Label>
                   <select className="w-full rounded-md border px-3 py-2 text-sm" value={newDocType} onChange={(e) => setNewDocType(e.target.value as (typeof DOC_TYPES)[number])}>

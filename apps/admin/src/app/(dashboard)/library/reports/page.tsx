@@ -80,7 +80,7 @@ export default function LibraryReportsPage() {
           )}
         </TabsContent>
         <TabsContent value="fines">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">৳{fineReport?.total_fines ?? 0}</p><p className="text-sm text-muted-foreground">Total Fines</p></CardContent></Card>
             <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold text-emerald-600">৳{fineReport?.collected ?? 0}</p><p className="text-sm text-muted-foreground">Collected</p></CardContent></Card>
             <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold text-red-600">৳{fineReport?.outstanding ?? 0}</p><p className="text-sm text-muted-foreground">Outstanding</p></CardContent></Card>

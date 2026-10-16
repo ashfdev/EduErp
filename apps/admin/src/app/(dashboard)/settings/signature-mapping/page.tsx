@@ -93,7 +93,7 @@ export default function SignatureMappingPage() {
                 </p>
               )}
             </CardHeader>
-            <CardContent className="grid grid-cols-3 gap-4">
+            <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {slots[docType]?.map((slot) => (
                 <div key={slot.slot} className="space-y-2 rounded-md border p-3">
                   <p className="text-xs font-medium text-muted-foreground">Slot {slot.slot}</p>

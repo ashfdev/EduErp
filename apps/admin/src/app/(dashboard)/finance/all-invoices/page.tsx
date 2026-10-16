@@ -73,7 +73,7 @@ export default function AllInvoicesPage() {
         breadcrumbs={[{ label: "Finance", href: "/fees" }, { label: "All Invoices" }]}
       />
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{data?.meta.total ?? 0}</p><p className="text-sm text-muted-foreground">Total Records</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{data?.meta.total_amount ?? 0}</p><p className="text-sm text-muted-foreground">Total Amount</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-2xl font-semibold text-emerald-600">৳{data?.meta.total_paid ?? 0}</p><p className="text-sm text-muted-foreground">Total Paid</p></CardContent></Card>

@@ -42,7 +42,7 @@ function PageGroup({ title, keys, pages }: { title: string; keys: string[]; page
   return (
     <div className="space-y-3">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {rows.map((p) => (
           <Link key={p.page_key} href={`/website/pages/${p.page_key}`}>
             <Card className="transition hover:shadow-md">

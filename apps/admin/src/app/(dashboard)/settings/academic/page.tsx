@@ -535,7 +535,7 @@ export default function AcademicSettingsPage() {
                 </TableBody>
               </Table>
             )}
-            <div className="grid grid-cols-4 gap-2 border-t pt-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 border-t pt-3">
               <div className="space-y-1.5">
                 <Label>Period #</Label>
                 <Input type="number" min={1} value={periodForm.period_no} onChange={(e) => setPeriodForm({ ...periodForm, period_no: Number(e.target.value) })} />

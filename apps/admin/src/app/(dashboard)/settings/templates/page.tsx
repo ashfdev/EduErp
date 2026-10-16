@@ -114,7 +114,7 @@ export default function TemplatesPage() {
     <PageWrapper>
       <PageHeader title="Document Templates" subtitle="HTML templates used to generate documents" breadcrumbs={[{ label: "Settings" }, { label: "Templates" }]} />
 
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="col-span-1 space-y-1">
           {DOC_TYPES.map((t) => (
             <button
@@ -127,10 +127,10 @@ export default function TemplatesPage() {
           ))}
         </div>
 
-        <div className="col-span-3 space-y-4">
-          <div className="flex justify-between">
+        <div className="space-y-4 lg:col-span-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h3 className="font-medium">{selectedType.replace(/_/g, " ")}</h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={loadPreview}>Preview</Button>
               {VISUAL_DOC_TYPES.has(selectedType) && (
                 <Link href={`/settings/templates/design/${selectedType}`}>
@@ -158,7 +158,7 @@ export default function TemplatesPage() {
                     {t.is_active && <Badge variant="success">Active</Badge>}
                     {!!t.layout_json && <Badge variant="outline">Visual Design</Badge>}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {!!t.layout_json && (
                       <Link href={`/settings/templates/design/${selectedType}/${t.id}`}>
                         <Button size="sm" variant="outline">Edit in Designer</Button>

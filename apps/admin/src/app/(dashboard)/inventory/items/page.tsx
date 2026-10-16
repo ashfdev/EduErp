@@ -190,7 +190,7 @@ export default function ItemsPage() {
               <div className="space-y-1.5"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. A4 Paper" /></div>
               <div className="space-y-1.5"><Label>Name (Bangla, optional)</Label><Input value={form.name_bn} onChange={(e) => setForm((f) => ({ ...f, name_bn: e.target.value }))} /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5"><Label>Unit</Label><Input value={form.unit} onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))} placeholder="Pcs / Ream / Box" /></div>
               <div className="space-y-1.5"><Label>Minimum Stock</Label><Input type="number" value={form.minimum_stock} onChange={(e) => setForm((f) => ({ ...f, minimum_stock: e.target.value }))} /></div>
               <div className="space-y-1.5"><Label>Reorder Qty</Label><Input type="number" value={form.reorder_qty} onChange={(e) => setForm((f) => ({ ...f, reorder_qty: e.target.value }))} /></div>

@@ -21,7 +21,7 @@ export function LanguageToggle() {
   }
 
   return (
-    <button onClick={toggle} className="rounded-md border px-2.5 py-1 text-xs hover:bg-accent" aria-label="Switch language">
+    <button onClick={toggle} className="flex h-10 items-center rounded-md border px-3 text-xs font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Switch language">
       {next === "BN" ? "বাংলা" : "English"}
     </button>
   );

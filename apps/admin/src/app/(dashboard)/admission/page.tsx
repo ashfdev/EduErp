@@ -59,7 +59,7 @@ export default function AdmissionDashboardPage() {
                     {!c.is_published && <StatusBadge status="DRAFT" />}
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center text-sm">
                   <div><p className="text-lg font-semibold">{c.stats.total_applications}</p><p className="text-muted-foreground">Applied</p></div>
                   <div><p className="text-lg font-semibold">{c.stats.shortlisted + c.stats.confirmed}</p><p className="text-muted-foreground">Shortlisted</p></div>
                   <div><p className="text-lg font-semibold">{c.seats_remaining}</p><p className="text-muted-foreground">Seats Left</p></div>

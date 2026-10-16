@@ -36,7 +36,7 @@ export default function LibraryDashboardPage() {
           </div>
         }
       />
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{booksMeta?.total ?? 0}</p><p className="text-sm text-muted-foreground">Total Books</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold">{activeIssues?.length ?? 0}</p><p className="text-sm text-muted-foreground">Active Issues</p></CardContent></Card>
         <Card><CardContent className="pt-6 text-center"><p className="text-2xl font-semibold text-red-600">{overdue?.length ?? 0}</p><p className="text-sm text-muted-foreground">Overdue</p></CardContent></Card>

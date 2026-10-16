@@ -424,7 +424,7 @@ export default function NewStaffPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-4 gap-3 items-end rounded-md border p-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end rounded-md border p-3">
                 <div className="space-y-1.5">
                   <Label>Type</Label>
                   <select className="w-full rounded-md border px-3 py-2 text-sm" value={newDocType} onChange={(e) => setNewDocType(e.target.value as (typeof DOC_TYPES)[number])}>
@@ -445,7 +445,7 @@ export default function NewStaffPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-3 gap-3 rounded-md border p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-md border p-3">
                 <div className="space-y-1.5"><Label>Institution</Label><Input value={newExperience.institution_name} onChange={(e) => setNewExperience({ ...newExperience, institution_name: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Designation</Label><Input value={newExperience.designation} onChange={(e) => setNewExperience({ ...newExperience, designation: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Location</Label><Input value={newExperience.location} onChange={(e) => setNewExperience({ ...newExperience, location: e.target.value })} /></div>
@@ -464,7 +464,7 @@ export default function NewStaffPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-3 gap-3 rounded-md border p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-md border p-3">
                 <div className="space-y-1.5"><Label>Name</Label><Input value={newReference.name} onChange={(e) => setNewReference({ ...newReference, name: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Designation</Label><Input value={newReference.designation} onChange={(e) => setNewReference({ ...newReference, designation: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label>Relation</Label><Input value={newReference.relation} onChange={(e) => setNewReference({ ...newReference, relation: e.target.value })} /></div>

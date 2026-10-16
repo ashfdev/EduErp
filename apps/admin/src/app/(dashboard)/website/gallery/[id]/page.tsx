@@ -67,7 +67,7 @@ export default function GalleryAlbumDetailPage() {
       </div>
 
       {!album.images.length && <EmptyState title="No photos yet" />}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {album.images.map((img) => (
           <Card key={img.id} className="group relative overflow-hidden">
             <CardContent className="p-0">

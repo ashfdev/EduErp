@@ -118,15 +118,15 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Institution Overview",
-    "totalStudents": "🎓 Total Students",
+    "totalStudents": "Total Students",
     "present": "Present {count}",
     "absent": "Absent {count}",
     "unmarked": "{count} not yet marked",
-    "staff": "👨‍🏫 Staff",
+    "staff": "Staff",
     "onLeaveToday": "{count} on leave today",
-    "todaysCollection": "💰 Today's Collection",
+    "todaysCollection": "Today's Collection",
     "thisMonth": "This month: ৳{amount}",
-    "attendanceToday": "📊 Attendance Today",
+    "attendanceToday": "Attendance Today",
     "staffPresentToday": "Staff Present Today",
     "staffAbsentToday": "Staff Absent Today",
     "staffLateToday": "Staff Late Today",
@@ -135,7 +135,7 @@
     "studentsOnLeaveToday": "Students On Leave Today",
     "studentsUnmarkedToday": "Students Not Yet Marked",
     "currentFundBalance": "Current Fund Balance",
-    "todaysExpense": "💸 Today's Expense",
+    "todaysExpense": "Today's Expense",
     "thisMonthExpense": "This month: ৳{amount}",
     "netPositionToday": "Net Position (Today)",
     "netPositionMonth": "Net Position (This Month)",
@@ -176,7 +176,8 @@
     "examControllerOverview": "Exam Controller Overview",
     "manageExaminations": "Manage Examinations →",
     "reminderSent": "Reminder sent to guardian",
-    "reminderFailed": "Failed to send reminder"
+    "reminderFailed": "Failed to send reminder",
+    "todayAtAGlance": "Today at a glance"
   },
   "students": {
     "title": "Students",

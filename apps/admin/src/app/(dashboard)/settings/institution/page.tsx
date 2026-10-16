@@ -155,7 +155,7 @@ export default function InstitutionSettingsPage() {
 
                 <div className="space-y-2">
                   <Label>Institution Type</Label>
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {INSTITUTION_TYPES.map((t) => (
                       <button
                         key={t.value}

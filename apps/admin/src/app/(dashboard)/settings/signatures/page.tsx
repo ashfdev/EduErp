@@ -130,7 +130,7 @@ export default function SignaturesPage() {
         <>
           {!signatures?.length && <EmptyState title="No signatures yet" />}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {signatures?.map((s) => (
               <Card key={s.id}>
                 <CardContent className="space-y-2 pt-6">

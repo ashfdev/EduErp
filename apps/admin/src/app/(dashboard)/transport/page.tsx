@@ -38,7 +38,7 @@ export default function TransportDashboardPage() {
       ) : (
         <>
           {!routes?.length && <EmptyState title="No routes configured yet" />}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {routes?.map((r) => (
               <Link key={r.id} href={`/transport/routes/${r.id}`}>
                 <Card className="transition hover:shadow-md">

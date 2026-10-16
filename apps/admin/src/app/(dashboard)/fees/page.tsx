@@ -48,7 +48,7 @@ export default function FeesDashboardPage() {
         <ErrorState title="Failed to load fee summary" description={extractErrorMessage(errorObj)} retryLabel="Retry" onRetry={refetchAll} />
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{daily?.total ?? 0}</p><p className="text-sm text-muted-foreground">{t("todaysCollection")}</p></CardContent></Card>
             <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">৳{monthly?.total ?? 0}</p><p className="text-sm text-muted-foreground">{t("thisMonth")}</p></CardContent></Card>
             <Card><CardContent className="pt-6"><p className="text-2xl font-semibold">{defaulters?.length ?? 0}</p><p className="text-sm text-muted-foreground">{t("defaulters")}</p></CardContent></Card>

@@ -228,7 +228,7 @@ function AddSessionForm({ examId, classes }: { examId: string; classes?: ClassOp
     <Card>
       <CardContent className="space-y-3 pt-6">
         <p className="text-sm font-medium">New Session</p>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Input placeholder="Label (e.g. Morning)" value={label} onChange={(e) => setLabel(e.target.value)} />
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />

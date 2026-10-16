@@ -123,7 +123,7 @@ export default function MarkCompositionTemplatesPage() {
         <>
           {!templates?.length && <EmptyState title="No templates yet" description="Create one to reuse across exams and classes." />}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {templates?.map((t) => {
               const templateTotal = Math.round(t.items.reduce((sum, it) => sum + it.max_marks, 0) * 100) / 100;
               return (
