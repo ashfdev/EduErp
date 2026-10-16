@@ -8,6 +8,8 @@ import { prisma } from "../lib/prisma";
 import type { DocumentType } from "@education-erp/types";
 import { cardDesignSchema, SIZE_PRESETS, FIELD_CATALOG, type CardDesign } from "@education-erp/validators";
 import { DOCUMENT_FONT_STACK, getDocumentFontCss } from "./document-fonts";
+import { escapeHtml } from "../lib/report/report-html";
+import { resolveBaseUrl } from "../lib/env";
 
 const DEFAULT_TEMPLATES_DIR = join(__dirname, "..", "templates", "defaults");
 const PARTIALS_DIR = join(__dirname, "..", "templates", "partials");
@@ -455,6 +457,33 @@ async function mergePdfBuffers(buffers: Buffer[]): Promise<Buffer> {
   return Buffer.from(await merged.save());
 }
 
+// Where a PDF page may load anything from: inline data: URIs, the API's own
+// uploads (logos, photos, signatures), Google Fonts and, when configured,
+// the Azure Blob container. Every other request (file://, other hosts,
+// internal services such as Redis or Postgres) is aborted, so text that
+// reaches the HTML can't make Chromium read local files or probe the
+// internal network.
+function pdfResourceOrigins(): Set<string> {
+  const origins = new Set(["https://fonts.googleapis.com", "https://fonts.gstatic.com"]);
+  try {
+    origins.add(new URL(resolveBaseUrl("API_URL", process.env.API_URL, `http://localhost:${process.env.PORT ?? 4000}`)).origin);
+  } catch {
+    // A malformed API_URL just means no uploads load; the PDF still renders.
+  }
+  const azureAccount = /AccountName=([^;]+)/.exec(process.env.AZURE_STORAGE_CONNECTION_STRING ?? "")?.[1];
+  if (azureAccount) origins.add(`https://${azureAccount}.blob.core.windows.net`);
+  return origins;
+}
+
+export function isAllowedPdfResource(url: string, origins: Set<string> = pdfResourceOrigins()): boolean {
+  if (url.startsWith("data:") || url.startsWith("blob:") || url === "about:blank") return true;
+  try {
+    return origins.has(new URL(url).origin);
+  } catch {
+    return false;
+  }
+}
+
 export async function renderHtmlToPdf(html: string, options?: RenderOptions): Promise<Buffer> {
   const size: { format?: "A4" | "A5" | "A3"; width?: string; height?: string } =
     PAGE_SIZE_TO_PUPPETEER[options?.pageSize ?? "A4"] ?? { format: "A4" };
@@ -472,6 +501,12 @@ export async function renderHtmlToPdf(html: string, options?: RenderOptions): Pr
   });
   try {
     const page = await browser.newPage();
+    const origins = pdfResourceOrigins();
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+      if (isAllowedPdfResource(request.url(), origins)) void request.continue();
+      else void request.abort();
+    });
     // Real gap found live-verifying Plan Twenty (2026-08-08): Puppeteer's
     // own default navigation timeout is 30s, applying to setContent()
     // regardless of whether the caller is an HTTP request or a background
@@ -523,8 +558,8 @@ export async function renderSimpleReport(title: string, bodyHtml: string, option
     </style></head>
     <body>
       <div class="report-header">
-        ${institution.logo_url ? `<img src="${institution.logo_url}" />` : ""}
-        <div><h1>${institution.name_en}</h1><p style="margin:2px 0;">${title}</p></div>
+        ${institution.logo_url ? `<img src="${escapeHtml(institution.logo_url)}" />` : ""}
+        <div><h1>${escapeHtml(institution.name_en)}</h1><p style="margin:2px 0;">${escapeHtml(title)}</p></div>
       </div>
       ${bodyHtml}
     </body></html>`;

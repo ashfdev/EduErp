@@ -12,6 +12,7 @@ import { computeSubjectWiseAttendance } from "../../utils/subject-attendance";
 import { computeDailyAttendancePercentage } from "../../utils/daily-attendance";
 import { badRequest, forbidden, notFound } from "../../lib/errors";
 import { renderDocument, renderDocumentBatch, renderSimpleReport, generateQrDataUrl } from "../../services/pdf.service";
+import { escapeHtml } from "../../lib/report/report-html";
 import { computeClassResults } from "../results/results.routes";
 import { calculatePositions, calculateStudentResult } from "../../utils/grading.engine";
 import { uploadBuffer, getSignedDownloadUrl } from "../../services/storage.service";
@@ -1538,7 +1539,7 @@ documentsRouter.get(
     const rows = students
       .map((s, i) => {
         const rec = records.find((r) => r.person_id === s.id);
-        return `<tr><td>${i + 1}</td><td>${s.current_roll_no ?? ""}</td><td style="text-align:left">${s.name_en}</td><td>${rec?.status ?? "-"}</td></tr>`;
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(s.current_roll_no)}</td><td style="text-align:left">${escapeHtml(s.name_en)}</td><td>${escapeHtml(rec?.status ?? "-")}</td></tr>`;
       })
       .join("");
     const html = `<table><thead><tr><th>SL</th><th>Roll</th><th>Name</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -1769,7 +1770,8 @@ documentsRouter.get(
         // real due too, not just an enrolled student's.
         const name = inv.student?.name_en ?? inv.application?.applicant_name ?? "-";
         const uid = inv.student?.student_uid ?? inv.application?.admission_roll ?? "Applicant";
-        return `<tr><td>${name}</td><td>${uid}</td><td>${inv.description}</td><td>৳${inv.amount_due - inv.amount_paid}</td><td>${inv.status}</td></tr>`;
+        // Escaped: applicant_name comes from the public admission form.
+        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(uid)}</td><td>${escapeHtml(inv.description)}</td><td>৳${inv.amount_due - inv.amount_paid}</td><td>${escapeHtml(inv.status)}</td></tr>`;
       })
       .join("");
     const html = `<table><thead><tr><th>Student</th><th>ID</th><th>Description</th><th>Due</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
