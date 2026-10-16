@@ -58,13 +58,13 @@ export function LoginLayout({ institution, portalLabel, footer, topEnd, children
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1400px] flex-col gap-7 px-6 py-6 sm:px-10 lg:flex-row lg:gap-14 lg:px-16 lg:py-12">
         <section className="flex min-w-0 flex-col gap-7 lg:flex-1 lg:justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 lg:gap-4">
             {institution?.logo_url ? (
-              <img src={institution.logo_url} alt="" className="h-12 w-12 shrink-0 object-contain lg:h-16 lg:w-16" />
+              <img src={institution.logo_url} alt="" className="h-16 w-16 shrink-0 object-contain lg:h-20 lg:w-20" />
             ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-forest text-lg font-bold text-lime lg:h-16 lg:w-16">{name.charAt(0)}</div>
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-forest text-xl font-bold text-lime lg:h-20 lg:w-20">{name.charAt(0)}</div>
             )}
-            <span className="text-[13px] text-muted-foreground lg:text-[15px]">{portalLabel}</span>
+            <span className="rounded-full bg-lime px-3.5 py-1.5 text-sm font-bold text-forest lg:px-4 lg:py-2 lg:text-base">{portalLabel}</span>
           </div>
 
           <div className="flex flex-col gap-0.5 lg:gap-1.5">
